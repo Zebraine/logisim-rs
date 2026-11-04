@@ -1,0 +1,51 @@
+# Default deny: only the minimal build and root project documents enter Git.
+*
+
+# Workspace, toolchain, license, and root project documents.
+!/Cargo.toml
+!/Cargo.lock
+!/rust-toolchain.toml
+!/rustfmt.toml
+!/clippy.toml
+!/LICENSE
+!/AGENTS.md
+!/CONTRIBUTING.md
+!/README.md
+
+# Git and build-check configuration; do not allow arbitrary dotfiles.
+!/.gitignore
+!/.gitattributes
+!/.gitmodules
+!/.cargo/
+!/.cargo/config.toml
+!/.github/
+!/.github/workflows/
+!/.github/workflows/ci.yml
+
+# Package manifests, build scripts, and Rust sources only.
+!/apps/
+!/apps/**/
+!/apps/**/Cargo.toml
+!/apps/**/build.rs
+!/apps/**/src/**/*.rs
+!/crates/
+!/crates/**/
+!/crates/**/Cargo.toml
+!/crates/**/build.rs
+!/crates/**/src/**/*.rs
+
+# Local design and observation material, including each directory's README.
+/docs/
+/experiments/
+/specs/
+/fixtures/
+/resources/
+
+# Keep generated files and caches excluded even inside source trees.
+**/target/
+**/cache/
+**/.cache/
+**/__pycache__/
+.DS_Store
+Thumbs.db
+*.swp

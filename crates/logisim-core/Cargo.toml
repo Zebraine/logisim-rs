@@ -1,0 +1,11 @@
+[package]
+name = "logisim-core"
+description = "Circuit domain model boundary; M0 scaffold"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

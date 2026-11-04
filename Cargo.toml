@@ -1,0 +1,35 @@
+[workspace]
+resolver = "3"
+members = [
+    "apps/logisim-desktop",
+    "crates/logisim-core",
+    "crates/logisim-sim",
+    "crates/logisim-file",
+    "crates/logisim-ui",
+]
+default-members = ["apps/logisim-desktop"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT"
+publish = false
+
+[workspace.dependencies]
+logisim-core = { path = "crates/logisim-core" }
+logisim-sim = { path = "crates/logisim-sim" }
+logisim-file = { path = "crates/logisim-file" }
+logisim-ui = { path = "crates/logisim-ui" }
+
+# Reserved for the implementation phase; no member enables these in M0.
+# Declaring them here does not download, compile, or validate the GUI stack.
+egui = { version = "=0.37.0", default-features = false }
+eframe = { version = "=0.37.0", default-features = false }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+dbg_macro = "warn"
+todo = "warn"

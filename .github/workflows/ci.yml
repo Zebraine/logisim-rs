@@ -1,0 +1,22 @@
+name: Scaffold checks
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Prepare toolchain
+        run: |
+          rustup show
+          rustup component add rustfmt clippy
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Check workspace
+        run: cargo check --workspace --all-targets --locked --offline
+      - name: Check lints
+        run: cargo clippy --workspace --all-targets --locked --offline -- -D warnings
