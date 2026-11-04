@@ -1,4 +1,4 @@
-name: Scaffold checks
+name: Rust checks
 
 on: [push, pull_request]
 
@@ -16,7 +16,11 @@ jobs:
           rustup component add rustfmt clippy
       - name: Check formatting
         run: cargo fmt --all -- --check
+      - name: Fetch locked dependencies
+        run: cargo fetch --locked
       - name: Check workspace
         run: cargo check --workspace --all-targets --locked --offline
       - name: Check lints
         run: cargo clippy --workspace --all-targets --locked --offline -- -D warnings
+      - name: Test workspace
+        run: cargo test --workspace --locked --offline

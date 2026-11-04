@@ -8,6 +8,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+eframe.workspace = true
 logisim-core.workspace = true
 logisim-sim.workspace = true
 logisim-file.workspace = true

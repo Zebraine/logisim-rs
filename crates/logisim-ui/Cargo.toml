@@ -1,6 +1,6 @@
 [package]
 name = "logisim-ui"
-description = "egui circuit editor boundary; M0 scaffold"
+description = "egui workspace layout and navigable circuit canvas"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,9 +8,8 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+egui.workspace = true
 logisim-core.workspace = true
-
-# egui.workspace = true will be enabled when UI implementation begins.
 
 [lints]
 workspace = true
