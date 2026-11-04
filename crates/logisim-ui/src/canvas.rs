@@ -58,6 +58,17 @@ impl Default for Canvas {
 }
 
 impl Canvas {
+    pub fn world(&self, screen: egui::Pos2) -> Vec2 {
+        self.camera.world_at(screen - self.rect.min)
+    }
+
+    pub fn screen(&self, point: logisim_core::Point) -> egui::Pos2 {
+        self.screen_vec(vec2(point.x as f32, point.y as f32))
+    }
+
+    pub fn screen_vec(&self, world: Vec2) -> egui::Pos2 {
+        self.rect.min + self.camera.offset + world * self.camera.zoom
+    }
     pub fn reset(&mut self) {
         self.camera = Camera::default();
     }
@@ -71,7 +82,7 @@ impl Canvas {
         self.camera.zoom_at(zoom, anchor);
     }
 
-    pub fn show(&mut self, ui: &mut Ui) {
+    pub fn show(&mut self, ui: &mut Ui) -> egui::Response {
         let (rect, response) = ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
         self.rect = rect;
         if response.clicked() {
@@ -120,19 +131,6 @@ impl Canvas {
             });
         }
 
-        response.context_menu(|ui| {
-            if ui.button("Reset canvas").clicked() {
-                self.reset();
-                ui.close();
-            }
-            if ui.button("Actual size · 100%").clicked() {
-                self.set_zoom(1.0);
-                ui.close();
-            }
-            ui.separator();
-            ui.checkbox(&mut self.show_grid, "Show grid");
-        });
-
         let painter = ui.painter_at(rect);
         painter.rect_filled(rect, 0, Color32::WHITE);
         if self.show_grid {
@@ -146,6 +144,7 @@ impl Canvas {
             painter.line_segment([origin - vec2(5.0, 0.0), origin + vec2(5.0, 0.0)], stroke);
             painter.line_segment([origin - vec2(0.0, 5.0), origin + vec2(0.0, 5.0)], stroke);
         }
+        response
     }
 
     fn paint_grid(&self, painter: &egui::Painter, rect: Rect) {

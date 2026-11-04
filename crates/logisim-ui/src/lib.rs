@@ -1,11 +1,18 @@
 //! Editor layout based on runtime observation, with an independent canvas viewport.
 
 mod canvas;
+mod drawing;
+mod editor;
+#[cfg(test)]
+mod editor_tests;
 mod icons;
+mod properties;
 
 use canvas::{Canvas, MAX_ZOOM, MIN_ZOOM};
+use editor::{Editor, Tool};
 use egui::{Color32, Frame, Margin, Panel, RichText, ScrollArea, Stroke, Ui, vec2};
 use icons::Icon;
+use logisim_core::{Gate, Kind};
 
 const INK: Color32 = Color32::from_rgb(51, 65, 85);
 const ACCENT: Color32 = Color32::from_rgb(37, 99, 235);
@@ -30,10 +37,11 @@ pub fn configure(ctx: &egui::Context) {
     ctx.set_global_style(style);
 }
 
-/// Presentation state only. Circuit editing and simulation are not implemented here.
+/// Circuit editing and viewport state. Signal simulation is not part of this layer.
 #[derive(Default)]
 pub struct Workspace {
     canvas: Canvas,
+    editor: Editor,
     about_open: bool,
 }
 
@@ -66,7 +74,10 @@ impl Workspace {
 
         egui::CentralPanel::default()
             .frame(Frame::NONE)
-            .show(ui, |ui| self.canvas.show(ui));
+            .show(ui, |ui| {
+                let response = self.canvas.show(ui);
+                self.editor.show(ui, &mut self.canvas, &response);
+            });
 
         egui::Window::new("About logisim-rs")
             .open(&mut self.about_open)
@@ -76,8 +87,8 @@ impl Workspace {
                 ui.heading("Logisim rs");
                 ui.label("A cleanroom digital circuit workspace.");
                 ui.separator();
-                ui.label("Canvas navigation is available.");
-                ui.label("Circuit editing, file operations and simulation are not yet available.");
+                ui.label("Component editing, wiring and canvas navigation are available.");
+                ui.label("File saving and simulation are not yet available.");
             });
     }
 
@@ -93,9 +104,64 @@ impl Workspace {
                 }
             });
             ui.menu_button("Edit", |ui| {
-                disabled_actions(ui, &["Undo", "Redo"]);
+                if ui
+                    .add_enabled(self.editor.can_undo(), egui::Button::new("Undo · Ctrl+Z"))
+                    .clicked()
+                {
+                    self.editor.undo();
+                    ui.close();
+                }
+                if ui
+                    .add_enabled(
+                        self.editor.can_redo(),
+                        egui::Button::new("Redo · Ctrl+Shift+Z"),
+                    )
+                    .clicked()
+                {
+                    self.editor.redo();
+                    ui.close();
+                }
                 ui.separator();
-                disabled_actions(ui, &["Cut", "Copy", "Paste", "Delete", "Select All"]);
+                let selected = !self.editor.selection.is_empty();
+                if ui
+                    .add_enabled(selected, egui::Button::new("Cut · Ctrl+X"))
+                    .clicked()
+                {
+                    self.editor.cut();
+                    ui.close();
+                }
+                if ui
+                    .add_enabled(selected, egui::Button::new("Copy · Ctrl+C"))
+                    .clicked()
+                {
+                    self.editor.copy();
+                    ui.close();
+                }
+                if ui
+                    .add_enabled(self.editor.can_paste(), egui::Button::new("Paste · Ctrl+V"))
+                    .clicked()
+                {
+                    self.editor.paste();
+                    ui.close();
+                }
+                if ui
+                    .add_enabled(selected, egui::Button::new("Duplicate · Ctrl+D"))
+                    .clicked()
+                {
+                    self.editor.duplicate();
+                    ui.close();
+                }
+                if ui
+                    .add_enabled(selected, egui::Button::new("Delete"))
+                    .clicked()
+                {
+                    self.editor.delete();
+                    ui.close();
+                }
+                if ui.button("Select All · Ctrl+A").clicked() {
+                    self.editor.select_all();
+                    ui.close();
+                }
             });
             ui.menu_button("Project", |ui| {
                 disabled_actions(ui, &["Add Circuit…", "Load Library…", "Project Options…"]);
@@ -132,26 +198,48 @@ impl Workspace {
 
     fn toolbar(&mut self, ui: &mut Ui) {
         ui.horizontal(|ui| {
-            icons::button(ui, Icon::Poke, false, false, "Poke — requires simulation");
-            icons::button(ui, Icon::Select, true, true, "Select");
-            ui.separator();
-            icons::button(ui, Icon::Text, false, false, "Text — not yet available");
-            ui.separator();
-            for (icon, name) in [
-                (Icon::Pin, "Pin"),
-                (Icon::Probe, "Probe"),
-                (Icon::Not, "NOT Gate"),
-                (Icon::And, "AND Gate"),
-                (Icon::Or, "OR Gate"),
+            icons::button(
+                ui,
+                Icon::Poke,
+                false,
+                false,
+                "Poke — simulation is not implemented",
+            );
+            for (icon, tool, hint) in [
+                (Icon::Select, Tool::Select, "Select · V"),
+                (
+                    Icon::Wire,
+                    Tool::Wire,
+                    "Wire · W · drag or click two points",
+                ),
+                (Icon::Text, Tool::Place(Kind::Text), "Text · T"),
+                (Icon::Pin, Tool::Place(Kind::Pin), "Pin"),
+                (Icon::Tunnel, Tool::Place(Kind::Tunnel), "Tunnel · U"),
+                (Icon::Not, Tool::Place(Kind::Gate(Gate::Not)), "NOT Gate"),
+                (Icon::And, Tool::Place(Kind::Gate(Gate::And)), "AND Gate"),
+                (Icon::Or, Tool::Place(Kind::Gate(Gate::Or)), "OR Gate"),
             ] {
-                icons::button(ui, icon, false, false, name);
+                if icons::button(ui, icon, self.editor.tool == tool, true, hint).clicked() {
+                    self.editor.set_tool(tool);
+                }
             }
-            if ui.available_width() > 350.0 {
+            ui.separator();
+            if ui
+                .add_enabled(self.editor.can_rotate(), egui::Button::new("Rotate"))
+                .on_hover_text("Rotate clockwise · R")
+                .clicked()
+            {
+                self.editor.rotate();
+            }
+            if ui.available_width() > 290.0 {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.label(
-                        RichText::new("Wheel to zoom   ·   Middle-drag to pan")
-                            .size(11.0)
-                            .weak(),
+                        RichText::new(format!(
+                            "{}  ·  Wheel zoom / Middle-drag pan",
+                            self.editor.tool.name()
+                        ))
+                        .size(11.0)
+                        .weak(),
                     );
                 });
             }
@@ -213,34 +301,29 @@ impl Workspace {
                                     "Input/Output",
                                     "Base",
                                 ] {
-                                    egui::CollapsingHeader::new(group).show(ui, |ui| {
-                                        let tools: &[&str] = match group {
-                                            "Wiring" => &[
-                                                "Splitter",
-                                                "Pin",
-                                                "Probe",
-                                                "Tunnel",
-                                                "Pull Resistor",
-                                                "Clock",
-                                                "Programmable Generator",
-                                                "Constant",
-                                                "Power",
-                                                "Ground",
-                                                "Transistor",
-                                                "Transmission Gate",
-                                                "Bit Extender",
-                                            ],
-                                            "Gates" => &["NOT Gate", "AND Gate", "OR Gate"],
-                                            _ => &[],
-                                        };
-                                        if tools.is_empty() {
-                                            ui.weak("No tools available yet");
+                                    egui::CollapsingHeader::new(group).show(ui, |ui| match group {
+                                        "Gates" => {
+                                            for gate in Gate::ALL {
+                                                self.library_tool(ui, Kind::Gate(gate));
+                                            }
                                         }
-                                        for name in tools {
-                                            ui.add_enabled(
-                                                false,
-                                                egui::Button::new(*name).frame(false),
+                                        "Wiring" => {
+                                            self.library_tool(ui, Kind::Pin);
+                                            self.library_tool(ui, Kind::Tunnel);
+                                            disabled_actions(
+                                                ui,
+                                                &[
+                                                    "Splitter",
+                                                    "Probe",
+                                                    "Clock",
+                                                    "Constant",
+                                                    "Bit Extender",
+                                                ],
                                             );
+                                        }
+                                        "Base" => self.library_tool(ui, Kind::Text),
+                                        _ => {
+                                            ui.weak("No tools available yet");
                                         }
                                     });
                                 }
@@ -251,35 +334,18 @@ impl Workspace {
         egui::CentralPanel::default()
             .frame(Frame::NONE.fill(CHROME))
             .show(ui, |ui| {
-                Frame::NONE
-                    .inner_margin(Margin::symmetric(12, 9))
-                    .show(ui, |ui| {
-                        ui.label(RichText::new("Circuit: main").strong());
-                    });
-                ui.separator();
-                ScrollArea::both()
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        Frame::NONE.inner_margin(12).show(ui, |ui| {
-                            egui::Grid::new("circuit_attributes")
-                                .num_columns(2)
-                                .spacing(vec2(16.0, 12.0))
-                                .show(ui, |ui| {
-                                    for (key, value) in [
-                                        ("Circuit Name", "main"),
-                                        ("Shared Label", "—"),
-                                        ("Label Facing", "East"),
-                                        ("Label Font", "Default"),
-                                        ("Label Color", "#000000"),
-                                    ] {
-                                        ui.label(RichText::new(key).weak());
-                                        ui.label(value);
-                                        ui.end_row();
-                                    }
-                                });
-                        });
-                    });
+                properties::show(ui, &mut self.editor);
             });
+    }
+
+    fn library_tool(&mut self, ui: &mut Ui, kind: Kind) {
+        let tool = Tool::Place(kind);
+        if ui
+            .selectable_label(self.editor.tool == tool, kind.name())
+            .clicked()
+        {
+            self.editor.set_tool(tool);
+        }
     }
 
     fn zoom_controls(&mut self, ui: &mut Ui) {

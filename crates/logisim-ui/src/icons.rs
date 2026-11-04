@@ -8,7 +8,8 @@ pub(crate) enum Icon {
     Select,
     Text,
     Pin,
-    Probe,
+    Wire,
+    Tunnel,
     Not,
     And,
     Or,
@@ -91,9 +92,24 @@ fn paint(p: &egui::Painter, r: Rect, icon: Icon, color: Color32) {
             line((0.5, 0.35), (0.5, 0.7));
             line((0.9, 0.5), (1.1, 0.5));
         }
-        Icon::Probe => {
-            p.circle_stroke(r.center(), r.width() * 0.35, stroke);
-            line((0.85, 0.5), (1.1, 0.5));
+        Icon::Wire => {
+            line((0.05, 0.85), (0.55, 0.85));
+            line((0.55, 0.85), (0.55, 0.15));
+            line((0.55, 0.15), (0.95, 0.15));
+            p.circle_filled(point(0.05, 0.85), 2.0, color);
+            p.circle_filled(point(0.95, 0.15), 2.0, color);
+        }
+        Icon::Tunnel => {
+            p.add(Shape::closed_line(
+                vec![
+                    point(0.05, 0.2),
+                    point(0.65, 0.2),
+                    point(1.0, 0.5),
+                    point(0.65, 0.8),
+                    point(0.05, 0.8),
+                ],
+                stroke,
+            ));
         }
         Icon::Not => {
             p.add(Shape::closed_line(

@@ -28,6 +28,7 @@ cargo test --workspace --locked --offline
 git diff --check
 ```
 
-首次检查前安装 Rust 工具链并下载锁定依赖。测试覆盖布局、画布坐标变换与输入隔离；
+首次检查前安装 Rust 工具链并下载锁定依赖。测试覆盖布局、画布坐标、连接几何、
+编辑历史及真实 egui 输入路径（含属性输入隔离）；
 界面改动还需真实启动窗口检查。每步实现前先运行参考程序并截图，行为依据遵循
 [AGENTS.md](AGENTS.md) 中的 Cleanroom 约定。
