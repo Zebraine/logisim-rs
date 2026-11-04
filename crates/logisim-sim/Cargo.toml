@@ -1,6 +1,6 @@
 [package]
 name = "logisim-sim"
-description = "Headless simulation boundary; M0 scaffold"
+description = "Bounded combinational logic simulation"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

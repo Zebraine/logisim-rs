@@ -7,6 +7,10 @@ mod editor;
 mod editor_tests;
 mod icons;
 mod properties;
+mod simulation;
+pub use simulation::{
+    InputValue, SignalTone, SignalView, SimulationAction, SimulationIssue, SimulationView,
+};
 
 use canvas::{Canvas, MAX_ZOOM, MIN_ZOOM};
 use editor::{Editor, Tool};
@@ -46,6 +50,16 @@ pub struct Workspace {
 }
 
 impl Workspace {
+    pub fn circuit(&self) -> &logisim_core::Circuit {
+        &self.editor.circuit
+    }
+    pub fn set_simulation(&mut self, view: SimulationView) {
+        self.editor.simulation.view = view;
+    }
+    pub fn take_simulation_actions(&mut self) -> Vec<SimulationAction> {
+        std::mem::take(&mut self.editor.simulation.actions)
+    }
+
     pub fn show(&mut self, ui: &mut Ui) {
         Panel::top("menus")
             .exact_size(29.0)
@@ -88,7 +102,7 @@ impl Workspace {
                 ui.label("A cleanroom digital circuit workspace.");
                 ui.separator();
                 ui.label("Component editing, wiring and canvas navigation are available.");
-                ui.label("File saving and simulation are not yet available.");
+                ui.label("Combinational simulation is available. File saving and clocks are not yet available.");
             });
     }
 
@@ -167,7 +181,7 @@ impl Workspace {
                 disabled_actions(ui, &["Add Circuit…", "Load Library…", "Project Options…"]);
             });
             ui.menu_button("Simulate", |ui| {
-                disabled_actions(ui, &["Run", "Step", "Reset", "Tick Once"]);
+                self.editor.simulation.menu(ui);
             });
             ui.menu_button("Window", |ui| {
                 if ui.button("Minimize").clicked() {
@@ -198,14 +212,12 @@ impl Workspace {
 
     fn toolbar(&mut self, ui: &mut Ui) {
         ui.horizontal(|ui| {
-            icons::button(
-                ui,
-                Icon::Poke,
-                false,
-                false,
-                "Poke — simulation is not implemented",
-            );
             for (icon, tool, hint) in [
+                (
+                    Icon::Poke,
+                    Tool::Poke,
+                    "Poke · P · toggle inputs / inspect signals",
+                ),
                 (Icon::Select, Tool::Select, "Select · V"),
                 (
                     Icon::Wire,
@@ -231,15 +243,14 @@ impl Workspace {
             {
                 self.editor.rotate();
             }
-            if ui.available_width() > 290.0 {
+            ui.separator();
+            self.editor.simulation.toolbar(ui);
+            if ui.available_width() > 180.0 {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.label(
-                        RichText::new(format!(
-                            "{}  ·  Wheel zoom / Middle-drag pan",
-                            self.editor.tool.name()
-                        ))
-                        .size(11.0)
-                        .weak(),
+                        RichText::new(self.editor.simulation.status())
+                            .size(11.0)
+                            .weak(),
                     );
                 });
             }

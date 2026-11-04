@@ -445,10 +445,7 @@ impl Circuit {
                         && (w.touches(*wire)
                             || ports.iter().any(|p| w.contains(*p) && wire.contains(*p)))
                 }) || tunnels.iter().any(|t| {
-                    wire.contains(t.position)
-                        && attached
-                            .iter()
-                            .any(|a| a.label == t.label && a.bits == t.bits)
+                    wire.contains(t.position) && attached.iter().any(|a| a.label == t.label)
                 }) {
                     next.insert(wire.id);
                 }
@@ -558,6 +555,8 @@ mod tests {
         }
         let a = d.add_wire(Point::ZERO, Point::new(0, 50)).unwrap();
         let b = d.add_wire(Point::new(200, 0), Point::new(200, 50)).unwrap();
+        assert!(d.connected_wires(a).contains(&b));
+        d.components[1].bits = 4;
         assert!(d.connected_wires(a).contains(&b));
         d.components[1].label = "data".into();
         assert!(!d.connected_wires(a).contains(&b));

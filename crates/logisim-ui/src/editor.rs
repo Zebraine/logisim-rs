@@ -1,6 +1,10 @@
 //! Editing transactions and gestures. Simulation is deliberately separate.
 
-use crate::{canvas::Canvas, drawing};
+use crate::{
+    canvas::Canvas,
+    drawing,
+    simulation::{SimulationAction, SimulationUi},
+};
 
 use egui::{Key, Modifiers, PointerButton, Pos2, Rect, Response, Ui, Vec2};
 use logisim_core::{Circuit, Component, GRID, Gate, Id, Kind, Point};
@@ -13,6 +17,7 @@ pub(crate) enum Tool {
     #[default]
     Select,
     Wire,
+    Poke,
     Place(Kind),
 }
 impl Tool {
@@ -20,6 +25,7 @@ impl Tool {
         match self {
             Self::Select => "Select",
             Self::Wire => "Wire",
+            Self::Poke => "Poke",
             Self::Place(kind) => kind.name(),
         }
     }
@@ -58,6 +64,7 @@ pub(crate) struct Editor {
     pub tool: Tool,
     pub template: Component,
     pub focus_text: bool,
+    pub simulation: SimulationUi,
     undo: Vec<Snapshot>,
     redo: Vec<Snapshot>,
     clipboard: Option<Circuit>,
@@ -75,6 +82,7 @@ impl Default for Editor {
             tool: Tool::Select,
             template: Component::new(Kind::Gate(Gate::And), Point::ZERO),
             focus_text: false,
+            simulation: SimulationUi::default(),
             undo: vec![],
             redo: vec![],
             clipboard: None,
@@ -483,6 +491,21 @@ impl Editor {
                 let world = canvas.world(pos);
                 let snap = self.snap(world, tolerance);
                 match self.tool {
+                    Tool::Poke => {
+                        self.selection.clear();
+                        if let Some(id) = self.hit(world, tolerance) {
+                            self.selection.insert(id);
+                            if let Some(input) = self.simulation.view.inputs.get(&id) {
+                                if input.bits == 1 {
+                                    self.simulation
+                                        .actions
+                                        .push(SimulationAction::ToggleInput { id, bit: 0 });
+                                } else {
+                                    self.simulation.focus_value = true;
+                                }
+                            }
+                        }
+                    }
                     Tool::Place(_) => self.place(snap),
                     Tool::Wire => {
                         if let Some(start) = self.wire_start.take() {
@@ -506,6 +529,22 @@ impl Editor {
                     }
                 }
             }
+        }
+        if response.hovered()
+            && let Some(pos) = pointer
+            && let Some(id) = self.hit(canvas.world(pos), tolerance)
+            && let Some(signal) = self
+                .simulation
+                .view
+                .wires
+                .get(&id)
+                .or_else(|| self.simulation.view.ports.get(&(id, 0)))
+        {
+            response.clone().on_hover_ui(|ui| {
+                ui.colored_label(signal.tone.color(), format!("Signal: {}", signal.text));
+                ui.monospace(&signal.binary);
+                ui.weak(format!("{} bit", signal.binary.len()));
+            });
         }
         response.context_menu(|ui| {
             if ui
@@ -548,7 +587,13 @@ impl Editor {
             self.publish_clipboard = false;
         }
         let painter = ui.painter_at(canvas.rect);
-        drawing::circuit(&painter, canvas, &self.circuit, &self.selection);
+        drawing::circuit(
+            &painter,
+            canvas,
+            &self.circuit,
+            &self.selection,
+            &self.simulation.view,
+        );
         if let Some(Gesture::Box { start, current, .. }) = &self.gesture {
             let rect = Rect::from_two_pos(
                 canvas.screen_vec(start.to_vec2()),
@@ -597,8 +642,12 @@ impl Editor {
             if let Tool::Place(_) = self.tool {
                 let mut ghost = self.template.clone();
                 ghost.position = self.snap(world, tolerance);
-                drawing::component(&painter, canvas, &ghost, false, true);
+                drawing::component(&painter, canvas, &ghost, false, true, None);
                 ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+            } else if self.tool == Tool::Poke {
+                if self.hit(world, tolerance).is_some() {
+                    ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                }
             } else if let Some(port) = self.port_at(world, tolerance) {
                 painter.circle_stroke(
                     canvas.screen(port),
@@ -612,6 +661,7 @@ impl Editor {
         }
     }
     fn shortcuts(&mut self, ui: &mut Ui) {
+        self.simulation.shortcuts(ui, &self.selection);
         let consume = |key, modifiers| ui.input_mut(|i| i.consume_key(modifiers, key));
         if consume(Key::Escape, Modifiers::NONE) {
             self.cancel_gesture();
@@ -655,6 +705,9 @@ impl Editor {
         if !ui.input(|i| i.modifiers.command || i.modifiers.alt) {
             if consume(Key::R, Modifiers::NONE) {
                 self.rotate();
+            }
+            if consume(Key::P, Modifiers::NONE) {
+                self.set_tool(Tool::Poke);
             }
             if consume(Key::V, Modifiers::NONE) {
                 self.set_tool(Tool::Select);

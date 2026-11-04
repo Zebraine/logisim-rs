@@ -1,5 +1,5 @@
 //! Original vector artwork and editor hit geometry.
-use crate::{ACCENT, INK, canvas::Canvas};
+use crate::{ACCENT, INK, canvas::Canvas, simulation::SimulationView};
 use egui::{
     Align2, Color32, FontId, Painter, Pos2, Rect, Shape, Stroke, StrokeKind, Vec2, pos2, vec2,
 };
@@ -33,6 +33,13 @@ fn text_width(c: &Component) -> f32 {
         * 0.62)
         .max(24.0)
 }
+fn pin_width(c: &Component) -> f32 {
+    if c.bits <= 1 {
+        32.0
+    } else {
+        (f32::from(c.bits.clamp(1, 32).div_ceil(4)) * 8.0 + 22.0).max(40.0)
+    }
+}
 fn half_height(c: &Component) -> f32 {
     (f32::from(c.input_count().saturating_sub(1)) * 10.0 + 10.0).max(20.0)
 }
@@ -52,7 +59,7 @@ pub(crate) fn bounds(c: &Component) -> Rect {
             text_width(c) + 22.0,
             (f32::from(c.font_size) * 0.7 + 5.0).max(16.0),
         ),
-        _ => (32.0, 16.0),
+        _ => (pin_width(c), 16.0),
     };
     let mut rect = Rect::NOTHING;
     for p in [
@@ -72,7 +79,13 @@ pub(crate) fn wire_distance(w: Wire, point: Vec2) -> f32 {
     let t = ((point - a).dot(segment) / segment.length_sq().max(1.0)).clamp(0.0, 1.0);
     (point - (a + segment * t)).length()
 }
-pub(crate) fn circuit(p: &Painter, canvas: &Canvas, circuit: &Circuit, selection: &BTreeSet<Id>) {
+pub(crate) fn circuit(
+    p: &Painter,
+    canvas: &Canvas,
+    circuit: &Circuit,
+    selection: &BTreeSet<Id>,
+    simulation: &SimulationView,
+) {
     let mut net = BTreeSet::new();
     for id in selection {
         if !net.contains(id) && circuit.wires.iter().any(|w| w.id == *id) {
@@ -81,16 +94,27 @@ pub(crate) fn circuit(p: &Painter, canvas: &Canvas, circuit: &Circuit, selection
     }
     for w in &circuit.wires {
         let selected = selection.contains(&w.id);
-        let color = if selected {
-            ACCENT
-        } else if net.contains(&w.id) {
-            Color32::from_rgb(14, 165, 180)
-        } else {
-            INK
-        };
+        let segment = [canvas.screen(w.a), canvas.screen(w.b)];
+        if selected || net.contains(&w.id) {
+            p.line_segment(
+                segment,
+                Stroke::new(
+                    if selected { 7.0 } else { 5.0 },
+                    ACCENT.gamma_multiply(if selected { 0.25 } else { 0.12 }),
+                ),
+            );
+        }
+        let signal = simulation.wires.get(&w.id);
         p.line_segment(
-            [canvas.screen(w.a), canvas.screen(w.b)],
-            Stroke::new(if selected { 2.8 } else { 1.8 }, color),
+            segment,
+            Stroke::new(
+                if signal.is_some_and(|s| s.binary.len() > 1) {
+                    3.0
+                } else {
+                    1.8
+                },
+                signal.map_or(INK, |s| s.tone.color()),
+            ),
         );
         if selected {
             for endpoint in [w.a, w.b] {
@@ -103,13 +127,33 @@ pub(crate) fn circuit(p: &Painter, canvas: &Canvas, circuit: &Circuit, selection
         }
     }
     for point in circuit.junctions() {
-        p.circle_filled(canvas.screen(point), 3.0, INK);
+        let color = circuit
+            .wires
+            .iter()
+            .find(|w| w.contains(point))
+            .and_then(|w| simulation.wires.get(&w.id))
+            .map_or(INK, |s| s.tone.color());
+        p.circle_filled(canvas.screen(point), 3.0, color);
     }
     for c in &circuit.components {
-        component(p, canvas, c, selection.contains(&c.id), false);
+        component(
+            p,
+            canvas,
+            c,
+            selection.contains(&c.id),
+            false,
+            Some(simulation),
+        );
     }
 }
-pub(crate) fn component(p: &Painter, canvas: &Canvas, c: &Component, selected: bool, ghost: bool) {
+pub(crate) fn component(
+    p: &Painter,
+    canvas: &Canvas,
+    c: &Component,
+    selected: bool,
+    ghost: bool,
+    simulation: Option<&SimulationView>,
+) {
     let color = if ghost {
         ACCENT.gamma_multiply(0.45)
     } else {
@@ -207,22 +251,38 @@ pub(crate) fn component(p: &Painter, canvas: &Canvas, c: &Component, selected: b
             }
         }
         Kind::Pin => {
+            let width = pin_width(c);
             path(
                 vec![
-                    vec2(-32.0, -15.0),
+                    vec2(-width, -15.0),
                     vec2(-8.0, -15.0),
                     vec2(0.0, 0.0),
                     vec2(-8.0, 15.0),
-                    vec2(-32.0, 15.0),
+                    vec2(-width, 15.0),
                 ],
                 true,
             );
-            p.text(
-                at(-19.0, 0.0),
-                Align2::CENTER_CENTER,
-                if c.output { "OUT" } else { "IN" },
-                FontId::proportional(10.0 * canvas.camera.zoom),
-                color,
+            let signal = simulation.and_then(|s| s.ports.get(&(c.id, 0)));
+            let text = simulation
+                .and_then(|s| s.inputs.get(&c.id))
+                .map(|v| v.text())
+                .or_else(|| signal.map(|s| s.text.clone()))
+                .unwrap_or_else(|| if c.output { "OUT".into() } else { "IN".into() });
+            let color = signal.map_or(color, |s| s.tone.color());
+            let galley =
+                p.layout_no_wrap(text, FontId::monospace(12.0 * canvas.camera.zoom), color);
+            let angle = match c.facing {
+                logisim_core::Facing::South => std::f32::consts::FRAC_PI_2,
+                logisim_core::Facing::North => -std::f32::consts::FRAC_PI_2,
+                _ => 0.0,
+            };
+            p.add(
+                egui::epaint::TextShape::new(
+                    at(-width * 0.5 - 3.0, 0.0) - galley.size() * 0.5,
+                    galley,
+                    color,
+                )
+                .with_angle_and_anchor(angle, Align2::CENTER_CENTER),
             );
         }
         Kind::Tunnel => {
@@ -285,8 +345,17 @@ pub(crate) fn component(p: &Painter, canvas: &Canvas, c: &Component, selected: b
             color,
         );
     }
-    for port in c.ports() {
-        p.circle_filled(canvas.screen(port), 2.6, if ghost { color } else { ACCENT });
+    for (index, port) in c.ports().into_iter().enumerate() {
+        let signal = simulation.and_then(|s| s.ports.get(&(c.id, index)));
+        p.circle_filled(
+            canvas.screen(port),
+            2.6,
+            if ghost {
+                color
+            } else {
+                signal.map_or(ACCENT, |s| s.tone.color())
+            },
+        );
     }
     if selected {
         let b = bounds(c);

@@ -33,9 +33,35 @@ pub(crate) fn show(ui: &mut Ui, editor: &mut Editor) {
         .show(ui, |ui| {
             Frame::NONE.inner_margin(12).show(ui, |ui| {
                 if let Some(c) = target {
+                    if !placing {
+                        editor.simulation.component(ui, &c);
+                        ui.separator();
+                    }
                     component_editor(ui, editor, c, placing);
                 } else {
                     selection_info(ui, editor);
+                }
+                if !editor.simulation.view.issues.is_empty() {
+                    ui.separator();
+                    egui::CollapsingHeader::new(format!(
+                        "Simulation issues ({})",
+                        editor.simulation.view.issues.len()
+                    ))
+                    .default_open(true)
+                    .show(ui, |ui| {
+                        for issue in editor.simulation.view.issues.iter().take(32) {
+                            if ui
+                                .button(&issue.message)
+                                .on_hover_text("Select affected components and wires")
+                                .clicked()
+                            {
+                                editor.selection = issue.targets.clone();
+                            }
+                        }
+                        if editor.simulation.view.issues.len() > 32 {
+                            ui.weak("Showing the first 32 issues.");
+                        }
+                    });
                 }
             });
         });
@@ -69,7 +95,11 @@ fn selection_info(ui: &mut Ui, editor: &mut Editor) {
                 editor.circuit.connected_wires(w.id).len()
             ));
             ui.weak("Drag the blue endpoint handles to reshape this wire.");
-            ui.weak("Cyan marks the connected net, including matching tunnel labels.");
+            if let Some(signal) = editor.simulation.view.wires.get(&w.id) {
+                ui.colored_label(signal.tone.color(), format!("Signal: {}", signal.text));
+                ui.monospace(&signal.binary);
+            }
+            ui.weak("The highlight follows the connected net, including matching tunnel labels.");
         }
         return;
     }
@@ -86,7 +116,9 @@ fn selection_info(ui: &mut Ui, editor: &mut Editor) {
         ui.weak("Drag empty space to select. Shift adds to the selection.");
     }
     ui.add_space(10.0);
-    ui.weak("In-memory editing. File saving and simulation are not available yet.");
+    editor.simulation.overview(ui);
+    ui.add_space(8.0);
+    ui.weak("In-memory circuit. File saving and clocks are not available yet.");
 }
 
 fn component_editor(ui: &mut Ui, editor: &mut Editor, mut c: Component, placing: bool) {
