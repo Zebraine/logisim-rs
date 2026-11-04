@@ -119,6 +119,39 @@ pub enum Kind {
     Tunnel,
     Text,
 }
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum GateSize {
+    #[default]
+    Narrow,
+    Medium,
+    Wide,
+}
+impl GateSize {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Narrow => "Narrow",
+            Self::Medium => "Medium",
+            Self::Wide => "Wide",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum HorizontalAlign {
+    #[default]
+    Left,
+    Center,
+    Right,
+}
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum VerticalAlign {
+    #[default]
+    Top,
+    Center,
+    Baseline,
+    Bottom,
+}
 impl Kind {
     pub fn name(self) -> &'static str {
         match self {
@@ -133,7 +166,7 @@ impl Kind {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Component {
     pub id: Id,
-    /// Gate output / single terminal, or text anchor. Always on the editor grid.
+    /// Gate output / single terminal, or text anchor. Imported positions stay exact.
     pub position: Point,
     pub kind: Kind,
     pub facing: Facing,
@@ -143,6 +176,9 @@ pub struct Component {
     pub label: String,
     pub font_size: u8,
     pub color: [u8; 3],
+    pub gate_size: GateSize,
+    pub text_horizontal: HorizontalAlign,
+    pub text_vertical: VerticalAlign,
 }
 impl Component {
     pub fn new(kind: Kind, position: Point) -> Self {
@@ -162,7 +198,14 @@ impl Component {
                 String::new()
             },
             font_size: 14,
-            color: [51, 65, 85],
+            color: if kind == Kind::Tunnel {
+                [0, 0, 0]
+            } else {
+                [51, 65, 85]
+            },
+            gate_size: GateSize::Narrow,
+            text_horizontal: HorizontalAlign::Left,
+            text_vertical: VerticalAlign::Top,
         }
     }
     pub fn input_count(&self) -> u8 {
@@ -179,12 +222,53 @@ impl Component {
         let count = self.input_count();
         let mut ports = vec![Point::ZERO];
         for i in 0..count {
-            ports.push(Point::new(
-                -60,
-                (2 * i32::from(i) - i32::from(count) + 1) * GRID,
-            ));
+            let y = if count == 1 {
+                0
+            } else {
+                // Positions measured from the running reference for 2–8 inputs.
+                let half = i32::from(count / 2);
+                let index = i32::from(i) - half;
+                let index = if count.is_multiple_of(2) && index >= 0 {
+                    index + 1
+                } else {
+                    index
+                };
+                match (self.gate_size, count) {
+                    (GateSize::Medium | GateSize::Wide, 2) | (GateSize::Medium, 3) => index * 20,
+                    (GateSize::Wide, 3) => index * 30,
+                    (GateSize::Wide, 4) => [-30, -10, 10, 30][usize::from(i)],
+                    _ => index * GRID,
+                }
+            };
+            ports.push(Point::new(-self.gate_depth(), y));
         }
         ports
+    }
+    pub fn gate_width(&self) -> i32 {
+        match self.kind {
+            Kind::Gate(Gate::Buffer) => 20,
+            Kind::Gate(Gate::Not) => {
+                if self.gate_size == GateSize::Wide {
+                    30
+                } else {
+                    20
+                }
+            }
+            Kind::Gate(_) => match self.gate_size {
+                GateSize::Narrow => 30,
+                GateSize::Medium => 50,
+                GateSize::Wide => 70,
+            },
+            _ => 0,
+        }
+    }
+    pub fn gate_depth(&self) -> i32 {
+        self.gate_width()
+            + match self.kind {
+                Kind::Gate(Gate::Nand | Gate::Nor | Gate::Xor) => 10,
+                Kind::Gate(Gate::Xnor) => 20,
+                _ => 0,
+            }
     }
     pub fn ports(&self) -> Vec<Point> {
         self.local_ports()
@@ -565,11 +649,12 @@ mod tests {
     fn rotation_preserves_existing_port_connections() {
         let mut d = Circuit::default();
         let id = d.add_component(Component::new(Kind::Gate(Gate::Not), Point::new(100, 100)));
-        d.add_wire(Point::new(0, 100), Point::new(40, 100));
+        let before = d.component(id).unwrap().ports()[1];
+        d.add_wire(Point::new(0, 100), before);
         let mut changed = d.component(id).unwrap().clone();
         changed.facing = Facing::South;
         d.replace_component(changed);
-        assert!(d.wires.iter().any(|w| w.contains(Point::new(100, 40))));
+        assert!(d.wires.iter().any(|w| w.contains(Point::new(100, 80))));
         assert!(d.wires.iter().all(|w| w.a.x == w.b.x || w.a.y == w.b.y));
     }
 }

@@ -1,6 +1,8 @@
 //! Editor layout based on runtime observation, with an independent canvas viewport.
 
 mod canvas;
+mod document;
+pub use document::{DocumentView, FileAction};
 mod drawing;
 mod editor;
 #[cfg(test)]
@@ -47,9 +49,28 @@ pub struct Workspace {
     canvas: Canvas,
     editor: Editor,
     about_open: bool,
+    document: DocumentView,
+    file_actions: Vec<FileAction>,
+    fit_pending: bool,
 }
 
 impl Workspace {
+    pub fn set_document(&mut self, document: DocumentView) {
+        self.document = document;
+    }
+    pub fn take_file_actions(&mut self) -> Vec<FileAction> {
+        std::mem::take(&mut self.file_actions)
+    }
+    pub fn finish_edit(&mut self) {
+        self.editor.cancel_gesture();
+        self.editor.commit_properties();
+    }
+    pub fn replace_circuit(&mut self, circuit: logisim_core::Circuit) {
+        self.editor = Editor::default();
+        self.editor.circuit = circuit;
+        self.canvas.reset();
+        self.fit_pending = true;
+    }
     pub fn circuit(&self) -> &logisim_core::Circuit {
         &self.editor.circuit
     }
@@ -61,6 +82,23 @@ impl Workspace {
     }
 
     pub fn show(&mut self, ui: &mut Ui) {
+        if ui.is_enabled() && !ui.ctx().any_popup_open() {
+            for (modifiers, key, action) in [
+                (
+                    egui::Modifiers::COMMAND.plus(egui::Modifiers::SHIFT),
+                    egui::Key::S,
+                    FileAction::SaveAs,
+                ),
+                (egui::Modifiers::COMMAND, egui::Key::S, FileAction::Save),
+                (egui::Modifiers::COMMAND, egui::Key::O, FileAction::Open),
+                (egui::Modifiers::COMMAND, egui::Key::N, FileAction::New),
+                (egui::Modifiers::COMMAND, egui::Key::Q, FileAction::Close),
+            ] {
+                if ui.input_mut(|i| i.consume_key(modifiers, key)) {
+                    self.file_actions.push(action);
+                }
+            }
+        }
         Panel::top("menus")
             .exact_size(29.0)
             .frame(
@@ -89,6 +127,26 @@ impl Workspace {
         egui::CentralPanel::default()
             .frame(Frame::NONE)
             .show(ui, |ui| {
+                if self.fit_pending {
+                    let mut bounds = egui::Rect::NOTHING;
+                    for c in &self.editor.circuit.components {
+                        bounds = bounds.union(drawing::bounds(c));
+                    }
+                    for w in &self.editor.circuit.wires {
+                        bounds.extend_with(drawing::pos(w.a));
+                        bounds.extend_with(drawing::pos(w.b));
+                    }
+                    if bounds.is_finite() {
+                        let available =
+                            (ui.available_size() - vec2(80.0, 80.0)).max(vec2(1.0, 1.0));
+                        let zoom = (available.x / bounds.width().max(1.0))
+                            .min(available.y / bounds.height().max(1.0))
+                            .clamp(MIN_ZOOM, 1.0);
+                        self.canvas.camera.zoom = zoom;
+                        self.canvas.camera.offset = vec2(40.0, 40.0) - bounds.min.to_vec2() * zoom;
+                    }
+                    self.fit_pending = false;
+                }
                 let response = self.canvas.show(ui);
                 self.editor.show(ui, &mut self.canvas, &response);
             });
@@ -102,19 +160,30 @@ impl Workspace {
                 ui.label("A cleanroom digital circuit workspace.");
                 ui.separator();
                 ui.label("Component editing, wiring and canvas navigation are available.");
-                ui.label("Combinational simulation is available. File saving and clocks are not yet available.");
+                ui.label("Combinational simulation is available. Supported .circ files can be opened and saved. Clocks are not yet available.");
             });
     }
 
     fn menus(&mut self, ui: &mut Ui) {
         egui::MenuBar::new().ui(ui, |ui| {
             ui.menu_button("File", |ui| {
-                disabled_actions(ui, &["New", "Open…", "Open Recent"]);
+                for (label, action) in [
+                    ("New · Ctrl+N", FileAction::New),
+                    ("Open… · Ctrl+O", FileAction::Open),
+                    ("Save · Ctrl+S", FileAction::Save),
+                    ("Save As… · Ctrl+Shift+S", FileAction::SaveAs),
+                ] {
+                    if ui.button(label).clicked() {
+                        self.file_actions.push(action);
+                        ui.close();
+                    }
+                }
                 ui.separator();
-                disabled_actions(ui, &["Save", "Save As…", "Export Image…", "Print…"]);
+                disabled_actions(ui, &["Export Image…", "Print…"]);
                 ui.separator();
                 if ui.button("Exit").clicked() {
-                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                    self.file_actions.push(FileAction::Close);
+                    ui.close();
                 }
             });
             ui.menu_button("Edit", |ui| {
@@ -196,10 +265,14 @@ impl Workspace {
                     ui.close();
                 }
                 if ui.button("Close").clicked() {
-                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                    self.file_actions.push(FileAction::Close);
+                    ui.close();
                 }
                 ui.separator();
-                ui.add_enabled(false, egui::Button::new("Untitled").selected(true));
+                ui.add_enabled(
+                    false,
+                    egui::Button::new(self.document.label()).selected(true),
+                );
             });
             ui.menu_button("Help", |ui| {
                 if ui.button("About logisim-rs").clicked() {
@@ -297,11 +370,14 @@ impl Workspace {
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
                         ui.add_space(6.0);
-                        egui::CollapsingHeader::new(RichText::new("Untitled").strong())
+                        egui::CollapsingHeader::new(RichText::new(self.document.label()).strong())
+                            .id_salt("document-tree")
                             .default_open(true)
                             .show(ui, |ui| {
-                                let _ =
-                                    ui.selectable_label(true, RichText::new("main").color(ACCENT));
+                                let _ = ui.selectable_label(
+                                    true,
+                                    RichText::new(&self.document.circuit_name).color(ACCENT),
+                                );
                                 for group in [
                                     "Wiring",
                                     "Gates",
@@ -345,7 +421,7 @@ impl Workspace {
         egui::CentralPanel::default()
             .frame(Frame::NONE.fill(CHROME))
             .show(ui, |ui| {
-                properties::show(ui, &mut self.editor);
+                properties::show(ui, &mut self.editor, &self.document.circuit_name);
             });
     }
 
@@ -540,5 +616,68 @@ mod tests {
             vec![Event::PointerMoved(start + vec2(80.0, 45.0))],
         );
         assert!((app.canvas.camera.offset - before - vec2(80.0, 45.0)).length() < 0.001);
+    }
+    #[test]
+    fn file_shortcuts_emit_one_command_and_modal_disabling_blocks_them() {
+        let ctx = Context::default();
+        configure(&ctx);
+        let mut app = Workspace::default();
+        let size = vec2(1200.0, 820.0);
+        for (key, modifiers, action) in [
+            (egui::Key::O, Modifiers::COMMAND, FileAction::Open),
+            (egui::Key::S, Modifiers::COMMAND, FileAction::Save),
+            (
+                egui::Key::S,
+                Modifiers::COMMAND.plus(Modifiers::SHIFT),
+                FileAction::SaveAs,
+            ),
+            (egui::Key::N, Modifiers::COMMAND, FileAction::New),
+            (egui::Key::Q, Modifiers::COMMAND, FileAction::Close),
+        ] {
+            let event = Event::Key {
+                key,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers,
+            };
+            frame(&ctx, &mut app, size, vec![event.clone()]);
+            assert_eq!(app.take_file_actions(), vec![action]);
+            let mut output = ctx.run_ui(
+                RawInput {
+                    screen_rect: Some(Rect::from_min_size(Pos2::ZERO, size)),
+                    events: vec![event],
+                    ..Default::default()
+                },
+                |ui| {
+                    ui.add_enabled_ui(false, |ui| app.show(ui));
+                },
+            );
+            output.textures_delta.clear();
+            assert!(app.take_file_actions().is_empty());
+        }
+    }
+    #[test]
+    fn loading_resets_history_selection_and_fits_negative_coordinates() {
+        let ctx = Context::default();
+        configure(&ctx);
+        let mut app = Workspace::default();
+        app.editor.place(logisim_core::Point::new(100, 100));
+        assert!(app.editor.can_undo());
+        let mut circuit = logisim_core::Circuit::default();
+        circuit.add_component(logisim_core::Component::new(
+            Kind::Text,
+            logisim_core::Point::new(-1000, -800),
+        ));
+        app.replace_circuit(circuit.clone());
+        frame(&ctx, &mut app, vec2(1200.0, 820.0), vec![]);
+        assert!(!app.editor.can_undo());
+        assert!(app.editor.selection.is_empty());
+        assert_eq!(app.circuit(), &circuit);
+        assert!(
+            app.canvas
+                .rect
+                .contains(app.canvas.screen(circuit.components[0].position))
+        );
     }
 }

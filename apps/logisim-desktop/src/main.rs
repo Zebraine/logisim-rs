@@ -1,5 +1,10 @@
 //! Desktop host; editor presentation and navigation live in logisim-ui.
+mod file_picker;
+#[cfg(test)]
+mod file_tests;
+mod files;
 mod simulation;
+mod storage;
 
 fn main() -> eframe::Result {
     eframe::run_native(
@@ -13,7 +18,15 @@ fn main() -> eframe::Result {
         },
         Box::new(|cc| {
             logisim_ui::configure(&cc.egui_ctx);
-            Ok(Box::new(DesktopApp::default()))
+            let mut app = DesktopApp::default();
+            if let Some(path) = std::env::args_os().nth(1) {
+                app.files.load(
+                    std::path::Path::new(&path),
+                    &mut app.workspace,
+                    &mut app.simulator,
+                );
+            }
+            Ok(Box::new(app))
         }),
     )
 }
@@ -22,6 +35,7 @@ fn main() -> eframe::Result {
 struct DesktopApp {
     workspace: logisim_ui::Workspace,
     simulator: logisim_sim::Simulator,
+    files: files::Files,
 }
 
 impl eframe::App for DesktopApp {
@@ -32,7 +46,34 @@ impl eframe::App for DesktopApp {
             self.workspace.circuit(),
             &self.simulator,
         ));
-        self.workspace.show(ui);
+        if ui.input(|i| i.viewport().close_requested()) && !self.files.allow_close {
+            ui.ctx()
+                .send_viewport_cmd(eframe::egui::ViewportCommand::CancelClose);
+            self.files.request(
+                logisim_ui::FileAction::Close,
+                ui.ctx(),
+                &mut self.workspace,
+                &mut self.simulator,
+            );
+        }
+        self.workspace
+            .set_document(self.files.present(self.workspace.circuit()));
+        ui.add_enabled_ui(!self.files.busy(), |ui| self.workspace.show(ui));
+        for action in self.workspace.take_file_actions() {
+            self.files
+                .request(action, ui.ctx(), &mut self.workspace, &mut self.simulator);
+        }
+        self.files
+            .show(ui.ctx(), &mut self.workspace, &mut self.simulator);
+        let view = self.files.present(self.workspace.circuit());
+        ui.ctx()
+            .send_viewport_cmd(eframe::egui::ViewportCommand::Title(format!(
+                "Logisim rs — {} · {}{}{}",
+                view.circuit_name,
+                view.title,
+                if view.dirty { " *" } else { "" },
+                if view.partial { " (partial)" } else { "" }
+            )));
         let edited = self.simulator.synchronize(self.workspace.circuit());
         let actions = self.workspace.take_simulation_actions();
         let acted = !actions.is_empty();

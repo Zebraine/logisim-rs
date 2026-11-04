@@ -1,3 +1,46 @@
-//! Circuit file import, export, and diagnostic boundary.
-//!
-//! M0 scaffold only. Format behavior awaits runtime-generated evidence.
+//! The supported .circ subset, independently specified from runtime-created files.
+//! No filesystem or simulator dependency; unsupported content is never silently saved.
+mod read;
+#[cfg(test)]
+mod tests;
+mod write;
+
+use logisim_core::Circuit;
+pub use read::parse;
+pub use write::serialize;
+
+pub const MAX_BYTES: usize = 8 * 1024 * 1024;
+pub const MAX_ITEMS: usize = 4096;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Document {
+    pub name: String,
+    pub circuit: Circuit,
+}
+impl Default for Document {
+    fn default() -> Self {
+        Self {
+            name: "main".into(),
+            circuit: Circuit::default(),
+        }
+    }
+}
+#[derive(Debug)]
+pub struct Import {
+    pub document: Document,
+    /// Any omitted or approximated content requires saving to a different file.
+    pub warnings: Vec<String>,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Error(pub String);
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+impl std::error::Error for Error {}
+type Result<T> = std::result::Result<T, Error>;
+
+fn valid_point(p: logisim_core::Point) -> bool {
+    (-1_000_000..=1_000_000).contains(&p.x) && (-1_000_000..=1_000_000).contains(&p.y)
+}

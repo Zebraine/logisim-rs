@@ -88,7 +88,8 @@ impl Canvas {
         if response.clicked() {
             response.request_focus();
         }
-        if !ui.ctx().any_popup_open()
+        if ui.is_enabled()
+            && !ui.ctx().any_popup_open()
             && (response.has_focus()
                 || (response.hovered() && !ui.ctx().egui_wants_keyboard_input()))
             && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::Num0))
@@ -99,14 +100,14 @@ impl Canvas {
         let space = ui.input(|i| i.key_down(egui::Key::Space));
         let dragging = response.dragged_by(PointerButton::Middle)
             || (space && response.dragged_by(PointerButton::Primary));
-        if dragging {
+        if ui.is_enabled() && dragging {
             self.camera.pan(ui.input(|i| i.pointer.delta()));
             ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
         } else if response.hovered() && space {
             ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
         }
 
-        if response.hovered() && !ui.ctx().any_popup_open() {
+        if ui.is_enabled() && response.hovered() && !ui.ctx().any_popup_open() {
             let anchor = ui.input(|i| i.pointer.hover_pos()).unwrap_or(rect.center()) - rect.min;
             ui.input(|i| {
                 for event in &i.events {

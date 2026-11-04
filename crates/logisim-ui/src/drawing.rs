@@ -33,6 +33,25 @@ fn text_width(c: &Component) -> f32 {
         * 0.62)
         .max(24.0)
 }
+fn text_origin(c: &Component) -> Pos2 {
+    use logisim_core::{HorizontalAlign as H, VerticalAlign as V};
+    let width = text_width(c);
+    let height = f32::from(c.font_size) * 1.35 * c.label.lines().count().max(1) as f32;
+    pos(c.position)
+        - vec2(
+            match c.text_horizontal {
+                H::Left => 0.0,
+                H::Center => width / 2.0,
+                H::Right => width,
+            },
+            match c.text_vertical {
+                V::Top => 0.0,
+                V::Center => height / 2.0,
+                V::Baseline => f32::from(c.font_size),
+                V::Bottom => height,
+            },
+        )
+}
 fn pin_width(c: &Component) -> f32 {
     if c.bits <= 1 {
         32.0
@@ -41,12 +60,13 @@ fn pin_width(c: &Component) -> f32 {
     }
 }
 fn half_height(c: &Component) -> f32 {
-    (f32::from(c.input_count().saturating_sub(1)) * 10.0 + 10.0).max(20.0)
+    (c.gate_width() as f32 * 0.5)
+        .max(c.local_ports().iter().map(|p| p.y.abs()).max().unwrap_or(0) as f32 + 5.0)
 }
 pub(crate) fn bounds(c: &Component) -> Rect {
     if c.kind == Kind::Text {
         return Rect::from_min_size(
-            pos(c.position),
+            text_origin(c),
             vec2(
                 text_width(c),
                 f32::from(c.font_size) * 1.35 * c.label.lines().count().max(1) as f32,
@@ -54,7 +74,7 @@ pub(crate) fn bounds(c: &Component) -> Rect {
         );
     }
     let (width, height) = match c.kind {
-        Kind::Gate(_) => (60.0, half_height(c)),
+        Kind::Gate(_) => (c.gate_depth() as f32, half_height(c)),
         Kind::Tunnel => (
             text_width(c) + 22.0,
             (f32::from(c.font_size) * 0.7 + 5.0).max(16.0),
@@ -171,7 +191,12 @@ pub(crate) fn component(
         );
     }
     let stroke = Stroke::new(1.7, color);
-    let at = |x, y| canvas.screen_vec(local(c, vec2(x, y)));
+    let scale_x = if matches!(c.kind, Kind::Gate(_)) {
+        c.gate_depth() as f32 / 60.0
+    } else {
+        1.0
+    };
+    let at = |x, y| canvas.screen_vec(local(c, vec2(x * scale_x, y)));
     let path = |points: Vec<Vec2>, closed| {
         let points = points.into_iter().map(|v| at(v.x, v.y)).collect();
         p.add(if closed {
@@ -186,7 +211,7 @@ pub(crate) fn component(
             let h = half_height(c);
             match gate {
                 Gate::Not | Gate::Buffer => path(
-                    vec![vec2(-50.0, -20.0), vec2(-10.0, 0.0), vec2(-50.0, 20.0)],
+                    vec![vec2(-50.0, -h), vec2(-10.0, 0.0), vec2(-50.0, h)],
                     true,
                 ),
                 Gate::And | Gate::Nand => {
@@ -240,12 +265,15 @@ pub(crate) fn component(
                     -50.0
                 };
                 p.line_segment(
-                    [at(port.x as f32, port.y as f32), at(input_x, port.y as f32)],
+                    [
+                        at(port.x as f32 / scale_x, port.y as f32),
+                        at(input_x, port.y as f32),
+                    ],
                     stroke,
                 );
             }
             if gate.inverted() {
-                p.circle_stroke(at(-5.0, 0.0), 5.0 * canvas.camera.zoom, stroke);
+                p.circle_stroke(at(-5.0, 0.0), 5.0 * scale_x * canvas.camera.zoom, stroke);
             } else {
                 p.line_segment([at(-10.0, 0.0), at(0.0, 0.0)], stroke);
             }
@@ -317,7 +345,7 @@ pub(crate) fn component(
         }
         Kind::Text => {
             p.text(
-                canvas.screen(c.position),
+                canvas.screen_vec(text_origin(c).to_vec2()),
                 Align2::LEFT_TOP,
                 &c.label,
                 font.clone(),

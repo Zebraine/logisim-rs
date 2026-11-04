@@ -1,8 +1,10 @@
 use crate::editor::{Editor, Tool};
 use egui::{Frame, RichText, ScrollArea, Ui};
-use logisim_core::{Component, Facing, Kind, Point};
+use logisim_core::{
+    Component, Facing, Gate, GateSize, HorizontalAlign, Kind, Point, VerticalAlign,
+};
 
-pub(crate) fn show(ui: &mut Ui, editor: &mut Editor) {
+pub(crate) fn show(ui: &mut Ui, editor: &mut Editor, circuit_name: &str) {
     let placing = matches!(editor.tool, Tool::Place(_));
     let target = if placing {
         Some(editor.template.clone())
@@ -22,7 +24,7 @@ pub(crate) fn show(ui: &mut Ui, editor: &mut Editor) {
     } else if !editor.selection.is_empty() {
         format!("Selection: {} item(s)", editor.selection.len())
     } else {
-        "Circuit: main".into()
+        format!("Circuit: {circuit_name}")
     };
     Frame::NONE.inner_margin(12).show(ui, |ui| {
         ui.label(RichText::new(title).strong());
@@ -118,7 +120,7 @@ fn selection_info(ui: &mut Ui, editor: &mut Editor) {
     ui.add_space(10.0);
     editor.simulation.overview(ui);
     ui.add_space(8.0);
-    ui.weak("In-memory circuit. File saving and clocks are not available yet.");
+    ui.weak("Use File to open or save the supported .circ subset. Clocks are not available yet.");
 }
 
 fn component_editor(ui: &mut Ui, editor: &mut Editor, mut c: Component, placing: bool) {
@@ -154,7 +156,9 @@ fn component_editor(ui: &mut Ui, editor: &mut Editor, mut c: Component, placing:
         .show(ui, |ui| {
             active |= fields(ui, &mut c, placing);
         });
-    c.position = Point::snapped(c.position.x as f32, c.position.y as f32);
+    if c.position != original.position && c.kind != Kind::Text {
+        c.position = Point::snapped(c.position.x as f32, c.position.y as f32);
+    }
     ui.add_space(12.0);
     if c.kind != Kind::Text && ui.button("Rotate clockwise · R").clicked() {
         c.facing = c.facing.next();
@@ -207,6 +211,50 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
         active |= r.has_focus() || r.dragged();
         ui.end_row();
     }
+    if let Kind::Gate(gate) = c.kind
+        && gate != Gate::Buffer
+    {
+        ui.label("Gate size");
+        egui::ComboBox::from_id_salt("gate_size")
+            .selected_text(c.gate_size.name())
+            .show_ui(ui, |ui| {
+                for size in [GateSize::Narrow, GateSize::Medium, GateSize::Wide] {
+                    if gate != Gate::Not || size != GateSize::Medium {
+                        ui.selectable_value(&mut c.gate_size, size, size.name());
+                    }
+                }
+            });
+        ui.end_row();
+    }
+    if c.kind == Kind::Text {
+        ui.label("Horizontal");
+        egui::ComboBox::from_id_salt("text_halign")
+            .selected_text(format!("{:?}", c.text_horizontal))
+            .show_ui(ui, |ui| {
+                for a in [
+                    HorizontalAlign::Left,
+                    HorizontalAlign::Center,
+                    HorizontalAlign::Right,
+                ] {
+                    ui.selectable_value(&mut c.text_horizontal, a, format!("{a:?}"));
+                }
+            });
+        ui.end_row();
+        ui.label("Vertical");
+        egui::ComboBox::from_id_salt("text_valign")
+            .selected_text(format!("{:?}", c.text_vertical))
+            .show_ui(ui, |ui| {
+                for a in [
+                    VerticalAlign::Top,
+                    VerticalAlign::Center,
+                    VerticalAlign::Baseline,
+                    VerticalAlign::Bottom,
+                ] {
+                    ui.selectable_value(&mut c.text_vertical, a, format!("{a:?}"));
+                }
+            });
+        ui.end_row();
+    }
     if c.kind == Kind::Pin {
         ui.label("Output pin");
         ui.checkbox(&mut c.output, "");
@@ -216,9 +264,11 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
     let r = ui.add(egui::DragValue::new(&mut c.font_size).range(8..=48));
     active |= r.has_focus() || r.dragged();
     ui.end_row();
-    ui.label("Color");
-    ui.color_edit_button_srgb(&mut c.color);
-    ui.end_row();
+    if c.kind != Kind::Tunnel {
+        ui.label("Color");
+        ui.color_edit_button_srgb(&mut c.color);
+        ui.end_row();
+    }
     if !placing {
         for (label, value) in [("X", &mut c.position.x), ("Y", &mut c.position.y)] {
             ui.label(label);

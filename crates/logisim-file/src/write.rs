@@ -1,0 +1,160 @@
+use super::{Document, Error, MAX_BYTES, MAX_ITEMS, Result, valid_point};
+use logisim_core::{Gate, HorizontalAlign, Kind, VerticalAlign};
+use std::fmt::Write;
+
+fn escape(s: &str) -> Result<String> {
+    let mut out = String::new();
+    for c in s.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\n' => out.push_str("&#10;"),
+            '\r' => out.push_str("&#13;"),
+            '\t' => out.push_str("&#9;"),
+            c if c >= '\u{20}' && c != '\u{fffe}' && c != '\u{ffff}' => out.push(c),
+            _ => {
+                return Err(Error(
+                    "Text contains a character XML cannot represent.".into(),
+                ));
+            }
+        }
+    }
+    Ok(out)
+}
+fn attribute(out: &mut String, name: &str, value: impl std::fmt::Display) -> Result<()> {
+    writeln!(
+        out,
+        "      <a name=\"{name}\" val=\"{}\"/>",
+        escape(&value.to_string())?
+    )
+    .unwrap();
+    Ok(())
+}
+pub fn serialize(document: &Document) -> Result<String> {
+    let circuit = &document.circuit;
+    if document.name.is_empty() || document.name.len() > 1024 {
+        return Err(Error("Invalid circuit name.".into()));
+    }
+    if circuit.components.len() + circuit.wires.len() > MAX_ITEMS {
+        return Err(Error(format!("Circuit exceeds {MAX_ITEMS} items.")));
+    }
+    let name = escape(&document.name)?;
+    let mut out = String::from(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!-- Written by logisim-rs; source declares the compatible Logisim-ITA format. -->\n<project source=\"2.16.2.2.jar\" version=\"1.0\">\n  <lib desc=\"#Wiring\" name=\"0\"/>\n  <lib desc=\"#Gates\" name=\"1\"/>\n  <lib desc=\"#Base\" name=\"2\"/>\n",
+    );
+    writeln!(out, "  <main name=\"{name}\"/>").unwrap();
+    out.push_str("  <options>\n    <a name=\"gateUndefined\" val=\"ignore\"/>\n    <a name=\"simlimit\" val=\"1000\"/>\n    <a name=\"simrand\" val=\"0\"/>\n  </options>\n  <mappings>\n    <tool lib=\"2\" map=\"Button2\" name=\"Poke Tool\"/>\n    <tool lib=\"2\" map=\"Button3\" name=\"Menu Tool\"/>\n    <tool lib=\"2\" map=\"Ctrl Button1\" name=\"Menu Tool\"/>\n  </mappings>\n  <toolbar>\n    <tool lib=\"2\" name=\"Poke Tool\"/>\n    <tool lib=\"2\" name=\"Edit Tool\"/>\n    <sep/>\n    <tool lib=\"2\" name=\"Text Tool\"/>\n    <tool lib=\"0\" name=\"Pin\"><a name=\"tristate\" val=\"false\"/></tool>\n    <tool lib=\"0\" name=\"Pin\"><a name=\"output\" val=\"true\"/><a name=\"facing\" val=\"west\"/></tool>\n    <tool lib=\"1\" name=\"NOT Gate\"/>\n    <tool lib=\"1\" name=\"AND Gate\"/>\n    <tool lib=\"1\" name=\"OR Gate\"/>\n  </toolbar>\n");
+    writeln!(out, "  <circuit name=\"{name}\">").unwrap();
+    for w in &circuit.wires {
+        if !valid_point(w.a)
+            || !valid_point(w.b)
+            || w.a == w.b
+            || (w.a.x != w.b.x && w.a.y != w.b.y)
+        {
+            return Err(Error("Invalid wire coordinates.".into()));
+        }
+        writeln!(
+            out,
+            "    <wire from=\"({},{})\" to=\"({},{})\"/>",
+            w.a.x, w.a.y, w.b.x, w.b.y
+        )
+        .unwrap();
+    }
+    for c in &circuit.components {
+        if !valid_point(c.position)
+            || !(1..=32).contains(&c.bits)
+            || !(2..=8).contains(&c.inputs)
+            || c.font_size == 0
+            || c.label.len() > 65_536
+        {
+            return Err(Error(format!("Invalid {} attributes.", c.kind.name())));
+        }
+        let lib = match c.kind {
+            Kind::Gate(_) => 1,
+            Kind::Text => 2,
+            _ => 0,
+        };
+        writeln!(
+            out,
+            "    <comp lib=\"{lib}\" loc=\"({},{})\" name=\"{}\">",
+            c.position.x,
+            c.position.y,
+            c.kind.name()
+        )
+        .unwrap();
+        if c.kind != Kind::Text {
+            attribute(&mut out, "facing", c.facing.name().to_ascii_lowercase())?;
+            attribute(&mut out, "width", c.bits)?;
+        }
+        if let Kind::Gate(g) = c.kind {
+            if g != Gate::Buffer {
+                attribute(&mut out, "size", c.gate_width())?;
+            }
+            if !g.unary() {
+                attribute(&mut out, "inputs", c.inputs)?;
+            }
+        }
+        if c.kind == Kind::Pin {
+            attribute(&mut out, "output", c.output)?;
+            attribute(&mut out, "tristate", false)?;
+        }
+        attribute(
+            &mut out,
+            if c.kind == Kind::Text {
+                "text"
+            } else {
+                "label"
+            },
+            &c.label,
+        )?;
+        attribute(
+            &mut out,
+            if c.kind == Kind::Text {
+                "font"
+            } else {
+                "labelfont"
+            },
+            format!("Dialog plain {}", c.font_size),
+        )?;
+        if c.kind != Kind::Tunnel {
+            attribute(
+                &mut out,
+                if c.kind == Kind::Text {
+                    "color"
+                } else {
+                    "labelcolor"
+                },
+                format!("#{:02x}{:02x}{:02x}", c.color[0], c.color[1], c.color[2]),
+            )?;
+        }
+        if c.kind == Kind::Text {
+            attribute(
+                &mut out,
+                "halign",
+                match c.text_horizontal {
+                    HorizontalAlign::Left => "left",
+                    HorizontalAlign::Center => "center",
+                    HorizontalAlign::Right => "right",
+                },
+            )?;
+            attribute(
+                &mut out,
+                "valign",
+                match c.text_vertical {
+                    VerticalAlign::Top => "top",
+                    VerticalAlign::Center => "center",
+                    VerticalAlign::Baseline => "base",
+                    VerticalAlign::Bottom => "bottom",
+                },
+            )?;
+        }
+        out.push_str("    </comp>\n");
+    }
+    out.push_str("  </circuit>\n</project>\n");
+    if out.len() > MAX_BYTES {
+        return Err(Error("Serialized file exceeds 8 MiB.".into()));
+    }
+    Ok(out)
+}

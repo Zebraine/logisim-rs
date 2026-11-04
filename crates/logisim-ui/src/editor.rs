@@ -328,7 +328,8 @@ impl Editor {
     }
 
     pub fn show(&mut self, ui: &mut Ui, canvas: &mut Canvas, response: &Response) {
-        let keyboard = !ui.ctx().any_popup_open()
+        let keyboard = ui.is_enabled()
+            && !ui.ctx().any_popup_open()
             && (response.has_focus()
                 || (response.hovered() && !ui.ctx().egui_wants_keyboard_input()));
         if keyboard {
@@ -340,7 +341,7 @@ impl Editor {
         }
         let pointer = ui.input(|i| i.pointer.interact_pos());
         let tolerance = 7.0 / canvas.camera.zoom;
-        if !space && !ui.ctx().any_popup_open() {
+        if ui.is_enabled() && !space && !ui.ctx().any_popup_open() {
             if response.drag_started_by(PointerButton::Primary) {
                 self.commit_properties();
                 if let Some(start) = ui.input(|i| i.pointer.press_origin()) {
