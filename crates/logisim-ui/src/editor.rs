@@ -139,12 +139,12 @@ impl Editor {
     }
     pub fn can_rotate(&self) -> bool {
         if let Tool::Place(kind) = self.tool {
-            kind != Kind::Text
+            kind.rotatable()
         } else {
             self.circuit
                 .components
                 .iter()
-                .any(|c| self.selection.contains(&c.id) && c.kind != Kind::Text)
+                .any(|c| self.selection.contains(&c.id) && c.kind.rotatable())
         }
     }
     pub fn undo(&mut self) {
@@ -245,6 +245,9 @@ impl Editor {
         }
     }
     pub fn rotate(&mut self) {
+        if !self.can_rotate() {
+            return;
+        }
         if let Tool::Place(_) = self.tool {
             self.template.facing = self.template.facing.next();
             return;
@@ -256,7 +259,7 @@ impl Editor {
             .circuit
             .components
             .iter()
-            .filter(|c| self.selection.contains(&c.id) && c.kind != Kind::Text)
+            .filter(|c| self.selection.contains(&c.id) && c.kind.rotatable())
             .cloned()
             .collect();
         for mut c in changes {

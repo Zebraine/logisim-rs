@@ -8,6 +8,7 @@ pub(crate) struct Network {
     pub nets: Vec<Net>,
     pub ports: BTreeMap<Port, usize>,
     pub wires: BTreeMap<Id, usize>,
+    bit_drivers: Vec<Vec<(Id, u8)>>,
 }
 #[derive(Default)]
 pub(crate) struct Net {
@@ -16,6 +17,7 @@ pub(crate) struct Net {
     pub width: u8,
     pub mismatch: bool,
     pub drivers: Vec<Id>,
+    bits: Vec<usize>,
 }
 impl Network {
     pub fn compile(circuit: &Circuit) -> Self {
@@ -75,19 +77,88 @@ impl Network {
                 let (c, index, _) = ports[i - offset];
                 network.ports.insert((c.id, index), net);
                 network.nets[net].ports.push((c.id, index));
-                widths[net].insert(c.bits.clamp(1, 32));
-                if index == 0
-                    && (matches!(c.kind, Kind::Gate(_)) || (c.kind == Kind::Pin && !c.output))
-                {
+                if let Some(width) = c.port_width(index).filter(|w| *w > 0) {
+                    widths[net].insert(width);
+                }
+                if index == 0 && c.drives_output() {
                     network.nets[net].drivers.push(c.id);
                 }
             }
         }
         for (net, widths) in network.nets.iter_mut().zip(widths) {
-            net.width = widths.last().copied().unwrap_or(1);
+            net.width = widths.last().copied().unwrap_or(0);
             net.mismatch = widths.len() > 1;
         }
+        network.connect_bits(circuit);
         network
+    }
+    fn connect_bits(&mut self, circuit: &Circuit) {
+        let mut count = 0;
+        for net in &mut self.nets {
+            net.bits = (count..count + usize::from(net.width)).collect();
+            count += usize::from(net.width);
+        }
+        let mut groups = Groups((0..count).collect());
+        for c in circuit
+            .components
+            .iter()
+            .filter(|c| c.kind == Kind::Splitter)
+        {
+            let common = &self.nets[self.ports[&(c.id, 0)]];
+            if common.mismatch {
+                continue;
+            }
+            for branch in 0..c.splitter.fanout.clamp(1, 32) {
+                let end = &self.nets[self.ports[&(c.id, usize::from(branch) + 1)]];
+                if end.mismatch {
+                    continue;
+                }
+                for (bit, combined) in c
+                    .splitter
+                    .branch_bits(c.bits, branch)
+                    .into_iter()
+                    .enumerate()
+                {
+                    groups.join(common.bits[usize::from(combined)], end.bits[bit]);
+                }
+            }
+        }
+        self.bit_drivers = vec![vec![]; count];
+        for net in &mut self.nets {
+            for (bit, node) in net.bits.iter_mut().enumerate() {
+                *node = groups.root(*node);
+                if !net.mismatch {
+                    self.bit_drivers[*node].extend(net.drivers.iter().map(|id| (*id, bit as u8)));
+                }
+            }
+        }
+    }
+    pub fn resolve(&self, drives: &BTreeMap<Id, crate::Value>) -> Vec<crate::Value> {
+        use crate::{Bit, Value};
+        let bits: Vec<_> = self
+            .bit_drivers
+            .iter()
+            .map(|drivers| {
+                drivers
+                    .iter()
+                    .filter_map(|(id, bit)| drives.get(id).map(|v| v.bit(*bit)))
+                    .fold(Bit::Unknown, |old, next| match (old, next) {
+                        (Bit::Unknown, b) | (b, Bit::Unknown) => b,
+                        (a, b) if a == b => a,
+                        _ => Bit::Error,
+                    })
+            })
+            .collect();
+        self.nets
+            .iter()
+            .map(|net| {
+                if net.mismatch {
+                    Value::filled(net.width, Bit::Unknown)
+                } else {
+                    Value::from_bits(net.bits.iter().map(|i| bits[*i]))
+                }
+            })
+            .collect()
     }
     pub fn connected(&self, port: Port) -> bool {
         self.ports.get(&port).is_some_and(|i| {

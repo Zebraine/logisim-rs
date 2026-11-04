@@ -1,5 +1,5 @@
 use super::{Document, Error, MAX_BYTES, MAX_ITEMS, Result, valid_point};
-use logisim_core::{Gate, HorizontalAlign, Kind, VerticalAlign};
+use logisim_core::{Gate, HorizontalAlign, Kind, Radix, SplitAppearance, VerticalAlign};
 use std::fmt::Write;
 
 fn escape(s: &str) -> Result<String> {
@@ -84,8 +84,13 @@ pub fn serialize(document: &Document) -> Result<String> {
             c.kind.name()
         )
         .unwrap();
-        if c.kind != Kind::Text {
+        if c.kind.rotatable() {
             attribute(&mut out, "facing", c.facing.name().to_ascii_lowercase())?;
+        }
+        if !matches!(
+            c.kind,
+            Kind::Text | Kind::Probe | Kind::Splitter | Kind::BitExtender
+        ) {
             attribute(&mut out, "width", c.bits)?;
         }
         if let Kind::Gate(g) = c.kind {
@@ -99,6 +104,76 @@ pub fn serialize(document: &Document) -> Result<String> {
         if c.kind == Kind::Pin {
             attribute(&mut out, "output", c.output)?;
             attribute(&mut out, "tristate", false)?;
+        }
+        match c.kind {
+            Kind::Constant => {
+                if c.bits < 32 && c.constant >= (1 << c.bits) {
+                    return Err(Error("Constant value exceeds width".into()));
+                }
+                attribute(&mut out, "value", format!("0x{:x}", c.constant))?;
+            }
+            Kind::Probe => {
+                attribute(
+                    &mut out,
+                    "radix",
+                    match c.radix {
+                        Radix::Binary => "2",
+                        Radix::Octal => "8",
+                        Radix::Signed => "10signed",
+                        Radix::Unsigned => "10unsigned",
+                        Radix::Hex => "16",
+                    },
+                )?;
+                attribute(
+                    &mut out,
+                    "labelloc",
+                    c.label_facing.name().to_ascii_lowercase(),
+                )?;
+            }
+            Kind::BitExtender => {
+                if !(1..=32).contains(&c.input_bits) {
+                    return Err(Error("Invalid extender input width".into()));
+                }
+                attribute(&mut out, "in_width", c.input_bits)?;
+                attribute(&mut out, "out_width", c.bits)?;
+                attribute(&mut out, "type", c.extension.name().to_ascii_lowercase())?;
+            }
+            Kind::Splitter => {
+                if !(1..=32).contains(&c.splitter.fanout) {
+                    return Err(Error("Invalid splitter fanout".into()));
+                }
+                attribute(&mut out, "fanout", c.splitter.fanout)?;
+                attribute(&mut out, "incoming", c.bits)?;
+                if c.splitter.descending {
+                    attribute(&mut out, "order", "descending")?;
+                }
+                attribute(
+                    &mut out,
+                    "appear",
+                    match c.splitter.appearance {
+                        SplitAppearance::Left => "left",
+                        SplitAppearance::Right => "right",
+                        SplitAppearance::Center => "center",
+                        SplitAppearance::Legacy => "legacy",
+                    },
+                )?;
+                for bit in 0..c.bits {
+                    let branch = c.splitter.mapping[usize::from(bit)];
+                    if branch.is_some_and(|b| b >= c.splitter.fanout) {
+                        return Err(Error("Invalid splitter mapping".into()));
+                    }
+                    attribute(
+                        &mut out,
+                        &format!("bit{bit}"),
+                        branch.map_or_else(|| "none".into(), |b| b.to_string()),
+                    )?;
+                }
+            }
+            _ => {}
+        }
+        if !c.kind.has_label() {
+            out.push_str("    </comp>\n");
+            continue;
         }
         attribute(
             &mut out,

@@ -17,7 +17,7 @@ pub struct Value {
 }
 impl Value {
     pub fn filled(width: u8, bit: Bit) -> Self {
-        let width = width.clamp(1, 32);
+        let width = width.min(32);
         let mut bits = [Bit::Unknown; 32];
         bits[..usize::from(width)].fill(bit);
         Self { width, bits }
@@ -66,20 +66,13 @@ impl Value {
             })
             .collect()
     }
-    pub(crate) fn resolve(width: u8, drivers: impl Iterator<Item = Self>) -> Self {
-        let mut result = Self::filled(width, Bit::Unknown);
-        for driver in drivers {
-            for i in 0..result.width {
-                let old = result.bit(i);
-                let next = driver.bit(i);
-                result.bits[usize::from(i)] = match (old, next) {
-                    (Bit::Unknown, bit) | (bit, Bit::Unknown) => bit,
-                    (a, b) if a == b => a,
-                    _ => Bit::Error,
-                };
-            }
+    pub(crate) fn from_bits(bits: impl Iterator<Item = Bit>) -> Self {
+        let mut value = Self::filled(0, Bit::Unknown);
+        for (i, bit) in bits.take(32).enumerate() {
+            value.bits[i] = bit;
+            value.width += 1;
         }
-        result
+        value
     }
 }
 

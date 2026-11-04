@@ -178,3 +178,117 @@ fn measured_gate_matrix_has_exact_ports_and_rotations() {
         }
     }
 }
+
+#[test]
+fn wiring_defaults_and_runtime_export_attributes_are_supported() {
+    let imported = parse(&xml(r#"
+        <comp lib="w" name="Constant" loc="(10,10)"/>
+        <comp lib="w" name="Power" loc="(20,10)"/>
+        <comp lib="w" name="Ground" loc="(30,10)"/>
+        <comp lib="w" name="Probe" loc="(40,10)"><a name="radix" val="10signed"/><a name="labelloc" val="south"/></comp>
+        <comp lib="w" name="Bit Extender" loc="(100,100)"/>
+        <comp lib="w" name="Splitter" loc="(200,200)"/>
+        <comp lib="w" name="Splitter" loc="(300,200)"><a name="fanout" val="3"/><a name="incoming" val="8"/><a name="appear" val="legacy"/><a name="bit0" val="none"/><a name="bit1" val="0"/><a name="bit2" val="0"/><a name="bit3" val="1"/><a name="bit4" val="1"/><a name="bit5" val="1"/><a name="bit6" val="2"/><a name="bit7" val="2"/></comp>
+    "#)).unwrap();
+    assert!(imported.warnings.is_empty(), "{:?}", imported.warnings);
+    let c = &imported.document.circuit.components;
+    assert_eq!(c[0].constant, 1);
+    assert_eq!(c[1].facing, Facing::North);
+    assert_eq!(c[2].facing, Facing::South);
+    assert_eq!(c[3].radix, logisim_core::Radix::Signed);
+    assert_eq!(c[3].label_facing, Facing::South);
+    assert_eq!((c[4].input_bits, c[4].bits), (8, 16));
+    assert_eq!(
+        c[4].ports(),
+        vec![Point::new(100, 100), Point::new(60, 100)]
+    );
+    assert_eq!(
+        c[5].ports(),
+        vec![
+            Point::new(200, 200),
+            Point::new(220, 160),
+            Point::new(220, 170),
+            Point::new(220, 180),
+            Point::new(220, 190)
+        ]
+    );
+    assert_eq!(
+        &c[6].splitter.mapping[..8],
+        &[
+            None,
+            Some(0),
+            Some(0),
+            Some(1),
+            Some(1),
+            Some(1),
+            Some(2),
+            Some(2)
+        ]
+    );
+}
+#[test]
+fn all_wiring_attributes_roundtrip_without_omissions() {
+    use logisim_core::{Extension, Radix, SplitAppearance};
+    let mut d = Document::default();
+    for (index, kind) in [
+        Kind::Constant,
+        Kind::Power,
+        Kind::Ground,
+        Kind::Probe,
+        Kind::Splitter,
+        Kind::BitExtender,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let mut c = Component::new(kind, Point::new(index as i32 * 100, 200));
+        match kind {
+            Kind::Constant | Kind::Power | Kind::Ground => {
+                c.bits = 32;
+                c.constant = if kind == Kind::Constant { u32::MAX } else { 1 };
+                c.facing = Facing::West;
+            }
+            Kind::Probe => {
+                c.radix = Radix::Octal;
+                c.label = "Probe & 总线".into();
+                c.label_facing = Facing::East;
+                c.font_size = 18;
+            }
+            Kind::Splitter => {
+                c.bits = 32;
+                c.facing = Facing::North;
+                c.splitter.fanout = 32;
+                c.splitter.appearance = SplitAppearance::Center;
+                c.splitter.distribute(32, true);
+                c.splitter.mapping[0] = None;
+            }
+            Kind::BitExtender => {
+                c.input_bits = 32;
+                c.bits = 8;
+                c.extension = Extension::Input;
+            }
+            _ => unreachable!(),
+        }
+        d.circuit.add_component(c);
+    }
+    let saved = serialize(&d).unwrap();
+    let imported = parse(&saved).unwrap();
+    assert!(imported.warnings.is_empty(), "{:?}", imported.warnings);
+    assert_eq!(d, imported.document);
+    assert_eq!(serialize(&imported.document).unwrap(), saved);
+}
+#[test]
+fn invalid_wiring_attributes_are_reported_and_never_exported_as_supported() {
+    let imported = parse(&xml(r#"
+        <comp lib="w" name="Splitter" loc="(0,0)"><a name="bit0" val="4"/></comp>
+        <comp lib="w" name="Splitter" loc="(0,10)"><a name="incoming" val="33"/></comp>
+        <comp lib="w" name="Splitter" loc="(0,20)"><a name="bit31" val="0"/></comp>
+        <comp lib="w" name="Bit Extender" loc="(0,30)"><a name="type" val="unknown"/></comp>
+        <comp lib="w" name="Bit Extender" loc="(0,40)"><a name="facing" val="south"/></comp>
+        <comp lib="w" name="Probe" loc="(0,50)"><a name="radix" val="unknown"/></comp>
+        <comp lib="w" name="Constant" loc="(0,60)"><a name="value" val="0x100000000"/></comp>
+    "#))
+    .unwrap();
+    assert_eq!(imported.warnings.len(), 7);
+    assert!(imported.document.circuit.components.is_empty());
+}

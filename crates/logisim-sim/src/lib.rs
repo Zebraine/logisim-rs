@@ -4,7 +4,7 @@ mod network;
 mod tests;
 mod value;
 
-use logisim_core::{Circuit, Id, Kind};
+use logisim_core::{Circuit, Extension, Id, Kind};
 use network::Network;
 use std::collections::BTreeMap;
 pub use value::{Bit, Value};
@@ -141,7 +141,7 @@ impl Simulator {
         self.steps = 0;
         self.unsettled_steps = 0;
         self.limited = false;
-        self.schedule_gates();
+        self.schedule_components();
     }
     fn schedule(&mut self, id: Id, value: Value) {
         if self.drives.get(&id) == Some(&value) {
@@ -150,46 +150,60 @@ impl Simulator {
             self.pending.insert(id, value);
         }
     }
-    fn schedule_gates(&mut self) {
+    fn schedule_components(&mut self) {
         let outputs: Vec<_> = self
             .circuit
             .components
             .iter()
             .filter_map(|c| {
-                let Kind::Gate(gate) = c.kind else {
-                    return None;
+                let output = match c.kind {
+                    Kind::Gate(gate) => {
+                        let inputs: Vec<_> = (1..=usize::from(c.input_count()))
+                            .filter(|i| gate.unary() || self.network.connected((c.id, *i)))
+                            .map(|i| self.port_value(c.id, i).expect("compiled gate port"))
+                            .collect();
+                        value::evaluate(gate, c.bits, &inputs)
+                    }
+                    Kind::Constant => Value::known(c.bits, c.constant),
+                    Kind::Power => Value::filled(c.bits, Bit::One),
+                    Kind::Ground => Value::known(c.bits, 0),
+                    Kind::BitExtender => {
+                        let input = self.port_value(c.id, 1).expect("compiled extender input");
+                        let extra = match c.extension {
+                            Extension::Zero => Bit::Zero,
+                            Extension::One => Bit::One,
+                            Extension::Sign => input.bit(input.width() - 1),
+                            Extension::Input => self
+                                .port_value(c.id, 2)
+                                .expect("compiled extension input")
+                                .bit(0),
+                        };
+                        Value::from_bits((0..c.bits.clamp(1, 32)).map(|i| {
+                            if i < input.width() {
+                                input.bit(i)
+                            } else {
+                                extra
+                            }
+                        }))
+                    }
+                    _ => return None,
                 };
-                let inputs: Vec<_> = (1..=usize::from(c.input_count()))
-                    .filter(|i| gate.unary() || self.network.connected((c.id, *i)))
-                    .map(|i| self.port_value(c.id, i).expect("compiled gate port"))
-                    .collect();
-                Some((c.id, value::evaluate(gate, c.bits, &inputs)))
+                Some((c.id, output))
             })
             .collect();
         for (id, value) in outputs {
             self.schedule(id, value);
         }
     }
-    /// Commit one batch of driver changes, then schedule resulting gate changes.
+    /// Commit one batch of driver changes, then schedule resulting component changes.
     pub fn step(&mut self) -> bool {
         if self.pending.is_empty() || self.limited {
             return false;
         }
         self.drives.extend(std::mem::take(&mut self.pending));
-        for (index, net) in self.network.nets.iter().enumerate() {
-            self.values[index] = if net.mismatch {
-                Value::filled(net.width, Bit::Unknown)
-            } else {
-                Value::resolve(
-                    net.width,
-                    net.drivers
-                        .iter()
-                        .filter_map(|id| self.drives.get(id).copied()),
-                )
-            };
-        }
+        self.values = self.network.resolve(&self.drives);
         self.steps = self.steps.saturating_add(1);
-        self.schedule_gates();
+        self.schedule_components();
         if self.pending.is_empty() {
             self.unsettled_steps = 0;
         } else {
@@ -228,7 +242,11 @@ impl Simulator {
     }
     pub fn port_value(&self, id: Id, index: usize) -> Option<Value> {
         let net = *self.network.ports.get(&(id, index))?;
-        let width = self.circuit.component(id)?.bits.clamp(1, 32);
+        let width = self
+            .circuit
+            .component(id)?
+            .port_width(index)
+            .unwrap_or(self.network.nets[net].width);
         Some(if self.network.nets[net].mismatch {
             Value::filled(width, Bit::Unknown)
         } else {
@@ -278,6 +296,9 @@ fn electrically_equal(a: &Circuit, b: &Circuit) -> bool {
             c.ports(),
             c.bits.clamp(1, 32),
             c.output && c.kind == Kind::Pin,
+            (c.kind == Kind::Constant).then_some(c.constant),
+            (c.kind == Kind::Splitter).then_some(c.splitter.clone()),
+            (c.kind == Kind::BitExtender).then_some((c.input_bits, c.extension)),
             if c.kind == Kind::Tunnel {
                 c.label.clone()
             } else {

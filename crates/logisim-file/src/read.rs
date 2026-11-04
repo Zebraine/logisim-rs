@@ -249,6 +249,12 @@ fn component(
     let kind = match (lib, name) {
         ("#Wiring", "Pin") => Kind::Pin,
         ("#Wiring", "Tunnel") => Kind::Tunnel,
+        ("#Wiring", "Constant") => Kind::Constant,
+        ("#Wiring", "Power") => Kind::Power,
+        ("#Wiring", "Ground") => Kind::Ground,
+        ("#Wiring", "Probe") => Kind::Probe,
+        ("#Wiring", "Splitter") => Kind::Splitter,
+        ("#Wiring", "Bit Extender") => Kind::BitExtender,
         ("#Base", "Text") => Kind::Text,
         ("#Gates", name) => Kind::Gate(
             Gate::ALL
@@ -262,6 +268,22 @@ fn component(
     let a = attributes(n)?;
     for key in a.keys() {
         let allowed = match kind {
+            Kind::Constant => matches!(key.as_str(), "facing" | "width" | "value"),
+            Kind::Power | Kind::Ground => matches!(key.as_str(), "facing" | "width"),
+            Kind::Probe => matches!(
+                key.as_str(),
+                "facing" | "radix" | "label" | "labelloc" | "labelfont" | "labelcolor"
+            ),
+            Kind::BitExtender => matches!(key.as_str(), "in_width" | "out_width" | "type"),
+            Kind::Splitter => {
+                matches!(
+                    key.as_str(),
+                    "facing" | "fanout" | "incoming" | "appear" | "order"
+                ) || key
+                    .strip_prefix("bit")
+                    .and_then(|n| n.parse::<u8>().ok())
+                    .is_some_and(|i| i < 32)
+            }
             Kind::Text => matches!(
                 key.as_str(),
                 "text" | "font" | "color" | "halign" | "valign"
@@ -283,7 +305,15 @@ fn component(
             return Err(Error(format!("Unsupported attribute {key}")));
         }
     }
-    c.facing = match value(&a, "facing", "east") {
+    c.facing = match value(
+        &a,
+        "facing",
+        match kind {
+            Kind::Power => "north",
+            Kind::Ground => "south",
+            _ => "east",
+        },
+    ) {
         "east" => Facing::East,
         "south" => Facing::South,
         "west" => Facing::West,
@@ -291,6 +321,10 @@ fn component(
         v => return Err(Error(format!("Invalid facing: {v}"))),
     };
     c.bits = number(&a, "width", 1, 1..=32)?;
+    read_wiring(&mut c, &a)?;
+    if !kind.has_label() {
+        return Ok((c, vec![]));
+    }
     c.inputs = number(&a, "inputs", 2, 2..=8)?;
     c.output = boolean(&a, "output", false)?;
     if kind == Kind::Pin && !c.output && boolean(&a, "tristate", true)? {
@@ -371,4 +405,89 @@ fn component(
         };
     }
     Ok((c, notes))
+}
+
+fn read_wiring(c: &mut Component, a: &Attributes) -> Result<()> {
+    use logisim_core::{Extension, Radix, SplitAppearance};
+    match c.kind {
+        Kind::Constant => {
+            let text = value(a, "value", "0x1");
+            c.constant = text
+                .strip_prefix("0x")
+                .and_then(|v| u32::from_str_radix(v, 16).ok())
+                .ok_or_else(|| Error("Invalid constant value".into()))?;
+            if c.bits < 32 {
+                c.constant &= (1 << c.bits) - 1;
+            }
+        }
+        Kind::Probe => {
+            c.radix = match value(a, "radix", "2") {
+                "2" => Radix::Binary,
+                "8" => Radix::Octal,
+                "10signed" => Radix::Signed,
+                "10unsigned" => Radix::Unsigned,
+                "16" => Radix::Hex,
+                _ => return Err(Error("Unsupported probe radix".into())),
+            };
+            c.label_facing = match value(a, "labelloc", "north") {
+                "north" => Facing::North,
+                "south" => Facing::South,
+                "east" => Facing::East,
+                "west" => Facing::West,
+                _ => return Err(Error("Invalid probe label location".into())),
+            };
+        }
+        Kind::BitExtender => {
+            c.input_bits = number(a, "in_width", 8, 1..=32)?;
+            c.bits = number(a, "out_width", 16, 1..=32)?;
+            c.extension = match value(a, "type", "zero") {
+                "zero" => Extension::Zero,
+                "one" => Extension::One,
+                "sign" => Extension::Sign,
+                "input" => Extension::Input,
+                _ => return Err(Error("Unsupported extension type".into())),
+            };
+        }
+        Kind::Splitter => {
+            c.bits = number(a, "incoming", 4, 1..=32)?;
+            c.splitter.fanout = number(a, "fanout", 4, 1..=32)?;
+            c.splitter.appearance = match value(a, "appear", "left") {
+                "left" => SplitAppearance::Left,
+                "right" => SplitAppearance::Right,
+                "center" => SplitAppearance::Center,
+                "legacy" => SplitAppearance::Legacy,
+                _ => return Err(Error("Unsupported splitter appearance".into())),
+            };
+            let descending = match value(a, "order", "ascending") {
+                "ascending" => false,
+                "descending" => true,
+                _ => return Err(Error("Unsupported splitter distribution".into())),
+            };
+            c.splitter.distribute(c.bits, descending);
+            // Runtime loading differs from the GUI's distribute action for omitted bitN values.
+            for i in 0..c.bits.min(c.splitter.fanout) {
+                c.splitter.mapping[usize::from(i)] = Some(i);
+            }
+            for (key, val) in a.iter().filter(|(k, _)| k.starts_with("bit")) {
+                let bit: usize = key[3..]
+                    .parse()
+                    .map_err(|_| Error("Invalid splitter bit".into()))?;
+                if bit >= usize::from(c.bits) {
+                    return Err(Error("Splitter mapping exceeds incoming width".into()));
+                }
+                c.splitter.mapping[bit] = if val == "none" {
+                    None
+                } else {
+                    Some(
+                        val.parse::<u8>()
+                            .ok()
+                            .filter(|n| *n < c.splitter.fanout)
+                            .ok_or_else(|| Error("Invalid splitter branch".into()))?,
+                    )
+                };
+            }
+        }
+        _ => {}
+    }
+    Ok(())
 }

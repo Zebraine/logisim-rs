@@ -326,3 +326,39 @@ fn multibit_poke_focuses_hex_input_and_enter_applies_without_global_commands() {
     );
     assert!(!app.editor.can_undo());
 }
+
+#[test]
+fn wiring_tools_place_duplicate_and_undo_and_fixed_extender_rejects_rotation() {
+    let (ctx, mut app) = setup();
+    for (i, kind) in [
+        Kind::Constant,
+        Kind::Power,
+        Kind::Ground,
+        Kind::Probe,
+        Kind::Splitter,
+        Kind::BitExtender,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        app.editor.set_tool(Tool::Place(kind));
+        if kind == Kind::BitExtender {
+            key(&ctx, &mut app, Key::R, Modifiers::NONE);
+            assert_eq!(app.editor.template.facing, logisim_core::Facing::East);
+        }
+        let at = app.canvas.screen(Point::new(140 + i as i32 * 110, 200));
+        click(&ctx, &mut app, at);
+    }
+    key(&ctx, &mut app, Key::Escape, Modifiers::NONE);
+    key(&ctx, &mut app, Key::R, Modifiers::NONE);
+    assert_eq!(
+        app.editor.circuit.components.last().unwrap().facing,
+        logisim_core::Facing::East
+    );
+    key(&ctx, &mut app, Key::A, Modifiers::COMMAND);
+    key(&ctx, &mut app, Key::D, Modifiers::COMMAND);
+    assert_eq!(app.editor.circuit.components.len(), 12);
+    assert_eq!(app.editor.circuit.ids().len(), 12);
+    key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
+    assert_eq!(app.editor.circuit.components.len(), 6);
+}

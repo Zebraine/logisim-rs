@@ -3,7 +3,7 @@ use crate::{ACCENT, INK, canvas::Canvas, simulation::SimulationView};
 use egui::{
     Align2, Color32, FontId, Painter, Pos2, Rect, Shape, Stroke, StrokeKind, Vec2, pos2, vec2,
 };
-use logisim_core::{Circuit, Component, Gate, Id, Kind, Point, Wire};
+use logisim_core::{Circuit, Component, Extension, Facing, Gate, Id, Kind, Point, Radix, Wire};
 use std::collections::BTreeSet;
 
 pub(crate) fn pos(p: Point) -> Pos2 {
@@ -63,7 +63,34 @@ fn half_height(c: &Component) -> f32 {
     (c.gate_width() as f32 * 0.5)
         .max(c.local_ports().iter().map(|p| p.y.abs()).max().unwrap_or(0) as f32 + 5.0)
 }
+fn probe_width(c: &Component) -> f32 {
+    match c.radix {
+        Radix::Binary => 136.0,
+        Radix::Octal => 100.0,
+        Radix::Signed | Radix::Unsigned => 108.0,
+        Radix::Hex => 84.0,
+    }
+}
 pub(crate) fn bounds(c: &Component) -> Rect {
+    if c.kind == Kind::Splitter {
+        let mut rect = Rect::from_min_max(pos(c.position), pos(c.position));
+        for point in c.ports() {
+            rect.extend_with(pos(point));
+        }
+        return rect.expand(4.0);
+    }
+    if matches!(c.kind, Kind::Power | Kind::Ground) {
+        let mut rect = Rect::NOTHING;
+        for p in [
+            vec2(0.0, -10.0),
+            vec2(20.0, 10.0),
+            vec2(0.0, 10.0),
+            vec2(20.0, -10.0),
+        ] {
+            rect.extend_with(local(c, p).to_pos2());
+        }
+        return rect;
+    }
     if c.kind == Kind::Text {
         return Rect::from_min_size(
             text_origin(c),
@@ -75,6 +102,8 @@ pub(crate) fn bounds(c: &Component) -> Rect {
     }
     let (width, height) = match c.kind {
         Kind::Gate(_) => (c.gate_depth() as f32, half_height(c)),
+        Kind::Probe => (probe_width(c), 20.0),
+        Kind::BitExtender => (40.0, 20.0),
         Kind::Tunnel => (
             text_width(c) + 22.0,
             (f32::from(c.font_size) * 0.7 + 5.0).max(16.0),
@@ -206,6 +235,18 @@ pub(crate) fn component(
         });
     };
     let font = FontId::proportional(f32::from(c.font_size) * canvas.camera.zoom);
+    let body_text = |at: Pos2, text: String, color: Color32| {
+        let galley = p.layout_no_wrap(text, FontId::monospace(12.0 * canvas.camera.zoom), color);
+        let angle = match c.facing {
+            Facing::South => std::f32::consts::FRAC_PI_2,
+            Facing::North => -std::f32::consts::FRAC_PI_2,
+            _ => 0.0,
+        };
+        p.add(
+            egui::epaint::TextShape::new(at - galley.size() * 0.5, galley, color)
+                .with_angle_and_anchor(angle, Align2::CENTER_CENTER),
+        );
+    };
     match c.kind {
         Kind::Gate(gate) => {
             let h = half_height(c);
@@ -276,6 +317,121 @@ pub(crate) fn component(
                 p.circle_stroke(at(-5.0, 0.0), 5.0 * scale_x * canvas.camera.zoom, stroke);
             } else {
                 p.line_segment([at(-10.0, 0.0), at(0.0, 0.0)], stroke);
+            }
+        }
+        Kind::Constant => {
+            let width = pin_width(c);
+            path(
+                vec![
+                    vec2(-width, -11.0),
+                    vec2(-5.0, -11.0),
+                    vec2(-5.0, 11.0),
+                    vec2(-width, 11.0),
+                ],
+                true,
+            );
+            p.line_segment([at(-5.0, 0.0), at(0.0, 0.0)], stroke);
+            body_text(
+                at(-(width + 5.0) / 2.0, 0.0),
+                format!("{:X}", c.constant),
+                color,
+            );
+        }
+        Kind::Power => {
+            p.line_segment([at(0.0, 0.0), at(18.0, 0.0)], stroke);
+            path(
+                vec![vec2(10.0, -8.0), vec2(18.0, 0.0), vec2(10.0, 8.0)],
+                false,
+            );
+        }
+        Kind::Ground => {
+            p.line_segment([at(0.0, 0.0), at(9.0, 0.0)], stroke);
+            for (x, half) in [(9.0, 9.0), (14.0, 6.0), (19.0, 3.0)] {
+                p.line_segment([at(x, -half), at(x, half)], stroke);
+            }
+        }
+        Kind::Probe => {
+            let width = probe_width(c);
+            path(
+                vec![
+                    vec2(-width, -20.0),
+                    vec2(-6.0, -20.0),
+                    vec2(-6.0, 20.0),
+                    vec2(-width, 20.0),
+                ],
+                true,
+            );
+            p.line_segment([at(-6.0, 0.0), at(0.0, 0.0)], stroke);
+            let signal = simulation.and_then(|s| s.ports.get(&(c.id, 0)));
+            let text = signal.map_or_else(
+                || "—".into(),
+                |s| {
+                    if c.radix == Radix::Binary && s.binary.len() > 16 {
+                        let split = s.binary.len() - 16;
+                        format!("{}\n{}", &s.binary[..split], &s.binary[split..])
+                    } else {
+                        s.text.clone()
+                    }
+                },
+            );
+            body_text(
+                at(-width / 2.0 - 3.0, 0.0),
+                text,
+                signal.map_or(color, |s| s.tone.color()),
+            );
+        }
+        Kind::Splitter => {
+            let ports = c.local_ports();
+            let first = ports[1].y as f32;
+            let last = ports[ports.len() - 1].y as f32;
+            p.line_segment([at(0.0, 0.0), at(10.0, 0.0)], stroke);
+            // Reversed branch numbering can reverse first/last without changing the stem.
+            p.line_segment(
+                [
+                    at(10.0, first.min(last).min(0.0)),
+                    at(10.0, first.max(last).max(0.0)),
+                ],
+                Stroke::new(3.5, color),
+            );
+            for (branch, port) in ports.iter().skip(1).enumerate() {
+                p.line_segment([at(10.0, port.y as f32), at(20.0, port.y as f32)], stroke);
+                let bits = c.splitter.branch_bits(c.bits, branch as u8);
+                let text = bits.iter().map(u8::to_string).collect::<Vec<_>>().join(",");
+                p.text(
+                    at(23.0, port.y as f32),
+                    Align2::LEFT_BOTTOM,
+                    format!("{branch}:{}", if text.is_empty() { "—" } else { &text }),
+                    FontId::proportional(8.0 * canvas.camera.zoom),
+                    color,
+                );
+            }
+        }
+        Kind::BitExtender => {
+            path(
+                vec![
+                    vec2(-40.0, -20.0),
+                    vec2(0.0, -20.0),
+                    vec2(0.0, 20.0),
+                    vec2(-40.0, 20.0),
+                ],
+                true,
+            );
+            p.text(
+                at(-20.0, -7.0),
+                Align2::CENTER_CENTER,
+                format!("{}→{}", c.input_bits, c.bits),
+                FontId::monospace(10.0 * canvas.camera.zoom),
+                color,
+            );
+            p.text(
+                at(-20.0, 8.0),
+                Align2::CENTER_CENTER,
+                c.extension.name(),
+                FontId::proportional(10.0 * canvas.camera.zoom),
+                color,
+            );
+            if c.extension == Extension::Input {
+                p.line_segment([at(-20.0, -20.0), at(-20.0, -15.0)], stroke);
             }
         }
         Kind::Pin => {
@@ -355,15 +511,24 @@ pub(crate) fn component(
     }
     if !matches!(c.kind, Kind::Text | Kind::Tunnel) && !c.label.is_empty() {
         let r = bounds(c);
-        p.text(
-            canvas.screen_vec(vec2(r.center().x, r.top() - 8.0)),
-            Align2::CENTER_BOTTOM,
-            &c.label,
-            font,
-            color,
-        );
+        let (anchor, align) = if c.kind == Kind::Probe {
+            match c.label_facing {
+                Facing::North => (vec2(r.center().x, r.top() - 8.0), Align2::CENTER_BOTTOM),
+                Facing::South => (vec2(r.center().x, r.bottom() + 8.0), Align2::CENTER_TOP),
+                Facing::East => (vec2(r.right() + 8.0, r.center().y), Align2::LEFT_CENTER),
+                Facing::West => (vec2(r.left() - 8.0, r.center().y), Align2::RIGHT_CENTER),
+            }
+        } else {
+            (vec2(r.center().x, r.top() - 8.0), Align2::CENTER_BOTTOM)
+        };
+        p.text(canvas.screen_vec(anchor), align, &c.label, font, color);
     }
-    if c.bits > 1 && c.kind != Kind::Text {
+    if c.bits > 1
+        && !matches!(
+            c.kind,
+            Kind::Text | Kind::Probe | Kind::Splitter | Kind::BitExtender
+        )
+    {
         let r = bounds(c);
         p.text(
             canvas.screen_vec(vec2(r.center().x, r.bottom() + 6.0)),

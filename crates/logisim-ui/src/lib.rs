@@ -395,16 +395,25 @@ impl Workspace {
                                             }
                                         }
                                         "Wiring" => {
-                                            self.library_tool(ui, Kind::Pin);
-                                            self.library_tool(ui, Kind::Tunnel);
+                                            for kind in [
+                                                Kind::Splitter,
+                                                Kind::Pin,
+                                                Kind::Probe,
+                                                Kind::Tunnel,
+                                                Kind::Constant,
+                                                Kind::Power,
+                                                Kind::Ground,
+                                                Kind::BitExtender,
+                                            ] {
+                                                self.library_tool(ui, kind);
+                                            }
                                             disabled_actions(
                                                 ui,
                                                 &[
-                                                    "Splitter",
-                                                    "Probe",
+                                                    "Pull Resistor",
                                                     "Clock",
-                                                    "Constant",
-                                                    "Bit Extender",
+                                                    "Transistor",
+                                                    "Transmission Gate",
                                                 ],
                                             );
                                         }

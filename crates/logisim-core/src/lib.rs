@@ -1,5 +1,8 @@
 //! Editable circuit geometry. No GUI, file format or signal evaluation dependencies.
 
+mod wiring;
+pub use wiring::{Extension, Radix, SplitAppearance, Splitter};
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::{Add, Sub};
 
@@ -118,6 +121,12 @@ pub enum Kind {
     Pin,
     Tunnel,
     Text,
+    Constant,
+    Power,
+    Ground,
+    Probe,
+    Splitter,
+    BitExtender,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -153,12 +162,27 @@ pub enum VerticalAlign {
     Bottom,
 }
 impl Kind {
+    pub fn rotatable(self) -> bool {
+        !matches!(self, Self::Text | Self::BitExtender)
+    }
+    pub fn has_label(self) -> bool {
+        matches!(
+            self,
+            Self::Text | Self::Tunnel | Self::Pin | Self::Gate(_) | Self::Probe
+        )
+    }
     pub fn name(self) -> &'static str {
         match self {
             Self::Gate(g) => g.name(),
             Self::Pin => "Pin",
             Self::Tunnel => "Tunnel",
             Self::Text => "Text",
+            Self::Constant => "Constant",
+            Self::Power => "Power",
+            Self::Ground => "Ground",
+            Self::Probe => "Probe",
+            Self::Splitter => "Splitter",
+            Self::BitExtender => "Bit Extender",
         }
     }
 }
@@ -179,6 +203,12 @@ pub struct Component {
     pub gate_size: GateSize,
     pub text_horizontal: HorizontalAlign,
     pub text_vertical: VerticalAlign,
+    pub constant: u32,
+    pub radix: Radix,
+    pub label_facing: Facing,
+    pub splitter: Splitter,
+    pub input_bits: u8,
+    pub extension: Extension,
 }
 impl Component {
     pub fn new(kind: Kind, position: Point) -> Self {
@@ -186,8 +216,16 @@ impl Component {
             id: 0,
             position,
             kind,
-            facing: Facing::East,
-            bits: 1,
+            facing: match kind {
+                Kind::Power => Facing::North,
+                Kind::Ground => Facing::South,
+                _ => Facing::East,
+            },
+            bits: match kind {
+                Kind::Splitter => 4,
+                Kind::BitExtender => 16,
+                _ => 1,
+            },
             inputs: 2,
             output: false,
             label: if kind == Kind::Tunnel {
@@ -206,6 +244,12 @@ impl Component {
             gate_size: GateSize::Narrow,
             text_horizontal: HorizontalAlign::Left,
             text_vertical: VerticalAlign::Top,
+            constant: 1,
+            radix: Radix::Binary,
+            label_facing: Facing::North,
+            splitter: Splitter::default(),
+            input_bits: 8,
+            extension: Extension::Zero,
         }
     }
     pub fn input_count(&self) -> u8 {
@@ -218,6 +262,20 @@ impl Component {
     pub fn local_ports(&self) -> Vec<Point> {
         if self.kind == Kind::Text {
             return vec![];
+        }
+        if self.kind == Kind::Splitter {
+            let mut ports = self.splitter.ports();
+            if matches!(self.facing, Facing::West | Facing::North) {
+                ports[1..].reverse();
+            }
+            return ports;
+        }
+        if self.kind == Kind::BitExtender {
+            let mut ports = vec![Point::ZERO, Point::new(-40, 0)];
+            if self.extension == Extension::Input {
+                ports.push(Point::new(-20, -20));
+            }
+            return ports;
         }
         let count = self.input_count();
         let mut ports = vec![Point::ZERO];

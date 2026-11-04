@@ -1,7 +1,8 @@
 use crate::editor::{Editor, Tool};
 use egui::{Frame, RichText, ScrollArea, Ui};
 use logisim_core::{
-    Component, Facing, Gate, GateSize, HorizontalAlign, Kind, Point, VerticalAlign,
+    Component, Extension, Facing, Gate, GateSize, HorizontalAlign, Kind, Point, Radix,
+    SplitAppearance, VerticalAlign,
 };
 
 pub(crate) fn show(ui: &mut Ui, editor: &mut Editor, circuit_name: &str) {
@@ -126,29 +127,31 @@ fn selection_info(ui: &mut Ui, editor: &mut Editor) {
 fn component_editor(ui: &mut Ui, editor: &mut Editor, mut c: Component, placing: bool) {
     let original = c.clone();
     let mut active = false;
-    let response = if c.kind == Kind::Text {
-        ui.label("Text");
-        ui.add(
-            egui::TextEdit::multiline(&mut c.label)
-                .desired_rows(3)
-                .desired_width(f32::INFINITY)
-                .char_limit(4096)
-                .id_salt((c.id, "text")),
-        )
-    } else {
-        ui.label("Label");
-        ui.add(
-            egui::TextEdit::singleline(&mut c.label)
-                .desired_width(f32::INFINITY)
-                .char_limit(128)
-                .id_salt((c.id, "label")),
-        )
-    };
-    if editor.focus_text {
-        response.request_focus();
-        editor.focus_text = false;
+    if c.kind.has_label() {
+        let response = if c.kind == Kind::Text {
+            ui.label("Text");
+            ui.add(
+                egui::TextEdit::multiline(&mut c.label)
+                    .desired_rows(3)
+                    .desired_width(f32::INFINITY)
+                    .char_limit(4096)
+                    .id_salt((c.id, "text")),
+            )
+        } else {
+            ui.label("Label");
+            ui.add(
+                egui::TextEdit::singleline(&mut c.label)
+                    .desired_width(f32::INFINITY)
+                    .char_limit(128)
+                    .id_salt((c.id, "label")),
+            )
+        };
+        if editor.focus_text {
+            response.request_focus();
+            editor.focus_text = false;
+        }
+        active |= response.has_focus();
     }
-    active |= response.has_focus();
     ui.add_space(8.0);
     egui::Grid::new(("component_properties", c.id))
         .num_columns(2)
@@ -160,7 +163,7 @@ fn component_editor(ui: &mut Ui, editor: &mut Editor, mut c: Component, placing:
         c.position = Point::snapped(c.position.x as f32, c.position.y as f32);
     }
     ui.add_space(12.0);
-    if c.kind != Kind::Text && ui.button("Rotate clockwise · R").clicked() {
+    if c.kind.rotatable() && ui.button("Rotate clockwise · R").clicked() {
         c.facing = c.facing.next();
     }
     if c != original {
@@ -187,7 +190,7 @@ fn component_editor(ui: &mut Ui, editor: &mut Editor, mut c: Component, placing:
 
 fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
     let mut active = false;
-    if c.kind != Kind::Text {
+    if c.kind.rotatable() {
         ui.label("Facing");
         egui::ComboBox::from_id_salt("facing")
             .selected_text(c.facing.name())
@@ -198,11 +201,24 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
                 }
             });
         ui.end_row();
-        ui.label("Data bits");
+    }
+    if !matches!(c.kind, Kind::Text | Kind::Probe) {
+        ui.label(if c.kind == Kind::BitExtender {
+            "Output bits"
+        } else {
+            "Data bits"
+        });
         let r = ui.add(egui::DragValue::new(&mut c.bits).range(1..=32));
+        if r.changed() && c.kind == Kind::Splitter {
+            c.splitter.distribute(c.bits, c.splitter.descending);
+        }
+        if r.changed() && c.kind == Kind::Constant && c.bits < 32 {
+            c.constant &= (1 << c.bits) - 1;
+        }
         active |= r.has_focus() || r.dragged();
         ui.end_row();
     }
+    active |= wiring_fields(ui, c);
     if let Kind::Gate(gate) = c.kind
         && !gate.unary()
     {
@@ -260,14 +276,16 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
         ui.checkbox(&mut c.output, "");
         ui.end_row();
     }
-    ui.label("Font size");
-    let r = ui.add(egui::DragValue::new(&mut c.font_size).range(8..=48));
-    active |= r.has_focus() || r.dragged();
-    ui.end_row();
-    if c.kind != Kind::Tunnel {
-        ui.label("Color");
-        ui.color_edit_button_srgb(&mut c.color);
+    if c.kind.has_label() {
+        ui.label("Font size");
+        let r = ui.add(egui::DragValue::new(&mut c.font_size).range(8..=48));
+        active |= r.has_focus() || r.dragged();
         ui.end_row();
+        if c.kind != Kind::Tunnel {
+            ui.label("Color");
+            ui.color_edit_button_srgb(&mut c.color);
+            ui.end_row();
+        }
     }
     if !placing {
         for (label, value) in [("X", &mut c.position.x), ("Y", &mut c.position.y)] {
@@ -280,6 +298,107 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
             active |= r.has_focus() || r.dragged();
             ui.end_row();
         }
+    }
+    active
+}
+
+fn wiring_fields(ui: &mut Ui, c: &mut Component) -> bool {
+    let mut active = false;
+    match c.kind {
+        Kind::Constant => {
+            ui.label("Value (hex)");
+            let max = u32::MAX >> (32 - c.bits.clamp(1, 32));
+            let r = ui.add(
+                egui::DragValue::new(&mut c.constant)
+                    .hexadecimal(usize::from(c.bits.div_ceil(4)), false, true)
+                    .range(0..=max),
+            );
+            active |= r.has_focus() || r.dragged();
+            ui.end_row();
+        }
+        Kind::Probe => {
+            ui.label("Radix");
+            egui::ComboBox::from_id_salt("probe_radix")
+                .selected_text(c.radix.name())
+                .show_ui(ui, |ui| {
+                    for r in Radix::ALL {
+                        ui.selectable_value(&mut c.radix, r, r.name());
+                    }
+                });
+            ui.end_row();
+            ui.label("Label location");
+            egui::ComboBox::from_id_salt("probe_label")
+                .selected_text(c.label_facing.name())
+                .show_ui(ui, |ui| {
+                    for f in Facing::ALL {
+                        ui.selectable_value(&mut c.label_facing, f, f.name());
+                    }
+                });
+            ui.end_row();
+        }
+        Kind::BitExtender => {
+            ui.label("Input bits");
+            let r = ui.add(egui::DragValue::new(&mut c.input_bits).range(1..=32));
+            active |= r.has_focus() || r.dragged();
+            ui.end_row();
+            ui.label("Extension");
+            egui::ComboBox::from_id_salt("extension")
+                .selected_text(c.extension.name())
+                .show_ui(ui, |ui| {
+                    for e in Extension::ALL {
+                        ui.selectable_value(&mut c.extension, e, e.name());
+                    }
+                });
+            ui.end_row();
+        }
+        Kind::Splitter => {
+            ui.label("Fan out");
+            let r = ui.add(egui::DragValue::new(&mut c.splitter.fanout).range(1..=32));
+            if r.changed() {
+                c.splitter.distribute(c.bits, c.splitter.descending);
+            }
+            active |= r.has_focus() || r.dragged();
+            ui.end_row();
+            ui.label("Appearance");
+            egui::ComboBox::from_id_salt("split_appearance")
+                .selected_text(c.splitter.appearance.name())
+                .show_ui(ui, |ui| {
+                    for a in SplitAppearance::ALL {
+                        ui.selectable_value(&mut c.splitter.appearance, a, a.name());
+                    }
+                });
+            ui.end_row();
+            ui.label("Distribute");
+            ui.horizontal(|ui| {
+                if ui
+                    .selectable_label(!c.splitter.descending, "Ascending")
+                    .clicked()
+                {
+                    c.splitter.distribute(c.bits, false);
+                }
+                if ui
+                    .selectable_label(c.splitter.descending, "Descending")
+                    .clicked()
+                {
+                    c.splitter.distribute(c.bits, true);
+                }
+            });
+            ui.end_row();
+            for bit in 0..c.bits {
+                ui.label(format!("Bit {bit}"));
+                let branch = &mut c.splitter.mapping[usize::from(bit)];
+                egui::ComboBox::from_id_salt(("split_bit", bit))
+                    .selected_text(branch.map_or_else(|| "None".into(), |b| format!("Branch {b}")))
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(branch, None, "None");
+                        for b in 0..c.splitter.fanout {
+                            ui.selectable_value(branch, Some(b), format!("Branch {b}"));
+                        }
+                    });
+                ui.end_row();
+            }
+        }
+        _ => {}
     }
     active
 }
