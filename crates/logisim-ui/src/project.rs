@@ -62,6 +62,7 @@ impl Editor {
         names.join(" / ")
     }
     pub fn switch_circuit(&mut self, id: Id) {
+        self.appearance_mode = false;
         self.cancel_gesture();
         self.commit_properties();
         self.sync_project();
@@ -76,6 +77,7 @@ impl Editor {
         }
     }
     pub fn enter_instance(&mut self, id: Id) {
+        self.appearance_mode = false;
         self.cancel_gesture();
         self.commit_properties();
         self.sync_project();
@@ -92,6 +94,7 @@ impl Editor {
         }
     }
     pub fn leave_instance(&mut self) {
+        self.appearance_mode = false;
         self.cancel_gesture();
         self.commit_properties();
         self.sync_project();
@@ -186,6 +189,7 @@ impl Workspace {
         self.editor.root = id;
         self.editor.circuit = project.main_circuit().circuit.clone();
         self.editor.project = project;
+        self.appearance.reset_context();
         self.name_dialog = None;
         self.remove_dialog = false;
         self.canvas.reset();

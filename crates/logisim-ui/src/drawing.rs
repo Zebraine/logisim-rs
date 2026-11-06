@@ -262,37 +262,57 @@ pub(crate) fn component(
     };
     match c.kind {
         Kind::Subcircuit(_) => {
-            let a = c.interface.min;
-            let b = c.interface.max;
-            let rect = bounds(c);
-            let screen = Rect::from_min_max(
-                canvas.screen_vec(rect.min.to_vec2()),
-                canvas.screen_vec(rect.max.to_vec2()),
-            );
-            p.rect(
-                screen,
-                4.0,
-                Color32::from_rgb(241, 245, 251),
-                stroke,
-                StrokeKind::Inside,
-            );
-            path(
-                vec![
-                    vec2(a.x as f32 + 4.0, a.y as f32 + 3.0),
-                    vec2(a.x as f32 + 4.0, a.y as f32 + 7.0),
-                    vec2(a.x as f32 + 8.0, a.y as f32 + 7.0),
-                ],
-                false,
-            );
-            let max_chars = ((b.x - a.x - 4) / 6).max(1) as usize;
-            let title: String = c.interface.name.chars().take(max_chars).collect();
-            p.text(
-                screen.center(),
-                Align2::CENTER_CENTER,
-                title,
-                FontId::proportional(10.0 * canvas.camera.zoom),
-                color,
-            );
+            if let Some(appearance) = &c.interface.appearance {
+                for shape in &appearance.shapes {
+                    crate::artwork::paint(
+                        p,
+                        canvas,
+                        shape,
+                        |v| {
+                            local(
+                                c,
+                                crate::artwork::rotate(
+                                    appearance.facing.inverse(),
+                                    v - crate::artwork::vector(appearance.anchor),
+                                ),
+                            )
+                        },
+                        crate::artwork::angle(c.facing) - crate::artwork::angle(appearance.facing),
+                    );
+                }
+            } else {
+                let a = c.interface.min;
+                let b = c.interface.max;
+                let rect = bounds(c);
+                let screen = Rect::from_min_max(
+                    canvas.screen_vec(rect.min.to_vec2()),
+                    canvas.screen_vec(rect.max.to_vec2()),
+                );
+                p.rect(
+                    screen,
+                    4.0,
+                    Color32::from_rgb(241, 245, 251),
+                    stroke,
+                    StrokeKind::Inside,
+                );
+                path(
+                    vec![
+                        vec2(a.x as f32 + 4.0, a.y as f32 + 3.0),
+                        vec2(a.x as f32 + 4.0, a.y as f32 + 7.0),
+                        vec2(a.x as f32 + 8.0, a.y as f32 + 7.0),
+                    ],
+                    false,
+                );
+                let max_chars = ((b.x - a.x - 4) / 6).max(1) as usize;
+                let title: String = c.interface.name.chars().take(max_chars).collect();
+                p.text(
+                    screen.center(),
+                    Align2::CENTER_CENTER,
+                    title,
+                    FontId::proportional(10.0 * canvas.camera.zoom),
+                    color,
+                );
+            }
         }
         Kind::Gate(gate) => {
             let h = half_height(c);

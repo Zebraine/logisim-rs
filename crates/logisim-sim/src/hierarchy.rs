@@ -480,4 +480,59 @@ mod tests {
         sim.advance(64);
         assert_eq!(sim.input(pin).unwrap().number(), Some(0));
     }
+    #[test]
+    fn custom_package_rotation_works_and_visual_edits_preserve_paused_signals() {
+        let mut p = Project::default();
+        let (child, input, output) = inverter(&mut p, "pack", 4);
+        let mut art = p.circuit(child).unwrap().editable_appearance();
+        art.facing = Facing::North;
+        p.circuit_mut(child).unwrap().circuit.appearance = Some(art);
+        let mut instance = p.instance(child, Point::new(200, 200)).unwrap();
+        instance.facing = Facing::West;
+        let input_index = instance
+            .interface
+            .ports
+            .iter()
+            .position(|port| port.pin == input)
+            .unwrap();
+        let output_index = instance
+            .interface
+            .ports
+            .iter()
+            .position(|port| port.pin == output)
+            .unwrap();
+        let mut source = Component::new(Kind::Constant, instance.ports()[input_index]);
+        source.bits = 4;
+        source.constant = 10;
+        let id = p.main_circuit_mut().circuit.add_component(instance);
+        p.main_circuit_mut().circuit.add_component(source);
+        let mut sim = ProjectSimulator::default();
+        sim.synchronize(&p, p.main);
+        sim.advance(64);
+        assert_eq!(
+            sim.view(&[])
+                .unwrap()
+                .port_value(id, output_index)
+                .unwrap()
+                .number(),
+            Some(5)
+        );
+        sim.set_enabled(false);
+        let steps = sim.steps();
+        let value = sim.view(&[id]).unwrap().port_value(output, 0);
+        p.circuit_mut(child)
+            .unwrap()
+            .circuit
+            .appearance
+            .as_mut()
+            .unwrap()
+            .shapes[0]
+            .paint
+            .fill = Some([100, 150, 200]);
+        p.refresh_interfaces(true);
+        assert!(!sim.synchronize(&p, p.main));
+        assert!(!sim.enabled());
+        assert_eq!(sim.steps(), steps);
+        assert_eq!(sim.view(&[id]).unwrap().port_value(output, 0), value);
+    }
 }

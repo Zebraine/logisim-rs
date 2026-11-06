@@ -32,6 +32,7 @@ impl Tool {
 }
 #[derive(Clone)]
 pub(crate) struct Snapshot {
+    pub appearance_mode: bool,
     pub project: Project,
     pub active: Id,
     pub root: Id,
@@ -67,6 +68,7 @@ enum Gesture {
 }
 
 pub(crate) struct Editor {
+    pub appearance_mode: bool,
     pub project: Project,
     pub active: Id,
     pub root: Id,
@@ -91,6 +93,7 @@ pub(crate) struct Editor {
 impl Default for Editor {
     fn default() -> Self {
         Self {
+            appearance_mode: false,
             project: Project::default(),
             active: 1,
             root: 1,
@@ -121,6 +124,7 @@ impl Editor {
             definition.circuit = self.circuit.clone();
         }
         Snapshot {
+            appearance_mode: self.appearance_mode,
             project,
             active: self.active,
             root: self.root,
@@ -130,6 +134,7 @@ impl Editor {
         }
     }
     fn restore(&mut self, mut state: Snapshot) {
+        self.appearance_mode = state.appearance_mode;
         state.project.preserve_allocations(&self.project);
         self.project = state.project;
         self.active = state.active;
@@ -160,6 +165,15 @@ impl Editor {
         if let Some(before) = self.property_before.take() {
             self.record(before);
         }
+    }
+    pub fn update_appearance(&mut self, appearance: logisim_core::Appearance) {
+        if self.circuit.appearance.as_ref() == Some(&appearance) {
+            return;
+        }
+        if self.property_before.is_none() {
+            self.property_before = Some(self.snapshot());
+        }
+        self.circuit.appearance = Some(appearance);
     }
     pub fn update_property(&mut self, component: Component) {
         if self.circuit.component(component.id) == Some(&component) {

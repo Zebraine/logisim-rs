@@ -144,18 +144,6 @@ pub fn parse(xml: &str) -> Result<Import> {
         .map(|c| (c.name.clone(), c.id))
         .collect();
     let mut blocked = std::collections::BTreeSet::new();
-    for node in &circuits {
-        if node.children().any(|n| n.has_tag_name("appear")) {
-            let name = attr(*node, "name")?;
-            blocked.insert(names[name]);
-            warn(
-                &mut warnings,
-                format!(
-                    "Circuit '{name}' has an unsupported custom appearance; its instances are omitted."
-                ),
-            );
-        }
-    }
     for n in root.children().filter(Node::is_element) {
         match n.tag_name().name() {
             "lib" | "main" | "circuit" | "toolbar" | "mappings" => {}
@@ -279,6 +267,29 @@ pub fn parse(xml: &str) -> Result<Import> {
                     "Circuit '{name}' has unsupported interface pins; its instances are omitted."
                 ),
             );
+        }
+        let appearances: Vec<_> = selected
+            .children()
+            .filter(|n| n.has_tag_name("appear"))
+            .collect();
+        if !appearances.is_empty() {
+            let parsed = if appearances.len() == 1 {
+                crate::appearance::read(appearances[0], &circuit)
+            } else {
+                Err(Error("Duplicate appearance".into()))
+            };
+            match parsed {
+                Ok(appearance) => circuit.appearance = Some(appearance),
+                Err(error) => {
+                    blocked.insert(names[name]);
+                    warn(
+                        &mut warnings,
+                        format!(
+                            "Circuit '{name}' has an unsupported custom appearance: {error}; its instances are omitted."
+                        ),
+                    );
+                }
+            }
         }
         document.circuit_mut(names[name]).unwrap().circuit = circuit;
     }

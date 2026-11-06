@@ -2,7 +2,7 @@ use super::{Document, Error, MAX_BYTES, MAX_ITEMS, Result, valid_point};
 use logisim_core::{Gate, HorizontalAlign, Kind, Radix, SplitAppearance, VerticalAlign};
 use std::fmt::Write;
 
-fn escape(s: &str) -> Result<String> {
+pub(crate) fn escape(s: &str) -> Result<String> {
     let mut out = String::new();
     for c in s.chars() {
         match c {
@@ -254,6 +254,9 @@ pub fn serialize(document: &Document) -> Result<String> {
                 )?;
             }
             out.push_str("    </comp>\n");
+        }
+        if let Some(appearance) = &circuit.appearance {
+            crate::appearance::write(&mut out, appearance, circuit)?;
         }
         out.push_str("  </circuit>\n");
     }

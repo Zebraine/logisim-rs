@@ -1,5 +1,10 @@
 //! Editable circuit geometry. No GUI, file format or signal evaluation dependencies.
 
+mod appearance;
+pub use appearance::{
+    Appearance, Artwork, ArtworkFont, Geometry, MAX_SHAPES, Paint, Rgb, TextAnchor,
+};
+
 mod project;
 pub use project::{CircuitDefinition, Interface, InterfacePort, MAX_CIRCUITS, Project};
 
@@ -65,6 +70,13 @@ impl Facing {
             Self::South => Self::West,
             Self::West => Self::North,
             Self::North => Self::East,
+        }
+    }
+    pub fn inverse(self) -> Self {
+        match self {
+            Self::South => Self::North,
+            Self::North => Self::South,
+            other => other,
         }
     }
     pub fn transform(self, p: Point) -> Point {
@@ -379,6 +391,7 @@ impl Wire {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Circuit {
+    pub appearance: Option<Appearance>,
     pub components: Vec<Component>,
     pub wires: Vec<Wire>,
     next_id: Id,

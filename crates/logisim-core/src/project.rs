@@ -15,6 +15,7 @@ pub struct InterfacePort {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Interface {
     pub name: String,
+    pub appearance: Option<crate::Appearance>,
     pub ports: Vec<InterfacePort>,
     pub min: Point,
     pub max: Point,
@@ -27,6 +28,45 @@ pub struct CircuitDefinition {
 }
 impl CircuitDefinition {
     pub fn interface(&self) -> Interface {
+        let Some(appearance) = &self.circuit.appearance else {
+            return self.default_interface();
+        };
+        let mut ports = vec![];
+        for pin in self
+            .circuit
+            .components
+            .iter()
+            .filter(|p| p.kind == Kind::Pin)
+        {
+            if let Some(at) = appearance.ports.get(&pin.id) {
+                ports.push(InterfacePort {
+                    pin: pin.id,
+                    offset: appearance.local(*at),
+                    bits: pin.bits,
+                    output: pin.output,
+                    label: pin.label.clone(),
+                });
+            }
+        }
+        ports.sort_by_key(|p| p.pin);
+        let (a, b) = appearance.bounds();
+        let corners =
+            [a, b, Point::new(a.x, b.y), Point::new(b.x, a.y)].map(|p| appearance.local(p));
+        Interface {
+            name: self.name.clone(),
+            appearance: Some(appearance.clone()),
+            ports,
+            min: Point::new(
+                corners.iter().map(|p| p.x).min().unwrap(),
+                corners.iter().map(|p| p.y).min().unwrap(),
+            ),
+            max: Point::new(
+                corners.iter().map(|p| p.x).max().unwrap(),
+                corners.iter().map(|p| p.y).max().unwrap(),
+            ),
+        }
+    }
+    pub fn default_interface(&self) -> Interface {
         // Side order is also the observed anchor preference: east, north, west, south.
         let mut sides: [Vec<&Component>; 4] = Default::default();
         for pin in self
@@ -93,6 +133,7 @@ impl CircuitDefinition {
         // Pin identity, not side order, is the persistent association across edits.
         ports.sort_by_key(|p| p.pin);
         Interface {
+            appearance: None,
             name: self.name.clone(),
             ports,
             min: Point::ZERO - anchor,
@@ -243,6 +284,16 @@ impl Project {
             {
                 return Err("Invalid or duplicate circuit identity/name.".into());
             }
+            if let Some(a) = &c.circuit.appearance {
+                a.validate(
+                    &c.circuit
+                        .components
+                        .iter()
+                        .filter(|p| p.kind == Kind::Pin)
+                        .map(|p| p.id)
+                        .collect(),
+                )?;
+            }
             for component in &c.circuit.components {
                 if let Kind::Subcircuit(target) = component.kind
                     && !self.can_instantiate(c.id, target)
@@ -254,8 +305,14 @@ impl Project {
         Ok(())
     }
     /// Import uses false: file coordinates already refer to the final interface.
-    /// Interactive edits use true: surviving pins retain their attached wires.
+    /// Default-interface Pin edits reroute surviving connections. Custom appearance edits
+    /// keep file/layout wire coordinates, matching the observed appearance editor.
     pub fn refresh_interfaces(&mut self, reroute: bool) {
+        if reroute {
+            for c in &mut self.circuits {
+                c.reconcile_appearance();
+            }
+        }
         let interfaces: BTreeMap<_, _> = self
             .circuits
             .iter()
@@ -280,7 +337,12 @@ impl Project {
                 })
                 .collect();
             for c in replacements {
-                if reroute {
+                let default_interface_change = c.interface.appearance.is_none()
+                    && definition
+                        .circuit
+                        .component(c.id)
+                        .is_some_and(|old| old.interface.appearance.is_none());
+                if reroute && default_interface_change {
                     definition.circuit.replace_component(c);
                 } else {
                     let id = c.id;
@@ -298,6 +360,9 @@ impl Project {
         let definition = self.circuit(target)?;
         let mut c = Component::new(Kind::Subcircuit(target), position);
         c.interface = definition.interface();
+        if let Some(a) = &c.interface.appearance {
+            c.facing = a.facing;
+        }
         Some(c)
     }
 }

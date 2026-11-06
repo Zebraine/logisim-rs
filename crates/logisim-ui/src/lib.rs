@@ -1,5 +1,8 @@
 //! Editor layout based on runtime observation, with an independent canvas viewport.
 
+mod appearance;
+mod appearance_properties;
+mod artwork;
 mod canvas;
 mod document;
 pub use document::{DocumentView, FileAction};
@@ -48,6 +51,7 @@ pub fn configure(ctx: &egui::Context) {
 /// Circuit editing and viewport state. Signal simulation is not part of this layer.
 #[derive(Default)]
 pub struct Workspace {
+    appearance: appearance::AppearanceEditor,
     canvas: Canvas,
     editor: Editor,
     about_open: bool,
@@ -66,6 +70,7 @@ impl Workspace {
         std::mem::take(&mut self.file_actions)
     }
     pub fn finish_edit(&mut self) {
+        self.appearance.cancel();
         self.editor.cancel_gesture();
         self.editor.commit_properties();
         self.editor.sync_project();
@@ -84,7 +89,11 @@ impl Workspace {
     }
 
     pub fn show(&mut self, ui: &mut Ui) {
-        let before = (self.editor.active, self.editor.path.clone());
+        let before = (
+            self.editor.active,
+            self.editor.path.clone(),
+            self.editor.appearance_mode,
+        );
         let modal =
             self.name_dialog.is_some() || self.remove_dialog || self.editor.project_error.is_some();
         ui.add_enabled_ui(!modal, |ui| self.show_inner(ui));
@@ -95,13 +104,32 @@ impl Workspace {
             self.editor.enter_instance(id);
         }
         self.editor.sync_project();
-        if before != (self.editor.active, self.editor.path.clone()) {
+        if before
+            != (
+                self.editor.active,
+                self.editor.path.clone(),
+                self.editor.appearance_mode,
+            )
+        {
+            self.appearance.reset_context();
             self.canvas.reset();
             self.fit_pending = true;
             ui.ctx().request_repaint();
         }
     }
     fn show_inner(&mut self, ui: &mut Ui) {
+        if ui.is_enabled()
+            && !ui.ctx().any_popup_open()
+            && ui.input_mut(|i| {
+                i.consume_key(
+                    egui::Modifiers::COMMAND.plus(egui::Modifiers::SHIFT),
+                    egui::Key::E,
+                )
+            })
+        {
+            self.finish_edit();
+            self.editor.appearance_mode = !self.editor.appearance_mode;
+        }
         if ui.is_enabled() && !ui.ctx().any_popup_open() {
             if ui.input_mut(|i| {
                 i.consume_key(
@@ -160,6 +188,9 @@ impl Workspace {
         egui::CentralPanel::default()
             .frame(Frame::NONE)
             .show(ui, |ui| {
+                if std::mem::take(&mut self.appearance.fit_requested) {
+                    self.fit_pending = true;
+                }
                 if self.fit_pending {
                     let mut bounds = egui::Rect::NOTHING;
                     for c in &self.editor.circuit.components {
@@ -169,19 +200,36 @@ impl Workspace {
                         bounds.extend_with(drawing::pos(w.a));
                         bounds.extend_with(drawing::pos(w.b));
                     }
+                    if self.editor.appearance_mode {
+                        let (a, b) = appearance::AppearanceEditor::current(&self.editor).bounds();
+                        bounds =
+                            egui::Rect::from_two_pos(drawing::pos(a), drawing::pos(b)).expand(20.0);
+                    }
                     if bounds.is_finite() {
                         let available =
                             (ui.available_size() - vec2(80.0, 80.0)).max(vec2(1.0, 1.0));
                         let zoom = (available.x / bounds.width().max(1.0))
                             .min(available.y / bounds.height().max(1.0))
-                            .clamp(MIN_ZOOM, 1.0);
+                            .clamp(
+                                MIN_ZOOM,
+                                if self.editor.appearance_mode {
+                                    3.0
+                                } else {
+                                    1.0
+                                },
+                            );
                         self.canvas.camera.zoom = zoom;
                         self.canvas.camera.offset = vec2(40.0, 40.0) - bounds.min.to_vec2() * zoom;
                     }
                     self.fit_pending = false;
                 }
                 let response = self.canvas.show(ui);
-                self.editor.show(ui, &mut self.canvas, &response);
+                if self.editor.appearance_mode {
+                    self.appearance
+                        .show(ui, &mut self.editor, &mut self.canvas, &response);
+                } else {
+                    self.editor.show(ui, &mut self.canvas, &response);
+                }
             });
 
         egui::Window::new("About logisim-rs")
@@ -220,6 +268,10 @@ impl Workspace {
                 }
             });
             ui.menu_button("Edit", |ui| {
+                if self.editor.appearance_mode {
+                    self.appearance.edit_menu(ui, &mut self.editor);
+                    return;
+                }
                 if ui
                     .add_enabled(self.editor.can_undo(), egui::Button::new("Undo · Ctrl+Z"))
                     .clicked()
@@ -312,6 +364,36 @@ impl Workspace {
                     self.editor.leave_instance();
                     ui.close();
                 }
+                ui.separator();
+                if ui
+                    .selectable_label(!self.editor.appearance_mode, "Edit Circuit Layout")
+                    .clicked()
+                {
+                    self.finish_edit();
+                    self.editor.appearance_mode = false;
+                    ui.close();
+                }
+                if ui
+                    .selectable_label(
+                        self.editor.appearance_mode,
+                        "Edit Circuit Appearance · Ctrl+Shift+E",
+                    )
+                    .clicked()
+                {
+                    self.finish_edit();
+                    self.editor.appearance_mode = true;
+                    ui.close();
+                }
+                if ui
+                    .add_enabled(
+                        self.editor.circuit.appearance.is_some(),
+                        egui::Button::new("Revert to Default Appearance"),
+                    )
+                    .clicked()
+                {
+                    self.appearance.revert(&mut self.editor);
+                    ui.close();
+                }
                 disabled_actions(ui, &["Load Library…", "Project Options…"]);
             });
             ui.menu_button("Simulate", |ui| {
@@ -349,6 +431,10 @@ impl Workspace {
     }
 
     fn toolbar(&mut self, ui: &mut Ui) {
+        if self.editor.appearance_mode {
+            self.appearance.toolbar(ui, &mut self.editor);
+            return;
+        }
         ui.horizontal(|ui| {
             for (icon, tool, hint) in [
                 (
@@ -449,10 +535,11 @@ impl Workspace {
                                     let response = ui.selectable_label(self.editor.active == id, label)
                                         .on_hover_text("Double-click to edit; single-click another circuit to place an instance.");
                                     if response.double_clicked() { self.editor.switch_circuit(id); }
-                                    else if response.clicked() && allowed { self.editor.set_tool(Tool::Place(Kind::Subcircuit(id))); }
+                                    else if response.clicked() && allowed { self.editor.appearance_mode=false; self.editor.set_tool(Tool::Place(Kind::Subcircuit(id))); }
                                     response.context_menu(|ui| {
                                         if ui.button("Open circuit").clicked() { self.editor.switch_circuit(id); ui.close(); }
                                         if ui.add_enabled(allowed,egui::Button::new("Place instance")).clicked() { self.editor.set_tool(Tool::Place(Kind::Subcircuit(id))); ui.close(); }
+                                        if ui.button("Edit appearance").clicked(){self.finish_edit();self.editor.switch_circuit(id);self.editor.appearance_mode=true;ui.close();}
                                         if ui.button("Rename…").clicked() { self.editor.switch_circuit(id); self.circuit_command(CircuitCommand::Rename); ui.close(); }
                                     });
                                 }
@@ -512,7 +599,11 @@ impl Workspace {
             .frame(Frame::NONE.fill(CHROME))
             .show(ui, |ui| {
                 let name = self.circuit_name().to_owned();
-                properties::show(ui, &mut self.editor, &name);
+                if self.editor.appearance_mode {
+                    self.appearance.properties(ui, &mut self.editor);
+                } else {
+                    properties::show(ui, &mut self.editor, &name);
+                }
             });
     }
 
@@ -522,6 +613,7 @@ impl Workspace {
             .selectable_label(self.editor.tool == tool, kind.name())
             .clicked()
         {
+            self.editor.appearance_mode = false;
             self.editor.set_tool(tool);
         }
     }
