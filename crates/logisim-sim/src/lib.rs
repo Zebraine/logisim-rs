@@ -1,7 +1,10 @@
-//! Deterministic, bounded combinational propagation, independent of the GUI.
+//! Deterministic, bounded signal propagation and sequential state, independent of the GUI.
 mod hierarchy;
 pub use hierarchy::ProjectSimulator;
 mod network;
+mod sequential;
+#[cfg(test)]
+mod sequential_tests;
 #[cfg(test)]
 mod tests;
 mod value;
@@ -30,6 +33,7 @@ pub struct Simulator {
     circuit: Circuit,
     network: Network,
     inputs: BTreeMap<Id, Value>,
+    storage: BTreeMap<Id, sequential::State>,
     drives: BTreeMap<network::Port, Value>,
     pending: BTreeMap<network::Port, Value>,
     values: Vec<Value>,
@@ -44,6 +48,7 @@ impl Default for Simulator {
             circuit: Circuit::default(),
             network: Network::default(),
             inputs: BTreeMap::new(),
+            storage: BTreeMap::new(),
             drives: BTreeMap::new(),
             pending: BTreeMap::new(),
             values: vec![],
@@ -76,6 +81,19 @@ impl Simulator {
                     .filter(|v| v.width() == c.bits.clamp(1, 32))
                     .unwrap_or_else(|| Value::known(c.bits, 0));
                 (c.id, value)
+            })
+            .collect();
+        self.storage = circuit
+            .components
+            .iter()
+            .filter(|c| c.kind.is_sequential())
+            .map(|c| {
+                let state = self
+                    .storage
+                    .remove(&c.id)
+                    .filter(|s| s.compatible(c))
+                    .unwrap_or_else(|| sequential::State::new(c));
+                (c.id, state)
             })
             .collect();
         self.circuit = circuit.clone();
@@ -129,6 +147,13 @@ impl Simulator {
         for input in self.inputs.values_mut() {
             *input = Value::known(input.width(), 0);
         }
+        self.storage = self
+            .circuit
+            .components
+            .iter()
+            .filter(|c| c.kind.is_sequential())
+            .map(|c| (c.id, sequential::State::new(c)))
+            .collect();
         self.initialize();
     }
     fn initialize(&mut self) {
@@ -208,6 +233,98 @@ impl Simulator {
             .collect();
         for (id, value) in outputs {
             self.schedule(id, value);
+        }
+        self.schedule_storage();
+    }
+    fn schedule_storage(&mut self) {
+        let samples: Vec<_> = self
+            .circuit
+            .components
+            .iter()
+            .filter(|c| c.kind.is_sequential())
+            .map(|c| {
+                let ports: Vec<_> = (0..c.ports().len())
+                    .map(|i| self.port_value(c.id, i).expect("compiled sequential port"))
+                    .collect();
+                (c.clone(), ports)
+            })
+            .collect();
+        for (c, ports) in samples {
+            let output = self
+                .storage
+                .get_mut(&c.id)
+                .expect("sequential state")
+                .evaluate(&c, &ports);
+            self.drive_port((c.id, 0), output);
+            if matches!(c.kind, Kind::FlipFlop(_)) {
+                self.drive_port((c.id, 1), Value::known(1, output.number().unwrap_or(0) ^ 1));
+            }
+        }
+    }
+    pub fn stored_value(&self, id: Id) -> Option<Value> {
+        self.storage
+            .get(&id)
+            .filter(|_| {
+                self.circuit
+                    .component(id)
+                    .is_some_and(|c| c.kind.is_storage())
+            })
+            .map(|s| s.value)
+    }
+    pub fn has_clocks(&self) -> bool {
+        self.circuit
+            .components
+            .iter()
+            .any(|c| c.kind == Kind::Clock)
+    }
+    /// Queue a tick only on a settled network, so separate edges cannot collapse into one batch.
+    pub fn tick(&mut self) -> bool {
+        if !self.pending.is_empty() || self.limited {
+            return false;
+        }
+        self.tick_clocks();
+        self.has_clocks()
+    }
+    fn tick_clocks(&mut self) {
+        let clocks: Vec<_> = self
+            .circuit
+            .components
+            .iter()
+            .filter(|c| c.kind == Kind::Clock)
+            .cloned()
+            .collect();
+        for c in clocks {
+            let state = self.storage.get_mut(&c.id).unwrap();
+            state.tick(&c);
+            let value = state.value;
+            self.drive_port((c.id, 0), value);
+        }
+    }
+    pub fn poke_clock(&mut self, id: Id) {
+        if self
+            .circuit
+            .component(id)
+            .is_some_and(|c| c.kind == Kind::Clock)
+        {
+            let state = self.storage.get_mut(&id).unwrap();
+            state.toggle();
+            let value = state.value;
+            self.drive_port((id, 0), value);
+            self.limited = false;
+            self.unsettled_steps = 0;
+        }
+    }
+    pub fn toggle_stored(&mut self, id: Id) {
+        if self
+            .circuit
+            .component(id)
+            .is_some_and(|c| matches!(c.kind, Kind::FlipFlop(_)))
+        {
+            self.storage.get_mut(&id).unwrap().toggle();
+            // Apply asserted asynchronous controls and output scheduling through the same path.
+            self.schedule_storage();
+            self.limited = false;
+            self.unsettled_steps = 0;
         }
     }
     /// Commit one batch of driver changes, then schedule resulting component changes.
@@ -319,6 +436,7 @@ fn electrically_equal(a: &Circuit, b: &Circuit) -> bool {
             (c.kind == Kind::Constant).then_some(c.constant),
             (c.kind == Kind::Splitter).then_some(c.splitter.clone()),
             (c.kind == Kind::BitExtender).then_some((c.input_bits, c.extension)),
+            c.kind.is_sequential().then_some(c.sequential),
             if c.kind == Kind::Tunnel {
                 c.label.clone()
             } else {

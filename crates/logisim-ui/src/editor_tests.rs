@@ -284,7 +284,8 @@ fn simulation_shortcuts_are_suppressed_while_editing_a_label() {
     let at = app.canvas.screen(Point::new(200, 100));
     click(&ctx, &mut app, at);
     frame(&ctx, &mut app, vec![], Modifiers::NONE);
-    for k in [Key::E, Key::I, Key::R] {
+    app.editor.simulation.view.has_clocks = true;
+    for k in [Key::E, Key::I, Key::R, Key::T, Key::K] {
         key(&ctx, &mut app, k, Modifiers::COMMAND);
     }
     key(&ctx, &mut app, Key::P, Modifiers::NONE);
@@ -679,4 +680,53 @@ fn appearance_grid_coordinate_typing_waits_for_enter_before_snapping() {
         app.circuit().appearance.as_ref().unwrap().ports[&pin].x,
         120
     );
+}
+
+#[test]
+fn sequential_placement_poke_and_tick_shortcuts_preserve_edit_history() {
+    let (ctx, mut app) = setup();
+    let mut ids = vec![];
+    for (kind, point) in [
+        (Kind::Clock, Point::new(200, 100)),
+        (
+            Kind::FlipFlop(logisim_core::FlipFlop::D),
+            Point::new(400, 200),
+        ),
+        (Kind::Register, Point::new(600, 200)),
+    ] {
+        app.editor.set_tool(Tool::Place(kind));
+        let at = app.canvas.screen(point);
+        click(&ctx, &mut app, at);
+        ids.push(app.editor.circuit.components.last().unwrap().id);
+    }
+    let before = app.editor.circuit.clone();
+    app.editor.simulation.view.has_clocks = true;
+    app.editor.simulation.view.clocks.insert(ids[0]);
+    key(&ctx, &mut app, Key::P, Modifiers::NONE);
+    for point in [
+        Point::new(190, 100),
+        Point::new(370, 220),
+        Point::new(585, 200),
+    ] {
+        let at = app.canvas.screen(point);
+        click(&ctx, &mut app, at);
+    }
+    key(&ctx, &mut app, Key::T, Modifiers::COMMAND);
+    key(&ctx, &mut app, Key::K, Modifiers::COMMAND);
+    assert_eq!(
+        app.take_simulation_actions(),
+        vec![
+            SimulationAction::PokeClock { id: ids[0] },
+            SimulationAction::ToggleStored { id: ids[1] },
+            SimulationAction::Tick,
+            SimulationAction::ToggleTicks,
+        ]
+    );
+    assert_eq!(app.editor.circuit, before);
+    app.editor.simulation.view.pending = 1;
+    key(&ctx, &mut app, Key::T, Modifiers::COMMAND);
+    assert!(app.take_simulation_actions().is_empty());
+    key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
+    assert_eq!(app.editor.circuit.components.len(), 2);
+    assert!(app.editor.circuit.component(ids[2]).is_none());
 }

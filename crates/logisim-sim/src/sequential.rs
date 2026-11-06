@@ -1,0 +1,95 @@
+//! State transitions sample one resolved network batch before any new outputs are committed.
+use crate::{Bit, Value};
+use logisim_core::{Component, FlipFlop, Kind, Trigger};
+
+#[derive(Clone, Debug)]
+pub(super) struct State {
+    kind: Kind,
+    pub value: Value,
+    clock: Bit,
+    phase: u64,
+}
+impl State {
+    pub fn new(c: &Component) -> Self {
+        Self {
+            kind: c.kind,
+            value: Value::known(if c.kind == Kind::Register { c.bits } else { 1 }, 0),
+            clock: Bit::Unknown,
+            phase: 0,
+        }
+    }
+    pub fn compatible(&self, c: &Component) -> bool {
+        self.kind == c.kind
+            && self.value.width() == if c.kind == Kind::Register { c.bits } else { 1 }
+    }
+    pub fn tick(&mut self, c: &Component) {
+        let low = u64::from(c.sequential.low_ticks.max(1));
+        let period = low + u64::from(c.sequential.high_ticks.max(1));
+        self.phase = (self.phase + 1) % period;
+        if self.phase == 0 || self.phase == low {
+            self.toggle();
+        }
+    }
+    pub fn toggle(&mut self) {
+        self.value = Value::known(1, u32::from(self.value.number() != Some(1)));
+    }
+    pub fn evaluate(&mut self, c: &Component, ports: &[Value]) -> Value {
+        if c.kind == Kind::Clock {
+            return self.value;
+        }
+        let clock = ports[2].bit(0);
+        let triggered = match c.sequential.trigger {
+            Trigger::Rising => self.clock == Bit::Zero && clock == Bit::One,
+            Trigger::Falling => self.clock == Bit::One && clock == Bit::Zero,
+            Trigger::High => clock == Bit::One,
+            Trigger::Low => clock == Bit::Zero,
+        };
+        self.clock = clock;
+        if c.kind == Kind::Register
+            && ports[4].bit(0)
+                == if c.sequential.select_high {
+                    Bit::Zero
+                } else {
+                    Bit::One
+                }
+        {
+            return Value::filled(c.bits, Bit::Unknown);
+        }
+        let active = if matches!(c.kind, Kind::FlipFlop(_)) && c.sequential.negate_controls {
+            Bit::Zero
+        } else {
+            Bit::One
+        };
+        let clear = ports[ports.len() - 1].bit(0) == active;
+        let preset = ports[ports.len() - 2].bit(0) == active;
+        if clear {
+            self.value = Value::known(self.value.width(), 0);
+        } else if preset {
+            self.value = Value::filled(self.value.width(), Bit::One);
+        } else if triggered {
+            match c.kind {
+                Kind::Register if ports[3].bit(0) != Bit::Zero && ports[1].number().is_some() => {
+                    self.value = ports[1]
+                }
+                Kind::FlipFlop(ff) => {
+                    if let Some(a) = ports[3].number() {
+                        let old = self.value.number().unwrap_or(0);
+                        let next = match ff {
+                            FlipFlop::D => a,
+                            FlipFlop::T => old ^ a,
+                            FlipFlop::Jk | FlipFlop::Sr => match (a, ports[4].number()) {
+                                (0, Some(1)) => 0,
+                                (1, Some(0)) => 1,
+                                (1, Some(1)) if ff == FlipFlop::Jk => old ^ 1,
+                                _ => old,
+                            },
+                        };
+                        self.value = Value::known(1, next);
+                    }
+                }
+                _ => {}
+            }
+        }
+        self.value
+    }
+}

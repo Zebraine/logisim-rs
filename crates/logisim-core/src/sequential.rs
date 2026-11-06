@@ -1,0 +1,211 @@
+//! Observed terminal layouts and editable timing attributes; no runtime state.
+use crate::{Component, Kind, Point};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FlipFlop {
+    D,
+    T,
+    Jk,
+    Sr,
+}
+impl FlipFlop {
+    pub const ALL: [Self; 4] = [Self::D, Self::T, Self::Jk, Self::Sr];
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::D => "D Flip-Flop",
+            Self::T => "T Flip-Flop",
+            Self::Jk => "J-K Flip-Flop",
+            Self::Sr => "S-R Flip-Flop",
+        }
+    }
+    pub fn paired(self) -> bool {
+        matches!(self, Self::Jk | Self::Sr)
+    }
+}
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Trigger {
+    #[default]
+    Rising,
+    Falling,
+    High,
+    Low,
+}
+impl Trigger {
+    pub const ALL: [Self; 4] = [Self::Rising, Self::Falling, Self::High, Self::Low];
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Rising => "Rising edge",
+            Self::Falling => "Falling edge",
+            Self::High => "High level",
+            Self::Low => "Low level",
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ControlPosition {
+    #[default]
+    AboveBelow,
+    BelowAbove,
+    Legacy,
+}
+impl ControlPosition {
+    pub const ALL: [Self; 3] = [Self::AboveBelow, Self::BelowAbove, Self::Legacy];
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::AboveBelow => "Above / below",
+            Self::BelowAbove => "Below / above",
+            Self::Legacy => "Legacy",
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Sequential {
+    pub trigger: Trigger,
+    pub controls: ControlPosition,
+    pub negate_controls: bool,
+    pub new_layout: bool,
+    pub select_high: bool,
+    pub high_ticks: u32,
+    pub low_ticks: u32,
+}
+impl Default for Sequential {
+    fn default() -> Self {
+        Self {
+            trigger: Trigger::Rising,
+            controls: ControlPosition::AboveBelow,
+            negate_controls: false,
+            new_layout: true,
+            select_high: false,
+            high_ticks: 1,
+            low_ticks: 1,
+        }
+    }
+}
+impl Kind {
+    pub fn is_storage(self) -> bool {
+        matches!(self, Self::FlipFlop(_) | Self::Register)
+    }
+    pub fn is_sequential(self) -> bool {
+        self.is_storage() || self == Self::Clock
+    }
+}
+impl Component {
+    /// FF: Q, /Q, CLK, data(s), PRE, CLR. Register: Q, D, CLK, EN, CS, PRE, CLR.
+    pub fn sequential_ports(&self) -> Option<Vec<Point>> {
+        let points = match self.kind {
+            Kind::Register => vec![
+                (0, 0),
+                (-30, 0),
+                (-20, 20),
+                (-30, 10),
+                (-30, -10),
+                (-10, -20),
+                (-10, 20),
+            ],
+            Kind::FlipFlop(ff) => {
+                if self.sequential.new_layout {
+                    let mut p = vec![(0, 0), (0, 40), (-60, 0)];
+                    if ff.paired() {
+                        p.push((-60, 20));
+                    }
+                    p.push((-60, 40));
+                    p.extend(match self.sequential.controls {
+                        ControlPosition::AboveBelow => [(-30, -20), (-30, 60)],
+                        ControlPosition::BelowAbove => [(-30, 60), (-30, -20)],
+                        ControlPosition::Legacy => [(-40, 60), (-20, 60)],
+                    });
+                    p
+                } else {
+                    let mut p = vec![(0, 0), (0, 20), (-40, if ff.paired() { 10 } else { 0 })];
+                    if ff.paired() {
+                        p.push((-40, 0));
+                    }
+                    p.push((-40, 20));
+                    p.extend([(-30, 30), (-10, 30)]);
+                    p
+                }
+            }
+            _ => return None,
+        };
+        Some(points.into_iter().map(|(x, y)| Point::new(x, y)).collect())
+    }
+    pub fn drives_port(&self, index: usize) -> bool {
+        if let Kind::Subcircuit(_) = self.kind {
+            return self.interface.ports.get(index).is_some_and(|p| p.output);
+        }
+        (index == 0 && self.drives_output())
+            || (matches!(self.kind, Kind::FlipFlop(_)) && index == 1)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn observed_layouts_keep_port_roles_widths_and_connection_edits() {
+        for ff in FlipFlop::ALL {
+            let mut c = Component::new(Kind::FlipFlop(ff), Point::ZERO);
+            assert_eq!(c.ports()[0], Point::ZERO);
+            assert_eq!(c.ports()[1], Point::new(0, 40));
+            assert_eq!(c.ports()[2], Point::new(-60, 0));
+            assert_eq!(
+                c.ports()[3],
+                Point::new(-60, if ff.paired() { 20 } else { 40 })
+            );
+            assert!(c.drives_port(0) && c.drives_port(1) && !c.drives_port(2));
+            c.sequential.controls = ControlPosition::Legacy;
+            assert_eq!(
+                &c.ports()[c.ports().len() - 2..],
+                &[Point::new(-40, 60), Point::new(-20, 60)]
+            );
+            c.sequential.new_layout = false;
+            assert_eq!(
+                c.ports()[2],
+                Point::new(-40, if ff.paired() { 10 } else { 0 })
+            );
+            assert_eq!(
+                &c.ports()[c.ports().len() - 2..],
+                &[Point::new(-30, 30), Point::new(-10, 30)]
+            );
+        }
+        let mut r = Component::new(Kind::Register, Point::ZERO);
+        r.bits = 32;
+        assert_eq!(
+            r.ports(),
+            [
+                (0, 0),
+                (-30, 0),
+                (-20, 20),
+                (-30, 10),
+                (-30, -10),
+                (-10, -20),
+                (-10, 20)
+            ]
+            .map(|(x, y)| Point::new(x, y))
+        );
+        assert_eq!(
+            (0..7).map(|i| r.port_width(i)).collect::<Vec<_>>(),
+            vec![
+                Some(32),
+                Some(32),
+                Some(1),
+                Some(1),
+                Some(1),
+                Some(1),
+                Some(1)
+            ]
+        );
+        let mut d = crate::Circuit::default();
+        let c = Component::new(Kind::FlipFlop(FlipFlop::D), Point::new(100, 100));
+        let old = c.ports();
+        let id = d.add_component(c);
+        let end = Point::new(10, 80);
+        d.add_wire(old[4], end);
+        let mut changed = d.component(id).unwrap().clone();
+        changed.sequential.controls = ControlPosition::BelowAbove;
+        let new = changed.ports();
+        d.replace_component(changed);
+        assert!(d.wires.iter().any(|w| w.a == new[4] || w.b == new[4]));
+        assert!(d.wires.iter().any(|w| w.a == end || w.b == end));
+    }
+}

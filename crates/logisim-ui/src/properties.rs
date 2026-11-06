@@ -136,9 +136,7 @@ fn selection_info(ui: &mut Ui, editor: &mut Editor) {
     ui.add_space(10.0);
     editor.simulation.overview(ui);
     ui.add_space(8.0);
-    ui.weak(tr(
-        "Use File to open or save the supported .circ subset. Clocks are not available yet.",
-    ));
+    ui.weak(tr("Use File to open or save the supported .circ subset."));
 }
 
 fn component_editor(ui: &mut Ui, editor: &mut Editor, mut c: Component, placing: bool) {
@@ -229,7 +227,10 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
             });
         ui.end_row();
     }
-    if !matches!(c.kind, Kind::Text | Kind::Probe | Kind::Subcircuit(_)) {
+    if !matches!(
+        c.kind,
+        Kind::Text | Kind::Probe | Kind::Subcircuit(_) | Kind::Clock | Kind::FlipFlop(_)
+    ) {
         ui.label(if c.kind == Kind::BitExtender {
             tr("Output bits")
         } else {
@@ -246,6 +247,7 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
         ui.end_row();
     }
     active |= wiring_fields(ui, c);
+    active |= crate::sequential::fields(ui, c);
     if let Kind::Gate(gate) = c.kind
         && !gate.unary()
     {
@@ -332,7 +334,7 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
 fn wiring_fields(ui: &mut Ui, c: &mut Component) -> bool {
     let mut active = false;
     match c.kind {
-        Kind::Subcircuit(_) => {
+        Kind::Subcircuit(_) | Kind::Clock => {
             ui.label(tr("Label location"));
             egui::ComboBox::from_id_salt("instance_label_location")
                 .selected_text(tr(c.label_facing.name()))

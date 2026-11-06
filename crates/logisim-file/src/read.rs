@@ -324,6 +324,14 @@ fn component(
         {
             Kind::Subcircuit(names[name])
         }
+        ("#Wiring", "Clock") => Kind::Clock,
+        ("#Memory", "Register") => Kind::Register,
+        ("#Memory", name) => Kind::FlipFlop(
+            logisim_core::FlipFlop::ALL
+                .into_iter()
+                .find(|ff| ff.name() == name)
+                .ok_or_else(|| Error("Unsupported memory component".into()))?,
+        ),
         ("#Wiring", "Pin") => Kind::Pin,
         ("#Wiring", "Tunnel") => Kind::Tunnel,
         ("#Wiring", "Constant") => Kind::Constant,
@@ -345,6 +353,9 @@ fn component(
     let a = attributes(n)?;
     for key in a.keys() {
         let allowed = match kind {
+            Kind::Clock | Kind::Register | Kind::FlipFlop(_) => {
+                crate::sequential::allowed(kind, key)
+            }
             Kind::Constant => matches!(key.as_str(), "facing" | "width" | "value"),
             Kind::Power | Kind::Ground => matches!(key.as_str(), "facing" | "width"),
             Kind::Probe | Kind::Subcircuit(_) => matches!(
@@ -397,10 +408,20 @@ fn component(
         "north" => Facing::North,
         v => return Err(Error(format!("Invalid facing: {v}"))),
     };
-    c.bits = number(&a, "width", 1, 1..=32)?;
+    c.bits = number(
+        &a,
+        "width",
+        if kind == Kind::Register { 8 } else { 1 },
+        1..=32,
+    )?;
+    crate::sequential::read(&mut c, &a)?;
     read_wiring(&mut c, &a)?;
-    if matches!(kind, Kind::Subcircuit(_)) {
-        c.label_facing = match value(&a, "labelloc", "north") {
+    if matches!(kind, Kind::Subcircuit(_) | Kind::Clock) {
+        c.label_facing = match value(
+            &a,
+            "labelloc",
+            if kind == Kind::Clock { "west" } else { "north" },
+        ) {
             "east" => Facing::East,
             "south" => Facing::South,
             "west" => Facing::West,

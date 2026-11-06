@@ -20,6 +20,7 @@ pub use i18n::Language;
 mod project;
 mod properties;
 use project::{CircuitCommand, NameDialog};
+mod sequential;
 mod simulation;
 pub use simulation::{
     InputValue, SignalTone, SignalView, SimulationAction, SimulationIssue, SimulationView,
@@ -258,7 +259,7 @@ impl Workspace {
                 ui.label(tr("A cleanroom digital circuit workspace."));
                 ui.separator();
                 ui.label(tr("Component editing, wiring and canvas navigation are available."));
-                ui.label(tr("Combinational simulation is available. Supported .circ files can be opened and saved. Clocks are not yet available."));
+                ui.label(tr("Combinational and sequential simulation is available. Open and save the supported .circ components."));
             });
     }
 
@@ -599,6 +600,7 @@ impl Workspace {
                                                 Kind::Pin,
                                                 Kind::Probe,
                                                 Kind::Tunnel,
+                                                Kind::Clock,
                                                 Kind::Constant,
                                                 Kind::Power,
                                                 Kind::Ground,
@@ -610,11 +612,14 @@ impl Workspace {
                                                 ui,
                                                 &[
                                                     "Pull Resistor",
-                                                    "Clock",
                                                     "Transistor",
                                                     "Transmission Gate",
                                                 ],
                                             );
+                                        }
+                                        "Memory" => {
+                                            for ff in logisim_core::FlipFlop::ALL { self.library_tool(ui, Kind::FlipFlop(ff)); }
+                                            self.library_tool(ui, Kind::Register);
                                         }
                                         "Base" => self.library_tool(ui, Kind::Text),
                                         _ => {

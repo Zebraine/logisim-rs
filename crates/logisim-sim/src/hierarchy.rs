@@ -8,6 +8,10 @@ struct Instance {
     definition: Id,
     sim: Simulator,
 }
+struct CachedRoot {
+    states: BTreeMap<Path, Instance>,
+    ticks: u64,
+}
 struct Bridge {
     parent: Path,
     instance: Id,
@@ -22,7 +26,8 @@ pub struct ProjectSimulator {
     root: Id,
     states: BTreeMap<Path, Instance>,
     bridges: Vec<Bridge>,
-    saved_inputs: BTreeMap<Id, BTreeMap<Id, Value>>,
+    cached_roots: BTreeMap<Id, CachedRoot>,
+    ticks: u64,
     enabled: bool,
     steps: u64,
     unsettled: usize,
@@ -36,7 +41,8 @@ impl Default for ProjectSimulator {
             root: 0,
             states: BTreeMap::new(),
             bridges: vec![],
-            saved_inputs: BTreeMap::new(),
+            cached_roots: BTreeMap::new(),
+            ticks: 0,
             enabled: true,
             steps: 0,
             unsettled: 0,
@@ -51,19 +57,26 @@ impl ProjectSimulator {
             return false;
         }
         let same_root = self.root == root;
-        if !same_root && let Some(state) = self.states.get(&vec![]) {
-            self.saved_inputs
-                .insert(self.root, state.sim.inputs.clone());
-        }
-        self.saved_inputs
-            .retain(|id, _| project.circuit(*id).is_some());
-        self.project = project.clone();
-        self.root = root;
         let mut old = if same_root {
             std::mem::take(&mut self.states)
         } else {
-            BTreeMap::new()
+            if !self.states.is_empty() {
+                self.cached_roots.insert(
+                    self.root,
+                    CachedRoot {
+                        states: std::mem::take(&mut self.states),
+                        ticks: self.ticks,
+                    },
+                );
+            }
+            let cached = self.cached_roots.remove(&root);
+            self.ticks = cached.as_ref().map_or(0, |c| c.ticks);
+            cached.map_or_else(BTreeMap::new, |c| c.states)
         };
+        self.cached_roots
+            .retain(|id, _| project.circuit(*id).is_some());
+        self.project = project.clone();
+        self.root = root;
         self.states.clear();
         self.bridges.clear();
         self.error = None;
@@ -98,20 +111,6 @@ impl ProjectSimulator {
                         }
                     });
                 changed |= instance.sim.synchronize(circuit);
-                if !same_root
-                    && path.is_empty()
-                    && let Some(saved) = self.saved_inputs.get(&root)
-                {
-                    for (id, value) in saved {
-                        if instance
-                            .sim
-                            .input(*id)
-                            .is_some_and(|input| input.width() == value.width())
-                        {
-                            instance.sim.external_input(*id, *value);
-                        }
-                    }
-                }
                 for c in &circuit.components {
                     if let Kind::Subcircuit(id) = c.kind {
                         let mut child = path.clone();
@@ -245,7 +244,8 @@ impl ProjectSimulator {
         }
     }
     pub fn reset(&mut self) {
-        self.saved_inputs.clear();
+        self.cached_roots.clear();
+        self.ticks = 0;
         for state in self.states.values_mut() {
             state.sim.reset();
         }
@@ -253,6 +253,34 @@ impl ProjectSimulator {
         self.unsettled = 0;
         self.limited = false;
         self.refresh_bridges();
+    }
+    pub fn ticks(&self) -> u64 {
+        self.ticks
+    }
+    pub fn has_clocks(&self) -> bool {
+        self.states.values().any(|s| s.sim.has_clocks())
+    }
+    pub fn tick(&mut self) -> bool {
+        if self.limited || self.error.is_some() || self.pending_count() > 0 || !self.has_clocks() {
+            return false;
+        }
+        for state in self.states.values_mut() {
+            state.sim.tick_clocks();
+        }
+        self.ticks = self.ticks.saturating_add(1);
+        true
+    }
+    pub fn poke_clock(&mut self, path: &[Id], id: Id) {
+        if let Some(state) = self.states.get_mut(path) {
+            state.sim.poke_clock(id);
+            self.unsettled = 0;
+        }
+    }
+    pub fn toggle_stored(&mut self, path: &[Id], id: Id) {
+        if let Some(state) = self.states.get_mut(path) {
+            state.sim.toggle_stored(id);
+            self.unsettled = 0;
+        }
     }
     // Only standalone root inputs are pokable; nested pins are driven by the enclosing instance.
     pub fn set_input(&mut self, id: Id, value: u32) {

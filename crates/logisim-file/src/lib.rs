@@ -2,6 +2,7 @@
 //! No filesystem or simulator dependency; unsupported content is never silently saved.
 mod appearance;
 mod read;
+mod sequential;
 #[cfg(test)]
 mod tests;
 mod write;

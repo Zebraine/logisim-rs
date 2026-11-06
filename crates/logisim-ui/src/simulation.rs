@@ -60,6 +60,12 @@ pub struct SimulationView {
     pub pending: usize,
     pub steps: u64,
     pub limited: bool,
+    pub has_clocks: bool,
+    pub ticks: u64,
+    pub automatic_ticks: bool,
+    pub tick_hz: u32,
+    pub clocks: BTreeSet<Id>,
+    pub storage: BTreeMap<Id, SignalView>,
     pub wires: BTreeMap<Id, SignalView>,
     pub ports: BTreeMap<(Id, usize), SignalView>,
     pub inputs: BTreeMap<Id, InputValue>,
@@ -70,6 +76,11 @@ pub enum SimulationAction {
     ToggleEnabled,
     Step,
     Reset,
+    Tick,
+    ToggleTicks,
+    SetTickRate(u32),
+    PokeClock { id: Id },
+    ToggleStored { id: Id },
     ToggleInput { id: Id, bit: u8 },
     SetInput { id: Id, value: u32 },
 }
@@ -104,9 +115,13 @@ impl SimulationUi {
             (Key::E, SimulationAction::ToggleEnabled),
             (Key::I, SimulationAction::Step),
             (Key::R, SimulationAction::Reset),
+            (Key::T, SimulationAction::Tick),
+            (Key::K, SimulationAction::ToggleTicks),
         ] {
             if ui.input_mut(|i| i.consume_key(Modifiers::COMMAND, key))
                 && (action != SimulationAction::Step || !self.view.enabled)
+                && (action != SimulationAction::Tick || self.can_tick())
+                && (action != SimulationAction::ToggleTicks || self.view.has_clocks)
             {
                 self.actions.push(action);
             }
@@ -147,10 +162,34 @@ impl SimulationUi {
             }
         }
         ui.separator();
-        ui.add_enabled(
-            false,
-            egui::Button::new(tr("Tick Once — no clock components")),
-        );
+        if ui
+            .add_enabled(self.can_tick(), egui::Button::new(tr("Tick once · Ctrl+T")))
+            .clicked()
+        {
+            self.actions.push(SimulationAction::Tick);
+            ui.close();
+        }
+        let mut automatic = self.view.automatic_ticks;
+        if ui
+            .add_enabled(
+                self.view.has_clocks,
+                egui::Checkbox::new(&mut automatic, tr("Automatic ticks · Ctrl+K")),
+            )
+            .changed()
+        {
+            self.actions.push(SimulationAction::ToggleTicks);
+        }
+        ui.menu_button(tr("Tick frequency"), |ui| {
+            for hz in [1, 2, 4, 8, 16, 32, 64, 128] {
+                if ui
+                    .selectable_label(self.view.tick_hz == hz, tf!("{} ticks/s", hz))
+                    .clicked()
+                {
+                    self.actions.push(SimulationAction::SetTickRate(hz));
+                    ui.close();
+                }
+            }
+        });
     }
     pub fn toolbar(&mut self, ui: &mut Ui) {
         if ui
@@ -176,15 +215,45 @@ impl SimulationUi {
         }
         if ui
             .button(tr("Reset"))
-            .on_hover_text(tr("Reset all inputs to zero · Ctrl+R"))
+            .on_hover_text(tr("Reset inputs, storage and clocks · Ctrl+R"))
             .clicked()
         {
             self.actions.push(SimulationAction::Reset);
         }
+        if ui
+            .add_enabled(self.can_tick(), egui::Button::new(tr("Tick")))
+            .on_hover_text(tr(
+                "Queue one clock tick · Ctrl+T; paused simulation uses Step or Run",
+            ))
+            .clicked()
+        {
+            self.actions.push(SimulationAction::Tick);
+        }
+        let mut automatic = self.view.automatic_ticks;
+        if ui
+            .add_enabled(
+                self.view.has_clocks,
+                egui::Checkbox::new(&mut automatic, tr("Auto ticks")),
+            )
+            .on_hover_text(tr("Automatic ticks · Ctrl+K"))
+            .changed()
+        {
+            self.actions.push(SimulationAction::ToggleTicks);
+        }
+    }
+    fn can_tick(&self) -> bool {
+        self.view.has_clocks && self.view.pending == 0 && !self.view.limited
     }
     pub fn overview(&self, ui: &mut Ui) {
         ui.label(self.status());
         ui.weak(tf!("{} propagation steps", self.view.steps));
+        if self.view.has_clocks {
+            ui.weak(tf!(
+                "{} clock ticks · {} ticks/s",
+                self.view.ticks,
+                self.view.tick_hz
+            ));
+        }
         if !self.view.enabled && self.view.pending > 0 {
             ui.weak(tr("Inputs have pending changes. Step or Run to propagate."));
         }
@@ -194,6 +263,19 @@ impl SimulationUi {
         ));
     }
     pub fn component(&mut self, ui: &mut Ui, c: &Component) {
+        if let Some(state) = self.view.storage.get(&c.id) {
+            ui.colored_label(state.tone.color(), tf!("Stored value: {}", state.text))
+                .on_hover_text(&state.binary);
+            if matches!(c.kind, logisim_core::Kind::FlipFlop(_))
+                && ui.button(tr("Toggle stored bit")).clicked()
+            {
+                self.actions
+                    .push(SimulationAction::ToggleStored { id: c.id });
+            }
+        }
+        if self.view.clocks.contains(&c.id) && ui.button(tr("Toggle clock output")).clicked() {
+            self.actions.push(SimulationAction::PokeClock { id: c.id });
+        }
         if let Some(signal) = self.view.ports.get(&(c.id, 0)) {
             ui.colored_label(signal.tone.color(), tf!("Signal: {}", signal.text))
                 .on_hover_text(tf!("{} bit: {}", signal.binary.len(), signal.binary));

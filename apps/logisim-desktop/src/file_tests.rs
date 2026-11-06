@@ -104,7 +104,7 @@ fn partial_import_requires_a_different_destination() {
     let path = dir.path("mixed.circ");
     let xml = logisim_file::serialize(&circuit()).unwrap().replace(
         "</circuit>",
-        "<comp lib=\"0\" loc=\"(0,0)\" name=\"Clock\"/></circuit>",
+        "<comp lib=\"0\" loc=\"(0,0)\" name=\"Transistor\"/></circuit>",
     );
     fs::write(&path, &xml).unwrap();
     let mut storage = Storage::new();
@@ -122,7 +122,7 @@ fn partial_import_requires_a_different_destination() {
     let copy = dir.path("subset.circ");
     storage.save(&circuit, &copy, SaveMode::Current).unwrap();
     assert!(storage.protected.is_none());
-    assert!(!fs::read_to_string(copy).unwrap().contains("Clock"));
+    assert!(!fs::read_to_string(copy).unwrap().contains("Transistor"));
     assert_eq!(fs::read_to_string(path).unwrap(), xml);
 }
 #[test]

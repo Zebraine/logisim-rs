@@ -73,6 +73,17 @@ fn probe_width(c: &Component) -> f32 {
     }
 }
 pub(crate) fn bounds(c: &Component) -> Rect {
+    if c.kind.is_sequential() {
+        let (min, max) = crate::sequential::body(c);
+        let mut r = Rect::NOTHING;
+        for p in [min, max, Point::new(min.x, max.y), Point::new(max.x, min.y)]
+            .into_iter()
+            .chain(c.local_ports())
+        {
+            r.extend_with(local(c, pos(p).to_vec2()).to_pos2());
+        }
+        return r;
+    }
     if matches!(c.kind, Kind::Subcircuit(_)) {
         let mut rect = Rect::NOTHING;
         for p in [
@@ -262,6 +273,9 @@ pub(crate) fn component(
         );
     };
     match c.kind {
+        Kind::Clock | Kind::FlipFlop(_) | Kind::Register => {
+            crate::sequential::draw(p, canvas, c, color, simulation)
+        }
         Kind::Subcircuit(_) => {
             if let Some(appearance) = &c.interface.appearance {
                 for shape in &appearance.shapes {
@@ -578,7 +592,7 @@ pub(crate) fn component(
     }
     if !matches!(c.kind, Kind::Text | Kind::Tunnel) && !c.label.is_empty() {
         let r = bounds(c);
-        let (anchor, align) = if matches!(c.kind, Kind::Probe | Kind::Subcircuit(_)) {
+        let (anchor, align) = if matches!(c.kind, Kind::Probe | Kind::Subcircuit(_) | Kind::Clock) {
             match c.label_facing {
                 Facing::North => (vec2(r.center().x, r.top() - 8.0), Align2::CENTER_BOTTOM),
                 Facing::South => (vec2(r.center().x, r.bottom() + 8.0), Align2::CENTER_TOP),

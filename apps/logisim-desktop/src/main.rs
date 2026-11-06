@@ -1,4 +1,5 @@
 //! Desktop host; editor presentation and navigation live in logisim-ui.
+mod clocks;
 mod file_picker;
 #[cfg(test)]
 mod file_tests;
@@ -25,6 +26,7 @@ fn main() -> eframe::Result {
                 workspace,
                 preferences,
                 simulator: Default::default(),
+                clocks: Default::default(),
                 files: Default::default(),
             };
             if let Some(path) = std::env::args_os().nth(1) {
@@ -45,6 +47,7 @@ struct DesktopApp {
     preferences: preferences::Preferences,
     workspace: logisim_ui::Workspace,
     simulator: logisim_sim::ProjectSimulator,
+    clocks: clocks::Clocks,
     files: files::Files,
 }
 
@@ -57,12 +60,20 @@ impl DesktopApp {
     fn show(&mut self, ui: &mut eframe::egui::Ui) {
         self.simulator
             .synchronize(self.workspace.project(), self.workspace.simulation_root());
+        if let Some(delay) = self
+            .clocks
+            .poll(std::time::Instant::now(), &mut self.simulator)
+        {
+            ui.ctx().request_repaint_after(delay);
+        }
         self.simulator.advance(64);
-        self.workspace.set_simulation(simulation::present_project(
+        let mut simulation_view = simulation::present_project(
             self.workspace.circuit(),
             &self.simulator,
             self.workspace.simulation_path(),
-        ));
+        );
+        self.clocks.present(&mut simulation_view);
+        self.workspace.set_simulation(simulation_view);
         if ui.input(|i| i.viewport().close_requested()) && !self.files.allow_close {
             ui.ctx()
                 .send_viewport_cmd(eframe::egui::ViewportCommand::CancelClose);
@@ -102,6 +113,7 @@ impl DesktopApp {
         let actions = self.workspace.take_simulation_actions();
         let acted = !actions.is_empty();
         for action in actions {
+            self.clocks.action(action);
             simulation::apply_project(
                 &mut self.simulator,
                 self.workspace.simulation_path(),

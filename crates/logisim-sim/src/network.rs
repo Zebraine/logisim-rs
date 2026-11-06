@@ -80,9 +80,7 @@ impl Network {
                 if let Some(width) = c.port_width(index).filter(|w| *w > 0) {
                     widths[net].insert(width);
                 }
-                if (index == 0 && c.drives_output())
-                    || (matches!(c.kind, Kind::Subcircuit(_)) && c.interface.ports[index].output)
-                {
+                if c.drives_port(index) {
                     network.nets[net].drivers.push((c.id, index));
                 }
             }

@@ -14,6 +14,12 @@ pub fn apply(sim: &mut Simulator, action: SimulationAction) {
         }
         SimulationAction::Step => {}
         SimulationAction::Reset => sim.reset(),
+        SimulationAction::Tick => {
+            sim.tick();
+        }
+        SimulationAction::PokeClock { id } => sim.poke_clock(id),
+        SimulationAction::ToggleStored { id } => sim.toggle_stored(id),
+        SimulationAction::ToggleTicks | SimulationAction::SetTickRate(_) => {}
         SimulationAction::ToggleInput { id, bit } => sim.toggle_input(id, bit),
         SimulationAction::SetInput { id, value } => sim.set_input(id, value),
     }
@@ -43,6 +49,12 @@ pub fn present(circuit: &Circuit, sim: &Simulator) -> SimulationView {
                 view.ports.insert((c.id, index), presented);
             }
         }
+        if c.kind == Kind::Clock {
+            view.clocks.insert(c.id);
+        }
+        if let Some(value) = sim.stored_value(c.id) {
+            view.storage.insert(c.id, signal(value, false));
+        }
         if let Some(value) = sim.input(c.id) {
             view.inputs.insert(
                 c.id,
@@ -53,6 +65,7 @@ pub fn present(circuit: &Circuit, sim: &Simulator) -> SimulationView {
             );
         }
     }
+    view.has_clocks = sim.has_clocks();
     append_issues(&mut view, circuit, sim.diagnostics());
     view
 }
@@ -101,6 +114,11 @@ pub fn apply_project(
             sim.step();
         }
         SimulationAction::Reset => sim.reset(),
+        SimulationAction::Tick => {
+            sim.tick();
+        }
+        SimulationAction::PokeClock { id } => sim.poke_clock(path, id),
+        SimulationAction::ToggleStored { id } => sim.toggle_stored(path, id),
         SimulationAction::ToggleInput { id, bit } if path.is_empty() => sim.toggle_input(id, bit),
         SimulationAction::SetInput { id, value } if path.is_empty() => sim.set_input(id, value),
         _ => {}
@@ -119,6 +137,8 @@ pub fn present_project(
     view.pending = sim.pending_count();
     view.steps = sim.steps();
     view.limited = sim.limited();
+    view.has_clocks = sim.has_clocks();
+    view.ticks = sim.ticks();
     if !path.is_empty() {
         view.inputs.clear();
     }

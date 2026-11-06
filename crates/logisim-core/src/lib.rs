@@ -8,6 +8,9 @@ pub use appearance::{
 mod project;
 pub use project::{CircuitDefinition, Interface, InterfacePort, MAX_CIRCUITS, Project};
 
+mod sequential;
+pub use sequential::{ControlPosition, FlipFlop, Sequential, Trigger};
+
 mod wiring;
 pub use wiring::{Extension, Radix, SplitAppearance, Splitter};
 
@@ -143,6 +146,9 @@ pub enum Kind {
     Probe,
     Splitter,
     BitExtender,
+    Clock,
+    FlipFlop(FlipFlop),
+    Register,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -179,7 +185,10 @@ pub enum VerticalAlign {
 }
 impl Kind {
     pub fn rotatable(self) -> bool {
-        !matches!(self, Self::Text | Self::BitExtender)
+        !matches!(
+            self,
+            Self::Text | Self::BitExtender | Self::FlipFlop(_) | Self::Register
+        )
     }
     pub fn has_label(self) -> bool {
         matches!(
@@ -190,6 +199,9 @@ impl Kind {
                 | Self::Gate(_)
                 | Self::Probe
                 | Self::Subcircuit(_)
+                | Self::Clock
+                | Self::FlipFlop(_)
+                | Self::Register
         )
     }
     pub fn name(self) -> &'static str {
@@ -205,6 +217,9 @@ impl Kind {
             Self::Probe => "Probe",
             Self::Splitter => "Splitter",
             Self::BitExtender => "Bit Extender",
+            Self::Clock => "Clock",
+            Self::FlipFlop(ff) => ff.name(),
+            Self::Register => "Register",
         }
     }
 }
@@ -233,6 +248,7 @@ pub struct Component {
     pub splitter: Splitter,
     pub input_bits: u8,
     pub extension: Extension,
+    pub sequential: Sequential,
 }
 impl Component {
     pub fn new(kind: Kind, position: Point) -> Self {
@@ -249,6 +265,7 @@ impl Component {
             bits: match kind {
                 Kind::Splitter => 4,
                 Kind::BitExtender => 16,
+                Kind::Register => 8,
                 _ => 1,
             },
             inputs: 2,
@@ -271,10 +288,15 @@ impl Component {
             text_vertical: VerticalAlign::Top,
             constant: 1,
             radix: Radix::Binary,
-            label_facing: Facing::North,
+            label_facing: if kind == Kind::Clock {
+                Facing::West
+            } else {
+                Facing::North
+            },
             splitter: Splitter::default(),
             input_bits: 8,
             extension: Extension::Zero,
+            sequential: Sequential::default(),
         }
     }
     pub fn input_count(&self) -> u8 {
@@ -285,6 +307,9 @@ impl Component {
         }
     }
     pub fn local_ports(&self) -> Vec<Point> {
+        if let Some(ports) = self.sequential_ports() {
+            return ports;
+        }
         if matches!(self.kind, Kind::Subcircuit(_)) {
             return self.interface.ports.iter().map(|p| p.offset).collect();
         }

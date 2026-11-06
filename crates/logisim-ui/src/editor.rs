@@ -579,6 +579,19 @@ impl Editor {
                         self.selection.clear();
                         if let Some(id) = self.hit(world, tolerance) {
                             self.selection.insert(id);
+                            if self.simulation.view.clocks.contains(&id) {
+                                self.simulation
+                                    .actions
+                                    .push(SimulationAction::PokeClock { id });
+                            } else if self
+                                .circuit
+                                .component(id)
+                                .is_some_and(|c| matches!(c.kind, Kind::FlipFlop(_)))
+                            {
+                                self.simulation
+                                    .actions
+                                    .push(SimulationAction::ToggleStored { id });
+                            }
                             if let Some(input) = self.simulation.view.inputs.get(&id) {
                                 if input.bits == 1 {
                                     self.simulation
@@ -625,6 +638,27 @@ impl Editor {
             && let Some(pointer) = pointer
         {
             let world = canvas.world(pointer);
+            for c in self
+                .circuit
+                .components
+                .iter()
+                .filter(|c| c.kind.is_sequential())
+            {
+                for (index, point) in c.ports().iter().enumerate() {
+                    if (drawing::pos(*point).to_vec2() - world).length() <= tolerance {
+                        response.clone().on_hover_ui(|ui| {
+                            ui.label(tf!(
+                                "{} · {} bit(s)",
+                                tr(crate::sequential::port_label(c, index)),
+                                c.port_width(index).unwrap_or(1)
+                            ));
+                            if let Some(signal) = self.simulation.view.ports.get(&(c.id, index)) {
+                                ui.monospace(&signal.binary);
+                            }
+                        });
+                    }
+                }
+            }
             for c in self
                 .circuit
                 .components

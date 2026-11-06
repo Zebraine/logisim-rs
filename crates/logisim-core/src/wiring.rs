@@ -132,6 +132,8 @@ impl Component {
             return self.interface.ports.get(index).map(|p| p.bits);
         }
         match self.kind {
+            Kind::Clock | Kind::FlipFlop(_) => Some(1),
+            Kind::Register if index >= 2 => Some(1),
             Kind::Probe => None,
             Kind::Splitter if index > 0 => Some(
                 self.splitter
@@ -146,7 +148,14 @@ impl Component {
     pub fn drives_output(&self) -> bool {
         matches!(
             self.kind,
-            Kind::Gate(_) | Kind::Constant | Kind::Power | Kind::Ground | Kind::BitExtender
+            Kind::Gate(_)
+                | Kind::Constant
+                | Kind::Power
+                | Kind::Ground
+                | Kind::BitExtender
+                | Kind::Clock
+                | Kind::FlipFlop(_)
+                | Kind::Register
         ) || (self.kind == Kind::Pin && !self.output)
     }
 }

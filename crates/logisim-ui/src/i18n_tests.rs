@@ -178,3 +178,53 @@ fn settings_retry_is_explicit_and_blocks_editor_shortcuts() {
     assert!(app.take_settings_retry());
     assert!(!app.take_settings_retry());
 }
+
+#[test]
+fn sequential_library_properties_and_controls_work_in_both_languages() {
+    for language in Language::ALL {
+        let ctx = Context::default();
+        configure(&ctx);
+        let mut app = Workspace::default();
+        app.set_language(language);
+        let translated = |text| i18n::with_language(language, || i18n::tr(text).to_owned());
+        click(&ctx, &mut app, &translated("Memory"));
+        click(&ctx, &mut app, &translated("J-K Flip-Flop"));
+        assert_eq!(
+            app.editor.tool,
+            Tool::Place(Kind::FlipFlop(logisim_core::FlipFlop::Jk))
+        );
+        let labels = frame(&ctx, &mut app, vec![]);
+        assert!(has(&labels, &translated("Trigger")));
+        click(&ctx, &mut app, &translated("Rising edge"));
+        click(&ctx, &mut app, &translated("Falling edge"));
+        assert_eq!(
+            app.editor.template.sequential.trigger,
+            logisim_core::Trigger::Falling
+        );
+        frame(
+            &ctx,
+            &mut app,
+            vec![
+                Event::PointerMoved(Pos2::new(170.0, 360.0)),
+                Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: egui::vec2(0.0, -200.0),
+                    phase: egui::TouchPhase::Move,
+                    source: egui::MouseWheelSource::Unknown,
+                    modifiers: Modifiers::NONE,
+                },
+            ],
+        );
+        click(&ctx, &mut app, &translated("Register"));
+        let labels = frame(&ctx, &mut app, vec![]);
+        assert!(has(&labels, &translated("Chip select active on")));
+        app.editor.simulation.view.has_clocks = true;
+        click(&ctx, &mut app, &translated("Tick"));
+        click(&ctx, &mut app, &translated("Auto ticks"));
+        assert_eq!(
+            app.take_simulation_actions(),
+            vec![SimulationAction::Tick, SimulationAction::ToggleTicks]
+        );
+        assert!(!app.editor.can_undo());
+    }
+}
