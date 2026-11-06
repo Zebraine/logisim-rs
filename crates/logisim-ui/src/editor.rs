@@ -432,6 +432,22 @@ impl Editor {
         self.port_at(world, tolerance)
             .unwrap_or(Point::snapped(world.x, world.y))
     }
+    fn connection_point(&self, world: Vec2, tolerance: f32) -> Point {
+        if let Some(port) = self.port_at(world, tolerance) {
+            return port;
+        }
+        let grid = Point::snapped(world.x, world.y);
+        if let Some(id) = self.wire_at(world, tolerance)
+            && let Some(w) = self.circuit.wires.iter().find(|w| w.id == id)
+        {
+            // Imported wires need not lie on the grid. Keep the anchor on the actual wire.
+            if w.horizontal() {
+                return Point::new(grid.x.clamp(w.a.x.min(w.b.x), w.a.x.max(w.b.x)), w.a.y);
+            }
+            return Point::new(w.a.x, grid.y.clamp(w.a.y.min(w.b.y), w.a.y.max(w.b.y)));
+        }
+        grid
+    }
 
     pub fn show(&mut self, ui: &mut Ui, canvas: &mut Canvas, response: &Response) {
         let keyboard = ui.is_enabled()
@@ -454,6 +470,8 @@ impl Editor {
                     let world = canvas.world(start);
                     let snap = self.snap(world, tolerance);
                     let hit = self.hit(world, tolerance);
+                    let ctrl = ui.input(|i| i.modifiers.ctrl);
+                    let hit_wire = hit.is_some_and(|id| self.circuit.component(id).is_none());
                     let selected_endpoint = self
                         .circuit
                         .wires
@@ -469,16 +487,24 @@ impl Editor {
                             }
                         });
                     if self.tool == Tool::Wire
-                        || (self.tool == Tool::Select && self.port_at(world, tolerance).is_some())
+                        || (self.tool == Tool::Select
+                            && !ctrl
+                            && (self.wire_start.is_some()
+                                || self.port_at(world, tolerance).is_some()
+                                || (hit_wire && selected_endpoint.is_none())))
                     {
+                        let start = self
+                            .wire_start
+                            .take()
+                            .unwrap_or_else(|| self.connection_point(world, tolerance));
                         self.gesture = Some(Gesture::Wire {
-                            start: snap,
-                            end: snap,
+                            start,
+                            end: start,
                             horizontal: true,
                         });
-                        self.wire_start = None;
                     } else if self.tool == Tool::Select {
-                        if let Some((wire, fixed)) = selected_endpoint {
+                        self.wire_start = None;
+                        if let Some((wire, fixed)) = selected_endpoint.filter(|_| !ctrl) {
                             self.gesture = Some(Gesture::Endpoint {
                                 before: self.snapshot(),
                                 fixed,
@@ -512,7 +538,7 @@ impl Editor {
             }
             if let Some(pos) = pointer {
                 let world = canvas.world(pos);
-                let snap = self.snap(world, tolerance);
+                let snap = self.connection_point(world, tolerance);
                 if let Some(gesture) = &mut self.gesture {
                     match gesture {
                         Gesture::Move { start, before } => {
@@ -628,6 +654,7 @@ impl Editor {
                     }
                     Tool::Place(_) => self.place(snap),
                     Tool::Wire => {
+                        let snap = self.connection_point(world, tolerance);
                         if let Some(start) = self.wire_start.take() {
                             self.add_route(start, snap, !ui.input(|i| i.modifiers.shift));
                         } else {
@@ -635,21 +662,39 @@ impl Editor {
                         }
                     }
                     Tool::Select => {
-                        if !ui.input(|i| i.modifiers.shift) {
+                        let modifiers = ui.input(|i| i.modifiers);
+                        let hit = self.hit(world, tolerance);
+                        let wire = hit.is_some_and(|id| self.circuit.component(id).is_none());
+                        if !modifiers.ctrl && self.wire_start.is_some() {
+                            let start = self.wire_start.take().unwrap();
+                            self.add_route(
+                                start,
+                                self.connection_point(world, tolerance),
+                                !modifiers.shift,
+                            );
+                        } else if !modifiers.ctrl && !modifiers.shift && wire {
+                            self.commit_properties();
+                            self.wire_start = Some(self.connection_point(world, tolerance));
                             self.selection.clear();
-                        }
-                        if let Some(id) = self.hit(world, tolerance) {
-                            if !self.selection.insert(id) {
-                                self.selection.remove(&id);
+                        } else {
+                            self.wire_start = None;
+                            if !modifiers.shift {
+                                self.selection.clear();
                             }
-                            if response.double_clicked() && self.circuit.component(id).is_some() {
-                                if matches!(
-                                    self.circuit.component(id).map(|c| c.kind),
-                                    Some(Kind::Subcircuit(_))
-                                ) {
-                                    self.open_instance = Some(id);
-                                } else {
-                                    self.focus_text = true;
+                            if let Some(id) = hit {
+                                if !self.selection.insert(id) {
+                                    self.selection.remove(&id);
+                                }
+                                if response.double_clicked() && self.circuit.component(id).is_some()
+                                {
+                                    if matches!(
+                                        self.circuit.component(id).map(|c| c.kind),
+                                        Some(Kind::Subcircuit(_))
+                                    ) {
+                                        self.open_instance = Some(id);
+                                    } else {
+                                        self.focus_text = true;
+                                    }
                                 }
                             }
                         }
@@ -810,7 +855,7 @@ impl Editor {
                     self.wire_start.map(|a| {
                         (
                             a,
-                            self.snap(canvas.world(p), tolerance),
+                            self.connection_point(canvas.world(p), tolerance),
                             !ui.input(|i| i.modifiers.shift),
                         )
                     })
@@ -839,7 +884,15 @@ impl Editor {
                 if self.hit(world, tolerance).is_some() {
                     ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
                 }
-            } else if let Some(port) = self.port_at(world, tolerance) {
+            } else if self.tool == Tool::Select
+                && ui.input(|i| i.modifiers.ctrl)
+                && self.hit(world, tolerance).is_some()
+            {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
+            } else if self.port_at(world, tolerance).is_some()
+                || self.wire_at(world, tolerance).is_some()
+            {
+                let port = self.connection_point(world, tolerance);
                 painter.circle_stroke(
                     canvas.screen(port),
                     6.0,

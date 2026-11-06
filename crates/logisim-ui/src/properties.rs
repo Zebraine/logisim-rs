@@ -104,7 +104,7 @@ fn selection_info(ui: &mut Ui, editor: &mut Editor) {
                 "Connected wires: {}",
                 editor.circuit.connected_wires(w.id).len()
             ));
-            ui.weak(tr("Drag the blue endpoint handles to reshape this wire."));
+            ui.weak(tr("Click or drag the wire to branch. Ctrl-drag moves; drag blue endpoint handles to reshape."));
             if let Some(signal) = editor.simulation.view.wires.get(&w.id) {
                 ui.colored_label(signal.tone.color(), tf!("Signal: {}", signal.text));
                 ui.monospace(&signal.binary);
@@ -127,7 +127,7 @@ fn selection_info(ui: &mut Ui, editor: &mut Editor) {
         ));
     } else {
         ui.weak(tr(
-            "Choose a tool to place a component. Drag a terminal to connect.",
+            "Click or drag a wire to branch. Ctrl-click selects; Ctrl-drag moves.",
         ));
         ui.weak(tr(
             "Drag empty space to select. Shift adds to the selection.",

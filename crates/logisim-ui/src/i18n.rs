@@ -177,15 +177,19 @@ const MESSAGES: &[(&str, &str)] = &[
         "请输入非空且不重复的电路名称。",
     ),
     ("Choose a regular .circ file.", "请选择普通 .circ 文件。"),
-    (
-        "Choose a tool to place a component. Drag a terminal to connect.",
-        "选择工具以放置元件，拖动端口以连线。",
-    ),
     ("Circuit layout", "电路布局"),
     ("Circuit name", "电路名称"),
     ("Circuit operation unavailable", "无法执行电路操作"),
     ("Circuit: {}", "电路：{}"),
     ("Clear: reset to zero", "清零：异步置零"),
+    (
+        "Click or drag a wire to branch. Ctrl-click selects; Ctrl-drag moves.",
+        "点击或拖动导线以引出支路；Ctrl 单击选择，Ctrl 拖动移动。",
+    ),
+    (
+        "Click or drag the wire to branch. Ctrl-drag moves; drag blue endpoint handles to reshape.",
+        "点击或拖动导线以引出支路；Ctrl 拖动移动，拖动蓝色端点调整路径。",
+    ),
     (
         "Click to add text, then edit its content here.",
         "点击添加文字，然后在此编辑内容。",
@@ -238,10 +242,6 @@ const MESSAGES: &[(&str, &str)] = &[
         "在空白处拖动框选，Shift 追加选择。",
     ),
     ("Drag or type a zoom percentage", "拖动或输入缩放百分比"),
-    (
-        "Drag the blue endpoint handles to reshape this wire.",
-        "拖动蓝色端点以调整导线。",
-    ),
     (
         "Drag the two endpoints, then click the control point.",
         "拖出两个端点，再点击控制点。",
