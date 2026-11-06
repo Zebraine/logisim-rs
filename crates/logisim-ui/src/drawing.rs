@@ -72,6 +72,19 @@ fn probe_width(c: &Component) -> f32 {
     }
 }
 pub(crate) fn bounds(c: &Component) -> Rect {
+    if matches!(c.kind, Kind::Subcircuit(_)) {
+        let mut rect = Rect::NOTHING;
+        for p in [
+            c.interface.min,
+            c.interface.max,
+            Point::new(c.interface.min.x, c.interface.max.y),
+            Point::new(c.interface.max.x, c.interface.min.y),
+        ] {
+            rect.extend_with(local(c, pos(p).to_vec2()).to_pos2());
+        }
+        return rect;
+    }
+
     if c.kind == Kind::Splitter {
         let mut rect = Rect::from_min_max(pos(c.position), pos(c.position));
         for point in c.ports() {
@@ -248,6 +261,39 @@ pub(crate) fn component(
         );
     };
     match c.kind {
+        Kind::Subcircuit(_) => {
+            let a = c.interface.min;
+            let b = c.interface.max;
+            let rect = bounds(c);
+            let screen = Rect::from_min_max(
+                canvas.screen_vec(rect.min.to_vec2()),
+                canvas.screen_vec(rect.max.to_vec2()),
+            );
+            p.rect(
+                screen,
+                4.0,
+                Color32::from_rgb(241, 245, 251),
+                stroke,
+                StrokeKind::Inside,
+            );
+            path(
+                vec![
+                    vec2(a.x as f32 + 4.0, a.y as f32 + 3.0),
+                    vec2(a.x as f32 + 4.0, a.y as f32 + 7.0),
+                    vec2(a.x as f32 + 8.0, a.y as f32 + 7.0),
+                ],
+                false,
+            );
+            let max_chars = ((b.x - a.x - 4) / 6).max(1) as usize;
+            let title: String = c.interface.name.chars().take(max_chars).collect();
+            p.text(
+                screen.center(),
+                Align2::CENTER_CENTER,
+                title,
+                FontId::proportional(10.0 * canvas.camera.zoom),
+                color,
+            );
+        }
         Kind::Gate(gate) => {
             let h = half_height(c);
             match gate {
@@ -511,7 +557,7 @@ pub(crate) fn component(
     }
     if !matches!(c.kind, Kind::Text | Kind::Tunnel) && !c.label.is_empty() {
         let r = bounds(c);
-        let (anchor, align) = if c.kind == Kind::Probe {
+        let (anchor, align) = if matches!(c.kind, Kind::Probe | Kind::Subcircuit(_)) {
             match c.label_facing {
                 Facing::North => (vec2(r.center().x, r.top() - 8.0), Align2::CENTER_BOTTOM),
                 Facing::South => (vec2(r.center().x, r.bottom() + 8.0), Align2::CENTER_TOP),
@@ -526,7 +572,7 @@ pub(crate) fn component(
     if c.bits > 1
         && !matches!(
             c.kind,
-            Kind::Text | Kind::Probe | Kind::Splitter | Kind::BitExtender
+            Kind::Text | Kind::Probe | Kind::Splitter | Kind::BitExtender | Kind::Subcircuit(_)
         )
     {
         let r = bounds(c);

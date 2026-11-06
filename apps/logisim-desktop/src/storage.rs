@@ -1,6 +1,6 @@
 //! Disk transactions. A failed load or save never advances the document baseline.
-use logisim_core::Circuit;
-use logisim_file::{Document, MAX_BYTES};
+use logisim_core::Project;
+use logisim_file::MAX_BYTES;
 use std::{
     fs,
     io::{Read, Write},
@@ -16,35 +16,30 @@ pub(crate) enum SaveMode<'a> {
 }
 #[derive(Default)]
 pub(crate) struct Storage {
-    pub name: String,
     pub path: Option<PathBuf>,
     pub protected: Option<PathBuf>,
-    baseline: Circuit,
+    baseline: Project,
     disk: Vec<u8>,
 }
 impl Storage {
     pub fn new() -> Self {
-        Self {
-            name: "main".into(),
-            ..Self::default()
-        }
+        Self::default()
     }
-    pub fn dirty(&self, circuit: &Circuit) -> bool {
-        *circuit != self.baseline
+    pub fn dirty(&self, project: &Project) -> bool {
+        *project != self.baseline
     }
-    pub fn load(&mut self, path: &Path) -> Result<(Circuit, Vec<String>)> {
+    pub fn load(&mut self, path: &Path) -> Result<(Project, Vec<String>)> {
         let path = destination(path)?;
         let bytes = read(&path)?;
         let text = std::str::from_utf8(&bytes).map_err(|e| format!("File is not UTF-8: {e}"))?;
         let import = logisim_file::parse(text).map_err(|e| e.to_string())?;
-        self.name = import.document.name;
-        self.baseline = import.document.circuit.clone();
+        self.baseline = import.document.clone();
         self.protected = (!import.warnings.is_empty()).then(|| path.clone());
         self.path = Some(path);
         self.disk = bytes;
-        Ok((import.document.circuit, import.warnings))
+        Ok((import.document, import.warnings))
     }
-    pub fn save(&mut self, circuit: &Circuit, path: &Path, mode: SaveMode<'_>) -> Result<()> {
+    pub fn save(&mut self, project: &Project, path: &Path, mode: SaveMode<'_>) -> Result<()> {
         let path = destination(path)?;
         if self.protected.as_ref() == Some(&path) {
             return Err("This import omitted unsupported content. Save to a different file to protect the original.".into());
@@ -54,15 +49,11 @@ impl Storage {
             SaveMode::Current => None,
             SaveMode::Selected(expected) => expected,
         };
-        let text = logisim_file::serialize(&Document {
-            name: self.name.clone(),
-            circuit: circuit.clone(),
-        })
-        .map_err(|e| e.to_string())?;
+        let text = logisim_file::serialize(project).map_err(|e| e.to_string())?;
         atomic_write(&path, text.as_bytes(), expected)?;
         self.path = Some(path);
         self.disk = text.into_bytes();
-        self.baseline = circuit.clone();
+        self.baseline = project.clone();
         self.protected = None;
         Ok(())
     }

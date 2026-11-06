@@ -12,7 +12,7 @@ fn runtime_subset_defaults_and_library_ids() {
     let imported = parse(&xml(r#"<comp lib="g" name="AND Gate" loc="(340,190)"/><comp lib="w" name="Pin" loc="(200,150)"><a name="tristate" val="false"/></comp><comp lib="w" name="Pin" loc="(440,190)"><a name="output" val="true"/></comp><wire from="(200,150)" to="(310,150)"/><comp lib="w" name="Tunnel" loc="(-20,0)"/><comp lib="b" name="Text" loc="(662,192)"><a name="text">line 1
 line 2 &amp; 线</a><a name="font" val="Dialog plain 24"/></comp>"#)).unwrap();
     assert!(imported.warnings.is_empty(), "{:?}", imported.warnings);
-    let c = &imported.document.circuit.components;
+    let c = &imported.document.main_circuit().circuit.components;
     assert_eq!(
         c[0].ports(),
         vec![
@@ -30,10 +30,7 @@ line 2 &amp; 线</a><a name="font" val="Dialog plain 24"/></comp>"#)).unwrap();
 }
 #[test]
 fn full_supported_roundtrip_preserves_attributes_ports_and_wires() {
-    let mut document = Document {
-        name: "A & B \"主\"".into(),
-        ..Document::default()
-    };
+    let mut document = Document::single("A & B \"主\"", logisim_core::Circuit::default());
     for (i, g) in Gate::ALL.into_iter().enumerate() {
         for facing in Facing::ALL {
             for size in [GateSize::Narrow, GateSize::Medium, GateSize::Wide] {
@@ -50,30 +47,36 @@ fn full_supported_roundtrip_preserves_attributes_ports_and_wires() {
                 c.label = "<&\" > 线\nnext\tend".into();
                 c.font_size = 24;
                 c.color = [1, 2, 255];
-                document.circuit.add_component(c);
+                document.main_circuit_mut().circuit.add_component(c);
             }
         }
     }
     for kind in [Kind::Text, Kind::Tunnel, Kind::Pin] {
         let mut c = Component::new(kind, Point::new(-133, 192));
         c.label = "line1\nline2 & 线".into();
-        document.circuit.add_component(c);
+        document.main_circuit_mut().circuit.add_component(c);
     }
     document
+        .main_circuit_mut()
         .circuit
         .add_wire(Point::new(-100, 0), Point::new(100, 0));
     document
+        .main_circuit_mut()
         .circuit
         .add_wire(Point::new(0, -100), Point::new(0, 100));
     let saved = serialize(&document).unwrap();
     let imported = parse(&saved).unwrap();
     assert!(imported.warnings.is_empty(), "{:?}", imported.warnings);
-    assert_eq!(imported.document.name, document.name);
+    assert_eq!(
+        imported.document.main_circuit().name,
+        document.main_circuit().name
+    );
     for (a, b) in document
+        .main_circuit_mut()
         .circuit
         .components
         .iter()
-        .zip(&imported.document.circuit.components)
+        .zip(&imported.document.main_circuit().circuit.components)
     {
         assert_eq!(a.ports(), b.ports());
         let mut a = a.clone();
@@ -90,8 +93,8 @@ fn full_supported_roundtrip_preserves_attributes_ports_and_wires() {
 fn unsupported_content_is_reported_without_becoming_a_supported_component() {
     let body = r#"<comp lib="w" name="Clock" loc="(0,0)"/><comp lib="g" name="AND Gate" loc="(100,0)"><a name="negated-unknown" val="true"/></comp><comp lib="w" name="Pin" loc="(10,0)"/><comp name="sub" loc="(20,0)"/><comp lib="g" name="OR Gate" loc="(100,100)"/>"#;
     let imported = parse(&xml(body)).unwrap();
-    assert_eq!(imported.warnings.len(), 4);
-    assert_eq!(imported.document.circuit.components.len(), 1);
+    assert_eq!(imported.warnings.len(), 5);
+    assert_eq!(imported.document.main_circuit().circuit.components.len(), 1);
     let saved = serialize(&imported.document).unwrap();
     assert!(!saved.contains("Clock"));
     assert!(!saved.contains("negated-unknown"));
@@ -103,7 +106,8 @@ fn main_selection_and_omitted_project_content_are_explicit() {
         "<circuit name=\"other\"/><message>data</message></project>",
     );
     let imported = parse(&s).unwrap();
-    assert_eq!(imported.warnings.len(), 3);
+    assert_eq!(imported.warnings.len(), 2);
+    assert_eq!(imported.document.circuits.len(), 2);
     assert!(parse(&s.replace("<main name=\"main\"/>", "<main name=\"missing\"/>")).is_err());
 }
 #[test]
@@ -122,7 +126,7 @@ fn rejects_malformed_dtd_duplicate_and_invalid_wire_inputs() {
     let mut d = Document::default();
     let mut c = Component::new(Kind::Text, Point::ZERO);
     c.label = "bad\u{0}".into();
-    d.circuit.add_component(c);
+    d.main_circuit_mut().circuit.add_component(c);
     assert!(serialize(&d).is_err());
 }
 #[test]
@@ -191,7 +195,7 @@ fn wiring_defaults_and_runtime_export_attributes_are_supported() {
         <comp lib="w" name="Splitter" loc="(300,200)"><a name="fanout" val="3"/><a name="incoming" val="8"/><a name="appear" val="legacy"/><a name="bit0" val="none"/><a name="bit1" val="0"/><a name="bit2" val="0"/><a name="bit3" val="1"/><a name="bit4" val="1"/><a name="bit5" val="1"/><a name="bit6" val="2"/><a name="bit7" val="2"/></comp>
     "#)).unwrap();
     assert!(imported.warnings.is_empty(), "{:?}", imported.warnings);
-    let c = &imported.document.circuit.components;
+    let c = &imported.document.main_circuit().circuit.components;
     assert_eq!(c[0].constant, 1);
     assert_eq!(c[1].facing, Facing::North);
     assert_eq!(c[2].facing, Facing::South);
@@ -269,7 +273,7 @@ fn all_wiring_attributes_roundtrip_without_omissions() {
             }
             _ => unreachable!(),
         }
-        d.circuit.add_component(c);
+        d.main_circuit_mut().circuit.add_component(c);
     }
     let saved = serialize(&d).unwrap();
     let imported = parse(&saved).unwrap();
@@ -290,5 +294,80 @@ fn invalid_wiring_attributes_are_reported_and_never_exported_as_supported() {
     "#))
     .unwrap();
     assert_eq!(imported.warnings.len(), 7);
-    assert!(imported.document.circuit.components.is_empty());
+    assert!(
+        imported
+            .document
+            .main_circuit()
+            .circuit
+            .components
+            .is_empty()
+    );
+}
+
+#[test]
+fn multiple_circuits_forward_references_and_instance_attributes_roundtrip() {
+    let source = r##"<project source="2.16.2.2.jar" version="1.0"><lib name="0" desc="#Wiring"/><main name="top"/>
+    <circuit name="top"><comp name="part" loc="(200,100)"><a name="facing" val="south"/><a name="label" val="unit"/><a name="labelloc" val="west"/></comp><wire from="(200,70)" to="(200,40)"/></circuit>
+    <circuit name="part"><comp lib="0" name="Pin" loc="(100,100)"><a name="tristate" val="false"/><a name="width" val="4"/></comp><comp lib="0" name="Pin" loc="(200,100)"><a name="output" val="true"/><a name="facing" val="west"/><a name="width" val="4"/></comp><wire from="(100,100)" to="(200,100)"/></circuit></project>"##;
+    let imported = parse(source).unwrap();
+    assert!(imported.warnings.is_empty(), "{:?}", imported.warnings);
+    let c = &imported.document.main_circuit().circuit.components[0];
+    assert_eq!(c.interface.name, "part");
+    assert_eq!(c.ports(), vec![Point::new(200, 70), Point::new(200, 100)]);
+    assert_eq!(c.port_width(1), Some(4));
+    assert_eq!(c.label_facing, Facing::West);
+    let serialized = serialize(&imported.document).unwrap();
+    assert!(serialized.contains("<comp loc=\"(200,100)\" name=\"part\">"));
+    let reloaded = parse(&serialized).unwrap();
+    assert!(reloaded.warnings.is_empty());
+    assert_eq!(serialize(&reloaded.document).unwrap(), serialized);
+    let mut renamed = imported.document;
+    let target = renamed.named("part").unwrap().id;
+    renamed.rename(target, "new & part".into()).unwrap();
+    renamed.main = target;
+    let read = parse(&serialize(&renamed).unwrap()).unwrap();
+    assert_eq!(read.document.main_circuit().name, "new & part");
+    assert_eq!(read.document.circuits.len(), 2);
+}
+#[test]
+fn recursive_missing_and_custom_interfaces_never_silently_change_coordinates() {
+    let source = xml("<comp name=\"sub\" loc=\"(100,100)\"/>").replace(
+        "</project>",
+        "<circuit name=\"sub\"><comp name=\"main\" loc=\"(0,0)\"/></circuit></project>",
+    );
+    assert!(parse(&source).unwrap_err().0.contains("recursive"));
+    let source = source.replace(
+        "<comp name=\"main\" loc=\"(0,0)\"/>",
+        "<appear><rect x=\"0\" y=\"0\" width=\"80\" height=\"40\"/></appear>",
+    );
+    let imported = parse(&source).unwrap();
+    assert!(!imported.warnings.is_empty());
+    assert!(
+        imported
+            .document
+            .main_circuit()
+            .circuit
+            .components
+            .is_empty()
+    );
+    assert!(!serialize(&imported.document).unwrap().contains("<appear>"));
+    let source = source.replace(
+        "<appear><rect x=\"0\" y=\"0\" width=\"80\" height=\"40\"/></appear>",
+        "<comp lib=\"w\" name=\"Pin\" loc=\"(0,0)\"/>",
+    );
+    let imported = parse(&source).unwrap();
+    assert!(
+        imported
+            .document
+            .main_circuit()
+            .circuit
+            .components
+            .is_empty()
+    );
+    assert!(
+        imported
+            .warnings
+            .iter()
+            .any(|w| w.contains("interface pins"))
+    );
 }

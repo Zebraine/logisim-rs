@@ -8,7 +8,9 @@ mod editor;
 #[cfg(test)]
 mod editor_tests;
 mod icons;
+mod project;
 mod properties;
+use project::{CircuitCommand, NameDialog};
 mod simulation;
 pub use simulation::{
     InputValue, SignalTone, SignalView, SimulationAction, SimulationIssue, SimulationView,
@@ -52,6 +54,8 @@ pub struct Workspace {
     document: DocumentView,
     file_actions: Vec<FileAction>,
     fit_pending: bool,
+    name_dialog: Option<NameDialog>,
+    remove_dialog: bool,
 }
 
 impl Workspace {
@@ -64,12 +68,10 @@ impl Workspace {
     pub fn finish_edit(&mut self) {
         self.editor.cancel_gesture();
         self.editor.commit_properties();
+        self.editor.sync_project();
     }
     pub fn replace_circuit(&mut self, circuit: logisim_core::Circuit) {
-        self.editor = Editor::default();
-        self.editor.circuit = circuit;
-        self.canvas.reset();
-        self.fit_pending = true;
+        self.replace_project(logisim_core::Project::single("main", circuit));
     }
     pub fn circuit(&self) -> &logisim_core::Circuit {
         &self.editor.circuit
@@ -82,6 +84,37 @@ impl Workspace {
     }
 
     pub fn show(&mut self, ui: &mut Ui) {
+        let before = (self.editor.active, self.editor.path.clone());
+        let modal =
+            self.name_dialog.is_some() || self.remove_dialog || self.editor.project_error.is_some();
+        ui.add_enabled_ui(!modal, |ui| self.show_inner(ui));
+        if ui.is_enabled() {
+            self.project_dialogs(ui.ctx());
+        }
+        if let Some(id) = self.editor.open_instance.take() {
+            self.editor.enter_instance(id);
+        }
+        self.editor.sync_project();
+        if before != (self.editor.active, self.editor.path.clone()) {
+            self.canvas.reset();
+            self.fit_pending = true;
+            ui.ctx().request_repaint();
+        }
+    }
+    fn show_inner(&mut self, ui: &mut Ui) {
+        if ui.is_enabled() && !ui.ctx().any_popup_open() {
+            if ui.input_mut(|i| {
+                i.consume_key(
+                    egui::Modifiers::COMMAND.plus(egui::Modifiers::SHIFT),
+                    egui::Key::N,
+                )
+            }) {
+                self.circuit_command(CircuitCommand::Add);
+            }
+            if ui.input_mut(|i| i.consume_key(egui::Modifiers::ALT, egui::Key::ArrowLeft)) {
+                self.editor.leave_instance();
+            }
+        }
         if ui.is_enabled() && !ui.ctx().any_popup_open() {
             for (modifiers, key, action) in [
                 (
@@ -247,7 +280,39 @@ impl Workspace {
                 }
             });
             ui.menu_button("Project", |ui| {
-                disabled_actions(ui, &["Add Circuit…", "Load Library…", "Project Options…"]);
+                for (label, command, enabled) in [
+                    ("Add Circuit… · Ctrl+Shift+N", CircuitCommand::Add, true),
+                    ("Rename Circuit…", CircuitCommand::Rename, true),
+                    (
+                        "Set as Main Circuit",
+                        CircuitCommand::Main,
+                        self.editor.active != self.editor.project.main,
+                    ),
+                    ("Move Circuit Up", CircuitCommand::Up, true),
+                    ("Move Circuit Down", CircuitCommand::Down, true),
+                    (
+                        "Remove Circuit…",
+                        CircuitCommand::Remove,
+                        self.editor.project.can_remove(self.editor.active),
+                    ),
+                ] {
+                    if ui.add_enabled(enabled, egui::Button::new(label)).clicked() {
+                        self.circuit_command(command);
+                        ui.close();
+                    }
+                }
+                ui.separator();
+                if ui
+                    .add_enabled(
+                        !self.editor.path.is_empty(),
+                        egui::Button::new("Return to Parent · Alt+Left"),
+                    )
+                    .clicked()
+                {
+                    self.editor.leave_instance();
+                    ui.close();
+                }
+                disabled_actions(ui, &["Load Library…", "Project Options…"]);
             });
             ui.menu_button("Simulate", |ui| {
                 self.editor.simulation.menu(ui);
@@ -356,14 +421,17 @@ impl Workspace {
                     )
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
-                            for (icon, name) in [
-                                (Icon::Plus, "Add circuit"),
-                                (Icon::Up, "Move up"),
-                                (Icon::Down, "Move down"),
-                                (Icon::Trash, "Remove circuit"),
+                            for (icon, name, command) in [
+                                (Icon::Plus, "Add circuit", CircuitCommand::Add),
+                                (Icon::Up, "Move up", CircuitCommand::Up),
+                                (Icon::Down, "Move down", CircuitCommand::Down),
+                                (Icon::Trash, "Remove circuit", CircuitCommand::Remove),
                             ] {
-                                icons::button(ui, icon, false, false, name);
+                                let enabled = !matches!(command,CircuitCommand::Remove) || self.editor.project.can_remove(self.editor.active);
+                                if icons::button(ui, icon, false, enabled, name).clicked() { self.circuit_command(command); }
                             }
+                            if !self.editor.path.is_empty() && ui.small_button("Back").on_hover_text("Return to parent instance · Alt+Left").clicked() { self.editor.leave_instance(); }
+
                         });
                     });
                 ScrollArea::both()
@@ -374,10 +442,23 @@ impl Workspace {
                             .id_salt("document-tree")
                             .default_open(true)
                             .show(ui, |ui| {
-                                let _ = ui.selectable_label(
-                                    true,
-                                    RichText::new(&self.document.circuit_name).color(ACCENT),
-                                );
+                                let definitions: Vec<_> = self.editor.project.circuits.iter().map(|c|(c.id,c.name.clone())).collect();
+                                for (id,name) in definitions {
+                                    let allowed = self.editor.project.can_instantiate(self.editor.active,id);
+                                    let label = format!("{}{}",name,if id == self.editor.project.main { "  (main)" } else { "" });
+                                    let response = ui.selectable_label(self.editor.active == id, label)
+                                        .on_hover_text("Double-click to edit; single-click another circuit to place an instance.");
+                                    if response.double_clicked() { self.editor.switch_circuit(id); }
+                                    else if response.clicked() && allowed { self.editor.set_tool(Tool::Place(Kind::Subcircuit(id))); }
+                                    response.context_menu(|ui| {
+                                        if ui.button("Open circuit").clicked() { self.editor.switch_circuit(id); ui.close(); }
+                                        if ui.add_enabled(allowed,egui::Button::new("Place instance")).clicked() { self.editor.set_tool(Tool::Place(Kind::Subcircuit(id))); ui.close(); }
+                                        if ui.button("Rename…").clicked() { self.editor.switch_circuit(id); self.circuit_command(CircuitCommand::Rename); ui.close(); }
+                                    });
+                                }
+                                if !self.editor.path.is_empty() {
+                                    ui.weak(self.editor.context_label()).on_hover_text("Viewing this instance. Edits change the shared circuit definition.");
+                                }
                                 for group in [
                                     "Wiring",
                                     "Gates",
@@ -430,7 +511,8 @@ impl Workspace {
         egui::CentralPanel::default()
             .frame(Frame::NONE.fill(CHROME))
             .show(ui, |ui| {
-                properties::show(ui, &mut self.editor, &self.document.circuit_name);
+                let name = self.circuit_name().to_owned();
+                properties::show(ui, &mut self.editor, &name);
             });
     }
 
@@ -688,5 +770,48 @@ mod tests {
                 .rect
                 .contains(app.canvas.screen(circuit.components[0].position))
         );
+    }
+    #[test]
+    fn add_circuit_shortcut_takes_precedence_over_new_file_and_modal_blocks_other_commands() {
+        let ctx = Context::default();
+        configure(&ctx);
+        let mut app = Workspace::default();
+        let size = vec2(1200.0, 820.0);
+        let key = |key, modifiers| Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers,
+        };
+        frame(
+            &ctx,
+            &mut app,
+            size,
+            vec![key(egui::Key::N, Modifiers::COMMAND.plus(Modifiers::SHIFT))],
+        );
+        assert!(app.name_dialog.is_some());
+        assert!(app.take_file_actions().is_empty());
+        frame(
+            &ctx,
+            &mut app,
+            size,
+            vec![key(egui::Key::S, Modifiers::COMMAND)],
+        );
+        assert!(app.take_file_actions().is_empty());
+        frame(&ctx, &mut app, size, vec![Event::Text("Pass".into())]);
+        frame(
+            &ctx,
+            &mut app,
+            size,
+            vec![key(egui::Key::Enter, Modifiers::NONE)],
+        );
+        assert!(app.name_dialog.is_none());
+        assert_eq!(app.project().circuits.len(), 2);
+        assert_eq!(app.circuit_name(), "Pass");
+        app.editor.undo();
+        assert_eq!(app.project().circuits.len(), 1);
+        app.editor.redo();
+        assert_eq!(app.circuit_name(), "Pass");
     }
 }

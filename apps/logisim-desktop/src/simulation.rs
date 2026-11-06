@@ -4,6 +4,7 @@ use logisim_ui::{
     InputValue, SignalTone, SignalView, SimulationAction, SimulationIssue, SimulationView,
 };
 
+#[cfg(test)]
 pub fn apply(sim: &mut Simulator, action: SimulationAction) {
     match action {
         SimulationAction::ToggleEnabled => sim.set_enabled(!sim.enabled()),
@@ -51,7 +52,15 @@ pub fn present(circuit: &Circuit, sim: &Simulator) -> SimulationView {
             );
         }
     }
-    for diagnostic in sim.diagnostics() {
+    append_issues(&mut view, circuit, sim.diagnostics());
+    view
+}
+fn append_issues(
+    view: &mut SimulationView,
+    circuit: &Circuit,
+    diagnostics: Vec<logisim_sim::Diagnostic>,
+) {
+    for diagnostic in diagnostics {
         let message = match diagnostic.problem {
             Problem::WidthMismatch => "Incompatible bit widths",
             Problem::ErrorSignal => "Error signal: conflicting drivers / undefined input",
@@ -79,8 +88,50 @@ pub fn present(circuit: &Circuit, sim: &Simulator) -> SimulationView {
                 .collect(),
         });
     }
+}
+pub fn apply_project(
+    sim: &mut logisim_sim::ProjectSimulator,
+    path: &[logisim_core::Id],
+    action: SimulationAction,
+) {
+    match action {
+        SimulationAction::ToggleEnabled => sim.set_enabled(!sim.enabled()),
+        SimulationAction::Step if !sim.enabled() => {
+            sim.step();
+        }
+        SimulationAction::Reset => sim.reset(),
+        SimulationAction::ToggleInput { id, bit } if path.is_empty() => sim.toggle_input(id, bit),
+        SimulationAction::SetInput { id, value } if path.is_empty() => sim.set_input(id, value),
+        _ => {}
+    }
+}
+pub fn present_project(
+    circuit: &Circuit,
+    sim: &logisim_sim::ProjectSimulator,
+    path: &[logisim_core::Id],
+) -> SimulationView {
+    let mut view = sim
+        .view(path)
+        .map(|s| present(circuit, s))
+        .unwrap_or_default();
+    view.enabled = sim.enabled();
+    view.pending = sim.pending_count();
+    view.steps = sim.steps();
+    view.limited = sim.limited();
+    if !path.is_empty() {
+        view.inputs.clear();
+    }
+    view.issues.clear();
+    append_issues(&mut view, circuit, sim.diagnostics(path));
+    if let Some(error) = sim.error() {
+        view.issues.push(SimulationIssue {
+            message: error.into(),
+            targets: Default::default(),
+        });
+    }
     view
 }
+
 fn signal(value: Value, mismatch: bool) -> SignalView {
     let tone = if mismatch {
         SignalTone::WidthMismatch

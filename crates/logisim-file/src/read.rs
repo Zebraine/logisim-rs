@@ -127,14 +127,34 @@ pub fn parse(xml: &str) -> Result<Import> {
     if selected.len() != 1 {
         return Err(Error(format!("Missing or ambiguous main circuit: {name}")));
     }
-    if circuits.len() > 1 {
-        warn(
-            &mut warnings,
-            format!(
-                "Only main circuit '{name}' was imported; {} other circuit(s) omitted.",
-                circuits.len() - 1
-            ),
-        );
+    if circuits.is_empty() || circuits.len() > logisim_core::MAX_CIRCUITS {
+        return Err(Error("Invalid number of circuits.".into()));
+    }
+    let mut document = Document::single(attr(circuits[0], "name")?, Circuit::default());
+    for node in &circuits[1..] {
+        document.add(attr(*node, "name")?.into()).map_err(Error)?;
+    }
+    document.main = document
+        .named(name)
+        .ok_or_else(|| Error("Missing main circuit".into()))?
+        .id;
+    let names: BTreeMap<_, _> = document
+        .circuits
+        .iter()
+        .map(|c| (c.name.clone(), c.id))
+        .collect();
+    let mut blocked = std::collections::BTreeSet::new();
+    for node in &circuits {
+        if node.children().any(|n| n.has_tag_name("appear")) {
+            let name = attr(*node, "name")?;
+            blocked.insert(names[name]);
+            warn(
+                &mut warnings,
+                format!(
+                    "Circuit '{name}' has an unsupported custom appearance; its instances are omitted."
+                ),
+            );
+        }
     }
     for n in root.children().filter(Node::is_element) {
         match n.tag_name().name() {
@@ -155,90 +175,129 @@ pub fn parse(xml: &str) -> Result<Import> {
             tag => warn(&mut warnings, format!("Project <{tag}> was omitted.")),
         }
     }
-    let selected = **selected.first().unwrap();
-    if selected.children().filter(Node::is_element).count() > MAX_ITEMS + 32 {
-        return Err(Error(format!(
-            "Circuit exceeds the {MAX_ITEMS} item limit."
-        )));
-    }
-    let mut circuit = Circuit::default();
-    for n in selected.children().filter(Node::is_element) {
-        match n.tag_name().name() {
-            "wire" => {
-                let a = point(attr(n, "from")?)?;
-                let b = point(attr(n, "to")?)?;
-                if a == b || (a.x != b.x && a.y != b.y) {
-                    return Err(Error(
-                        "Invalid wire: endpoints must form a nonzero orthogonal segment.".into(),
-                    ));
+    let mut total_items = 0;
+    for selected in circuits {
+        let name = attr(selected, "name")?;
+        if selected.children().filter(Node::is_element).count() > MAX_ITEMS + 32 {
+            return Err(Error(format!(
+                "Circuit exceeds the {MAX_ITEMS} item limit."
+            )));
+        }
+        let mut circuit = Circuit::default();
+        for n in selected.children().filter(Node::is_element) {
+            match n.tag_name().name() {
+                "wire" => {
+                    let a = point(attr(n, "from")?)?;
+                    let b = point(attr(n, "to")?)?;
+                    if a == b || (a.x != b.x && a.y != b.y) {
+                        return Err(Error(
+                            "Invalid wire: endpoints must form a nonzero orthogonal segment."
+                                .into(),
+                        ));
+                    }
+                    circuit.add_wire(a, b);
                 }
-                circuit.add_wire(a, b);
-            }
-            "comp" => match component(n, &libraries) {
-                Ok((c, notes)) => {
-                    for note in notes {
+                "comp" => match component(n, &libraries, &names, &blocked) {
+                    Ok((c, notes)) => {
+                        for note in notes {
+                            warn(
+                                &mut warnings,
+                                format!(
+                                    "{} at ({},{}): {note}",
+                                    c.kind.name(),
+                                    c.position.x,
+                                    c.position.y
+                                ),
+                            );
+                        }
+                        circuit.add_component(c);
+                    }
+                    Err(e) => warn(
+                        &mut warnings,
+                        format!(
+                            "Skipped {} at {}: {e}",
+                            n.attribute("name").unwrap_or("component"),
+                            n.attribute("loc").unwrap_or("?")
+                        ),
+                    ),
+                },
+                "appear" => {}
+                "a" => {
+                    let key = attr(n, "name")?;
+                    let val = n.attribute("val").map(str::to_owned).unwrap_or_else(|| {
+                        n.children()
+                            .filter(Node::is_text)
+                            .filter_map(|n| n.text())
+                            .collect()
+                    });
+                    if !((key == "circuit" && val == name)
+                        || matches!(
+                            (key, val.as_str()),
+                            ("clabel", "")
+                                | ("clabelup", "east")
+                                | ("clabelfont", "Dialog plain 12")
+                                | ("clabelcolor", "#000000")
+                        ))
+                    {
                         warn(
                             &mut warnings,
-                            format!(
-                                "{} at ({},{}): {note}",
-                                c.kind.name(),
-                                c.position.x,
-                                c.position.y
-                            ),
+                            format!("Circuit attribute {key} was omitted."),
                         );
                     }
-                    circuit.add_component(c);
                 }
-                Err(e) => warn(
-                    &mut warnings,
-                    format!(
-                        "Skipped {} at {}: {e}",
-                        n.attribute("name").unwrap_or("component"),
-                        n.attribute("loc").unwrap_or("?")
-                    ),
-                ),
-            },
-            "a" => {
-                let key = attr(n, "name")?;
-                let val = n.attribute("val").map(str::to_owned).unwrap_or_else(|| {
-                    n.children()
-                        .filter(Node::is_text)
-                        .filter_map(|n| n.text())
-                        .collect()
-                });
-                if !((key == "circuit" && val == name)
-                    || matches!(
-                        (key, val.as_str()),
-                        ("clabel", "")
-                            | ("clabelup", "east")
-                            | ("clabelfont", "Dialog plain 12")
-                            | ("clabelcolor", "#000000")
-                    ))
-                {
-                    warn(
-                        &mut warnings,
-                        format!("Circuit attribute {key} was omitted."),
-                    );
-                }
+                tag => warn(&mut warnings, format!("Circuit <{tag}> was omitted.")),
             }
-            tag => warn(&mut warnings, format!("Circuit <{tag}> was omitted.")),
         }
+        if circuit.components.len() + circuit.wires.len() > MAX_ITEMS {
+            return Err(Error("Circuit has too many items.".into()));
+        }
+        total_items += circuit.components.len() + circuit.wires.len();
+        if total_items > MAX_ITEMS {
+            return Err(Error("Project has too many items.".into()));
+        }
+        // Unsupported input-pin attributes would change the default interface geometry.
+        let original_pins = selected
+            .children()
+            .filter(|n| {
+                n.has_tag_name("comp")
+                    && n.attribute("name") == Some("Pin")
+                    && n.attribute("lib").and_then(|id| libraries.get(id)).copied()
+                        == Some("#Wiring")
+            })
+            .count();
+        if original_pins
+            != circuit
+                .components
+                .iter()
+                .filter(|c| c.kind == Kind::Pin)
+                .count()
+        {
+            blocked.insert(names[name]);
+            warn(
+                &mut warnings,
+                format!(
+                    "Circuit '{name}' has unsupported interface pins; its instances are omitted."
+                ),
+            );
+        }
+        document.circuit_mut(names[name]).unwrap().circuit = circuit;
     }
-    if circuit.components.len() + circuit.wires.len() > MAX_ITEMS {
-        return Err(Error("Circuit has too many items.".into()));
+    for definition in &mut document.circuits {
+        definition
+            .circuit
+            .components
+            .retain(|c| !matches!(c.kind,Kind::Subcircuit(id) if blocked.contains(&id)));
     }
-    Ok(Import {
-        document: Document {
-            name: name.to_owned(),
-            circuit,
-        },
-        warnings,
-    })
+    document.validate().map_err(Error)?;
+    document.refresh_interfaces(false);
+    Ok(Import { document, warnings })
 }
 
 fn component(
     n: Node<'_, '_>,
     libraries: &BTreeMap<&str, &str>,
+    names: &BTreeMap<String, logisim_core::Id>,
+    blocked: &std::collections::BTreeSet<logisim_core::Id>,
 ) -> Result<(Component, Vec<String>)> {
     let lib = n
         .attribute("lib")
@@ -247,6 +306,13 @@ fn component(
         .unwrap_or("");
     let name = attr(n, "name")?;
     let kind = match (lib, name) {
+        ("", name)
+            if n.attribute("lib").is_none()
+                && names.contains_key(name)
+                && !blocked.contains(&names[name]) =>
+        {
+            Kind::Subcircuit(names[name])
+        }
         ("#Wiring", "Pin") => Kind::Pin,
         ("#Wiring", "Tunnel") => Kind::Tunnel,
         ("#Wiring", "Constant") => Kind::Constant,
@@ -270,7 +336,7 @@ fn component(
         let allowed = match kind {
             Kind::Constant => matches!(key.as_str(), "facing" | "width" | "value"),
             Kind::Power | Kind::Ground => matches!(key.as_str(), "facing" | "width"),
-            Kind::Probe => matches!(
+            Kind::Probe | Kind::Subcircuit(_) => matches!(
                 key.as_str(),
                 "facing" | "radix" | "label" | "labelloc" | "labelfont" | "labelcolor"
             ),
@@ -322,6 +388,16 @@ fn component(
     };
     c.bits = number(&a, "width", 1, 1..=32)?;
     read_wiring(&mut c, &a)?;
+    if matches!(kind, Kind::Subcircuit(_)) {
+        c.label_facing = match value(&a, "labelloc", "north") {
+            "east" => Facing::East,
+            "south" => Facing::South,
+            "west" => Facing::West,
+            "north" => Facing::North,
+            _ => return Err(Error("Invalid label location".into())),
+        };
+    }
+
     if !kind.has_label() {
         return Ok((c, vec![]));
     }

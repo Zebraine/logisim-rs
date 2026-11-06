@@ -8,7 +8,7 @@ pub(crate) struct Network {
     pub nets: Vec<Net>,
     pub ports: BTreeMap<Port, usize>,
     pub wires: BTreeMap<Id, usize>,
-    bit_drivers: Vec<Vec<(Id, u8)>>,
+    bit_drivers: Vec<Vec<(Port, u8)>>,
 }
 #[derive(Default)]
 pub(crate) struct Net {
@@ -16,7 +16,7 @@ pub(crate) struct Net {
     pub wires: Vec<Id>,
     pub width: u8,
     pub mismatch: bool,
-    pub drivers: Vec<Id>,
+    pub drivers: Vec<Port>,
     bits: Vec<usize>,
 }
 impl Network {
@@ -80,8 +80,10 @@ impl Network {
                 if let Some(width) = c.port_width(index).filter(|w| *w > 0) {
                     widths[net].insert(width);
                 }
-                if index == 0 && c.drives_output() {
-                    network.nets[net].drivers.push(c.id);
+                if (index == 0 && c.drives_output())
+                    || (matches!(c.kind, Kind::Subcircuit(_)) && c.interface.ports[index].output)
+                {
+                    network.nets[net].drivers.push((c.id, index));
                 }
             }
         }
@@ -133,7 +135,7 @@ impl Network {
             }
         }
     }
-    pub fn resolve(&self, drives: &BTreeMap<Id, crate::Value>) -> Vec<crate::Value> {
+    pub fn resolve(&self, drives: &BTreeMap<Port, crate::Value>) -> Vec<crate::Value> {
         use crate::{Bit, Value};
         let bits: Vec<_> = self
             .bit_drivers

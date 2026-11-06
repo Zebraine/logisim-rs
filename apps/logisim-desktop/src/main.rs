@@ -34,17 +34,19 @@ fn main() -> eframe::Result {
 #[derive(Default)]
 struct DesktopApp {
     workspace: logisim_ui::Workspace,
-    simulator: logisim_sim::Simulator,
+    simulator: logisim_sim::ProjectSimulator,
     files: files::Files,
 }
 
 impl eframe::App for DesktopApp {
     fn ui(&mut self, ui: &mut eframe::egui::Ui, _frame: &mut eframe::Frame) {
-        self.simulator.synchronize(self.workspace.circuit());
+        self.simulator
+            .synchronize(self.workspace.project(), self.workspace.simulation_root());
         self.simulator.advance(64);
-        self.workspace.set_simulation(simulation::present(
+        self.workspace.set_simulation(simulation::present_project(
             self.workspace.circuit(),
             &self.simulator,
+            self.workspace.simulation_path(),
         ));
         if ui.input(|i| i.viewport().close_requested()) && !self.files.allow_close {
             ui.ctx()
@@ -57,7 +59,7 @@ impl eframe::App for DesktopApp {
             );
         }
         self.workspace
-            .set_document(self.files.present(self.workspace.circuit()));
+            .set_document(self.files.present(&self.workspace));
         ui.add_enabled_ui(!self.files.busy(), |ui| self.workspace.show(ui));
         for action in self.workspace.take_file_actions() {
             self.files
@@ -65,7 +67,7 @@ impl eframe::App for DesktopApp {
         }
         self.files
             .show(ui.ctx(), &mut self.workspace, &mut self.simulator);
-        let view = self.files.present(self.workspace.circuit());
+        let view = self.files.present(&self.workspace);
         ui.ctx()
             .send_viewport_cmd(eframe::egui::ViewportCommand::Title(format!(
                 "Logisim rs — {} · {}{}{}",
@@ -74,11 +76,17 @@ impl eframe::App for DesktopApp {
                 if view.dirty { " *" } else { "" },
                 if view.partial { " (partial)" } else { "" }
             )));
-        let edited = self.simulator.synchronize(self.workspace.circuit());
+        let edited = self
+            .simulator
+            .synchronize(self.workspace.project(), self.workspace.simulation_root());
         let actions = self.workspace.take_simulation_actions();
         let acted = !actions.is_empty();
         for action in actions {
-            simulation::apply(&mut self.simulator, action);
+            simulation::apply_project(
+                &mut self.simulator,
+                self.workspace.simulation_path(),
+                action,
+            );
         }
         if edited || acted || (self.simulator.enabled() && self.simulator.pending_count() > 0) {
             ui.ctx().request_repaint();

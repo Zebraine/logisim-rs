@@ -7,6 +7,9 @@ use logisim_core::{
 
 pub(crate) fn show(ui: &mut Ui, editor: &mut Editor, circuit_name: &str) {
     let placing = matches!(editor.tool, Tool::Place(_));
+    if !editor.path.is_empty() {
+        ui.weak("Instance inputs are driven by the parent circuit. Edits apply to all instances.");
+    }
     let target = if placing {
         Some(editor.template.clone())
     } else if editor.selection.len() == 1 {
@@ -125,6 +128,16 @@ fn selection_info(ui: &mut Ui, editor: &mut Editor) {
 }
 
 fn component_editor(ui: &mut Ui, editor: &mut Editor, mut c: Component, placing: bool) {
+    if matches!(c.kind, Kind::Subcircuit(_)) {
+        ui.strong(format!("Circuit: {}", c.interface.name));
+        if !placing && ui.button("View instance").clicked() {
+            editor.open_instance = Some(c.id);
+        }
+        ui.weak(format!(
+            "{} interface pins · edit Pin components in the circuit definition",
+            c.interface.ports.len()
+        ));
+    }
     let original = c.clone();
     let mut active = false;
     if c.kind.has_label() {
@@ -202,7 +215,7 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
             });
         ui.end_row();
     }
-    if !matches!(c.kind, Kind::Text | Kind::Probe) {
+    if !matches!(c.kind, Kind::Text | Kind::Probe | Kind::Subcircuit(_)) {
         ui.label(if c.kind == Kind::BitExtender {
             "Output bits"
         } else {
@@ -305,6 +318,17 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
 fn wiring_fields(ui: &mut Ui, c: &mut Component) -> bool {
     let mut active = false;
     match c.kind {
+        Kind::Subcircuit(_) => {
+            ui.label("Label location");
+            egui::ComboBox::from_id_salt("instance_label_location")
+                .selected_text(c.label_facing.name())
+                .show_ui(ui, |ui| {
+                    for facing in Facing::ALL {
+                        ui.selectable_value(&mut c.label_facing, facing, facing.name());
+                    }
+                });
+            ui.end_row();
+        }
         Kind::Constant => {
             ui.label("Value (hex)");
             let max = u32::MAX >> (32 - c.bits.clamp(1, 32));

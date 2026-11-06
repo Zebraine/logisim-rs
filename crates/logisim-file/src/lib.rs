@@ -5,26 +5,13 @@ mod read;
 mod tests;
 mod write;
 
-use logisim_core::Circuit;
+pub use logisim_core::Project as Document;
 pub use read::parse;
 pub use write::serialize;
 
 pub const MAX_BYTES: usize = 8 * 1024 * 1024;
 pub const MAX_ITEMS: usize = 4096;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Document {
-    pub name: String,
-    pub circuit: Circuit,
-}
-impl Default for Document {
-    fn default() -> Self {
-        Self {
-            name: "main".into(),
-            circuit: Circuit::default(),
-        }
-    }
-}
 #[derive(Debug)]
 pub struct Import {
     pub document: Document,

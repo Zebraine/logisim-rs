@@ -1,5 +1,8 @@
 //! Editable circuit geometry. No GUI, file format or signal evaluation dependencies.
 
+mod project;
+pub use project::{CircuitDefinition, Interface, InterfacePort, MAX_CIRCUITS, Project};
+
 mod wiring;
 pub use wiring::{Extension, Radix, SplitAppearance, Splitter};
 
@@ -117,6 +120,7 @@ impl Gate {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
+    Subcircuit(Id),
     Gate(Gate),
     Pin,
     Tunnel,
@@ -168,11 +172,17 @@ impl Kind {
     pub fn has_label(self) -> bool {
         matches!(
             self,
-            Self::Text | Self::Tunnel | Self::Pin | Self::Gate(_) | Self::Probe
+            Self::Text
+                | Self::Tunnel
+                | Self::Pin
+                | Self::Gate(_)
+                | Self::Probe
+                | Self::Subcircuit(_)
         )
     }
     pub fn name(self) -> &'static str {
         match self {
+            Self::Subcircuit(_) => "Subcircuit",
             Self::Gate(g) => g.name(),
             Self::Pin => "Pin",
             Self::Tunnel => "Tunnel",
@@ -189,6 +199,8 @@ impl Kind {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Component {
+    /// Derived interface; rebuilt from the project definition, never independently serialized.
+    pub interface: Interface,
     pub id: Id,
     /// Gate output / single terminal, or text anchor. Imported positions stay exact.
     pub position: Point,
@@ -213,6 +225,7 @@ pub struct Component {
 impl Component {
     pub fn new(kind: Kind, position: Point) -> Self {
         Self {
+            interface: Interface::default(),
             id: 0,
             position,
             kind,
@@ -260,6 +273,9 @@ impl Component {
         }
     }
     pub fn local_ports(&self) -> Vec<Point> {
+        if matches!(self.kind, Kind::Subcircuit(_)) {
+            return self.interface.ports.iter().map(|p| p.offset).collect();
+        }
         if self.kind == Kind::Text {
             return vec![];
         }
@@ -503,12 +519,25 @@ impl Circuit {
         }
         let before = old.ports();
         let after = replacement.ports();
-        let map: BTreeMap<_, _> = before
-            .iter()
-            .copied()
-            .zip(after)
-            .filter(|(a, b)| a != b)
-            .collect();
+        let pairs: Vec<_> =
+            if matches!(old.kind, Kind::Subcircuit(_)) && old.kind == replacement.kind {
+                old.interface
+                    .ports
+                    .iter()
+                    .zip(&before)
+                    .filter_map(|(port, before)| {
+                        replacement
+                            .interface
+                            .ports
+                            .iter()
+                            .position(|p| p.pin == port.pin)
+                            .map(|index| (*before, after[index]))
+                    })
+                    .collect()
+            } else {
+                before.iter().copied().zip(after).collect()
+            };
+        let map: BTreeMap<_, _> = pairs.into_iter().filter(|(a, b)| a != b).collect();
         if !map.is_empty() {
             self.split_at(&before, &BTreeSet::new());
         }

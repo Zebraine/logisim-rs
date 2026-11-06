@@ -1,4 +1,6 @@
 //! Deterministic, bounded combinational propagation, independent of the GUI.
+mod hierarchy;
+pub use hierarchy::ProjectSimulator;
 mod network;
 #[cfg(test)]
 mod tests;
@@ -28,8 +30,8 @@ pub struct Simulator {
     circuit: Circuit,
     network: Network,
     inputs: BTreeMap<Id, Value>,
-    drives: BTreeMap<Id, Value>,
-    pending: BTreeMap<Id, Value>,
+    drives: BTreeMap<network::Port, Value>,
+    pending: BTreeMap<network::Port, Value>,
     values: Vec<Value>,
     enabled: bool,
     limited: bool,
@@ -131,7 +133,11 @@ impl Simulator {
     }
     fn initialize(&mut self) {
         self.drives.clear();
-        self.pending = self.inputs.clone();
+        self.pending = self
+            .inputs
+            .iter()
+            .map(|(id, value)| ((*id, 0), *value))
+            .collect();
         self.values = self
             .network
             .nets
@@ -144,10 +150,19 @@ impl Simulator {
         self.schedule_components();
     }
     fn schedule(&mut self, id: Id, value: Value) {
-        if self.drives.get(&id) == Some(&value) {
-            self.pending.remove(&id);
+        self.drive_port((id, 0), value);
+    }
+    fn drive_port(&mut self, port: network::Port, value: Value) {
+        if self.drives.get(&port) == Some(&value) {
+            self.pending.remove(&port);
         } else {
-            self.pending.insert(id, value);
+            self.pending.insert(port, value);
+        }
+    }
+    fn external_input(&mut self, id: Id, value: Value) {
+        if let Some(input) = self.inputs.get_mut(&id) {
+            *input = value;
+            self.schedule(id, value);
         }
     }
     fn schedule_components(&mut self) {
@@ -280,7 +295,7 @@ impl Simulator {
         if self.limited {
             result.push(Diagnostic {
                 problem: Problem::PropagationLimit,
-                components: self.pending.keys().copied().collect(),
+                components: self.pending.keys().map(|(id, _)| *id).collect(),
                 wires: vec![],
             });
         }
@@ -295,6 +310,11 @@ fn electrically_equal(a: &Circuit, b: &Circuit) -> bool {
             c.kind,
             c.ports(),
             c.bits.clamp(1, 32),
+            c.interface
+                .ports
+                .iter()
+                .map(|p| (p.pin, p.bits, p.output))
+                .collect::<Vec<_>>(),
             c.output && c.kind == Kind::Pin,
             (c.kind == Kind::Constant).then_some(c.constant),
             (c.kind == Kind::Splitter).then_some(c.splitter.clone()),

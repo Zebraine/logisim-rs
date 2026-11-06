@@ -3,7 +3,7 @@ use crate::{
     storage::{self, SaveMode, Storage},
 };
 use eframe::egui;
-use logisim_sim::Simulator;
+use logisim_sim::ProjectSimulator as Simulator;
 use logisim_ui::{DocumentView, FileAction, Workspace};
 use std::path::{Path, PathBuf};
 
@@ -35,7 +35,7 @@ impl Files {
     pub fn busy(&self) -> bool {
         self.dialog.is_some()
     }
-    pub fn present(&self, circuit: &logisim_core::Circuit) -> DocumentView {
+    pub fn present(&self, workspace: &Workspace) -> DocumentView {
         DocumentView {
             title: self
                 .storage
@@ -44,8 +44,8 @@ impl Files {
                 .and_then(|p| p.file_name())
                 .map(|s| s.to_string_lossy().into_owned())
                 .unwrap_or_else(|| "Untitled".into()),
-            circuit_name: self.storage.name.clone(),
-            dirty: self.storage.dirty(circuit),
+            circuit_name: workspace.circuit_name().to_owned(),
+            dirty: self.storage.dirty(workspace.project()),
             partial: self.storage.protected.is_some(),
         }
     }
@@ -66,13 +66,13 @@ impl Files {
                     .and_then(|p| p.parent())
                     .unwrap_or(Path::new("."))
                     .to_path_buf();
-                workspace.replace_circuit(circuit);
+                workspace.replace_project(circuit);
                 *sim = Simulator::default();
                 if !warnings.is_empty() {
                     self.dialog = Some(Dialog::Message {
                         title: "Imported supported content only".into(),
                         body: format!(
-                            "The original file is protected. Use Save As to write the supported main-circuit subset to a different file.\n\n{}",
+                            "The original file is protected. Use Save As to write the supported project subset to a different file.\n\n{}",
                             warnings.join("\n")
                         ),
                     });
@@ -95,7 +95,7 @@ impl Files {
         if matches!(
             action,
             FileAction::New | FileAction::Open | FileAction::Close
-        ) && self.storage.dirty(workspace.circuit())
+        ) && self.storage.dirty(workspace.project())
         {
             self.dialog = Some(Dialog::Unsaved(action));
         } else {
@@ -129,7 +129,7 @@ impl Files {
         match action {
             FileAction::New => {
                 self.storage = Storage::new();
-                workspace.replace_circuit(Default::default());
+                workspace.replace_project(Default::default());
                 *sim = Simulator::default();
             }
             FileAction::Open => self.picker(Mode::Open),
@@ -160,7 +160,7 @@ impl Files {
         workspace: &mut Workspace,
         sim: &mut Simulator,
     ) {
-        match self.storage.save(workspace.circuit(), path, mode) {
+        match self.storage.save(workspace.project(), path, mode) {
             Ok(()) => {
                 if let Some(parent) = path.parent() {
                     self.directory = parent.to_path_buf();
@@ -183,7 +183,7 @@ impl Files {
                 Dialog::Picker(picker) => choice = picker.show(ui),
                 Dialog::Unsaved(_) => {
                     ui.heading("Save changes?");
-                    ui.label("This circuit has unsaved changes.");
+                    ui.label("This project has unsaved changes.");
                     ui.horizontal(|ui| {
                         if ui.button("Save").clicked() {
                             answer = Some(0);

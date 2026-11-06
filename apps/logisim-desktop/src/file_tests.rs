@@ -2,7 +2,7 @@ use crate::{
     files::Files,
     storage::{self, SaveMode, Storage},
 };
-use logisim_core::{Circuit, Component, Gate, Kind, Point};
+use logisim_core::{Circuit, Component, Gate, Kind, Point, Project};
 use logisim_file::Document;
 use std::{fs, path::PathBuf};
 struct Temp(PathBuf);
@@ -30,10 +30,10 @@ impl Drop for Temp {
         fs::remove_dir_all(&self.0).unwrap();
     }
 }
-fn circuit() -> Circuit {
+fn circuit() -> Project {
     let mut c = Circuit::default();
     c.add_component(Component::new(Kind::Gate(Gate::And), Point::new(200, 100)));
-    c
+    Project::single("main", c)
 }
 #[test]
 fn disk_roundtrip_updates_baseline_only_after_success() {
@@ -44,14 +44,14 @@ fn disk_roundtrip_updates_baseline_only_after_success() {
     assert!(storage.dirty(&circuit));
     storage.save(&circuit, &path, SaveMode::Current).unwrap();
     assert!(!storage.dirty(&circuit));
-    circuit.components[0].label = "saved again".into();
+    circuit.main_circuit_mut().circuit.components[0].label = "saved again".into();
     storage.save(&circuit, &path, SaveMode::Current).unwrap();
     let mut loaded = Storage::new();
     let (result, warnings) = loaded.load(&path).unwrap();
     assert!(warnings.is_empty());
     assert_eq!(result, circuit);
     let baseline = fs::read(&path).unwrap();
-    circuit.components[0].label = "pending".into();
+    circuit.main_circuit_mut().circuit.components[0].label = "pending".into();
     assert!(
         storage
             .save(&circuit, &dir.path("absent/failed.circ"), SaveMode::Current)
@@ -63,7 +63,7 @@ fn disk_roundtrip_updates_baseline_only_after_success() {
     fs::write(dir.path("invalid.circ"), "not XML").unwrap();
     assert!(storage.load(&dir.path("invalid.circ")).is_err());
     assert_eq!(storage.path.as_ref(), Some(&path));
-    assert_eq!(storage.name, "main");
+    assert!(storage.dirty(&circuit));
     assert_eq!(
         fs::read_dir(&dir.0).unwrap().count(),
         2,
@@ -102,12 +102,7 @@ fn external_changes_and_unconfirmed_overwrites_preserve_both_documents() {
 fn partial_import_requires_a_different_destination() {
     let dir = Temp::new();
     let path = dir.path("mixed.circ");
-    let xml = logisim_file::serialize(&Document {
-        circuit: circuit(),
-        ..Document::default()
-    })
-    .unwrap()
-    .replace(
+    let xml = logisim_file::serialize(&circuit()).unwrap().replace(
         "</circuit>",
         "<comp lib=\"0\" loc=\"(0,0)\" name=\"Clock\"/></circuit>",
     );
@@ -115,7 +110,7 @@ fn partial_import_requires_a_different_destination() {
     let mut storage = Storage::new();
     let (circuit, warnings) = storage.load(&path).unwrap();
     assert_eq!(warnings.len(), 1);
-    assert_eq!(circuit.components.len(), 1);
+    assert_eq!(circuit.main_circuit().circuit.components.len(), 1);
     assert!(storage.save(&circuit, &path, SaveMode::Current).is_err());
     assert_eq!(fs::read_to_string(&path).unwrap(), xml);
     #[cfg(unix)]
@@ -135,7 +130,7 @@ fn imported_runtime_wires_retain_gate_connectivity_and_simulation() {
     let xml = r##"<project source="2.16.2.2.jar" version="1.0"><lib name="0" desc="#Wiring"/><lib name="1" desc="#Gates"/><main name="main"/><circuit name="main"><wire from="(200,150)" to="(270,150)"/><wire from="(270,150)" to="(270,180)"/><wire from="(270,180)" to="(310,180)"/><wire from="(200,230)" to="(270,230)"/><wire from="(270,200)" to="(270,230)"/><wire from="(270,200)" to="(310,200)"/><wire from="(340,190)" to="(440,190)"/><comp lib="0" loc="(200,150)" name="Pin"><a name="tristate" val="false"/></comp><comp lib="0" loc="(200,230)" name="Pin"><a name="tristate" val="false"/></comp><comp lib="1" loc="(340,190)" name="AND Gate"/><comp lib="0" loc="(440,190)" name="Pin"><a name="output" val="true"/></comp></circuit></project>"##;
     let imported = logisim_file::parse(xml).unwrap();
     assert!(imported.warnings.is_empty());
-    let c = &imported.document.circuit;
+    let c = &imported.document.main_circuit().circuit;
     let mut sim = logisim_sim::Simulator::default();
     sim.synchronize(c);
     sim.advance(64);
@@ -159,26 +154,22 @@ fn replacing_document_resets_simulation_and_unsaved_actions_wait() {
     c.add_component(Component::new(Kind::Pin, Point::ZERO));
     fs::write(
         &path,
-        logisim_file::serialize(&Document {
-            circuit: c.clone(),
-            ..Document::default()
-        })
-        .unwrap(),
+        logisim_file::serialize(&Document::single("main", c.clone())).unwrap(),
     )
     .unwrap();
     let mut files = Files::default();
     let mut ws = logisim_ui::Workspace::default();
-    let mut sim = logisim_sim::Simulator::default();
-    sim.synchronize(&c);
+    let mut sim = logisim_sim::ProjectSimulator::default();
+    sim.synchronize(&Project::single("main", c.clone()), 1);
     sim.set_input(c.components[0].id, 1);
     files.load(&path, &mut ws, &mut sim);
-    sim.synchronize(ws.circuit());
+    sim.synchronize(ws.project(), ws.simulation_root());
     sim.advance(64);
     assert_eq!(
         sim.input(ws.circuit().components[0].id).unwrap().number(),
         Some(0)
     );
-    ws.replace_circuit(circuit());
+    ws.replace_project(circuit());
     let before = ws.circuit().clone();
     let ctx = eframe::egui::Context::default();
     files.request(logisim_ui::FileAction::New, &ctx, &mut ws, &mut sim);

@@ -7,7 +7,7 @@ use crate::{
 };
 
 use egui::{Key, Modifiers, PointerButton, Pos2, Rect, Response, Ui, Vec2};
-use logisim_core::{Circuit, Component, GRID, Gate, Id, Kind, Point};
+use logisim_core::{Circuit, Component, GRID, Gate, Id, Kind, Point, Project};
 use std::collections::BTreeSet;
 
 const CLIPBOARD_MARKER: &str = "logisim-rs selection (paste into the same window)";
@@ -32,8 +32,16 @@ impl Tool {
 }
 #[derive(Clone)]
 pub(crate) struct Snapshot {
+    pub project: Project,
+    pub active: Id,
+    pub root: Id,
+    pub path: Vec<Id>,
     pub circuit: Circuit,
     pub selection: BTreeSet<Id>,
+}
+struct Edit {
+    before: Snapshot,
+    after: Snapshot,
 }
 enum Gesture {
     Move {
@@ -59,14 +67,20 @@ enum Gesture {
 }
 
 pub(crate) struct Editor {
+    pub project: Project,
+    pub active: Id,
+    pub root: Id,
+    pub path: Vec<Id>,
+    pub open_instance: Option<Id>,
+    pub project_error: Option<String>,
     pub circuit: Circuit,
     pub selection: BTreeSet<Id>,
     pub tool: Tool,
     pub template: Component,
     pub focus_text: bool,
     pub simulation: SimulationUi,
-    undo: Vec<Snapshot>,
-    redo: Vec<Snapshot>,
+    undo: Vec<Edit>,
+    redo: Vec<Edit>,
     clipboard: Option<Circuit>,
     publish_clipboard: bool,
     paste_count: i32,
@@ -77,6 +91,12 @@ pub(crate) struct Editor {
 impl Default for Editor {
     fn default() -> Self {
         Self {
+            project: Project::default(),
+            active: 1,
+            root: 1,
+            path: vec![],
+            open_instance: None,
+            project_error: None,
             circuit: Circuit::default(),
             selection: BTreeSet::new(),
             tool: Tool::Select,
@@ -96,18 +116,40 @@ impl Default for Editor {
 }
 impl Editor {
     pub fn snapshot(&self) -> Snapshot {
+        let mut project = self.project.clone();
+        if let Some(definition) = project.circuit_mut(self.active) {
+            definition.circuit = self.circuit.clone();
+        }
         Snapshot {
+            project,
+            active: self.active,
+            root: self.root,
+            path: self.path.clone(),
             circuit: self.circuit.clone(),
             selection: self.selection.clone(),
         }
     }
-    fn restore(&mut self, state: Snapshot) {
+    fn restore(&mut self, mut state: Snapshot) {
+        state.project.preserve_allocations(&self.project);
+        self.project = state.project;
+        self.active = state.active;
+        self.root = state.root;
+        self.path = state.path;
         self.circuit = state.circuit;
         self.selection = state.selection;
+        if let Tool::Place(Kind::Subcircuit(id)) = self.tool
+            && !self.project.can_instantiate(self.active, id)
+        {
+            self.tool = Tool::Select;
+        }
     }
     pub fn record(&mut self, before: Snapshot) {
-        if before.circuit != self.circuit {
-            self.undo.push(before);
+        self.sync_project();
+        if before.project != self.project || before.circuit != self.circuit {
+            self.undo.push(Edit {
+                before,
+                after: self.snapshot(),
+            });
             if self.undo.len() > 100 {
                 self.undo.remove(0);
             }
@@ -135,7 +177,12 @@ impl Editor {
         !self.redo.is_empty() && self.property_before.is_none()
     }
     pub fn can_paste(&self) -> bool {
-        self.clipboard.is_some()
+        self.clipboard
+            .as_ref()
+            .is_some_and(|c| self.allowed_components(c))
+    }
+    fn allowed_components(&self, circuit: &Circuit) -> bool {
+        circuit.components.iter().all(|c| !matches!(c.kind,Kind::Subcircuit(id) if !self.project.can_instantiate(self.active,id)))
     }
     pub fn can_rotate(&self) -> bool {
         if let Tool::Place(kind) = self.tool {
@@ -150,17 +197,17 @@ impl Editor {
     pub fn undo(&mut self) {
         self.cancel_gesture();
         self.commit_properties();
-        if let Some(before) = self.undo.pop() {
-            self.redo.push(self.snapshot());
-            self.restore(before);
+        if let Some(edit) = self.undo.pop() {
+            self.restore(edit.before.clone());
+            self.redo.push(edit);
         }
     }
     pub fn redo(&mut self) {
         self.cancel_gesture();
         self.commit_properties();
-        if let Some(after) = self.redo.pop() {
-            self.undo.push(self.snapshot());
-            self.restore(after);
+        if let Some(edit) = self.redo.pop() {
+            self.restore(edit.after.clone());
+            self.undo.push(edit);
         }
     }
     pub fn cancel_gesture(&mut self) {
@@ -177,7 +224,13 @@ impl Editor {
         self.tool = tool;
         if let Tool::Place(kind) = tool {
             if self.template.kind != kind {
-                self.template = Component::new(kind, Point::ZERO);
+                self.template = if let Kind::Subcircuit(id) = kind {
+                    self.project
+                        .instance(id, Point::ZERO)
+                        .unwrap_or_else(|| Component::new(kind, Point::ZERO))
+                } else {
+                    Component::new(kind, Point::ZERO)
+                };
             }
             self.selection.clear();
         }
@@ -214,6 +267,11 @@ impl Editor {
         self.delete();
     }
     fn paste_circuit(&mut self, clip: Circuit, offset: Point) {
+        if !self.allowed_components(&clip) {
+            self.project_error =
+                Some("Pasting would create a missing or recursive subcircuit.".into());
+            return;
+        }
         self.cancel_gesture();
         self.commit_properties();
         let before = self.snapshot();
@@ -275,6 +333,13 @@ impl Editor {
         self.record(before);
     }
     pub fn place(&mut self, at: Point) {
+        if let Kind::Subcircuit(id) = self.template.kind
+            && !self.project.can_instantiate(self.active, id)
+        {
+            self.project_error =
+                Some("A circuit cannot contain itself, directly or indirectly.".into());
+            return;
+        }
         self.commit_properties();
         let before = self.snapshot();
         let mut c = self.template.clone();
@@ -527,9 +592,47 @@ impl Editor {
                                 self.selection.remove(&id);
                             }
                             if response.double_clicked() && self.circuit.component(id).is_some() {
-                                self.focus_text = true;
+                                if matches!(
+                                    self.circuit.component(id).map(|c| c.kind),
+                                    Some(Kind::Subcircuit(_))
+                                ) {
+                                    self.open_instance = Some(id);
+                                } else {
+                                    self.focus_text = true;
+                                }
                             }
                         }
+                    }
+                }
+            }
+        }
+        if response.hovered()
+            && let Some(pointer) = pointer
+        {
+            let world = canvas.world(pointer);
+            for c in self
+                .circuit
+                .components
+                .iter()
+                .filter(|c| matches!(c.kind, Kind::Subcircuit(_)))
+            {
+                for (index, (point, port)) in c.ports().iter().zip(&c.interface.ports).enumerate() {
+                    if (drawing::pos(*point).to_vec2() - world).length() <= tolerance {
+                        response.clone().on_hover_ui(|ui| {
+                            ui.label(format!(
+                                "{} · {} · {} bit",
+                                if port.label.is_empty() {
+                                    format!("Pin #{}", port.pin)
+                                } else {
+                                    port.label.clone()
+                                },
+                                if port.output { "Output" } else { "Input" },
+                                port.bits
+                            ));
+                            if let Some(signal) = self.simulation.view.ports.get(&(c.id, index)) {
+                                ui.monospace(&signal.binary);
+                            }
+                        });
                     }
                 }
             }
@@ -551,6 +654,18 @@ impl Editor {
             });
         }
         response.context_menu(|ui| {
+            let instance = pointer
+                .and_then(|p| self.hit(canvas.world(p), tolerance))
+                .or_else(|| self.selection.first().copied());
+            if let Some(id) = instance
+                && let Some(c) = self.circuit.component(id)
+                && matches!(c.kind, Kind::Subcircuit(_))
+                && ui.button(format!("View {}", c.interface.name)).clicked()
+            {
+                self.open_instance = Some(id);
+                ui.close();
+            }
+
             if ui
                 .add_enabled(self.can_rotate(), egui::Button::new("Rotate · R"))
                 .clicked()
