@@ -132,6 +132,7 @@ impl Component {
             return self.interface.ports.get(index).map(|p| p.bits);
         }
         match self.kind {
+            Kind::Plexer(_) => self.plexer_terminals().get(index).map(|p| p.bits),
             Kind::Clock | Kind::FlipFlop(_) => Some(1),
             Kind::Register if index >= 2 => Some(1),
             Kind::Probe => None,

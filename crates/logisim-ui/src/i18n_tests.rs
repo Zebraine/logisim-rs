@@ -228,3 +228,44 @@ fn sequential_library_properties_and_controls_work_in_both_languages() {
         assert!(!app.editor.can_undo());
     }
 }
+
+#[test]
+fn plexers_library_and_output_properties_work_in_both_languages() {
+    for language in Language::ALL {
+        let ctx = Context::default();
+        configure(&ctx);
+        let mut app = Workspace::default();
+        app.set_language(language);
+        let translated = |text| i18n::with_language(language, || i18n::tr(text).to_owned());
+        click(&ctx, &mut app, &translated("Plexers"));
+        for kind in logisim_core::Plexer::ALL {
+            click(&ctx, &mut app, &translated(kind.name()));
+            assert_eq!(app.editor.tool, Tool::Place(Kind::Plexer(kind)));
+            let labels = frame(&ctx, &mut app, vec![]);
+            assert!(has(&labels, &translated("Select bits")));
+            assert_eq!(has(&labels, &translated("Data bits")), kind.has_data_bits());
+            assert_eq!(
+                has(&labels, &translated("No input state")),
+                kind == logisim_core::Plexer::PriorityEncoder
+            );
+        }
+        click(&ctx, &mut app, &translated("Multiplexer"));
+        click(&ctx, &mut app, &translated("Floating"));
+        click(&ctx, &mut app, &translated("Zero output"));
+        assert!(app.editor.template.plexing.disabled_zero);
+        click(&ctx, &mut app, &translated("Bottom / left"));
+        click(&ctx, &mut app, &translated("Top / right"));
+        assert!(app.editor.template.plexing.top_right);
+        app.editor.place(Point::new(300, 300));
+        app.editor.set_tool(Tool::Select);
+        let id = app.circuit().components[0].id;
+        app.editor.selection.insert(id);
+        click(&ctx, &mut app, &translated("Zero output"));
+        click(&ctx, &mut app, &translated("Floating"));
+        assert!(!app.circuit().component(id).unwrap().plexing.disabled_zero);
+        app.editor.undo();
+        assert!(app.circuit().component(id).unwrap().plexing.disabled_zero);
+        app.editor.redo();
+        assert!(!app.circuit().component(id).unwrap().plexing.disabled_zero);
+    }
+}

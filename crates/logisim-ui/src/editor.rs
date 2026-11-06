@@ -710,14 +710,18 @@ impl Editor {
                 .circuit
                 .components
                 .iter()
-                .filter(|c| c.kind.is_sequential())
+                .filter(|c| c.kind.is_sequential() || matches!(c.kind, Kind::Plexer(_)))
             {
                 for (index, point) in c.ports().iter().enumerate() {
                     if (drawing::pos(*point).to_vec2() - world).length() <= tolerance {
                         response.clone().on_hover_ui(|ui| {
                             ui.label(tf!(
                                 "{} · {} bit(s)",
-                                tr(crate::sequential::port_label(c, index)),
+                                if matches!(c.kind, Kind::Plexer(_)) {
+                                    crate::plexers::port_label(c.plexer_terminals()[index].role)
+                                } else {
+                                    tr(crate::sequential::port_label(c, index)).to_owned()
+                                },
                                 c.port_width(index).unwrap_or(1)
                             ));
                             if let Some(signal) = self.simulation.view.ports.get(&(c.id, index)) {

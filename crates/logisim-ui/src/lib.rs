@@ -20,6 +20,7 @@ pub use i18n::Language;
 mod project;
 mod properties;
 use project::{CircuitCommand, NameDialog};
+mod plexers;
 mod sequential;
 mod simulation;
 pub use simulation::{
@@ -617,7 +618,10 @@ impl Workspace {
                                                 ],
                                             );
                                         }
-                                        "Memory" => {
+                                        "Plexers" => {
+                                    for p in logisim_core::Plexer::ALL { self.library_tool(ui, Kind::Plexer(p)); }
+                                }
+                                "Memory" => {
                                             for ff in logisim_core::FlipFlop::ALL { self.library_tool(ui, Kind::FlipFlop(ff)); }
                                             self.library_tool(ui, Kind::Register);
                                         }

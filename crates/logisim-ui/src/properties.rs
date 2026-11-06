@@ -229,7 +229,12 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
     }
     if !matches!(
         c.kind,
-        Kind::Text | Kind::Probe | Kind::Subcircuit(_) | Kind::Clock | Kind::FlipFlop(_)
+        Kind::Text
+            | Kind::Probe
+            | Kind::Subcircuit(_)
+            | Kind::Clock
+            | Kind::FlipFlop(_)
+            | Kind::Plexer(logisim_core::Plexer::Decoder | logisim_core::Plexer::PriorityEncoder)
     ) {
         ui.label(if c.kind == Kind::BitExtender {
             tr("Output bits")
@@ -248,6 +253,7 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
     }
     active |= wiring_fields(ui, c);
     active |= crate::sequential::fields(ui, c);
+    active |= crate::plexers::fields(ui, c);
     if let Kind::Gate(gate) = c.kind
         && !gate.unary()
     {

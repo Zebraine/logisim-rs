@@ -947,3 +947,39 @@ fn ctrl_wire_drags_move_selection_and_cancel_or_undo_without_leaving_branches() 
         }
     }
 }
+
+#[test]
+fn plexers_place_connect_rotate_and_undo_using_canvas_events() {
+    let (ctx, mut app) = setup();
+    for (i, kind) in logisim_core::Plexer::ALL.into_iter().enumerate() {
+        app.editor.set_tool(Tool::Place(Kind::Plexer(kind)));
+        for _ in 0..2 {
+            frame(&ctx, &mut app, vec![], Modifiers::NONE);
+        }
+        let at = app.canvas.screen(Point::new(200 + i as i32 * 130, 200));
+        click(&ctx, &mut app, at);
+        assert_eq!(
+            app.circuit().components.last().unwrap().kind,
+            Kind::Plexer(kind)
+        );
+    }
+    let c = app.circuit().components[0].clone();
+    let out = c.ports()[0];
+    app.editor.set_tool(Tool::Wire);
+    let start = app.canvas.screen(out);
+    click(&ctx, &mut app, start);
+    let end = app.canvas.screen(out + Point::new(50, 0));
+    click(&ctx, &mut app, end);
+    app.editor.set_tool(Tool::Select);
+    app.editor.selection = BTreeSet::from([c.id]);
+    let before = app.circuit().clone();
+    key(&ctx, &mut app, Key::R, Modifiers::NONE);
+    assert_eq!(
+        app.circuit().component(c.id).unwrap().facing,
+        logisim_core::Facing::South
+    );
+    key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
+    assert_eq!(app.circuit(), &before);
+    key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
+    assert!(app.circuit().wires.is_empty());
+}

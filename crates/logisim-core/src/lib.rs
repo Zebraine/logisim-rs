@@ -8,6 +8,9 @@ pub use appearance::{
 mod project;
 pub use project::{CircuitDefinition, Interface, InterfacePort, MAX_CIRCUITS, Project};
 
+mod plexers;
+pub use plexers::{Plexer, PlexerRole, PlexerTerminal, Plexing};
+
 mod sequential;
 pub use sequential::{ControlPosition, FlipFlop, Sequential, Trigger};
 
@@ -150,6 +153,7 @@ pub enum Kind {
     Clock,
     FlipFlop(FlipFlop),
     Register,
+    Plexer(Plexer),
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -221,6 +225,7 @@ impl Kind {
             Self::Clock => "Clock",
             Self::FlipFlop(ff) => ff.name(),
             Self::Register => "Register",
+            Self::Plexer(p) => p.name(),
         }
     }
 }
@@ -250,6 +255,7 @@ pub struct Component {
     pub input_bits: u8,
     pub extension: Extension,
     pub sequential: Sequential,
+    pub plexing: Plexing,
 }
 impl Component {
     pub fn new(kind: Kind, position: Point) -> Self {
@@ -298,6 +304,14 @@ impl Component {
             input_bits: 8,
             extension: Extension::Zero,
             sequential: Sequential::default(),
+            plexing: Plexing {
+                select_bits: if kind == Kind::Plexer(Plexer::PriorityEncoder) {
+                    3
+                } else {
+                    1
+                },
+                ..Plexing::default()
+            },
         }
     }
     pub fn input_count(&self) -> u8 {
@@ -308,6 +322,13 @@ impl Component {
         }
     }
     pub fn local_ports(&self) -> Vec<Point> {
+        if matches!(self.kind, Kind::Plexer(_)) {
+            return self
+                .plexer_terminals()
+                .into_iter()
+                .map(|p| p.offset)
+                .collect();
+        }
         if let Some(ports) = self.sequential_ports() {
             return ports;
         }
@@ -571,6 +592,17 @@ impl Circuit {
                             .iter()
                             .position(|p| p.pin == port.pin)
                             .map(|index| (*before, after[index]))
+                    })
+                    .collect()
+            } else if matches!(old.kind, Kind::Plexer(_)) && old.kind == replacement.kind {
+                let new = replacement.plexer_terminals();
+                old.plexer_terminals()
+                    .iter()
+                    .zip(&before)
+                    .filter_map(|(port, point)| {
+                        new.iter()
+                            .position(|p| p.role == port.role)
+                            .map(|i| (*point, after[i]))
                     })
                     .collect()
             } else {

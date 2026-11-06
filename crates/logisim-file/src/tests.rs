@@ -573,3 +573,100 @@ fn wire_import_merges_after_all_terminals_and_preserves_junctions_in_saved_geome
     }
     assert_eq!(shapes[0], shapes[1]);
 }
+
+#[test]
+fn plexers_runtime_defaults_and_roundtrip_preserve_terminal_roles_and_policies() {
+    use logisim_core::{Plexer, PlexerRole};
+    let wrap = |body: &str| xml(body).replace("<main", r##"<lib name="p" desc="#Plexers"/><main"##);
+    let imported=parse(&wrap(r#"<comp lib="p" name="Multiplexer" loc="(100,100)"/><comp lib="p" name="Multiplexer" loc="(200,100)"><a name="enable" val="false"/></comp><comp lib="p" name="Priority Encoder" loc="(300,100)"/>"#)).unwrap();
+    assert!(imported.warnings.is_empty());
+    let cs = &imported.document.main_circuit().circuit.components;
+    assert!(cs[0].plexing.enable);
+    assert!(!cs[1].plexing.enable);
+    assert_eq!(cs[2].plexing.select_bits, 3);
+    assert!(
+        cs[0]
+            .plexer_terminals()
+            .iter()
+            .any(|p| p.role == PlexerRole::Enable)
+    );
+    assert!(
+        !Component::new(Kind::Plexer(Plexer::Multiplexer), Point::ZERO)
+            .plexing
+            .enable
+    );
+    let mut document = Document::default();
+    for kind in Plexer::ALL {
+        for select in 1..=5 {
+            for facing in Facing::ALL {
+                for altered in [false, true] {
+                    let mut c =
+                        Component::new(Kind::Plexer(kind), Point::new(select as i32 * 100, 100));
+                    c.facing = facing;
+                    c.bits = if kind.has_data_bits() { 32 } else { 1 };
+                    c.plexing.select_bits = select;
+                    c.plexing.disabled_zero = altered;
+                    if kind == Plexer::PriorityEncoder {
+                        c.plexing.no_input_zero = altered;
+                    } else {
+                        c.plexing.top_right = altered;
+                        c.plexing.enable = altered;
+                        if kind != Plexer::Multiplexer {
+                            c.plexing.three_state = altered;
+                        }
+                    }
+                    document.main_circuit_mut().circuit.add_component(c);
+                }
+            }
+        }
+    }
+    let saved = serialize(&document).unwrap();
+    let restored = parse(&saved).unwrap();
+    assert!(restored.warnings.is_empty(), "{:?}", restored.warnings);
+    for (a, b) in document
+        .main_circuit()
+        .circuit
+        .components
+        .iter()
+        .zip(&restored.document.main_circuit().circuit.components)
+    {
+        assert_eq!(a, b);
+        assert_eq!(a.ports(), b.ports());
+    }
+    assert_eq!(serialize(&restored.document).unwrap(), saved);
+}
+#[test]
+fn unsupported_plexers_and_parameters_trigger_import_protection() {
+    let bodies = [
+        ("Multiplexer", r#"<a name="select" val="0"/>"#),
+        ("Decoder", r#"<a name="select" val="6"/>"#),
+        ("Multiplexer", r#"<a name="width" val="33"/>"#),
+        ("Multiplexer", r#"<a name="enable" val="maybe"/>"#),
+        ("Decoder", r#"<a name="selloc" val="unknown"/>"#),
+        ("Decoder", r#"<a name="width" val="8"/>"#),
+        (
+            "Priority Encoder",
+            r#"<a name="noInputState" val="unknown"/>"#,
+        ),
+        ("Priority Encoder", r#"<a name="enable" val="false"/>"#),
+        ("Multiplexer", r#"<a name="disabled" val="1"/>"#),
+        ("Bit Selector", ""),
+    ];
+    let body = bodies
+        .into_iter()
+        .map(|(name, attrs)| {
+            format!(r#"<comp lib="p" name="{name}" loc="(100,100)">{attrs}</comp>"#)
+        })
+        .collect::<String>();
+    let input = xml(&body).replace("<main", r##"<lib name="p" desc="#Plexers"/><main"##);
+    let imported = parse(&input).unwrap();
+    assert_eq!(imported.warnings.len(), 10);
+    assert!(
+        imported
+            .document
+            .main_circuit()
+            .circuit
+            .components
+            .is_empty()
+    );
+}

@@ -338,6 +338,12 @@ fn component(
         {
             Kind::Subcircuit(names[name])
         }
+        ("#Plexers", name) => Kind::Plexer(
+            logisim_core::Plexer::ALL
+                .into_iter()
+                .find(|p| p.name() == name)
+                .ok_or_else(|| Error(format!("Unsupported plexer: {name}")))?,
+        ),
         ("#Wiring", "Clock") => Kind::Clock,
         ("#Memory", "Register") => Kind::Register,
         ("#Memory", name) => Kind::FlipFlop(
@@ -367,6 +373,7 @@ fn component(
     let a = attributes(n)?;
     for key in a.keys() {
         let allowed = match kind {
+            Kind::Plexer(p) => crate::plexers::allowed(p, key),
             Kind::Clock | Kind::Register | Kind::FlipFlop(_) => {
                 crate::sequential::allowed(kind, key)
             }
@@ -429,6 +436,7 @@ fn component(
         1..=32,
     )?;
     crate::sequential::read(&mut c, &a)?;
+    crate::plexers::read(&mut c, &a)?;
     read_wiring(&mut c, &a)?;
     if matches!(kind, Kind::Subcircuit(_) | Kind::Clock) {
         c.label_facing = match value(

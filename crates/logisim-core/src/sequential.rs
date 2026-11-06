@@ -130,6 +130,9 @@ impl Component {
         Some(points.into_iter().map(|(x, y)| Point::new(x, y)).collect())
     }
     pub fn drives_port(&self, index: usize) -> bool {
+        if matches!(self.kind, Kind::Plexer(_)) {
+            return self.plexer_terminals().get(index).is_some_and(|p| p.output);
+        }
         if let Kind::Subcircuit(_) = self.kind {
             return self.interface.ports.get(index).is_some_and(|p| p.output);
         }

@@ -45,7 +45,7 @@ pub fn serialize(document: &Document) -> Result<String> {
     }
     let name = escape(&document.main_circuit().name)?;
     let mut out = String::from(
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!-- Written by logisim-rs; source declares the compatible Logisim-ITA format. -->\n<project source=\"2.16.2.2.jar\" version=\"1.0\">\n  <lib desc=\"#Wiring\" name=\"0\"/>\n  <lib desc=\"#Gates\" name=\"1\"/>\n  <lib desc=\"#Base\" name=\"2\"/>\n  <lib desc=\"#Memory\" name=\"3\"/>\n",
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!-- Written by logisim-rs; source declares the compatible Logisim-ITA format. -->\n<project source=\"2.16.2.2.jar\" version=\"1.0\">\n  <lib desc=\"#Wiring\" name=\"0\"/>\n  <lib desc=\"#Gates\" name=\"1\"/>\n  <lib desc=\"#Base\" name=\"2\"/>\n  <lib desc=\"#Memory\" name=\"3\"/>\n  <lib desc=\"#Plexers\" name=\"4\"/>\n",
     );
     writeln!(out, "  <main name=\"{name}\"/>").unwrap();
     out.push_str("  <options>\n    <a name=\"gateUndefined\" val=\"ignore\"/>\n    <a name=\"simlimit\" val=\"1000\"/>\n    <a name=\"simrand\" val=\"0\"/>\n  </options>\n  <mappings>\n    <tool lib=\"2\" map=\"Button2\" name=\"Poke Tool\"/>\n    <tool lib=\"2\" map=\"Button3\" name=\"Menu Tool\"/>\n    <tool lib=\"2\" map=\"Ctrl Button1\" name=\"Menu Tool\"/>\n  </mappings>\n  <toolbar>\n    <tool lib=\"2\" name=\"Poke Tool\"/>\n    <tool lib=\"2\" name=\"Edit Tool\"/>\n    <sep/>\n    <tool lib=\"2\" name=\"Text Tool\"/>\n    <tool lib=\"0\" name=\"Pin\"><a name=\"tristate\" val=\"false\"/></tool>\n    <tool lib=\"0\" name=\"Pin\"><a name=\"output\" val=\"true\"/><a name=\"facing\" val=\"west\"/></tool>\n    <tool lib=\"1\" name=\"NOT Gate\"/>\n    <tool lib=\"1\" name=\"AND Gate\"/>\n    <tool lib=\"1\" name=\"OR Gate\"/>\n  </toolbar>\n");
@@ -78,6 +78,7 @@ pub fn serialize(document: &Document) -> Result<String> {
                 return Err(Error(format!("Invalid {} attributes.", c.kind.name())));
             }
             let lib = match c.kind {
+                Kind::Plexer(_) => 4,
                 Kind::Gate(_) => 1,
                 Kind::Text => 2,
                 Kind::Register | Kind::FlipFlop(_) => 3,
@@ -118,10 +119,14 @@ pub fn serialize(document: &Document) -> Result<String> {
                     | Kind::Subcircuit(_)
                     | Kind::Clock
                     | Kind::FlipFlop(_)
+                    | Kind::Plexer(
+                        logisim_core::Plexer::Decoder | logisim_core::Plexer::PriorityEncoder
+                    )
             ) {
                 attribute(&mut out, "width", c.bits)?;
             }
             crate::sequential::write(&mut out, c)?;
+            crate::plexers::write(&mut out, c)?;
             if let Kind::Gate(g) = c.kind {
                 if g != Gate::Buffer {
                     attribute(&mut out, "size", c.gate_width())?;

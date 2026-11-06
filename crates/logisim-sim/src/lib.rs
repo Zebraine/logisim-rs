@@ -2,6 +2,9 @@
 mod hierarchy;
 pub use hierarchy::ProjectSimulator;
 mod network;
+#[cfg(test)]
+mod plexer_tests;
+mod plexers;
 mod sequential;
 #[cfg(test)]
 mod sequential_tests;
@@ -234,6 +237,24 @@ impl Simulator {
         for (id, value) in outputs {
             self.schedule(id, value);
         }
+        let plexers: Vec<_> = self
+            .circuit
+            .components
+            .iter()
+            .filter(|c| matches!(c.kind, Kind::Plexer(_)))
+            .flat_map(|c| {
+                let ports: Vec<_> = (0..c.ports().len())
+                    .map(|i| self.port_value(c.id, i).expect("compiled plexer port"))
+                    .collect();
+                plexers::evaluate(c, &ports)
+                    .into_iter()
+                    .map(|(i, v)| ((c.id, i), v))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        for (port, value) in plexers {
+            self.drive_port(port, value);
+        }
         self.schedule_storage();
     }
     fn schedule_storage(&mut self) {
@@ -437,6 +458,7 @@ fn electrically_equal(a: &Circuit, b: &Circuit) -> bool {
             (c.kind == Kind::Splitter).then_some(c.splitter.clone()),
             (c.kind == Kind::BitExtender).then_some((c.input_bits, c.extension)),
             c.kind.is_sequential().then_some(c.sequential),
+            matches!(c.kind, Kind::Plexer(_)).then_some(c.plexing),
             if c.kind == Kind::Tunnel {
                 c.label.clone()
             } else {

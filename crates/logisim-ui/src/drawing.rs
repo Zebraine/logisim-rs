@@ -73,6 +73,13 @@ fn probe_width(c: &Component) -> f32 {
     }
 }
 pub(crate) fn bounds(c: &Component) -> Rect {
+    if matches!(c.kind, Kind::Plexer(_)) {
+        let mut r = Rect::NOTHING;
+        for point in c.plexer_body().into_iter().chain(c.local_ports()) {
+            r.extend_with(local(c, pos(point).to_vec2()).to_pos2());
+        }
+        return r;
+    }
     if c.kind.is_sequential() {
         let (min, max) = crate::sequential::body(c);
         let mut r = Rect::NOTHING;
@@ -277,6 +284,7 @@ pub(crate) fn component(
         );
     };
     match c.kind {
+        Kind::Plexer(_) => crate::plexers::draw(p, canvas, c, color),
         Kind::Clock | Kind::FlipFlop(_) | Kind::Register => {
             crate::sequential::draw(p, canvas, c, color, simulation)
         }
