@@ -338,6 +338,12 @@ fn component(
         {
             Kind::Subcircuit(names[name])
         }
+        ("#Arithmetic", name) => Kind::Arithmetic(
+            logisim_core::Arithmetic::ALL
+                .into_iter()
+                .find(|a| a.name() == name)
+                .ok_or_else(|| Error(format!("Unsupported arithmetic component: {name}")))?,
+        ),
         ("#Plexers", name) => Kind::Plexer(
             logisim_core::Plexer::ALL
                 .into_iter()
@@ -374,6 +380,7 @@ fn component(
     for key in a.keys() {
         let allowed = match kind {
             Kind::Plexer(p) => crate::plexers::allowed(p, key),
+            Kind::Arithmetic(a) => crate::arithmetic::allowed(a, key),
             Kind::Clock | Kind::Register | Kind::FlipFlop(_) => {
                 crate::sequential::allowed(kind, key)
             }
@@ -432,11 +439,16 @@ fn component(
     c.bits = number(
         &a,
         "width",
-        if kind == Kind::Register { 8 } else { 1 },
+        if matches!(kind, Kind::Register | Kind::Arithmetic(_)) {
+            8
+        } else {
+            1
+        },
         1..=32,
     )?;
     crate::sequential::read(&mut c, &a)?;
     crate::plexers::read(&mut c, &a)?;
+    crate::arithmetic::read(&mut c, &a)?;
     read_wiring(&mut c, &a)?;
     if matches!(kind, Kind::Subcircuit(_) | Kind::Clock) {
         c.label_facing = match value(

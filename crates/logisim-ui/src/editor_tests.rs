@@ -983,3 +983,37 @@ fn plexers_place_connect_rotate_and_undo_using_canvas_events() {
     key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
     assert!(app.circuit().wires.is_empty());
 }
+
+#[test]
+fn arithmetic_canvas_places_wires_and_keeps_fixed_orientation() {
+    let (ctx, mut app) = setup();
+    for (i, kind) in logisim_core::Arithmetic::ALL.into_iter().enumerate() {
+        app.editor.set_tool(Tool::Place(Kind::Arithmetic(kind)));
+        for _ in 0..2 {
+            frame(&ctx, &mut app, vec![], Modifiers::NONE);
+        }
+        let at = app.canvas.screen(Point::new(200 + i as i32 * 130, 200));
+        click(&ctx, &mut app, at);
+        let c = app.circuit().components.last().unwrap();
+        assert_eq!(c.kind, Kind::Arithmetic(kind));
+        assert_eq!(c.bits, 8);
+        let bounds = crate::drawing::bounds(c);
+        assert!(bounds.contains(crate::drawing::pos(c.position + Point::new(-20, 0))));
+        for port in c.ports() {
+            assert!(bounds.contains(crate::drawing::pos(port)));
+        }
+    }
+    let c = app.circuit().components[0].clone();
+    app.editor.set_tool(Tool::Wire);
+    let start = app.canvas.screen(c.ports()[4]);
+    click(&ctx, &mut app, start);
+    let end = app.canvas.screen(c.ports()[4] + Point::new(0, 60));
+    click(&ctx, &mut app, end);
+    app.editor.set_tool(Tool::Select);
+    app.editor.selection = BTreeSet::from([c.id]);
+    let before = app.circuit().clone();
+    key(&ctx, &mut app, Key::R, Modifiers::NONE);
+    assert_eq!(app.circuit(), &before);
+    key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
+    assert!(app.circuit().wires.is_empty());
+}

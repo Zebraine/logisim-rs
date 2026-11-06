@@ -254,6 +254,7 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
     active |= wiring_fields(ui, c);
     active |= crate::sequential::fields(ui, c);
     active |= crate::plexers::fields(ui, c);
+    crate::arithmetic::fields(ui, c);
     if let Kind::Gate(gate) = c.kind
         && !gate.unary()
     {

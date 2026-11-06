@@ -1,6 +1,9 @@
 //! Deterministic, bounded signal propagation and sequential state, independent of the GUI.
 mod hierarchy;
 pub use hierarchy::ProjectSimulator;
+mod arithmetic;
+#[cfg(test)]
+mod arithmetic_tests;
 mod network;
 #[cfg(test)]
 mod plexer_tests;
@@ -237,22 +240,26 @@ impl Simulator {
         for (id, value) in outputs {
             self.schedule(id, value);
         }
-        let plexers: Vec<_> = self
+        let multiple_outputs: Vec<_> = self
             .circuit
             .components
             .iter()
-            .filter(|c| matches!(c.kind, Kind::Plexer(_)))
+            .filter(|c| matches!(c.kind, Kind::Plexer(_) | Kind::Arithmetic(_)))
             .flat_map(|c| {
                 let ports: Vec<_> = (0..c.ports().len())
-                    .map(|i| self.port_value(c.id, i).expect("compiled plexer port"))
+                    .map(|i| self.port_value(c.id, i).expect("compiled component port"))
                     .collect();
-                plexers::evaluate(c, &ports)
+                let outputs = match c.kind {
+                    Kind::Arithmetic(_) => arithmetic::evaluate(c, &ports),
+                    _ => plexers::evaluate(c, &ports),
+                };
+                outputs
                     .into_iter()
                     .map(|(i, v)| ((c.id, i), v))
                     .collect::<Vec<_>>()
             })
             .collect();
-        for (port, value) in plexers {
+        for (port, value) in multiple_outputs {
             self.drive_port(port, value);
         }
         self.schedule_storage();
@@ -458,7 +465,10 @@ fn electrically_equal(a: &Circuit, b: &Circuit) -> bool {
             (c.kind == Kind::Splitter).then_some(c.splitter.clone()),
             (c.kind == Kind::BitExtender).then_some((c.input_bits, c.extension)),
             c.kind.is_sequential().then_some(c.sequential),
-            matches!(c.kind, Kind::Plexer(_)).then_some(c.plexing),
+            (
+                matches!(c.kind, Kind::Plexer(_)).then_some(c.plexing),
+                matches!(c.kind, Kind::Arithmetic(_)).then_some(c.arithmetic),
+            ),
             if c.kind == Kind::Tunnel {
                 c.label.clone()
             } else {

@@ -130,6 +130,11 @@ impl Component {
         Some(points.into_iter().map(|(x, y)| Point::new(x, y)).collect())
     }
     pub fn drives_port(&self, index: usize) -> bool {
+        if let Kind::Arithmetic(kind) = self.kind {
+            return index == 0
+                || (index == 4 && kind != crate::Arithmetic::Shifter)
+                || (index == 3 && kind == crate::Arithmetic::Comparator);
+        }
         if matches!(self.kind, Kind::Plexer(_)) {
             return self.plexer_terminals().get(index).is_some_and(|p| p.output);
         }

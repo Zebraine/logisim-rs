@@ -269,3 +269,53 @@ fn plexers_library_and_output_properties_work_in_both_languages() {
         assert!(!app.circuit().component(id).unwrap().plexing.disabled_zero);
     }
 }
+
+#[test]
+fn arithmetic_library_and_modes_edit_in_both_languages_with_undo() {
+    use logisim_core::{Arithmetic, Shift};
+    for language in Language::ALL {
+        let ctx = Context::default();
+        configure(&ctx);
+        let mut app = Workspace::default();
+        app.set_language(language);
+        let translated = |text| i18n::with_language(language, || i18n::tr(text).to_owned());
+        click(&ctx, &mut app, &translated("Arithmetic"));
+        for kind in Arithmetic::ALL {
+            click(&ctx, &mut app, &translated(kind.name()));
+            assert_eq!(app.editor.tool, Tool::Place(Kind::Arithmetic(kind)));
+            let labels = frame(&ctx, &mut app, vec![]);
+            assert!(has(&labels, &translated("Data bits")));
+            assert!(!has(&labels, &translated("Facing")));
+            assert!(!has(&labels, &translated("Label")));
+            assert_eq!(
+                has(&labels, &translated("Numeric type")),
+                kind == Arithmetic::Comparator
+            );
+            assert_eq!(
+                has(&labels, &translated("Shift type")),
+                kind == Arithmetic::Shifter
+            );
+        }
+        for shift in Shift::ALL.into_iter().skip(1) {
+            let previous = app.editor.template.arithmetic.shift;
+            click(&ctx, &mut app, &translated(previous.name()));
+            click(&ctx, &mut app, &translated(shift.name()));
+            assert_eq!(app.editor.template.arithmetic.shift, shift);
+        }
+        click(&ctx, &mut app, &translated("Comparator"));
+        click(&ctx, &mut app, &translated("Two's complement"));
+        click(&ctx, &mut app, &translated("Unsigned"));
+        assert!(!app.editor.template.arithmetic.signed);
+        app.editor.place(Point::new(300, 300));
+        app.editor.set_tool(Tool::Select);
+        let id = app.circuit().components[0].id;
+        app.editor.selection.insert(id);
+        click(&ctx, &mut app, &translated("Unsigned"));
+        click(&ctx, &mut app, &translated("Two's complement"));
+        assert!(app.circuit().component(id).unwrap().arithmetic.signed);
+        app.editor.undo();
+        assert!(!app.circuit().component(id).unwrap().arithmetic.signed);
+        app.editor.redo();
+        assert!(app.circuit().component(id).unwrap().arithmetic.signed);
+    }
+}

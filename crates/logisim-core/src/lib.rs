@@ -8,6 +8,9 @@ pub use appearance::{
 mod project;
 pub use project::{CircuitDefinition, Interface, InterfacePort, MAX_CIRCUITS, Project};
 
+mod arithmetic;
+pub use arithmetic::{Arithmetic, ArithmeticOptions, Shift};
+
 mod plexers;
 pub use plexers::{Plexer, PlexerRole, PlexerTerminal, Plexing};
 
@@ -154,6 +157,7 @@ pub enum Kind {
     FlipFlop(FlipFlop),
     Register,
     Plexer(Plexer),
+    Arithmetic(Arithmetic),
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -192,7 +196,11 @@ impl Kind {
     pub fn rotatable(self) -> bool {
         !matches!(
             self,
-            Self::Text | Self::BitExtender | Self::FlipFlop(_) | Self::Register
+            Self::Text
+                | Self::BitExtender
+                | Self::FlipFlop(_)
+                | Self::Register
+                | Self::Arithmetic(_)
         )
     }
     pub fn has_label(self) -> bool {
@@ -226,6 +234,7 @@ impl Kind {
             Self::FlipFlop(ff) => ff.name(),
             Self::Register => "Register",
             Self::Plexer(p) => p.name(),
+            Self::Arithmetic(a) => a.name(),
         }
     }
 }
@@ -256,6 +265,7 @@ pub struct Component {
     pub extension: Extension,
     pub sequential: Sequential,
     pub plexing: Plexing,
+    pub arithmetic: ArithmeticOptions,
 }
 impl Component {
     pub fn new(kind: Kind, position: Point) -> Self {
@@ -272,7 +282,7 @@ impl Component {
             bits: match kind {
                 Kind::Splitter => 4,
                 Kind::BitExtender => 16,
-                Kind::Register => 8,
+                Kind::Register | Kind::Arithmetic(_) => 8,
                 _ => 1,
             },
             inputs: 2,
@@ -304,6 +314,7 @@ impl Component {
             input_bits: 8,
             extension: Extension::Zero,
             sequential: Sequential::default(),
+            arithmetic: ArithmeticOptions::default(),
             plexing: Plexing {
                 select_bits: if kind == Kind::Plexer(Plexer::PriorityEncoder) {
                     3
@@ -328,6 +339,9 @@ impl Component {
                 .into_iter()
                 .map(|p| p.offset)
                 .collect();
+        }
+        if let Some(ports) = self.arithmetic_ports() {
+            return ports;
         }
         if let Some(ports) = self.sequential_ports() {
             return ports;

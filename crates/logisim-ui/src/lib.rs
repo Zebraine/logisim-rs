@@ -20,6 +20,7 @@ pub use i18n::Language;
 mod project;
 mod properties;
 use project::{CircuitCommand, NameDialog};
+mod arithmetic;
 mod plexers;
 mod sequential;
 mod simulation;
@@ -618,6 +619,9 @@ impl Workspace {
                                                 ],
                                             );
                                         }
+                                        "Arithmetic" => {
+                                    for a in logisim_core::Arithmetic::ALL { self.library_tool(ui, Kind::Arithmetic(a)); }
+                                }
                                         "Plexers" => {
                                     for p in logisim_core::Plexer::ALL { self.library_tool(ui, Kind::Plexer(p)); }
                                 }

@@ -1,6 +1,7 @@
 //! The supported .circ subset, independently specified from runtime-created files.
 //! No filesystem or simulator dependency; unsupported content is never silently saved.
 mod appearance;
+mod arithmetic;
 mod plexers;
 mod read;
 mod sequential;

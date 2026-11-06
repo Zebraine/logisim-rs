@@ -135,7 +135,7 @@ pub(crate) fn bounds(c: &Component) -> Rect {
     let (width, height) = match c.kind {
         Kind::Gate(_) => (c.gate_depth() as f32, half_height(c)),
         Kind::Probe => (probe_width(c), 20.0),
-        Kind::BitExtender => (40.0, 20.0),
+        Kind::BitExtender | Kind::Arithmetic(_) => (40.0, 20.0),
         Kind::Tunnel => (
             text_width(c) + 22.0,
             (f32::from(c.font_size) * 0.7 + 5.0).max(16.0),
@@ -285,6 +285,7 @@ pub(crate) fn component(
     };
     match c.kind {
         Kind::Plexer(_) => crate::plexers::draw(p, canvas, c, color),
+        Kind::Arithmetic(_) => crate::arithmetic::draw(p, canvas, c, color),
         Kind::Clock | Kind::FlipFlop(_) | Kind::Register => {
             crate::sequential::draw(p, canvas, c, color, simulation)
         }

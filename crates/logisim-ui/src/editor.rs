@@ -706,12 +706,9 @@ impl Editor {
             && let Some(pointer) = pointer
         {
             let world = canvas.world(pointer);
-            for c in self
-                .circuit
-                .components
-                .iter()
-                .filter(|c| c.kind.is_sequential() || matches!(c.kind, Kind::Plexer(_)))
-            {
+            for c in self.circuit.components.iter().filter(|c| {
+                c.kind.is_sequential() || matches!(c.kind, Kind::Plexer(_) | Kind::Arithmetic(_))
+            }) {
                 for (index, point) in c.ports().iter().enumerate() {
                     if (drawing::pos(*point).to_vec2() - world).length() <= tolerance {
                         response.clone().on_hover_ui(|ui| {
@@ -719,6 +716,8 @@ impl Editor {
                                 "{} · {} bit(s)",
                                 if matches!(c.kind, Kind::Plexer(_)) {
                                     crate::plexers::port_label(c.plexer_terminals()[index].role)
+                                } else if matches!(c.kind, Kind::Arithmetic(_)) {
+                                    tr(crate::arithmetic::port_label(c, index)).to_owned()
                                 } else {
                                     tr(crate::sequential::port_label(c, index)).to_owned()
                                 },
