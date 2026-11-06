@@ -379,3 +379,6 @@ fn two_arithmetic_instances_propagate_carry_between_words() {
         }
     }
 }
+
+#[path = "arithmetic_extra_tests.rs"]
+mod extra;

@@ -281,6 +281,26 @@ fn arithmetic_library_and_modes_edit_in_both_languages_with_undo() {
         let translated = |text| i18n::with_language(language, || i18n::tr(text).to_owned());
         click(&ctx, &mut app, &translated("Arithmetic"));
         for kind in Arithmetic::ALL {
+            if kind == Arithmetic::Negator {
+                // The expanded library exceeds the project pane: use its real scroll path.
+                frame(
+                    &ctx,
+                    &mut app,
+                    vec![
+                        Event::PointerMoved(Pos2::new(130.0, 350.0)),
+                        Event::MouseWheel {
+                            unit: egui::MouseWheelUnit::Point,
+                            delta: egui::vec2(0.0, -170.0),
+                            modifiers: Modifiers::NONE,
+                            phase: egui::TouchPhase::Move,
+                            source: egui::MouseWheelSource::Unknown,
+                        },
+                    ],
+                );
+                for _ in 0..20 {
+                    frame(&ctx, &mut app, vec![]);
+                }
+            }
             click(&ctx, &mut app, &translated(kind.name()));
             assert_eq!(app.editor.tool, Tool::Place(Kind::Arithmetic(kind)));
             let labels = frame(&ctx, &mut app, vec![]);

@@ -992,7 +992,10 @@ fn arithmetic_canvas_places_wires_and_keeps_fixed_orientation() {
         for _ in 0..2 {
             frame(&ctx, &mut app, vec![], Modifiers::NONE);
         }
-        let at = app.canvas.screen(Point::new(200 + i as i32 * 130, 200));
+        let at = app.canvas.screen(Point::new(
+            180 + (i % 4) as i32 * 100,
+            160 + (i / 4) as i32 * 100,
+        ));
         click(&ctx, &mut app, at);
         let c = app.circuit().components.last().unwrap();
         assert_eq!(c.kind, Kind::Arithmetic(kind));

@@ -134,7 +134,13 @@ impl Component {
         match self.kind {
             Kind::Plexer(_) => self.plexer_terminals().get(index).map(|p| p.bits),
             Kind::Arithmetic(kind) => Some(
-                if index >= 3 || (index == 0 && kind == crate::Arithmetic::Comparator) {
+                if (index >= 3
+                    && !matches!(
+                        kind,
+                        crate::Arithmetic::Multiplier | crate::Arithmetic::Divider
+                    ))
+                    || (index == 0 && kind == crate::Arithmetic::Comparator)
+                {
                     1
                 } else if index == 2 && kind == crate::Arithmetic::Shifter {
                     self.shift_amount_bits()

@@ -132,7 +132,11 @@ impl Component {
     pub fn drives_port(&self, index: usize) -> bool {
         if let Kind::Arithmetic(kind) = self.kind {
             return index == 0
-                || (index == 4 && kind != crate::Arithmetic::Shifter)
+                || (index == 4
+                    && !matches!(
+                        kind,
+                        crate::Arithmetic::Shifter | crate::Arithmetic::Negator
+                    ))
                 || (index == 3 && kind == crate::Arithmetic::Comparator);
         }
         if matches!(self.kind, Kind::Plexer(_)) {

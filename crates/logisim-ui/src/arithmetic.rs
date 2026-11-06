@@ -11,6 +11,15 @@ pub(crate) fn port_label(c: &Component, index: usize) -> &'static str {
         (Kind::Arithmetic(Arithmetic::Adder), 4) => "Carry out",
         (Kind::Arithmetic(Arithmetic::Subtractor), 3) => "Borrow in",
         (Kind::Arithmetic(Arithmetic::Subtractor), 4) => "Borrow out",
+        (Kind::Arithmetic(Arithmetic::Multiplier), 0) => "Product low",
+        (Kind::Arithmetic(Arithmetic::Multiplier), 3) => "Addend",
+        (Kind::Arithmetic(Arithmetic::Multiplier), 4) => "Product high",
+        (Kind::Arithmetic(Arithmetic::Divider), 0) => "Quotient",
+        (Kind::Arithmetic(Arithmetic::Divider), 1) => "Dividend low",
+        (Kind::Arithmetic(Arithmetic::Divider), 2) => "Divisor",
+        (Kind::Arithmetic(Arithmetic::Divider), 3) => "Dividend high",
+        (Kind::Arithmetic(Arithmetic::Divider), 4) => "Remainder",
+        (Kind::Arithmetic(Arithmetic::Negator), 1) => "Data input",
         (Kind::Arithmetic(Arithmetic::Shifter), 1) => "Data input",
         (Kind::Arithmetic(Arithmetic::Shifter), 2) => "Shift amount",
         (_, 0) => "Result",
@@ -77,6 +86,11 @@ pub(crate) fn draw(p: &Painter, canvas: &Canvas, c: &Component, color: Color32) 
             color,
         );
     };
+    if kind == Arithmetic::Negator {
+        text(-33, 0, "D", 7.0);
+        text(-15, 0, "−x", 14.0);
+        return;
+    }
     text(
         -33,
         -10,
@@ -98,6 +112,17 @@ pub(crate) fn draw(p: &Painter, canvas: &Canvas, c: &Component, color: Color32) 
         7.0,
     );
     match kind {
+        Arithmetic::Multiplier | Arithmetic::Divider => {
+            let (symbol, input, output) = if kind == Arithmetic::Multiplier {
+                ("×", "C", "H")
+            } else {
+                ("÷", "U", "R")
+            };
+            text(-12, 0, symbol, 18.0);
+            text(-20, -13, input, 7.0);
+            text(-20, 13, output, 7.0);
+        }
+        Arithmetic::Negator => {}
         Arithmetic::Adder | Arithmetic::Subtractor => {
             text(
                 -12,

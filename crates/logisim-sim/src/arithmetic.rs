@@ -6,9 +6,26 @@ pub(crate) fn evaluate(c: &Component, ports: &[Value]) -> Vec<(usize, Value)> {
         return vec![];
     };
     let a = ports[1];
-    let b = ports[2];
     let width = c.bits.clamp(1, 32);
+    if kind == Arithmetic::Negator {
+        return vec![(0, negate(a))];
+    }
+    let b = ports[2];
     match kind {
+        Arithmetic::Multiplier | Arithmetic::Divider => {
+            let extra = if (0..width).all(|i| ports[3].bit(i) == Bit::Unknown) {
+                Value::known(width, 0)
+            } else {
+                ports[3]
+            };
+            let (result, auxiliary) = if kind == Arithmetic::Multiplier {
+                multiply(a, b, extra)
+            } else {
+                divide(a, b, extra)
+            };
+            vec![(0, result), (4, auxiliary)]
+        }
+        Arithmetic::Negator => unreachable!("handled before reading a second operand"),
         Arithmetic::Adder | Arithmetic::Subtractor => {
             let subtract = kind == Arithmetic::Subtractor;
             let mut carry = match ports[3].bit(0) {
@@ -106,4 +123,90 @@ pub(crate) fn evaluate(c: &Component, ports: &[Value]) -> Vec<(usize, Value)> {
             vec![(0, result)]
         }
     }
+}
+
+fn multiply(a: Value, b: Value, extra: Value) -> (Value, Value) {
+    let width = a.width();
+    let inputs = [a, b, extra];
+    let first_uncertain = (0..width).find(|i| {
+        inputs
+            .iter()
+            .any(|v| matches!(v.bit(*i), Bit::Unknown | Bit::Error))
+    });
+    let first_error = (0..width).find(|i| inputs.iter().any(|v| v.bit(*i) == Bit::Error));
+    // Unknown high bits do not affect the exact low prefix of a product or sum.
+    let known_bits =
+        |v: Value| (0..width).fold(0_u64, |n, i| n | (u64::from(v.bit(i) == Bit::One) << i));
+    let product = known_bits(a) * known_bits(b) + known_bits(extra);
+    let low = Value::from_bits((0..width).map(|i| {
+        if first_error.is_some_and(|start| i >= start) {
+            Bit::Error
+        } else if first_uncertain.is_some_and(|start| i >= start) {
+            Bit::Unknown
+        } else if product & (1 << i) != 0 {
+            Bit::One
+        } else {
+            Bit::Zero
+        }
+    }));
+    let high = if first_error.is_some() {
+        Value::filled(width, Bit::Error)
+    } else if first_uncertain.is_some() {
+        Value::filled(width, Bit::Unknown)
+    } else {
+        Value::known(width, (product >> width) as u32)
+    };
+    (low, high)
+}
+
+fn divide(low: Value, divisor: Value, upper: Value) -> (Value, Value) {
+    let width = low.width();
+    if [low, divisor, upper].iter().any(|v| v.contains(Bit::Error)) {
+        return (
+            Value::filled(width, Bit::Error),
+            Value::filled(width, Bit::Error),
+        );
+    }
+    let (Some(low), Some(divisor), Some(upper)) = (low.number(), divisor.number(), upper.number())
+    else {
+        return (
+            Value::filled(width, Bit::Unknown),
+            Value::filled(width, Bit::Unknown),
+        );
+    };
+    // Runtime observations at width 32 use a signed 64-bit dividend and nonnegative
+    // remainder. Keep that boundary behavior, including when the divisor is zero.
+    let dividend = ((u64::from(upper) << width) | u64::from(low)) as i64;
+    let divisor = i64::from(divisor.max(1));
+    (
+        Value::known(width, dividend.div_euclid(divisor) as u32),
+        Value::known(width, dividend.rem_euclid(divisor) as u32),
+    )
+}
+
+fn negate(input: Value) -> Value {
+    // Before the first known 1, uncertainty propagates upward; after it, invert
+    // defined bits independently and preserve X/E at their own positions.
+    let mut carry = Bit::One;
+    Value::from_bits((0..input.width()).map(|i| {
+        let bit = input.bit(i);
+        if carry == Bit::Zero {
+            return match bit {
+                Bit::Zero => Bit::One,
+                Bit::One => Bit::Zero,
+                other => other,
+            };
+        }
+        if bit == Bit::One {
+            let result = carry;
+            carry = Bit::Zero;
+            return result;
+        }
+        if bit == Bit::Error {
+            carry = Bit::Error;
+        } else if bit == Bit::Unknown && carry != Bit::Error {
+            carry = Bit::Unknown;
+        }
+        if carry == Bit::One { Bit::Zero } else { carry }
+    }))
 }

@@ -741,7 +741,10 @@ fn arithmetic_unknown_attributes_modes_components_and_invalid_widths_are_protect
         ("Comparator", r#"<a name="mode" val="unobserved"/>"#),
         ("Shifter", r#"<a name="shift" val="unobserved"/>"#),
         ("Shifter", r#"<a name="label" val="unsupported"/>"#),
-        ("Multiplier", ""),
+        ("Multiplier", r#"<a name="width" val="33"/>"#),
+        ("Divider", r#"<a name="mode" val="unsigned"/>"#),
+        ("Negator", r#"<a name="facing" val="west"/>"#),
+        ("Bit Adder", ""),
     ] {
         let i = parse(&wrap(&format!(
             r#"<comp lib="a" name="{kind}" loc="(0,0)">{attrs}</comp>"#
