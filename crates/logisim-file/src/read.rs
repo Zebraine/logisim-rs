@@ -301,6 +301,20 @@ pub fn parse(xml: &str) -> Result<Import> {
     }
     document.validate().map_err(Error)?;
     document.refresh_interfaces(false);
+    for definition in &mut document.circuits {
+        definition.circuit.normalize_wires();
+    }
+    if document
+        .circuits
+        .iter()
+        .map(|d| d.circuit.components.len() + d.circuit.wires.len())
+        .sum::<usize>()
+        > MAX_ITEMS
+    {
+        return Err(Error(
+            "Project exceeds item limit after preserving wire junctions.".into(),
+        ));
+    }
     Ok(Import { document, warnings })
 }
 

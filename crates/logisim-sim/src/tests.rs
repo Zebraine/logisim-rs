@@ -497,3 +497,33 @@ fn changing_source_value_or_bit_mapping_recompiles_but_probe_radix_does_not() {
     sim.advance(16);
     assert_eq!(sim.port_value(probe, 0), Some(Value::known(8, 0x5a)));
 }
+
+#[test]
+fn normalization_preserves_connected_junction_signals_and_insulated_crossings() {
+    let mut c = Circuit::default();
+    let input = pin(&mut c, Point::new(0, 50), 1, false);
+    let connected = pin(&mut c, Point::new(50, 100), 1, true);
+    c.add_wire(Point::new(0, 50), Point::new(50, 50));
+    c.add_wire(Point::new(50, 50), Point::new(100, 50));
+    c.add_wire(Point::new(20, 50), Point::new(80, 50));
+    c.add_wire(Point::new(50, 0), Point::new(50, 100));
+    let other = pin(&mut c, Point::new(200, 50), 1, false);
+    let isolated = pin(&mut c, Point::new(250, 100), 1, true);
+    c.add_wire(Point::new(200, 50), Point::new(300, 50));
+    c.add_wire(Point::new(250, 0), Point::new(250, 100));
+    let mut s = run(&c);
+    s.set_input(input, 1);
+    s.set_input(other, 1);
+    s.advance(64);
+    let values = (s.port_value(connected, 0), s.port_value(isolated, 0));
+    assert_eq!(values.0.unwrap().number(), Some(1));
+    assert_eq!(values.1.unwrap().bit(0), Bit::Unknown);
+    c.normalize_wires();
+    s.synchronize(&c);
+    s.advance(64);
+    assert_eq!(
+        (s.port_value(connected, 0), s.port_value(isolated, 0)),
+        values
+    );
+    assert!(s.diagnostics().is_empty());
+}

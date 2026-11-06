@@ -11,6 +11,7 @@ pub use project::{CircuitDefinition, Interface, InterfacePort, MAX_CIRCUITS, Pro
 mod sequential;
 pub use sequential::{ControlPosition, FlipFlop, Sequential, Trigger};
 
+mod wire_geometry;
 mod wiring;
 pub use wiring::{Extension, Radix, SplitAppearance, Splitter};
 

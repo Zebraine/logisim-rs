@@ -2,6 +2,7 @@
 use super::*;
 use egui::{Context, Event, Key, Modifiers, PointerButton, Pos2, RawInput, Rect};
 use logisim_core::{Component, Point};
+use std::collections::BTreeSet;
 
 fn frame(ctx: &Context, app: &mut Workspace, mut events: Vec<Event>, modifiers: Modifiers) {
     events.insert(0, Event::ModifiersChanged(modifiers));
@@ -729,4 +730,80 @@ fn sequential_placement_poke_and_tick_shortcuts_preserve_edit_history() {
     key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
     assert_eq!(app.editor.circuit.components.len(), 2);
     assert!(app.editor.circuit.component(ids[2]).is_none());
+}
+
+#[test]
+fn drawn_extensions_merge_with_selection_undo_redo_and_cancelled_moves() {
+    let (ctx, mut app) = setup();
+    app.editor.set_tool(Tool::Wire);
+    for (a, b) in [(100, 200), (200, 300), (150, 350)] {
+        let start = app.canvas.screen(Point::new(a, 100));
+        let end = app.canvas.screen(Point::new(b, 100));
+        click(&ctx, &mut app, start);
+        click(&ctx, &mut app, end);
+        assert_eq!(app.circuit().wires.len(), 1);
+        assert_eq!(
+            app.editor.selection,
+            BTreeSet::from([app.circuit().wires[0].id])
+        );
+    }
+    assert_eq!(
+        (app.circuit().wires[0].a, app.circuit().wires[0].b),
+        (Point::new(100, 100), Point::new(350, 100))
+    );
+    key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
+    assert_eq!(app.circuit().wires[0].b, Point::new(300, 100));
+    key(
+        &ctx,
+        &mut app,
+        Key::Z,
+        Modifiers::COMMAND.plus(Modifiers::SHIFT),
+    );
+    assert_eq!(app.circuit().wires[0].b, Point::new(350, 100));
+    app.editor.set_tool(Tool::Select);
+    let before = app.circuit().clone();
+    let at = app.canvas.screen(Point::new(200, 100));
+    button(&ctx, &mut app, at, true);
+    frame(
+        &ctx,
+        &mut app,
+        vec![Event::PointerMoved(at + vec2(0.0, 80.0))],
+        Modifiers::NONE,
+    );
+    key(&ctx, &mut app, Key::Escape, Modifiers::NONE);
+    button(&ctx, &mut app, at, false);
+    assert_eq!(app.circuit(), &before);
+    key(&ctx, &mut app, Key::Delete, Modifiers::NONE);
+    assert!(app.circuit().wires.is_empty());
+    key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
+    assert_eq!(app.circuit(), &before);
+}
+
+#[test]
+fn endpoint_drag_join_merges_both_wires_and_undo_restores_the_gap() {
+    let (ctx, mut app) = setup();
+    app.editor
+        .circuit
+        .add_wire(Point::new(100, 100), Point::new(200, 100));
+    app.editor
+        .circuit
+        .add_wire(Point::new(300, 100), Point::new(400, 100));
+    let at = app.canvas.screen(Point::new(150, 100));
+    click(&ctx, &mut app, at);
+    let a = app.canvas.screen(Point::new(200, 100));
+    let b = app.canvas.screen(Point::new(300, 100));
+    drag(&ctx, &mut app, a, b);
+    assert_eq!(app.circuit().wires.len(), 1);
+    assert_eq!(
+        (app.circuit().wires[0].a, app.circuit().wires[0].b),
+        (Point::new(100, 100), Point::new(400, 100))
+    );
+    assert_eq!(
+        app.editor.selection,
+        BTreeSet::from([app.circuit().wires[0].id])
+    );
+    key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
+    assert_eq!(app.circuit().wires.len(), 2);
+    assert_eq!(app.circuit().wires[0].b, Point::new(200, 100));
+    assert_eq!(app.circuit().wires[1].a, Point::new(300, 100));
 }

@@ -200,7 +200,11 @@ pub(crate) fn circuit(
             }
         }
     }
-    for point in circuit.junctions() {
+    for point in circuit
+        .junctions()
+        .into_iter()
+        .chain(circuit.dangling_ends())
+    {
         let color = circuit
             .wires
             .iter()
@@ -652,5 +656,54 @@ pub(crate) fn component(
         ] {
             p.rect_filled(Rect::from_center_size(at, vec2(5.0, 5.0)), 1, ACCENT);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::simulation::{SignalTone, SignalView};
+    #[test]
+    fn unselected_open_ends_have_signal_colored_dots_without_marking_elbows() {
+        let mut c = Circuit::default();
+        c.add_wire(Point::new(50, 50), Point::new(150, 50));
+        c.add_wire(Point::new(150, 50), Point::new(150, 100));
+        let mut view = SimulationView::default();
+        for w in &c.wires {
+            view.wires.insert(
+                w.id,
+                SignalView {
+                    text: "1".into(),
+                    binary: "1".into(),
+                    tone: SignalTone::High,
+                },
+            );
+        }
+        let ctx = egui::Context::default();
+        let mut canvas = Canvas::default();
+        let mut output = ctx.run_ui(Default::default(), |ui| {
+            canvas.rect = ui.max_rect();
+            circuit(ui.painter(), &canvas, &c, &BTreeSet::new(), &view);
+        });
+        output.textures_delta.clear();
+        let dots: Vec<_> = output
+            .shapes
+            .iter()
+            .filter_map(|s| match &s.shape {
+                Shape::Circle(circle)
+                    if circle.radius == 3.0 && circle.fill == SignalTone::High.color() =>
+                {
+                    Some(circle.center)
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            dots,
+            vec![
+                canvas.screen(Point::new(50, 50)),
+                canvas.screen(Point::new(150, 100))
+            ]
+        );
     }
 }

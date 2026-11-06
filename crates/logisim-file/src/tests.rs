@@ -552,3 +552,24 @@ fn custom_appearance_save_rejects_ambiguous_internal_pin_positions() {
             .contains("unique internal positions")
     );
 }
+
+#[test]
+fn wire_import_merges_after_all_terminals_and_preserves_junctions_in_saved_geometry() {
+    let wires = r#"<wire from="(0,0)" to="(50,0)"/><wire from="(50,0)" to="(100,0)"/><wire from="(20,0)" to="(70,0)"/><wire from="(50,-50)" to="(50,50)"/><wire from="(200,0)" to="(250,0)"/><wire from="(250,0)" to="(300,0)"/>"#;
+    let pin = r#"<comp lib="w" name="Pin" loc="(250,0)"><a name="tristate" val="false"/></comp>"#;
+    let mut shapes = vec![];
+    for body in [format!("{wires}{pin}"), format!("{pin}{wires}")] {
+        let imported = parse(&xml(&body)).unwrap();
+        assert!(imported.warnings.is_empty());
+        let c = &imported.document.main_circuit().circuit;
+        assert_eq!(c.wires.len(), 6);
+        assert_eq!(c.junctions(), vec![Point::new(50, 0), Point::new(250, 0)]);
+        let mut geometry: Vec<_> = c.wires.iter().map(|w| (w.a, w.b)).collect();
+        geometry.sort();
+        shapes.push(geometry);
+        let saved = serialize(&imported.document).unwrap();
+        let restored = parse(&saved).unwrap();
+        assert_eq!(serialize(&restored.document).unwrap(), saved);
+    }
+    assert_eq!(shapes[0], shapes[1]);
+}

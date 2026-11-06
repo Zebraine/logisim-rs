@@ -151,6 +151,29 @@ impl Editor {
     }
     pub fn record(&mut self, before: Snapshot) {
         self.sync_project();
+        for definition in &mut self.project.circuits {
+            if before.project.circuit(definition.id).map(|d| &d.circuit)
+                != Some(&definition.circuit)
+            {
+                let mapped = definition.circuit.normalize_wires();
+                if definition.id == self.active {
+                    self.selection = self
+                        .selection
+                        .iter()
+                        .flat_map(|id| {
+                            mapped.get(id).cloned().unwrap_or_else(|| {
+                                if definition.circuit.component(*id).is_some() {
+                                    BTreeSet::from([*id])
+                                } else {
+                                    BTreeSet::new()
+                                }
+                            })
+                        })
+                        .collect();
+                }
+            }
+        }
+        self.circuit = self.project.circuit(self.active).unwrap().circuit.clone();
         if before.project != self.project || before.circuit != self.circuit {
             self.undo.push(Edit {
                 before,
