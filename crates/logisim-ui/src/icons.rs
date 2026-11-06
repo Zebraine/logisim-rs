@@ -42,7 +42,7 @@ pub(crate) fn button(
             Color32::from_rgb(155, 165, 179)
         };
         paint(ui.painter(), rect.shrink(7.0), icon, color);
-        response.on_hover_text(hint)
+        response.on_hover_text(crate::i18n::tr(hint))
     })
     .inner
 }

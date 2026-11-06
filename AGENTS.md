@@ -15,6 +15,9 @@
 - craft-libs 可独立评估复用，固定版本、保留许可，并验证其 GUI 依赖兼容性。
 - `core` 不依赖 GUI、文件系统或仿真运行时；`sim`、`file`、`ui` 各依赖 `core`，
   由 `apps/logisim-desktop` 组装。
+- 界面支持英语与简体中文，词条集中于 `ui/i18n`，只翻译应用自有显示文案。
+  不翻译用户名称/标签/外观文字及 `.circ` 标识；控件持久 ID 不依赖翻译结果。
+  语言偏好由桌面宿主保存到用户配置目录，不进入项目、编辑历史或 Git；中文使用系统字体。
 - Git 仅保存必要源码、Cargo/工具链文件、LICENSE、Git/构建检查配置及根目录的
   AGENTS.md、CONTRIBUTING.md、README.md。范围由 `.gitignore` 白名单控制；
   新增构建必需文件时同步调整，不用 `git add -f` 绕过忽略规则。

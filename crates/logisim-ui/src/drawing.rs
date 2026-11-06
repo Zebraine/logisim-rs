@@ -1,5 +1,6 @@
 //! Original vector artwork and editor hit geometry.
 use crate::{ACCENT, INK, canvas::Canvas, simulation::SimulationView};
+use crate::{i18n::tr, tf};
 use egui::{
     Align2, Color32, FontId, Painter, Pos2, Rect, Shape, Stroke, StrokeKind, Vec2, pos2, vec2,
 };
@@ -20,7 +21,7 @@ fn local(c: &Component, point: Vec2) -> Vec2 {
 }
 fn text_width(c: &Component) -> f32 {
     (if c.kind == Kind::Tunnel && c.label.is_empty() {
-        "(unnamed)"
+        tr("(unnamed)")
     } else {
         &c.label
     }
@@ -492,7 +493,7 @@ pub(crate) fn component(
             p.text(
                 at(-20.0, 8.0),
                 Align2::CENTER_CENTER,
-                c.extension.name(),
+                tr(c.extension.name()),
                 FontId::proportional(10.0 * canvas.camera.zoom),
                 color,
             );
@@ -549,7 +550,7 @@ pub(crate) fn component(
                 true,
             );
             let label = if c.label.is_empty() {
-                "(unnamed)"
+                tr("(unnamed)")
             } else {
                 &c.label
             };
@@ -599,7 +600,7 @@ pub(crate) fn component(
         p.text(
             canvas.screen_vec(vec2(r.center().x, r.bottom() + 6.0)),
             Align2::CENTER_TOP,
-            format!("{} bit", c.bits),
+            tf!("{} bit", c.bits),
             FontId::proportional(10.0 * canvas.camera.zoom),
             color,
         );

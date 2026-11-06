@@ -1,4 +1,5 @@
 //! Presentation and commands only; the desktop host owns the simulation service.
+use crate::{i18n::tr, tf};
 use egui::{Color32, Key, Modifiers, Ui};
 use logisim_core::{Component, Id};
 use std::collections::{BTreeMap, BTreeSet};
@@ -82,19 +83,19 @@ pub(crate) struct SimulationUi {
 impl SimulationUi {
     pub fn status(&self) -> String {
         if self.view.limited {
-            return "Propagation limit — paused".into();
+            return tr("Propagation limit — paused").into();
         }
         format!(
             "{} · {}",
             if self.view.enabled {
-                "Running"
+                tr("Running")
             } else {
-                "Paused"
+                tr("Paused")
             },
             if self.view.pending == 0 {
-                "settled".into()
+                tr("settled").into()
             } else {
-                format!("{} pending", self.view.pending)
+                tf!("{} pending", self.view.pending)
             }
         )
     }
@@ -137,18 +138,28 @@ impl SimulationUi {
             ),
             ("Reset Simulation · Ctrl+R", SimulationAction::Reset, true),
         ] {
-            if ui.add_enabled(enabled, egui::Button::new(label)).clicked() {
+            if ui
+                .add_enabled(enabled, egui::Button::new(tr(label)))
+                .clicked()
+            {
                 self.actions.push(action);
                 ui.close();
             }
         }
         ui.separator();
-        ui.add_enabled(false, egui::Button::new("Tick Once — no clock components"));
+        ui.add_enabled(
+            false,
+            egui::Button::new(tr("Tick Once — no clock components")),
+        );
     }
     pub fn toolbar(&mut self, ui: &mut Ui) {
         if ui
-            .button(if self.view.enabled { "Pause" } else { "Run" })
-            .on_hover_text("Enable / pause simulation · Ctrl+E")
+            .button(if self.view.enabled {
+                tr("Pause")
+            } else {
+                tr("Run")
+            })
+            .on_hover_text(tr("Enable / pause simulation · Ctrl+E"))
             .clicked()
         {
             self.actions.push(SimulationAction::ToggleEnabled);
@@ -156,16 +167,16 @@ impl SimulationUi {
         if ui
             .add_enabled(
                 !self.view.enabled && !self.view.limited,
-                egui::Button::new("Step"),
+                egui::Button::new(tr("Step")),
             )
-            .on_hover_text("Propagate one batch · Ctrl+I")
+            .on_hover_text(tr("Propagate one batch · Ctrl+I"))
             .clicked()
         {
             self.actions.push(SimulationAction::Step);
         }
         if ui
-            .button("Reset")
-            .on_hover_text("Reset all inputs to zero · Ctrl+R")
+            .button(tr("Reset"))
+            .on_hover_text(tr("Reset all inputs to zero · Ctrl+R"))
             .clicked()
         {
             self.actions.push(SimulationAction::Reset);
@@ -173,24 +184,26 @@ impl SimulationUi {
     }
     pub fn overview(&self, ui: &mut Ui) {
         ui.label(self.status());
-        ui.weak(format!("{} propagation steps", self.view.steps));
+        ui.weak(tf!("{} propagation steps", self.view.steps));
         if !self.view.enabled && self.view.pending > 0 {
-            ui.weak("Inputs have pending changes. Step or Run to propagate.");
+            ui.weak(tr("Inputs have pending changes. Step or Run to propagate."));
         }
-        ui.weak("P: Poke · click a 1-bit input to toggle.");
-        ui.weak("0 / 1: set selected input. Multi-bit values use hexadecimal.");
+        ui.weak(tr("P: Poke · click a 1-bit input to toggle."));
+        ui.weak(tr(
+            "0 / 1: set selected input. Multi-bit values use hexadecimal.",
+        ));
     }
     pub fn component(&mut self, ui: &mut Ui, c: &Component) {
         if let Some(signal) = self.view.ports.get(&(c.id, 0)) {
-            ui.colored_label(signal.tone.color(), format!("Signal: {}", signal.text))
-                .on_hover_text(format!("{} bit: {}", signal.binary.len(), signal.binary));
+            ui.colored_label(signal.tone.color(), tf!("Signal: {}", signal.text))
+                .on_hover_text(tf!("{} bit: {}", signal.binary.len(), signal.binary));
         }
         let Some(input) = self.view.inputs.get(&c.id).copied() else {
             return;
         };
         if input.bits == 1 {
             ui.horizontal(|ui| {
-                ui.label("Input");
+                ui.label(tr("Input"));
                 for value in [0, 1] {
                     if ui
                         .selectable_label(input.value == value, value.to_string())
@@ -207,7 +220,7 @@ impl SimulationUi {
             self.draft = Some((c.id, input.value, input.text()));
         }
         let (_, previous, text) = self.draft.as_mut().unwrap();
-        ui.label("Input (hex)");
+        ui.label(tr("Input (hex)"));
         let response = ui.add(
             egui::TextEdit::singleline(text)
                 .id_salt(("simulation_input", c.id))
@@ -220,8 +233,8 @@ impl SimulationUi {
         }
         let value = parse_input(text, input.bits);
         let apply = ui
-            .add_enabled(value.is_some(), egui::Button::new("Apply"))
-            .on_hover_text("Apply the hexadecimal value · Enter")
+            .add_enabled(value.is_some(), egui::Button::new(tr("Apply")))
+            .on_hover_text(tr("Apply the hexadecimal value · Enter"))
             .clicked()
             || (response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)));
         if apply && let Some(value) = value {
@@ -231,7 +244,7 @@ impl SimulationUi {
         if value.is_none() {
             ui.colored_label(
                 SignalTone::Error.color(),
-                format!("Enter a hexadecimal value within {} bits.", input.bits),
+                tf!("Enter a hexadecimal value within {} bits.", input.bits),
             );
         }
         if *previous != input.value {
@@ -245,7 +258,7 @@ impl SimulationUi {
                 let high = input.value & (1 << bit) != 0;
                 if ui
                     .selectable_label(high, if high { "1" } else { "0" })
-                    .on_hover_text(format!("Toggle bit {bit}"))
+                    .on_hover_text(tf!("Toggle bit {}", bit))
                     .clicked()
                 {
                     self.actions

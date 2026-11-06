@@ -2,6 +2,7 @@ use crate::{
     appearance::{AppearanceEditor, Command, Target, Tool},
     editor::Editor,
 };
+use crate::{i18n::tr, tf};
 use egui::{Frame, ScrollArea, Ui};
 use logisim_core::{Appearance, ArtworkFont, Facing, Geometry, Kind, Paint, Point, TextAnchor};
 use std::collections::BTreeMap;
@@ -30,7 +31,7 @@ fn point(ui: &mut Ui, p: &mut Point, grid: bool) {
 fn paint(ui: &mut Ui, paint: &mut Paint, text: bool) {
     if !text {
         let mut enabled = paint.stroke.is_some();
-        ui.checkbox(&mut enabled, "Outline");
+        ui.checkbox(&mut enabled, tr("Outline"));
         if enabled {
             let mut color = paint.stroke.unwrap_or([0; 3]);
             ui.horizontal(|ui| {
@@ -38,7 +39,7 @@ fn paint(ui: &mut Ui, paint: &mut Paint, text: bool) {
                 ui.add(
                     egui::DragValue::new(&mut paint.width)
                         .update_while_editing(false)
-                        .prefix("Width ")
+                        .prefix(tr("Width "))
                         .range(1..=64),
                 );
             });
@@ -48,7 +49,10 @@ fn paint(ui: &mut Ui, paint: &mut Paint, text: bool) {
         }
     }
     let mut enabled = paint.fill.is_some();
-    ui.checkbox(&mut enabled, if text { "Text color" } else { "Fill" });
+    ui.checkbox(
+        &mut enabled,
+        if text { tr("Text color") } else { tr("Fill") },
+    );
     if enabled {
         let mut color = paint.fill.unwrap_or([235, 242, 255]);
         ui.color_edit_button_srgb(&mut color);
@@ -58,108 +62,108 @@ fn paint(ui: &mut Ui, paint: &mut Paint, text: bool) {
     }
 }
 fn font(ui: &mut Ui, font: &mut ArtworkFont, anchor: &mut TextAnchor) {
-    ui.label("Font family");
+    ui.label(tr("Font family"));
     ui.text_edit_singleline(&mut font.family);
     ui.add(
         egui::DragValue::new(&mut font.size)
             .update_while_editing(false)
             .range(1..=96)
-            .prefix("Size "),
+            .prefix(tr("Size ")),
     );
     ui.horizontal(|ui| {
-        ui.checkbox(&mut font.bold, "Bold");
-        ui.checkbox(&mut font.italic, "Italic");
+        ui.checkbox(&mut font.bold, tr("Bold"));
+        ui.checkbox(&mut font.italic, tr("Italic"));
     });
     egui::ComboBox::from_id_salt("appearance-text-align")
         .selected_text(match anchor {
-            TextAnchor::Start => "Left",
-            TextAnchor::Middle => "Center",
-            TextAnchor::End => "Right",
+            TextAnchor::Start => tr("Left"),
+            TextAnchor::Middle => tr("Center"),
+            TextAnchor::End => tr("Right"),
         })
         .show_ui(ui, |ui| {
-            ui.selectable_value(anchor, TextAnchor::Start, "Left");
-            ui.selectable_value(anchor, TextAnchor::Middle, "Center");
-            ui.selectable_value(anchor, TextAnchor::End, "Right");
+            ui.selectable_value(anchor, TextAnchor::Start, tr("Left"));
+            ui.selectable_value(anchor, TextAnchor::Middle, tr("Center"));
+            ui.selectable_value(anchor, TextAnchor::End, tr("Right"));
         });
 }
 impl AppearanceEditor {
     pub fn properties(&mut self, ui: &mut Ui, editor: &mut Editor) {
         ScrollArea::vertical().show(ui,|ui| { Frame::NONE.inner_margin(12).show(ui,|ui|{
-            ui.strong(format!("Appearance: {}",editor.project.circuit(editor.active).unwrap().name));
-            ui.weak("Changes update every instance. Wires keep their positions; reconnect moved ports in the circuit layout.");ui.separator();
+            ui.strong(tf!("Appearance: {}", editor.project.circuit(editor.active).unwrap().name));
+            ui.weak(tr("Changes update every instance. Wires keep their positions; reconnect moved ports in the circuit layout."));ui.separator();
             let mut a=Self::current(editor);let original=a.clone();
             let selection=(self.selected.len()==1).then(||*self.selected.first().unwrap());
             if self.tool!=Tool::Select {
-                ui.strong("Drawing style");paint(ui,&mut self.paint,self.tool==Tool::Text);
+                ui.strong(tr("Drawing style"));paint(ui,&mut self.paint,self.tool==Tool::Text);
                 if self.tool==Tool::Text {font(ui,&mut self.font,&mut self.text_anchor);}
-                if self.tool==Tool::Rounded{ui.add(egui::DragValue::new(&mut self.radius).update_while_editing(false).range(1..=10000).prefix("Corner radius "));}
-                ui.weak(match self.tool {Tool::Polyline|Tool::Polygon=>"Click vertices. Double-click or Enter to finish. Escape cancels.",Tool::Curve=>"Drag the two endpoints, then click the control point.",Tool::Text=>"Click to add text, then edit its content here.",_=>"Drag to draw. Shift-click adds to a selection."});
+                if self.tool==Tool::Rounded{ui.add(egui::DragValue::new(&mut self.radius).update_while_editing(false).range(1..=10000).prefix(tr("Corner radius ")));}
+                ui.weak(match self.tool {Tool::Polyline|Tool::Polygon=>tr("Click vertices. Double-click or Enter to finish. Escape cancels."),Tool::Curve=>tr("Drag the two endpoints, then click the control point."),Tool::Text=>tr("Click to add text, then edit its content here."),_=>tr("Drag to draw. Shift-click adds to a selection.")});
             } else if let Some(target)=selection {
                 match target {
                     Target::Shape(id)=>if let Some(shape)=a.shapes.iter_mut().find(|s|s.id==id){
-                        ui.strong(shape.geometry.name());
+                        ui.strong(tr(shape.geometry.name()));
                         let is_text=matches!(shape.geometry,Geometry::Text {..});paint(ui,&mut shape.paint,is_text);
                         match &mut shape.geometry {
                             Geometry::Text {at,text,font:f,anchor}=>{
-                                ui.label("Text");let response=ui.text_edit_singleline(text);
+                                ui.label(tr("Text"));let response=ui.text_edit_singleline(text);
                                 if self.focus_text {response.request_focus();self.focus_text=false;}
                                 font(ui,f,anchor);point(ui,at,false);
                             },
-                            Geometry::Rect {a,b,radius}=>{ui.label("First corner");point(ui,a,false);ui.label("Opposite corner");point(ui,b,false);ui.add(egui::DragValue::new(radius).update_while_editing(false).range(0..=10000).prefix("Corner radius "));},
-                            Geometry::Ellipse {a,b}=>{ui.label("First corner");point(ui,a,false);ui.label("Opposite corner");point(ui,b,false);},
-                            Geometry::Curve {a,control,b}=>{ui.label("Start");point(ui,a,false);ui.label("Control");point(ui,control,false);ui.label("End");point(ui,b,false);},
+                            Geometry::Rect {a,b,radius}=>{ui.label(tr("First corner"));point(ui,a,false);ui.label(tr("Opposite corner"));point(ui,b,false);ui.add(egui::DragValue::new(radius).update_while_editing(false).range(0..=10000).prefix(tr("Corner radius ")));},
+                            Geometry::Ellipse {a,b}=>{ui.label(tr("First corner"));point(ui,a,false);ui.label(tr("Opposite corner"));point(ui,b,false);},
+                            Geometry::Curve {a,control,b}=>{ui.label(tr("Start"));point(ui,a,false);ui.label(tr("Control"));point(ui,control,false);ui.label(tr("End"));point(ui,b,false);},
                             Geometry::Poly {points,closed}=>{
-                                ui.add_enabled(points.len()>=3,egui::Checkbox::new(closed,"Closed polygon"));
-                                for (index,at) in points.iter_mut().enumerate(){ui.push_id(index,|ui|{if ui.selectable_label(self.vertex==Some((id,index)),format!("Vertex {}",index+1)).clicked(){self.vertex=Some((id,index));}point(ui,at,false);});}
+                                ui.add_enabled(points.len()>=3,egui::Checkbox::new(closed,tr("Closed polygon")));
+                                for (index,at) in points.iter_mut().enumerate(){ui.push_id(index,|ui|{if ui.selectable_label(self.vertex==Some((id,index)),tf!("Vertex {}", index+1)).clicked(){self.vertex=Some((id,index));}point(ui,at,false);});}
                             }
                         }
                     },
                     Target::Port(id)=>if let Some(pin)=editor.circuit.component(id) {
-                        ui.strong(if pin.label.is_empty(){format!("Pin ({}, {})",pin.position.x,pin.position.y)}else{pin.label.clone()});
-                        ui.label(format!("{} · {} bit(s)",if pin.output{"Output"}else{"Input"},pin.bits));
-                        ui.label(format!("Internal Pin: ({}, {})",pin.position.x,pin.position.y));
+                        ui.strong(if pin.label.is_empty(){tf!("Pin ({}, {})", pin.position.x, pin.position.y)}else{pin.label.clone()});
+                        ui.label(tf!("{} · {} bit(s)", tr(if pin.output{"Output"}else{"Input"}), pin.bits));
+                        ui.label(tf!("Internal Pin: ({}, {})", pin.position.x, pin.position.y));
                         if let Some(at)=a.ports.get_mut(&id){point(ui,at,true);}
-                        ui.weak("Move this port to arrange the package. Edit or remove its Pin in the circuit layout.");
+                        ui.weak(tr("Move this port to arrange the package. Edit or remove its Pin in the circuit layout."));
                     },
                     Target::Anchor=>{
-                        ui.strong("Anchor");point(ui,&mut a.anchor,true);
-                        egui::ComboBox::from_id_salt("appearance-facing").selected_text(a.facing.name()).show_ui(ui,|ui|{for f in Facing::ALL{ui.selectable_value(&mut a.facing,f,f.name());}});
-                        ui.weak("The anchor sets the placement origin and the artwork's original facing.");
+                        ui.strong(tr("Anchor"));point(ui,&mut a.anchor,true);
+                        egui::ComboBox::from_id_salt("appearance-facing").selected_text(tr(a.facing.name())).show_ui(ui,|ui|{for f in Facing::ALL{ui.selectable_value(&mut a.facing,f,tr(f.name()));}});
+                        ui.weak(tr("The anchor sets the placement origin and the artwork's original facing."));
                     }
                 }
             } else {
-                ui.label(format!("{} shape(s) · {} port(s)",a.shapes.len(),a.ports.len()));
-                ui.weak("Select, drag or use arrow keys to move. Drag shape handles to reshape. Ports and anchor stay on the circuit grid.");
+                ui.label(tf!("{} shape(s) · {} port(s)", a.shapes.len(), a.ports.len()));
+                ui.weak(tr("Select, drag or use arrow keys to move. Drag shape handles to reshape. Ports and anchor stay on the circuit grid."));
             }
             if a!=original && a.shapes.iter().all(|s|s.geometry.valid()) {editor.update_appearance(a);}
             if !ui.ctx().egui_wants_keyboard_input()&&!ui.input(|i|i.pointer.any_down()){editor.commit_properties();}
             if self.selected.iter().any(|t|matches!(t,Target::Shape(_))) {
                 ui.separator();ui.horizontal_wrapped(|ui|{
-                    for (label,cmd) in [("Raise",Command::Raise),("Lower",Command::Lower),("Front",Command::Front),("Back",Command::Back),("Duplicate",Command::Duplicate),("Delete",Command::Delete)] {if ui.button(label).clicked(){self.command(editor,cmd);}}
+                    for (label,cmd) in [("Raise",Command::Raise),("Lower",Command::Lower),("Front",Command::Front),("Send to Back",Command::Back),("Duplicate",Command::Duplicate),("Delete",Command::Delete)] {if ui.button(tr(label)).clicked(){self.command(editor,cmd);}}
                 });
                 if self.can_edit_vertex(editor,false)||self.can_edit_vertex(editor,true) {
                     ui.horizontal(|ui| {
-                        if ui.add_enabled(self.can_edit_vertex(editor,false),egui::Button::new("Add vertex")).clicked() {self.command(editor,Command::AddVertex);}
-                        if ui.add_enabled(self.can_edit_vertex(editor,true),egui::Button::new("Remove vertex")).clicked() {self.command(editor,Command::RemoveVertex);}
+                        if ui.add_enabled(self.can_edit_vertex(editor,false),egui::Button::new(tr("Add vertex"))).clicked() {self.command(editor,Command::AddVertex);}
+                        if ui.add_enabled(self.can_edit_vertex(editor,true),egui::Button::new(tr("Remove vertex"))).clicked() {self.command(editor,Command::RemoveVertex);}
                     });
                 }
             }
             ui.separator();
-            egui::CollapsingHeader::new("Package design").default_open(selection.is_none()).show(ui,|ui|{
-                ui.add(egui::DragValue::new(&mut self.package_width).update_while_editing(false).range(80..=1000).speed(10).prefix("Body width "));
-                ui.add(egui::DragValue::new(&mut self.package_pitch).update_while_editing(false).range(10..=100).speed(10).prefix("Port spacing "));
+            egui::CollapsingHeader::new(tr("Package design")).id_salt("package-design").default_open(selection.is_none()).show(ui,|ui|{
+                ui.add(egui::DragValue::new(&mut self.package_width).update_while_editing(false).range(80..=1000).speed(10).prefix(tr("Body width ")));
+                ui.add(egui::DragValue::new(&mut self.package_pitch).update_while_editing(false).range(10..=100).speed(10).prefix(tr("Port spacing ")));
                 self.package_width=(self.package_width/10).max(8)*10;self.package_pitch=(self.package_pitch/10).max(1)*10;
-                ui.checkbox(&mut self.package_labels,"Include pin names");
-                if ui.button("Generate package").on_hover_text("Replace the artwork with a labeled package. You can undo this change.").clicked(){self.generate_package(editor);}
+                ui.checkbox(&mut self.package_labels,tr("Include pin names"));
+                if ui.button(tr("Generate package")).on_hover_text(tr("Replace the artwork with a labeled package. You can undo this change.")).clicked(){self.generate_package(editor);}
             });
-            egui::CollapsingHeader::new("Ports").show(ui,|ui|{
+            egui::CollapsingHeader::new(tr("Ports")).id_salt("appearance-ports").show(ui,|ui|{
                 for pin in editor.circuit.components.clone().iter().filter(|p|p.kind==Kind::Pin) {
-                    let label=if pin.label.is_empty(){format!("Pin ({}, {})",pin.position.x,pin.position.y)}else{pin.label.clone()};
+                    let label=if pin.label.is_empty(){tf!("Pin ({}, {})", pin.position.x, pin.position.y)}else{pin.label.clone()};
                     if ui.selectable_label(self.selected.contains(&Target::Port(pin.id)),format!("{} {} [{}]",if pin.output{"OUT"}else{"IN"},label,pin.bits)).clicked(){editor.commit_properties();self.selected=BTreeSet::from([Target::Port(pin.id)]);self.tool=Tool::Select;}
                 }
-                if ui.selectable_label(self.selected.contains(&Target::Anchor),"Anchor").clicked(){editor.commit_properties();self.selected=BTreeSet::from([Target::Anchor]);self.tool=Tool::Select;}
+                if ui.selectable_label(self.selected.contains(&Target::Anchor),tr("Anchor")).clicked(){editor.commit_properties();self.selected=BTreeSet::from([Target::Anchor]);self.tool=Tool::Select;}
             });
-            if ui.add_enabled(editor.circuit.appearance.is_some(),egui::Button::new("Revert to default appearance")).clicked(){self.revert(editor);}
+            if ui.add_enabled(editor.circuit.appearance.is_some(),egui::Button::new(tr("Revert to default appearance"))).clicked(){self.revert(editor);}
         });
         });
     }

@@ -1,5 +1,6 @@
 //! Small egui file browser, usable without a desktop portal or an external process.
 use eframe::egui;
+use logisim_ui::i18n::tr;
 use std::path::{Path, PathBuf};
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Mode {
@@ -65,18 +66,20 @@ impl Picker {
     pub fn show(&mut self, ui: &mut egui::Ui) -> Choice {
         ui.set_min_width(520.0);
         ui.heading(if self.mode == Mode::Open {
-            "Open circuit"
+            tr("Open circuit")
         } else {
-            "Save circuit as"
+            tr("Save circuit as")
         });
-        ui.label("Logisim-ITA compatible .circ · supported components only");
+        ui.label(tr(
+            "Logisim-ITA compatible .circ · supported components only",
+        ));
         ui.horizontal(|ui| {
-            if ui.button("Up").clicked()
+            if ui.button(tr("Up")).clicked()
                 && let Some(parent) = self.directory.parent().map(Path::to_path_buf)
             {
                 self.enter(&parent);
             }
-            if ui.button("Refresh").clicked() {
+            if ui.button(tr("Refresh")).clicked() {
                 self.refresh();
             }
             ui.label(self.directory.to_string_lossy());
@@ -109,7 +112,7 @@ impl Picker {
             self.enter(&path);
         }
         ui.separator();
-        ui.label("File name or full path");
+        ui.label(tr("File name or full path"));
         let edit = ui.add(
             egui::TextEdit::singleline(&mut self.path)
                 .desired_width(f32::INFINITY)
@@ -127,19 +130,19 @@ impl Picker {
         ui.horizontal(|ui| {
             submit |= ui
                 .button(if self.mode == Mode::Open {
-                    "Open"
+                    tr("Open")
                 } else {
-                    "Save"
+                    tr("Save")
                 })
                 .clicked();
-            cancel = ui.button("Cancel").clicked();
+            cancel = ui.button(tr("Cancel")).clicked();
         });
         if cancel {
             return Choice::Cancel;
         }
         if submit {
             if self.path.trim().is_empty() {
-                self.error = Some("Enter a file name.".into());
+                self.error = Some(tr("Enter a file name.").into());
                 return Choice::Wait;
             }
             let path = PathBuf::from(&self.path);

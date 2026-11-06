@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
+      - name: Install system font support
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libfontconfig1-dev
       - name: Prepare toolchain
         run: |
           rustup show

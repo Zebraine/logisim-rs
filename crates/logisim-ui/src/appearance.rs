@@ -4,6 +4,7 @@ use crate::{
     canvas::Canvas,
     editor::{Editor, Snapshot},
 };
+use crate::{i18n::tr, tf};
 use egui::{Key, Modifiers, PointerButton, Rect, Response, Stroke, Ui, Vec2};
 use logisim_core::{Appearance, Artwork, ArtworkFont, Geometry, Id, Paint, Point, TextAnchor};
 use std::collections::BTreeSet;
@@ -157,7 +158,7 @@ impl AppearanceEditor {
                 Tool::Polygon,
             ] {
                 if ui
-                    .selectable_label(self.tool == tool, tool.name())
+                    .selectable_label(self.tool == tool, tr(tool.name()))
                     .clicked()
                 {
                     self.cancel();
@@ -167,16 +168,16 @@ impl AppearanceEditor {
                 }
             }
             ui.separator();
-            ui.checkbox(&mut self.snap, "Snap");
-            if ui.button("Circuit layout").clicked() {
+            ui.checkbox(&mut self.snap, tr("Snap"));
+            if ui.button(tr("Circuit layout")).clicked() {
                 self.cancel();
                 editor.commit_properties();
                 editor.appearance_mode = false;
             }
             ui.weak(if editor.circuit.appearance.is_some() {
-                "Custom appearance"
+                tr("Custom appearance")
             } else {
-                "Default appearance"
+                tr("Default appearance")
             });
         });
     }
@@ -342,7 +343,7 @@ impl AppearanceEditor {
     }
     pub fn edit_menu(&mut self, ui: &mut Ui, editor: &mut Editor) {
         if ui
-            .add_enabled(editor.can_undo(), egui::Button::new("Undo · Ctrl+Z"))
+            .add_enabled(editor.can_undo(), egui::Button::new(tr("Undo · Ctrl+Z")))
             .clicked()
         {
             self.cancel();
@@ -351,7 +352,10 @@ impl AppearanceEditor {
             ui.close();
         }
         if ui
-            .add_enabled(editor.can_redo(), egui::Button::new("Redo · Ctrl+Shift+Z"))
+            .add_enabled(
+                editor.can_redo(),
+                egui::Button::new(tr("Redo · Ctrl+Shift+Z")),
+            )
             .clicked()
         {
             self.cancel();
@@ -383,7 +387,10 @@ impl AppearanceEditor {
                 self.can_edit_vertex(editor, true),
             ),
         ] {
-            if ui.add_enabled(enabled, egui::Button::new(label)).clicked() {
+            if ui
+                .add_enabled(enabled, egui::Button::new(tr(label)))
+                .clicked()
+            {
                 self.command(editor, command);
                 ui.close();
             }
@@ -885,10 +892,10 @@ impl AppearanceEditor {
             && let Some(Target::Port(id)) = Self::hit(&preview, world, 4.0 / canvas.camera.zoom)
             && let Some(pin) = editor.circuit.component(id)
         {
-            response.clone().on_hover_text(format!(
+            response.clone().on_hover_text(tf!(
                 "{} · {} · {} bit(s) · Pin ({}, {})",
                 pin.label,
-                if pin.output { "Output" } else { "Input" },
+                tr(if pin.output { "Output" } else { "Input" }),
                 pin.bits,
                 pin.position.x,
                 pin.position.y

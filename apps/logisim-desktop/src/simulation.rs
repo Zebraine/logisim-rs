@@ -1,5 +1,6 @@
 use logisim_core::{Circuit, Kind, Radix};
 use logisim_sim::{Bit, Problem, Simulator, Value};
+use logisim_ui::i18n::tr;
 use logisim_ui::{
     InputValue, SignalTone, SignalView, SimulationAction, SimulationIssue, SimulationView,
 };
@@ -73,14 +74,14 @@ fn append_issues(
             .filter_map(|id| circuit.component(*id))
             .map(|c| {
                 if c.label.is_empty() {
-                    format!("{} #{}", c.kind.name(), c.id)
+                    format!("{} #{}", tr(c.kind.name()), c.id)
                 } else {
                     c.label.clone()
                 }
             })
             .collect();
         view.issues.push(SimulationIssue {
-            message: format!("{message}\n{}", names.join(", ")),
+            message: format!("{}\n{}", tr(message), names.join(", ")),
             targets: diagnostic
                 .components
                 .into_iter()
@@ -125,7 +126,7 @@ pub fn present_project(
     append_issues(&mut view, circuit, sim.diagnostics(path));
     if let Some(error) = sim.error() {
         view.issues.push(SimulationIssue {
-            message: error.into(),
+            message: tr(error).into(),
             targets: Default::default(),
         });
     }

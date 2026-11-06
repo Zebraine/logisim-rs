@@ -1,4 +1,5 @@
 use crate::editor::{Editor, Tool};
+use crate::{i18n::tr, tf};
 use egui::{Frame, RichText, ScrollArea, Ui};
 use logisim_core::{
     Component, Extension, Facing, Gate, GateSize, HorizontalAlign, Kind, Point, Radix,
@@ -8,7 +9,9 @@ use logisim_core::{
 pub(crate) fn show(ui: &mut Ui, editor: &mut Editor, circuit_name: &str) {
     let placing = matches!(editor.tool, Tool::Place(_));
     if !editor.path.is_empty() {
-        ui.weak("Instance inputs are driven by the parent circuit. Edits apply to all instances.");
+        ui.weak(tr(
+            "Instance inputs are driven by the parent circuit. Edits apply to all instances.",
+        ));
     }
     let target = if placing {
         Some(editor.template.clone())
@@ -22,13 +25,13 @@ pub(crate) fn show(ui: &mut Ui, editor: &mut Editor, circuit_name: &str) {
         None
     };
     let title = if placing {
-        format!("Tool: {}", editor.tool.name())
+        tf!("Tool: {}", tr(editor.tool.name()))
     } else if let Some(c) = &target {
-        format!("Selection: {}", c.kind.name())
+        tf!("Selection: {}", tr(c.kind.name()))
     } else if !editor.selection.is_empty() {
-        format!("Selection: {} item(s)", editor.selection.len())
+        tf!("Selection: {} item(s)", editor.selection.len())
     } else {
-        format!("Circuit: {circuit_name}")
+        tf!("Circuit: {}", circuit_name)
     };
     Frame::NONE.inner_margin(12).show(ui, |ui| {
         ui.label(RichText::new(title).strong());
@@ -49,23 +52,24 @@ pub(crate) fn show(ui: &mut Ui, editor: &mut Editor, circuit_name: &str) {
                 }
                 if !editor.simulation.view.issues.is_empty() {
                     ui.separator();
-                    egui::CollapsingHeader::new(format!(
+                    egui::CollapsingHeader::new(tf!(
                         "Simulation issues ({})",
                         editor.simulation.view.issues.len()
                     ))
+                    .id_salt("simulation-issues")
                     .default_open(true)
                     .show(ui, |ui| {
                         for issue in editor.simulation.view.issues.iter().take(32) {
                             if ui
                                 .button(&issue.message)
-                                .on_hover_text("Select affected components and wires")
+                                .on_hover_text(tr("Select affected components and wires"))
                                 .clicked()
                             {
                                 editor.selection = issue.targets.clone();
                             }
                         }
                         if editor.simulation.view.issues.len() > 32 {
-                            ui.weak("Showing the first 32 issues.");
+                            ui.weak(tr("Showing the first 32 issues."));
                         }
                     });
                 }
@@ -78,12 +82,12 @@ fn selection_info(ui: &mut Ui, editor: &mut Editor) {
     if !editor.selection.is_empty() {
         ui.horizontal(|ui| {
             if ui
-                .add_enabled(editor.can_rotate(), egui::Button::new("Rotate"))
+                .add_enabled(editor.can_rotate(), egui::Button::new(tr("Rotate")))
                 .clicked()
             {
                 editor.rotate();
             }
-            if ui.button("Delete").clicked() {
+            if ui.button(tr("Delete")).clicked() {
                 editor.delete();
             }
         });
@@ -94,46 +98,56 @@ fn selection_info(ui: &mut Ui, editor: &mut Editor) {
                 .iter()
                 .find(|w| editor.selection.contains(&w.id))
         {
-            ui.label(format!("Start: {}, {}", w.a.x, w.a.y));
-            ui.label(format!("End: {}, {}", w.b.x, w.b.y));
-            ui.label(format!(
+            ui.label(tf!("Start: {}, {}", w.a.x, w.a.y));
+            ui.label(tf!("End: {}, {}", w.b.x, w.b.y));
+            ui.label(tf!(
                 "Connected wires: {}",
                 editor.circuit.connected_wires(w.id).len()
             ));
-            ui.weak("Drag the blue endpoint handles to reshape this wire.");
+            ui.weak(tr("Drag the blue endpoint handles to reshape this wire."));
             if let Some(signal) = editor.simulation.view.wires.get(&w.id) {
-                ui.colored_label(signal.tone.color(), format!("Signal: {}", signal.text));
+                ui.colored_label(signal.tone.color(), tf!("Signal: {}", signal.text));
                 ui.monospace(&signal.binary);
             }
-            ui.weak("The highlight follows the connected net, including matching tunnel labels.");
+            ui.weak(tr(
+                "The highlight follows the connected net, including matching tunnel labels.",
+            ));
         }
         return;
     }
-    ui.label(format!(
+    ui.label(tf!(
         "{} components · {} wires",
         editor.circuit.components.len(),
         editor.circuit.wires.len()
     ));
     ui.add_space(10.0);
     if editor.tool == Tool::Wire {
-        ui.weak("Click two points or drag to connect. Shift changes the bend. Esc cancels.");
+        ui.weak(tr(
+            "Click two points or drag to connect. Shift changes the bend. Esc cancels.",
+        ));
     } else {
-        ui.weak("Choose a tool to place a component. Drag a terminal to connect.");
-        ui.weak("Drag empty space to select. Shift adds to the selection.");
+        ui.weak(tr(
+            "Choose a tool to place a component. Drag a terminal to connect.",
+        ));
+        ui.weak(tr(
+            "Drag empty space to select. Shift adds to the selection.",
+        ));
     }
     ui.add_space(10.0);
     editor.simulation.overview(ui);
     ui.add_space(8.0);
-    ui.weak("Use File to open or save the supported .circ subset. Clocks are not available yet.");
+    ui.weak(tr(
+        "Use File to open or save the supported .circ subset. Clocks are not available yet.",
+    ));
 }
 
 fn component_editor(ui: &mut Ui, editor: &mut Editor, mut c: Component, placing: bool) {
     if matches!(c.kind, Kind::Subcircuit(_)) {
-        ui.strong(format!("Circuit: {}", c.interface.name));
-        if !placing && ui.button("View instance").clicked() {
+        ui.strong(tf!("Circuit: {}", c.interface.name));
+        if !placing && ui.button(tr("View instance")).clicked() {
             editor.open_instance = Some(c.id);
         }
-        ui.weak(format!(
+        ui.weak(tf!(
             "{} interface pins · edit Pin components in the circuit definition",
             c.interface.ports.len()
         ));
@@ -142,7 +156,7 @@ fn component_editor(ui: &mut Ui, editor: &mut Editor, mut c: Component, placing:
     let mut active = false;
     if c.kind.has_label() {
         let response = if c.kind == Kind::Text {
-            ui.label("Text");
+            ui.label(tr("Text"));
             ui.add(
                 egui::TextEdit::multiline(&mut c.label)
                     .desired_rows(3)
@@ -151,7 +165,7 @@ fn component_editor(ui: &mut Ui, editor: &mut Editor, mut c: Component, placing:
                     .id_salt((c.id, "text")),
             )
         } else {
-            ui.label("Label");
+            ui.label(tr("Label"));
             ui.add(
                 egui::TextEdit::singleline(&mut c.label)
                     .desired_width(f32::INFINITY)
@@ -176,7 +190,7 @@ fn component_editor(ui: &mut Ui, editor: &mut Editor, mut c: Component, placing:
         c.position = Point::snapped(c.position.x as f32, c.position.y as f32);
     }
     ui.add_space(12.0);
-    if c.kind.rotatable() && ui.button("Rotate clockwise · R").clicked() {
+    if c.kind.rotatable() && ui.button(tr("Rotate clockwise · R")).clicked() {
         c.facing = c.facing.next();
     }
     if c != original {
@@ -191,10 +205,10 @@ fn component_editor(ui: &mut Ui, editor: &mut Editor, mut c: Component, placing:
     }
     if !placing {
         ui.horizontal(|ui| {
-            if ui.button("Duplicate").clicked() {
+            if ui.button(tr("Duplicate")).clicked() {
                 editor.duplicate();
             }
-            if ui.button("Delete").clicked() {
+            if ui.button(tr("Delete")).clicked() {
                 editor.delete();
             }
         });
@@ -204,22 +218,22 @@ fn component_editor(ui: &mut Ui, editor: &mut Editor, mut c: Component, placing:
 fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
     let mut active = false;
     if c.kind.rotatable() {
-        ui.label("Facing");
+        ui.label(tr("Facing"));
         egui::ComboBox::from_id_salt("facing")
-            .selected_text(c.facing.name())
+            .selected_text(tr(c.facing.name()))
             .width(110.0)
             .show_ui(ui, |ui| {
                 for facing in Facing::ALL {
-                    ui.selectable_value(&mut c.facing, facing, facing.name());
+                    ui.selectable_value(&mut c.facing, facing, tr(facing.name()));
                 }
             });
         ui.end_row();
     }
     if !matches!(c.kind, Kind::Text | Kind::Probe | Kind::Subcircuit(_)) {
         ui.label(if c.kind == Kind::BitExtender {
-            "Output bits"
+            tr("Output bits")
         } else {
-            "Data bits"
+            tr("Data bits")
         });
         let r = ui.add(egui::DragValue::new(&mut c.bits).range(1..=32));
         if r.changed() && c.kind == Kind::Splitter {
@@ -235,7 +249,7 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
     if let Kind::Gate(gate) = c.kind
         && !gate.unary()
     {
-        ui.label("Inputs");
+        ui.label(tr("Inputs"));
         let r = ui.add(egui::DragValue::new(&mut c.inputs).range(2..=8));
         active |= r.has_focus() || r.dragged();
         ui.end_row();
@@ -243,35 +257,35 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
     if let Kind::Gate(gate) = c.kind
         && gate != Gate::Buffer
     {
-        ui.label("Gate size");
+        ui.label(tr("Gate size"));
         egui::ComboBox::from_id_salt("gate_size")
-            .selected_text(c.gate_size.name())
+            .selected_text(tr(c.gate_size.name()))
             .show_ui(ui, |ui| {
                 for size in [GateSize::Narrow, GateSize::Medium, GateSize::Wide] {
                     if gate != Gate::Not || size != GateSize::Medium {
-                        ui.selectable_value(&mut c.gate_size, size, size.name());
+                        ui.selectable_value(&mut c.gate_size, size, tr(size.name()));
                     }
                 }
             });
         ui.end_row();
     }
     if c.kind == Kind::Text {
-        ui.label("Horizontal");
+        ui.label(tr("Horizontal"));
         egui::ComboBox::from_id_salt("text_halign")
-            .selected_text(format!("{:?}", c.text_horizontal))
+            .selected_text(tr(&format!("{:?}", c.text_horizontal)))
             .show_ui(ui, |ui| {
                 for a in [
                     HorizontalAlign::Left,
                     HorizontalAlign::Center,
                     HorizontalAlign::Right,
                 ] {
-                    ui.selectable_value(&mut c.text_horizontal, a, format!("{a:?}"));
+                    ui.selectable_value(&mut c.text_horizontal, a, tr(&format!("{a:?}")));
                 }
             });
         ui.end_row();
-        ui.label("Vertical");
+        ui.label(tr("Vertical"));
         egui::ComboBox::from_id_salt("text_valign")
-            .selected_text(format!("{:?}", c.text_vertical))
+            .selected_text(tr(&format!("{:?}", c.text_vertical)))
             .show_ui(ui, |ui| {
                 for a in [
                     VerticalAlign::Top,
@@ -279,23 +293,23 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
                     VerticalAlign::Baseline,
                     VerticalAlign::Bottom,
                 ] {
-                    ui.selectable_value(&mut c.text_vertical, a, format!("{a:?}"));
+                    ui.selectable_value(&mut c.text_vertical, a, tr(&format!("{a:?}")));
                 }
             });
         ui.end_row();
     }
     if c.kind == Kind::Pin {
-        ui.label("Output pin");
+        ui.label(tr("Output pin"));
         ui.checkbox(&mut c.output, "");
         ui.end_row();
     }
     if c.kind.has_label() {
-        ui.label("Font size");
+        ui.label(tr("Font size"));
         let r = ui.add(egui::DragValue::new(&mut c.font_size).range(8..=48));
         active |= r.has_focus() || r.dragged();
         ui.end_row();
         if c.kind != Kind::Tunnel {
-            ui.label("Color");
+            ui.label(tr("Color"));
             ui.color_edit_button_srgb(&mut c.color);
             ui.end_row();
         }
@@ -319,18 +333,18 @@ fn wiring_fields(ui: &mut Ui, c: &mut Component) -> bool {
     let mut active = false;
     match c.kind {
         Kind::Subcircuit(_) => {
-            ui.label("Label location");
+            ui.label(tr("Label location"));
             egui::ComboBox::from_id_salt("instance_label_location")
-                .selected_text(c.label_facing.name())
+                .selected_text(tr(c.label_facing.name()))
                 .show_ui(ui, |ui| {
                     for facing in Facing::ALL {
-                        ui.selectable_value(&mut c.label_facing, facing, facing.name());
+                        ui.selectable_value(&mut c.label_facing, facing, tr(facing.name()));
                     }
                 });
             ui.end_row();
         }
         Kind::Constant => {
-            ui.label("Value (hex)");
+            ui.label(tr("Value (hex)"));
             let max = u32::MAX >> (32 - c.bits.clamp(1, 32));
             let r = ui.add(
                 egui::DragValue::new(&mut c.constant)
@@ -341,67 +355,67 @@ fn wiring_fields(ui: &mut Ui, c: &mut Component) -> bool {
             ui.end_row();
         }
         Kind::Probe => {
-            ui.label("Radix");
+            ui.label(tr("Radix"));
             egui::ComboBox::from_id_salt("probe_radix")
-                .selected_text(c.radix.name())
+                .selected_text(tr(c.radix.name()))
                 .show_ui(ui, |ui| {
                     for r in Radix::ALL {
-                        ui.selectable_value(&mut c.radix, r, r.name());
+                        ui.selectable_value(&mut c.radix, r, tr(r.name()));
                     }
                 });
             ui.end_row();
-            ui.label("Label location");
+            ui.label(tr("Label location"));
             egui::ComboBox::from_id_salt("probe_label")
-                .selected_text(c.label_facing.name())
+                .selected_text(tr(c.label_facing.name()))
                 .show_ui(ui, |ui| {
                     for f in Facing::ALL {
-                        ui.selectable_value(&mut c.label_facing, f, f.name());
+                        ui.selectable_value(&mut c.label_facing, f, tr(f.name()));
                     }
                 });
             ui.end_row();
         }
         Kind::BitExtender => {
-            ui.label("Input bits");
+            ui.label(tr("Input bits"));
             let r = ui.add(egui::DragValue::new(&mut c.input_bits).range(1..=32));
             active |= r.has_focus() || r.dragged();
             ui.end_row();
-            ui.label("Extension");
+            ui.label(tr("Extension"));
             egui::ComboBox::from_id_salt("extension")
-                .selected_text(c.extension.name())
+                .selected_text(tr(c.extension.name()))
                 .show_ui(ui, |ui| {
                     for e in Extension::ALL {
-                        ui.selectable_value(&mut c.extension, e, e.name());
+                        ui.selectable_value(&mut c.extension, e, tr(e.name()));
                     }
                 });
             ui.end_row();
         }
         Kind::Splitter => {
-            ui.label("Fan out");
+            ui.label(tr("Fan out"));
             let r = ui.add(egui::DragValue::new(&mut c.splitter.fanout).range(1..=32));
             if r.changed() {
                 c.splitter.distribute(c.bits, c.splitter.descending);
             }
             active |= r.has_focus() || r.dragged();
             ui.end_row();
-            ui.label("Appearance");
+            ui.label(tr("Appearance"));
             egui::ComboBox::from_id_salt("split_appearance")
-                .selected_text(c.splitter.appearance.name())
+                .selected_text(tr(c.splitter.appearance.name()))
                 .show_ui(ui, |ui| {
                     for a in SplitAppearance::ALL {
-                        ui.selectable_value(&mut c.splitter.appearance, a, a.name());
+                        ui.selectable_value(&mut c.splitter.appearance, a, tr(a.name()));
                     }
                 });
             ui.end_row();
-            ui.label("Distribute");
+            ui.label(tr("Distribute"));
             ui.horizontal(|ui| {
                 if ui
-                    .selectable_label(!c.splitter.descending, "Ascending")
+                    .selectable_label(!c.splitter.descending, tr("Ascending"))
                     .clicked()
                 {
                     c.splitter.distribute(c.bits, false);
                 }
                 if ui
-                    .selectable_label(c.splitter.descending, "Descending")
+                    .selectable_label(c.splitter.descending, tr("Descending"))
                     .clicked()
                 {
                     c.splitter.distribute(c.bits, true);
@@ -409,14 +423,16 @@ fn wiring_fields(ui: &mut Ui, c: &mut Component) -> bool {
             });
             ui.end_row();
             for bit in 0..c.bits {
-                ui.label(format!("Bit {bit}"));
+                ui.label(tf!("Bit {}", bit));
                 let branch = &mut c.splitter.mapping[usize::from(bit)];
                 egui::ComboBox::from_id_salt(("split_bit", bit))
-                    .selected_text(branch.map_or_else(|| "None".into(), |b| format!("Branch {b}")))
+                    .selected_text(
+                        branch.map_or_else(|| tr("None").into(), |b| tf!("Branch {}", b)),
+                    )
                     .show_ui(ui, |ui| {
-                        ui.selectable_value(branch, None, "None");
+                        ui.selectable_value(branch, None, tr("None"));
                         for b in 0..c.splitter.fanout {
-                            ui.selectable_value(branch, Some(b), format!("Branch {b}"));
+                            ui.selectable_value(branch, Some(b), tf!("Branch {}", b));
                         }
                     });
                 ui.end_row();

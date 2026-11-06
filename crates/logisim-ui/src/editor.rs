@@ -1,4 +1,5 @@
 //! Editing transactions and gestures. Simulation is deliberately separate.
+use crate::{i18n::tr, tf};
 
 use crate::{
     canvas::Canvas,
@@ -633,14 +634,14 @@ impl Editor {
                 for (index, (point, port)) in c.ports().iter().zip(&c.interface.ports).enumerate() {
                     if (drawing::pos(*point).to_vec2() - world).length() <= tolerance {
                         response.clone().on_hover_ui(|ui| {
-                            ui.label(format!(
+                            ui.label(tf!(
                                 "{} · {} · {} bit",
                                 if port.label.is_empty() {
-                                    format!("Pin #{}", port.pin)
+                                    tf!("Pin #{}", port.pin)
                                 } else {
                                     port.label.clone()
                                 },
-                                if port.output { "Output" } else { "Input" },
+                                tr(if port.output { "Output" } else { "Input" }),
                                 port.bits
                             ));
                             if let Some(signal) = self.simulation.view.ports.get(&(c.id, index)) {
@@ -662,9 +663,9 @@ impl Editor {
                 .or_else(|| self.simulation.view.ports.get(&(id, 0)))
         {
             response.clone().on_hover_ui(|ui| {
-                ui.colored_label(signal.tone.color(), format!("Signal: {}", signal.text));
+                ui.colored_label(signal.tone.color(), tf!("Signal: {}", signal.text));
                 ui.monospace(&signal.binary);
-                ui.weak(format!("{} bit", signal.binary.len()));
+                ui.weak(tf!("{} bit", signal.binary.len()));
             });
         }
         response.context_menu(|ui| {
@@ -674,14 +675,14 @@ impl Editor {
             if let Some(id) = instance
                 && let Some(c) = self.circuit.component(id)
                 && matches!(c.kind, Kind::Subcircuit(_))
-                && ui.button(format!("View {}", c.interface.name)).clicked()
+                && ui.button(tf!("View {}", c.interface.name)).clicked()
             {
                 self.open_instance = Some(id);
                 ui.close();
             }
 
             if ui
-                .add_enabled(self.can_rotate(), egui::Button::new("Rotate · R"))
+                .add_enabled(self.can_rotate(), egui::Button::new(tr("Rotate · R")))
                 .clicked()
             {
                 self.rotate();
@@ -690,7 +691,7 @@ impl Editor {
             if ui
                 .add_enabled(
                     !self.selection.is_empty(),
-                    egui::Button::new("Duplicate · Ctrl+D"),
+                    egui::Button::new(tr("Duplicate · Ctrl+D")),
                 )
                 .clicked()
             {
@@ -698,22 +699,22 @@ impl Editor {
                 ui.close();
             }
             if ui
-                .add_enabled(!self.selection.is_empty(), egui::Button::new("Delete"))
+                .add_enabled(!self.selection.is_empty(), egui::Button::new(tr("Delete")))
                 .clicked()
             {
                 self.delete();
                 ui.close();
             }
             ui.separator();
-            if ui.button("Reset canvas").clicked() {
+            if ui.button(tr("Reset canvas")).clicked() {
                 canvas.reset();
                 ui.close();
             }
-            if ui.button("Actual size · 100%").clicked() {
+            if ui.button(tr("Actual size · 100%")).clicked() {
                 canvas.set_zoom(1.0);
                 ui.close();
             }
-            ui.checkbox(&mut canvas.show_grid, "Show grid");
+            ui.checkbox(&mut canvas.show_grid, tr("Show grid"));
         });
         if self.publish_clipboard {
             ui.ctx().copy_text(CLIPBOARD_MARKER.to_owned());

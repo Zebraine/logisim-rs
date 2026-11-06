@@ -100,7 +100,7 @@ fn check_expected(path: &Path, expected: Option<&[u8]>) -> Result<()> {
         _ => Err("The destination changed, cannot be read, or needs overwrite confirmation. Use Save As and choose the file again.".into()),
     }
 }
-fn atomic_write(path: &Path, bytes: &[u8], expected: Option<&[u8]>) -> Result<()> {
+pub(crate) fn atomic_write(path: &Path, bytes: &[u8], expected: Option<&[u8]>) -> Result<()> {
     check_expected(path, expected)?;
     static SEQUENCE: AtomicU64 = AtomicU64::new(0);
     let parent = path.parent().ok_or("Missing parent directory")?;

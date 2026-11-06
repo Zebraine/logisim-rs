@@ -3,6 +3,7 @@ mod file_picker;
 #[cfg(test)]
 mod file_tests;
 mod files;
+mod preferences;
 mod simulation;
 mod storage;
 
@@ -18,21 +19,30 @@ fn main() -> eframe::Result {
         },
         Box::new(|cc| {
             logisim_ui::configure(&cc.egui_ctx);
-            let mut app = DesktopApp::default();
+            let mut workspace = logisim_ui::Workspace::default();
+            let preferences = preferences::Preferences::load(&mut workspace);
+            let mut app = DesktopApp {
+                workspace,
+                preferences,
+                simulator: Default::default(),
+                files: Default::default(),
+            };
             if let Some(path) = std::env::args_os().nth(1) {
-                app.files.load(
-                    std::path::Path::new(&path),
-                    &mut app.workspace,
-                    &mut app.simulator,
-                );
+                logisim_ui::i18n::with_language(app.workspace.language(), || {
+                    app.files.load(
+                        std::path::Path::new(&path),
+                        &mut app.workspace,
+                        &mut app.simulator,
+                    );
+                });
             }
             Ok(Box::new(app))
         }),
     )
 }
 
-#[derive(Default)]
 struct DesktopApp {
+    preferences: preferences::Preferences,
     workspace: logisim_ui::Workspace,
     simulator: logisim_sim::ProjectSimulator,
     files: files::Files,
@@ -40,6 +50,11 @@ struct DesktopApp {
 
 impl eframe::App for DesktopApp {
     fn ui(&mut self, ui: &mut eframe::egui::Ui, _frame: &mut eframe::Frame) {
+        logisim_ui::i18n::with_language(self.workspace.language(), || self.show(ui));
+    }
+}
+impl DesktopApp {
+    fn show(&mut self, ui: &mut eframe::egui::Ui) {
         self.simulator
             .synchronize(self.workspace.project(), self.workspace.simulation_root());
         self.simulator.advance(64);
@@ -67,14 +82,19 @@ impl eframe::App for DesktopApp {
         }
         self.files
             .show(ui.ctx(), &mut self.workspace, &mut self.simulator);
+        self.preferences.synchronize(&mut self.workspace);
         let view = self.files.present(&self.workspace);
         ui.ctx()
             .send_viewport_cmd(eframe::egui::ViewportCommand::Title(format!(
                 "Logisim rs — {} · {}{}{}",
                 view.circuit_name,
-                view.title,
+                view.display_title(),
                 if view.dirty { " *" } else { "" },
-                if view.partial { " (partial)" } else { "" }
+                if view.partial {
+                    logisim_ui::i18n::tr(" (partial)")
+                } else {
+                    ""
+                }
             )));
         let edited = self
             .simulator

@@ -1,4 +1,5 @@
 //! Editor layout based on runtime observation, with an independent canvas viewport.
+use crate::i18n::tr;
 
 mod appearance;
 mod appearance_properties;
@@ -10,7 +11,12 @@ mod drawing;
 mod editor;
 #[cfg(test)]
 mod editor_tests;
+pub mod i18n;
+#[cfg(test)]
+mod i18n_tests;
 mod icons;
+mod settings;
+pub use i18n::Language;
 mod project;
 mod properties;
 use project::{CircuitCommand, NameDialog};
@@ -51,6 +57,10 @@ pub fn configure(ctx: &egui::Context) {
 /// Circuit editing and viewport state. Signal simulation is not part of this layer.
 #[derive(Default)]
 pub struct Workspace {
+    language: Language,
+    settings_open: bool,
+    settings_error: Option<String>,
+    retry_settings: bool,
     appearance: appearance::AppearanceEditor,
     canvas: Canvas,
     editor: Editor,
@@ -89,16 +99,22 @@ impl Workspace {
     }
 
     pub fn show(&mut self, ui: &mut Ui) {
+        i18n::with_language(self.language, || self.show_localized(ui));
+    }
+    fn show_localized(&mut self, ui: &mut Ui) {
         let before = (
             self.editor.active,
             self.editor.path.clone(),
             self.editor.appearance_mode,
         );
-        let modal =
-            self.name_dialog.is_some() || self.remove_dialog || self.editor.project_error.is_some();
+        let modal = self.settings_open
+            || self.name_dialog.is_some()
+            || self.remove_dialog
+            || self.editor.project_error.is_some();
         ui.add_enabled_ui(!modal, |ui| self.show_inner(ui));
         if ui.is_enabled() {
             self.project_dialogs(ui.ctx());
+            self.settings(ui.ctx());
         }
         if let Some(id) = self.editor.open_instance.take() {
             self.editor.enter_instance(id);
@@ -232,29 +248,30 @@ impl Workspace {
                 }
             });
 
-        egui::Window::new("About logisim-rs")
+        egui::Window::new(tr("About logisim-rs"))
+            .id(egui::Id::unique("about-window"))
             .open(&mut self.about_open)
             .collapsible(false)
             .resizable(false)
             .show(ui.ctx(), |ui| {
                 ui.heading("Logisim rs");
-                ui.label("A cleanroom digital circuit workspace.");
+                ui.label(tr("A cleanroom digital circuit workspace."));
                 ui.separator();
-                ui.label("Component editing, wiring and canvas navigation are available.");
-                ui.label("Combinational simulation is available. Supported .circ files can be opened and saved. Clocks are not yet available.");
+                ui.label(tr("Component editing, wiring and canvas navigation are available."));
+                ui.label(tr("Combinational simulation is available. Supported .circ files can be opened and saved. Clocks are not yet available."));
             });
     }
 
     fn menus(&mut self, ui: &mut Ui) {
         egui::MenuBar::new().ui(ui, |ui| {
-            ui.menu_button("File", |ui| {
+            ui.menu_button(tr("File"), |ui| {
                 for (label, action) in [
                     ("New · Ctrl+N", FileAction::New),
                     ("Open… · Ctrl+O", FileAction::Open),
                     ("Save · Ctrl+S", FileAction::Save),
                     ("Save As… · Ctrl+Shift+S", FileAction::SaveAs),
                 ] {
-                    if ui.button(label).clicked() {
+                    if ui.button(tr(label)).clicked() {
                         self.file_actions.push(action);
                         ui.close();
                     }
@@ -262,18 +279,26 @@ impl Workspace {
                 ui.separator();
                 disabled_actions(ui, &["Export Image…", "Print…"]);
                 ui.separator();
-                if ui.button("Exit").clicked() {
+                if ui.button(tr("Settings")).clicked() {
+                    self.finish_edit();
+                    self.settings_open = true;
+                    ui.close();
+                }
+                if ui.button(tr("Exit")).clicked() {
                     self.file_actions.push(FileAction::Close);
                     ui.close();
                 }
             });
-            ui.menu_button("Edit", |ui| {
+            ui.menu_button(tr("Edit"), |ui| {
                 if self.editor.appearance_mode {
                     self.appearance.edit_menu(ui, &mut self.editor);
                     return;
                 }
                 if ui
-                    .add_enabled(self.editor.can_undo(), egui::Button::new("Undo · Ctrl+Z"))
+                    .add_enabled(
+                        self.editor.can_undo(),
+                        egui::Button::new(tr("Undo · Ctrl+Z")),
+                    )
                     .clicked()
                 {
                     self.editor.undo();
@@ -282,7 +307,7 @@ impl Workspace {
                 if ui
                     .add_enabled(
                         self.editor.can_redo(),
-                        egui::Button::new("Redo · Ctrl+Shift+Z"),
+                        egui::Button::new(tr("Redo · Ctrl+Shift+Z")),
                     )
                     .clicked()
                 {
@@ -292,46 +317,49 @@ impl Workspace {
                 ui.separator();
                 let selected = !self.editor.selection.is_empty();
                 if ui
-                    .add_enabled(selected, egui::Button::new("Cut · Ctrl+X"))
+                    .add_enabled(selected, egui::Button::new(tr("Cut · Ctrl+X")))
                     .clicked()
                 {
                     self.editor.cut();
                     ui.close();
                 }
                 if ui
-                    .add_enabled(selected, egui::Button::new("Copy · Ctrl+C"))
+                    .add_enabled(selected, egui::Button::new(tr("Copy · Ctrl+C")))
                     .clicked()
                 {
                     self.editor.copy();
                     ui.close();
                 }
                 if ui
-                    .add_enabled(self.editor.can_paste(), egui::Button::new("Paste · Ctrl+V"))
+                    .add_enabled(
+                        self.editor.can_paste(),
+                        egui::Button::new(tr("Paste · Ctrl+V")),
+                    )
                     .clicked()
                 {
                     self.editor.paste();
                     ui.close();
                 }
                 if ui
-                    .add_enabled(selected, egui::Button::new("Duplicate · Ctrl+D"))
+                    .add_enabled(selected, egui::Button::new(tr("Duplicate · Ctrl+D")))
                     .clicked()
                 {
                     self.editor.duplicate();
                     ui.close();
                 }
                 if ui
-                    .add_enabled(selected, egui::Button::new("Delete"))
+                    .add_enabled(selected, egui::Button::new(tr("Delete")))
                     .clicked()
                 {
                     self.editor.delete();
                     ui.close();
                 }
-                if ui.button("Select All · Ctrl+A").clicked() {
+                if ui.button(tr("Select All · Ctrl+A")).clicked() {
                     self.editor.select_all();
                     ui.close();
                 }
             });
-            ui.menu_button("Project", |ui| {
+            ui.menu_button(tr("Project"), |ui| {
                 for (label, command, enabled) in [
                     ("Add Circuit… · Ctrl+Shift+N", CircuitCommand::Add, true),
                     ("Rename Circuit…", CircuitCommand::Rename, true),
@@ -348,7 +376,10 @@ impl Workspace {
                         self.editor.project.can_remove(self.editor.active),
                     ),
                 ] {
-                    if ui.add_enabled(enabled, egui::Button::new(label)).clicked() {
+                    if ui
+                        .add_enabled(enabled, egui::Button::new(tr(label)))
+                        .clicked()
+                    {
                         self.circuit_command(command);
                         ui.close();
                     }
@@ -357,7 +388,7 @@ impl Workspace {
                 if ui
                     .add_enabled(
                         !self.editor.path.is_empty(),
-                        egui::Button::new("Return to Parent · Alt+Left"),
+                        egui::Button::new(tr("Return to Parent · Alt+Left")),
                     )
                     .clicked()
                 {
@@ -366,7 +397,7 @@ impl Workspace {
                 }
                 ui.separator();
                 if ui
-                    .selectable_label(!self.editor.appearance_mode, "Edit Circuit Layout")
+                    .selectable_label(!self.editor.appearance_mode, tr("Edit Circuit Layout"))
                     .clicked()
                 {
                     self.finish_edit();
@@ -376,7 +407,7 @@ impl Workspace {
                 if ui
                     .selectable_label(
                         self.editor.appearance_mode,
-                        "Edit Circuit Appearance · Ctrl+Shift+E",
+                        tr("Edit Circuit Appearance · Ctrl+Shift+E"),
                     )
                     .clicked()
                 {
@@ -387,7 +418,7 @@ impl Workspace {
                 if ui
                     .add_enabled(
                         self.editor.circuit.appearance.is_some(),
-                        egui::Button::new("Revert to Default Appearance"),
+                        egui::Button::new(tr("Revert to Default Appearance")),
                     )
                     .clicked()
                 {
@@ -396,22 +427,22 @@ impl Workspace {
                 }
                 disabled_actions(ui, &["Load Library…", "Project Options…"]);
             });
-            ui.menu_button("Simulate", |ui| {
+            ui.menu_button(tr("Simulate"), |ui| {
                 self.editor.simulation.menu(ui);
             });
-            ui.menu_button("Window", |ui| {
-                if ui.button("Minimize").clicked() {
+            ui.menu_button(tr("Window"), |ui| {
+                if ui.button(tr("Minimize")).clicked() {
                     ui.ctx()
                         .send_viewport_cmd(egui::ViewportCommand::Minimized(true));
                     ui.close();
                 }
-                if ui.button("Maximize / Restore").clicked() {
+                if ui.button(tr("Maximize / Restore")).clicked() {
                     let maximized = ui.input(|i| i.viewport().maximized.unwrap_or(false));
                     ui.ctx()
                         .send_viewport_cmd(egui::ViewportCommand::Maximized(!maximized));
                     ui.close();
                 }
-                if ui.button("Close").clicked() {
+                if ui.button(tr("Close")).clicked() {
                     self.file_actions.push(FileAction::Close);
                     ui.close();
                 }
@@ -421,8 +452,8 @@ impl Workspace {
                     egui::Button::new(self.document.label()).selected(true),
                 );
             });
-            ui.menu_button("Help", |ui| {
-                if ui.button("About logisim-rs").clicked() {
+            ui.menu_button(tr("Help"), |ui| {
+                if ui.button(tr("About logisim-rs")).clicked() {
                     self.about_open = true;
                     ui.close();
                 }
@@ -461,8 +492,8 @@ impl Workspace {
             }
             ui.separator();
             if ui
-                .add_enabled(self.editor.can_rotate(), egui::Button::new("Rotate"))
-                .on_hover_text("Rotate clockwise · R")
+                .add_enabled(self.editor.can_rotate(), egui::Button::new(tr("Rotate")))
+                .on_hover_text(tr("Rotate clockwise · R"))
                 .clicked()
             {
                 self.editor.rotate();
@@ -516,7 +547,7 @@ impl Workspace {
                                 let enabled = !matches!(command,CircuitCommand::Remove) || self.editor.project.can_remove(self.editor.active);
                                 if icons::button(ui, icon, false, enabled, name).clicked() { self.circuit_command(command); }
                             }
-                            if !self.editor.path.is_empty() && ui.small_button("Back").on_hover_text("Return to parent instance · Alt+Left").clicked() { self.editor.leave_instance(); }
+                            if !self.editor.path.is_empty() && ui.small_button(tr("Back")).on_hover_text(tr("Return to parent instance · Alt+Left")).clicked() { self.editor.leave_instance(); }
 
                         });
                     });
@@ -531,20 +562,20 @@ impl Workspace {
                                 let definitions: Vec<_> = self.editor.project.circuits.iter().map(|c|(c.id,c.name.clone())).collect();
                                 for (id,name) in definitions {
                                     let allowed = self.editor.project.can_instantiate(self.editor.active,id);
-                                    let label = format!("{}{}",name,if id == self.editor.project.main { "  (main)" } else { "" });
+                                    let label = format!("{}{}",name,if id == self.editor.project.main { tr("  (main)") } else { "" });
                                     let response = ui.selectable_label(self.editor.active == id, label)
-                                        .on_hover_text("Double-click to edit; single-click another circuit to place an instance.");
+                                        .on_hover_text(tr("Double-click to edit; single-click another circuit to place an instance."));
                                     if response.double_clicked() { self.editor.switch_circuit(id); }
                                     else if response.clicked() && allowed { self.editor.appearance_mode=false; self.editor.set_tool(Tool::Place(Kind::Subcircuit(id))); }
                                     response.context_menu(|ui| {
-                                        if ui.button("Open circuit").clicked() { self.editor.switch_circuit(id); ui.close(); }
-                                        if ui.add_enabled(allowed,egui::Button::new("Place instance")).clicked() { self.editor.set_tool(Tool::Place(Kind::Subcircuit(id))); ui.close(); }
-                                        if ui.button("Edit appearance").clicked(){self.finish_edit();self.editor.switch_circuit(id);self.editor.appearance_mode=true;ui.close();}
-                                        if ui.button("Rename…").clicked() { self.editor.switch_circuit(id); self.circuit_command(CircuitCommand::Rename); ui.close(); }
+                                        if ui.button(tr("Open circuit")).clicked() { self.editor.switch_circuit(id); ui.close(); }
+                                        if ui.add_enabled(allowed,egui::Button::new(tr("Place instance"))).clicked() { self.editor.set_tool(Tool::Place(Kind::Subcircuit(id))); ui.close(); }
+                                        if ui.button(tr("Edit appearance")).clicked(){self.finish_edit();self.editor.switch_circuit(id);self.editor.appearance_mode=true;ui.close();}
+                                        if ui.button(tr("Rename…")).clicked() { self.editor.switch_circuit(id); self.circuit_command(CircuitCommand::Rename); ui.close(); }
                                     });
                                 }
                                 if !self.editor.path.is_empty() {
-                                    ui.weak(self.editor.context_label()).on_hover_text("Viewing this instance. Edits change the shared circuit definition.");
+                                    ui.weak(self.editor.context_label()).on_hover_text(tr("Viewing this instance. Edits change the shared circuit definition."));
                                 }
                                 for group in [
                                     "Wiring",
@@ -556,7 +587,7 @@ impl Workspace {
                                     "Input/Output",
                                     "Base",
                                 ] {
-                                    egui::CollapsingHeader::new(group).show(ui, |ui| match group {
+                                    egui::CollapsingHeader::new(tr(group)).id_salt(group).show(ui, |ui| match group {
                                         "Gates" => {
                                             for gate in Gate::ALL {
                                                 self.library_tool(ui, Kind::Gate(gate));
@@ -587,7 +618,7 @@ impl Workspace {
                                         }
                                         "Base" => self.library_tool(ui, Kind::Text),
                                         _ => {
-                                            ui.weak("No tools available yet");
+                                            ui.weak(tr("No tools available yet"));
                                         }
                                     });
                                 }
@@ -610,7 +641,7 @@ impl Workspace {
     fn library_tool(&mut self, ui: &mut Ui, kind: Kind) {
         let tool = Tool::Place(kind);
         if ui
-            .selectable_label(self.editor.tool == tool, kind.name())
+            .selectable_label(self.editor.tool == tool, tr(kind.name()))
             .clicked()
         {
             self.editor.appearance_mode = false;
@@ -620,7 +651,7 @@ impl Workspace {
 
     fn zoom_controls(&mut self, ui: &mut Ui) {
         ui.horizontal(|ui| {
-            if ui.small_button("−").on_hover_text("Zoom out").clicked() {
+            if ui.small_button("−").on_hover_text(tr("Zoom out")).clicked() {
                 self.canvas.set_zoom(self.canvas.camera.zoom / 1.1);
             }
             let mut percent = self.canvas.camera.zoom * 100.0;
@@ -631,26 +662,26 @@ impl Workspace {
                         .suffix("%")
                         .speed(1.0),
                 )
-                .on_hover_text("Drag or type a zoom percentage")
+                .on_hover_text(tr("Drag or type a zoom percentage"))
                 .changed()
             {
                 self.canvas.set_zoom(percent / 100.0);
             }
-            if ui.small_button("+").on_hover_text("Zoom in").clicked() {
+            if ui.small_button("+").on_hover_text(tr("Zoom in")).clicked() {
                 self.canvas.set_zoom(self.canvas.camera.zoom * 1.1);
             }
             ui.separator();
             if icons::button(ui, Icon::Home, false, true, "Reset canvas · Ctrl+0").clicked() {
                 self.canvas.reset();
             }
-            ui.checkbox(&mut self.canvas.show_grid, "Grid");
+            ui.checkbox(&mut self.canvas.show_grid, tr("Grid"));
         });
     }
 }
 
 fn disabled_actions(ui: &mut Ui, labels: &[&str]) {
     for label in labels {
-        ui.add_enabled(false, egui::Button::new(*label));
+        ui.add_enabled(false, egui::Button::new(tr(label)));
     }
 }
 

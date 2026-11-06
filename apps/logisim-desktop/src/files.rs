@@ -5,6 +5,7 @@ use crate::{
 use eframe::egui;
 use logisim_sim::ProjectSimulator as Simulator;
 use logisim_ui::{DocumentView, FileAction, Workspace};
+use logisim_ui::{i18n::tr, tf};
 use std::path::{Path, PathBuf};
 
 enum Dialog {
@@ -37,6 +38,7 @@ impl Files {
     }
     pub fn present(&self, workspace: &Workspace) -> DocumentView {
         DocumentView {
+            untitled: self.storage.path.is_none(),
             title: self
                 .storage
                 .path
@@ -71,14 +73,14 @@ impl Files {
                 if !warnings.is_empty() {
                     self.dialog = Some(Dialog::Message {
                         title: "Imported supported content only".into(),
-                        body: format!(
+                        body: tf!(
                             "The original file is protected. Use Save As to write the supported project subset to a different file.\n\n{}",
                             warnings.join("\n")
                         ),
                     });
                 }
             }
-            Err(e) => self.error(format!("{}\n\n{e}", path.display())),
+            Err(e) => self.error(format!("{}\n\n{}", path.display(), tr(&e))),
         }
     }
     pub fn request(
@@ -169,7 +171,7 @@ impl Files {
                     self.execute(action, ctx, workspace, sim);
                 }
             }
-            Err(e) => self.error(format!("{}\n\n{e}", path.display())),
+            Err(e) => self.error(format!("{}\n\n{}", path.display(), tr(&e))),
         }
     }
     pub fn show(&mut self, ctx: &egui::Context, workspace: &mut Workspace, sim: &mut Simulator) {
@@ -182,41 +184,41 @@ impl Files {
             egui::Modal::new(egui::Id::unique("file-dialog")).show(ctx, |ui| match &mut dialog {
                 Dialog::Picker(picker) => choice = picker.show(ui),
                 Dialog::Unsaved(_) => {
-                    ui.heading("Save changes?");
-                    ui.label("This project has unsaved changes.");
+                    ui.heading(tr("Save changes?"));
+                    ui.label(tr("This project has unsaved changes."));
                     ui.horizontal(|ui| {
-                        if ui.button("Save").clicked() {
+                        if ui.button(tr("Save")).clicked() {
                             answer = Some(0);
                         }
-                        if ui.button("Discard changes").clicked() {
+                        if ui.button(tr("Discard changes")).clicked() {
                             answer = Some(1);
                         }
-                        if ui.button("Cancel").clicked() {
+                        if ui.button(tr("Cancel")).clicked() {
                             answer = Some(2);
                         }
                     });
                 }
                 Dialog::Replace { path, .. } => {
-                    ui.heading("Replace existing file?");
+                    ui.heading(tr("Replace existing file?"));
                     ui.label(path.to_string_lossy());
                     ui.horizontal(|ui| {
-                        if ui.button("Replace").clicked() {
+                        if ui.button(tr("Replace")).clicked() {
                             answer = Some(0);
                         }
-                        if ui.button("Cancel").clicked() {
+                        if ui.button(tr("Cancel")).clicked() {
                             answer = Some(2);
                         }
                     });
                 }
                 Dialog::Message { title, body } => {
                     ui.set_max_width(620.0);
-                    ui.heading(title.as_str());
+                    ui.heading(tr(title.as_str()));
                     egui::ScrollArea::vertical()
                         .max_height(400.0)
                         .show(ui, |ui| {
                             ui.label(body.as_str());
                         });
-                    if ui.button("OK").clicked() {
+                    if ui.button(tr("OK")).clicked() {
                         answer = Some(2);
                     }
                 }
@@ -243,7 +245,7 @@ impl Files {
                 } else {
                     match storage::destination(&path) {
                         Ok(path) if self.storage.protected.as_ref() == Some(&path) => self.error(
-                            "Choose a different file: this source contains unsupported content."
+                            tr("Choose a different file: this source contains unsupported content.")
                                 .into(),
                         ),
                         Ok(path) if path.exists() => match storage::read(&path) {

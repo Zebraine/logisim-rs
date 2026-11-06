@@ -29,10 +29,24 @@ cargo test --workspace --locked --offline
 
 使用 Rust 2024，声明最低 Rust 1.95，工具链暂用 stable；已在 1.97.1 检查。
 界面基于 egui/eframe 0.37.0 和 wgpu，启用 Wayland/X11 后端；已在 Linux X11 环境运行验证。
+Linux 构建另需 `pkg-config` 与 Fontconfig 开发包（Debian/Ubuntu：`libfontconfig1-dev`）。
 
 布局保留顶部菜单/工具栏、左上项目树、左下属性表及缩放区、右侧画布。
 拖动分隔线可调整侧栏宽度和上下比例。滚轮缩放，中键或空格＋左键拖动平移；
 左下可输入缩放比例、开关网格，Home 按钮或 Ctrl+0 复位。画布右键也可复位。
+
+## 语言设置
+
+首次启动使用英语。通过 **File → Settings → Language**（文件 → 设置 → 语言）
+选择 English 或简体中文，立即生效，重启后保留。菜单、工具与属性、外观编辑、
+文件操作和仿真提示支持两种语言；文件解析器和系统返回的原始技术诊断保留原文。
+切换不修改电路名称、标签、外观文字、文件内容或仿真状态，也不产生编辑历史。
+
+中文使用系统字体，不随程序打包字体资源；推荐安装 Noto Sans CJK SC。
+缺少中文字体时设置窗口会给出英文提示。Windows/macOS 的系统字体支持已启用，尚未实窗验证。
+语言偏好保存在用户配置目录的 `logisim-rs/preferences`：Linux 使用 `$XDG_CONFIG_HOME`
+或 `~/.config`，Windows 使用 `%APPDATA%`，macOS 使用 `~/Library/Application Support`。
+保存失败时当前选择仍生效，可在设置窗口重试，不影响电路保存。
 
 ## 基本编辑
 

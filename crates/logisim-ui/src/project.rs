@@ -3,6 +3,7 @@ use crate::{
     Workspace,
     editor::{Editor, Tool},
 };
+use crate::{i18n::tr, tf};
 use logisim_core::{Id, Kind, Project};
 
 #[derive(Clone, Copy)]
@@ -224,23 +225,27 @@ impl Workspace {
             let mut cancel = false;
             let response = egui::Modal::new(egui::Id::unique("circuit-name")).show(ctx, |ui| {
                 ui.heading(if dialog.rename {
-                    "Rename circuit"
+                    tr("Rename circuit")
                 } else {
-                    "Add circuit"
+                    tr("Add circuit")
                 });
-                ui.label("Circuit name");
+                ui.label(tr("Circuit name"));
                 let response = ui.text_edit_singleline(&mut dialog.name);
                 if !ctx.memory(|m| m.has_focus(response.id)) && dialog.name.is_empty() {
                     response.request_focus();
                 }
                 if !dialog.error.is_empty() {
-                    ui.colored_label(egui::Color32::DARK_RED, &dialog.error);
+                    ui.colored_label(egui::Color32::DARK_RED, tr(&dialog.error));
                 }
                 ui.horizontal(|ui| {
                     apply = ui
-                        .button(if dialog.rename { "Rename" } else { "Add" })
+                        .button(if dialog.rename {
+                            tr("Rename")
+                        } else {
+                            tr("Add")
+                        })
                         .clicked();
-                    cancel = ui.button("Cancel").clicked();
+                    cancel = ui.button(tr("Cancel")).clicked();
                 });
                 apply |= ui.input(|i| i.key_pressed(egui::Key::Enter));
             });
@@ -270,11 +275,13 @@ impl Workspace {
             let mut remove = false;
             let mut cancel = false;
             let response = egui::Modal::new(egui::Id::unique("remove-circuit")).show(ctx, |ui| {
-                ui.heading(format!("Remove '{}' ?", self.circuit_name()));
-                ui.label("This removes the circuit and its contents. You can undo this change.");
+                ui.heading(tf!("Remove '{}' ?", self.circuit_name()));
+                ui.label(tr(
+                    "This removes the circuit and its contents. You can undo this change.",
+                ));
                 ui.horizontal(|ui| {
-                    remove = ui.button("Remove").clicked();
-                    cancel = ui.button("Cancel").clicked();
+                    remove = ui.button(tr("Remove")).clicked();
+                    cancel = ui.button(tr("Cancel")).clicked();
                 });
             });
             if remove {
@@ -294,9 +301,9 @@ impl Workspace {
         if let Some(message) = self.editor.project_error.clone() {
             let mut close = false;
             let response = egui::Modal::new(egui::Id::unique("project-error")).show(ctx, |ui| {
-                ui.heading("Circuit operation unavailable");
-                ui.label(message);
-                close = ui.button("OK").clicked();
+                ui.heading(tr("Circuit operation unavailable"));
+                ui.label(tr(&message));
+                close = ui.button(tr("OK")).clicked();
             });
             if close || response.should_close() {
                 self.editor.project_error = None;

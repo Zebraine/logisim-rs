@@ -19,6 +19,9 @@
 
 ## 本地检查
 
+Linux 构建需安装 `pkg-config` 和 Fontconfig 开发包（Debian/Ubuntu：`libfontconfig1-dev`）。
+运行中文界面需系统中文字体，例如 Noto Sans CJK SC；字体文件不进入 Git。
+
 ```sh
 cargo fmt --all -- --check
 cargo fetch --locked
@@ -32,5 +35,10 @@ git diff --check
 项目级编辑历史、接口连线、外观控制点/凹多边形/端口与锚/字体/封装往返、
 递归保护、实例隔离/嵌套/多输出、
 组合求值/逐位总线连接/扩展/网络错误/传播步进、文件往返/遗漏报告/磁盘失败保护及真实 egui 输入路径；
+同时覆盖语言切换、格式占位符、用户文本隔离、偏好持久化与失败重试。
 界面改动还需真实启动窗口检查。每步实现前先运行参考程序并截图，行为依据遵循
 [AGENTS.md](AGENTS.md) 中的 Cleanroom 约定。
+
+新界面文案在 `crates/logisim-ui/src/i18n.rs` 中补齐词条；静态文案使用 `tr`，
+动态文案使用 `tf!` 并将用户内容作为独立参数。格式参数数量在编译时检查。
+语言属于显示状态，不能触发文档修改或仿真重置；库与窗口等可折叠/持久控件使用稳定 ID。
