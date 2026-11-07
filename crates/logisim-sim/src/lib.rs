@@ -4,6 +4,7 @@ pub use hierarchy::ProjectSimulator;
 mod arithmetic;
 #[cfg(test)]
 mod arithmetic_tests;
+mod io;
 mod memory;
 #[cfg(test)]
 mod memory_tests;
@@ -85,7 +86,7 @@ impl Simulator {
         self.inputs = circuit
             .components
             .iter()
-            .filter(|c| c.kind == Kind::Pin && !c.output)
+            .filter(|c| (c.kind == Kind::Pin && !c.output) || c.kind == Kind::Button)
             .map(|c| {
                 let value = self
                     .inputs

@@ -17,6 +17,8 @@ pub use plexers::{Plexer, PlexerRole, PlexerTerminal, Plexing};
 mod sequential;
 pub use sequential::{ControlPosition, CounterOverflow, FlipFlop, Sequential, Trigger};
 
+mod io;
+pub use io::Io;
 mod memory;
 pub use memory::{Memory, MemoryContents, MemoryInterface, MemoryRole, MemoryTerminal};
 
@@ -161,6 +163,10 @@ pub enum Kind {
     Register,
     Counter,
     ShiftRegister,
+    Button,
+    Led,
+    SevenSegment,
+    HexDisplay,
     Rom,
     Ram,
     Plexer(Plexer),
@@ -204,6 +210,8 @@ impl Kind {
         !matches!(
             self,
             Self::Text
+                | Self::SevenSegment
+                | Self::HexDisplay
                 | Self::BitExtender
                 | Self::FlipFlop(_)
                 | Self::Register
@@ -219,6 +227,8 @@ impl Kind {
             self,
             Self::Text
                 | Self::Tunnel
+                | Self::Button
+                | Self::Led
                 | Self::Pin
                 | Self::Gate(_)
                 | Self::Probe
@@ -250,6 +260,10 @@ impl Kind {
             Self::Register => "Register",
             Self::Counter => "Counter",
             Self::ShiftRegister => "Shift Register",
+            Self::Button => "Button",
+            Self::Led => "LED",
+            Self::SevenSegment => "7-Segment Display",
+            Self::HexDisplay => "Hex Digit Display",
             Self::Rom => "ROM",
             Self::Ram => "RAM",
             Self::Plexer(p) => p.name(),
@@ -286,6 +300,7 @@ pub struct Component {
     pub plexing: Plexing,
     pub arithmetic: ArithmeticOptions,
     pub memory: Memory,
+    pub io: Io,
 }
 impl Component {
     pub fn new(kind: Kind, position: Point) -> Self {
@@ -297,10 +312,11 @@ impl Component {
             facing: match kind {
                 Kind::Power => Facing::North,
                 Kind::Ground => Facing::South,
+                Kind::Led => Facing::West,
                 _ => Facing::East,
             },
             bits: match kind {
-                Kind::Splitter => 4,
+                Kind::Splitter | Kind::HexDisplay => 4,
                 Kind::BitExtender => 16,
                 Kind::Register
                 | Kind::Counter
@@ -342,6 +358,7 @@ impl Component {
             sequential: Sequential::default(),
             arithmetic: ArithmeticOptions::default(),
             memory: Memory::default(),
+            io: Io::for_kind(kind),
             plexing: Plexing {
                 select_bits: if kind == Kind::Plexer(Plexer::PriorityEncoder) {
                     3
@@ -360,6 +377,9 @@ impl Component {
         }
     }
     pub fn local_ports(&self) -> Vec<Point> {
+        if self.kind.is_io() {
+            return self.io_ports();
+        }
         if self.kind.is_memory() {
             return self.memory_terminals().iter().map(|p| p.offset).collect();
         }

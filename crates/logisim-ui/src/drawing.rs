@@ -73,6 +73,13 @@ fn probe_width(c: &Component) -> f32 {
     }
 }
 pub(crate) fn bounds(c: &Component) -> Rect {
+    if c.kind.is_io() {
+        let [min, max] = c.io_body();
+        return Rect::from_two_pos(
+            pos(c.position + c.facing.transform(min)),
+            pos(c.position + c.facing.transform(max)),
+        );
+    }
     if c.kind.is_memory() {
         return Rect::from_min_max(
             pos(c.position + Point::new(-140, -40)),
@@ -294,6 +301,9 @@ pub(crate) fn component(
         );
     };
     match c.kind {
+        Kind::Button | Kind::Led | Kind::SevenSegment | Kind::HexDisplay => {
+            crate::io::draw(p, canvas, c, color, simulation)
+        }
         Kind::Rom | Kind::Ram => crate::memory::draw(p, canvas, c, color, simulation),
         Kind::Plexer(_) => crate::plexers::draw(p, canvas, c, color),
         Kind::Arithmetic(_) => crate::arithmetic::draw(p, canvas, c, color),
@@ -616,7 +626,10 @@ pub(crate) fn component(
     }
     if !matches!(c.kind, Kind::Text | Kind::Tunnel) && !c.label.is_empty() {
         let r = bounds(c);
-        let (anchor, align) = if matches!(c.kind, Kind::Probe | Kind::Subcircuit(_) | Kind::Clock) {
+        let (anchor, align) = if matches!(
+            c.kind,
+            Kind::Probe | Kind::Subcircuit(_) | Kind::Clock | Kind::Button | Kind::Led
+        ) {
             match c.label_facing {
                 Facing::North => (vec2(r.center().x, r.top() - 8.0), Align2::CENTER_BOTTOM),
                 Facing::South => (vec2(r.center().x, r.bottom() + 8.0), Align2::CENTER_TOP),
@@ -629,6 +642,7 @@ pub(crate) fn component(
         p.text(canvas.screen_vec(anchor), align, &c.label, font, color);
     }
     if c.bits > 1
+        && !c.kind.is_io()
         && !matches!(
             c.kind,
             Kind::Text | Kind::Probe | Kind::Splitter | Kind::BitExtender | Kind::Subcircuit(_)

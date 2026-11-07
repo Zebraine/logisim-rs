@@ -353,6 +353,10 @@ fn component(
         ("#Wiring", "Clock") => Kind::Clock,
         ("#Memory", "Register") => Kind::Register,
         ("#Memory", "Counter") => Kind::Counter,
+        ("#I/O", "Button") => Kind::Button,
+        ("#I/O", "LED") => Kind::Led,
+        ("#I/O", "7-Segment Display") => Kind::SevenSegment,
+        ("#I/O", "Hex Digit Display") => Kind::HexDisplay,
         ("#Memory", "ROM") => Kind::Rom,
         ("#Memory", "RAM") => Kind::Ram,
         ("#Memory", "Universal Register") => Kind::ShiftRegister,
@@ -385,6 +389,9 @@ fn component(
         let allowed = match kind {
             Kind::Plexer(p) => crate::plexers::allowed(p, key),
             Kind::Rom | Kind::Ram => crate::memory::allowed(kind, key),
+            Kind::Button | Kind::Led | Kind::SevenSegment | Kind::HexDisplay => {
+                crate::io::allowed(kind, key)
+            }
             Kind::Arithmetic(a) => crate::arithmetic::allowed(a, key),
             Kind::Clock
             | Kind::Register
@@ -434,6 +441,7 @@ fn component(
         match kind {
             Kind::Power => "north",
             Kind::Ground => "south",
+            Kind::Led => "west",
             _ => "east",
         },
     ) {
@@ -462,10 +470,14 @@ fn component(
     )?;
     crate::sequential::read(&mut c, &a)?;
     crate::memory::read(&mut c, &a)?;
+    crate::io::read(&mut c, &a)?;
     crate::plexers::read(&mut c, &a)?;
     crate::arithmetic::read(&mut c, &a)?;
     read_wiring(&mut c, &a)?;
-    if matches!(kind, Kind::Subcircuit(_) | Kind::Clock) {
+    if matches!(
+        kind,
+        Kind::Subcircuit(_) | Kind::Clock | Kind::Button | Kind::Led
+    ) {
         c.label_facing = match value(
             &a,
             "labelloc",

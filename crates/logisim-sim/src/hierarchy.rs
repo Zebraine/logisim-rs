@@ -270,6 +270,21 @@ impl ProjectSimulator {
         self.ticks = self.ticks.saturating_add(1);
         true
     }
+    pub fn set_button(&mut self, path: &[Id], id: Id, pressed: bool) {
+        if let Some(state) = self.states.get_mut(path) {
+            state.sim.set_button(id, pressed);
+        }
+    }
+    pub fn release_buttons(&mut self) {
+        for state in self.states.values_mut() {
+            state.sim.release_buttons();
+        }
+        for root in self.cached_roots.values_mut() {
+            for state in root.states.values_mut() {
+                state.sim.release_buttons();
+            }
+        }
+    }
     pub fn set_memory_word(&mut self, path: &[Id], id: Id, address: u32, value: u32) {
         if let Some(state) = self.states.get_mut(path) {
             state.sim.set_memory_word(id, address, value);

@@ -8,6 +8,8 @@ use logisim_ui::{
 #[cfg(test)]
 pub fn apply(sim: &mut Simulator, action: SimulationAction) {
     match action {
+        SimulationAction::PressButton { id } => sim.set_button(id, true),
+        SimulationAction::ReleaseButtons => sim.release_buttons(),
         SimulationAction::ToggleEnabled => sim.set_enabled(!sim.enabled()),
         SimulationAction::Step if !sim.enabled() => {
             sim.step();
@@ -64,7 +66,16 @@ pub fn present(circuit: &Circuit, sim: &Simulator) -> SimulationView {
         if let Some(value) = sim.stored_value(c.id) {
             view.storage.insert(c.id, signal(value, false));
         }
-        if let Some(value) = sim.input(c.id) {
+        if let Some(lights) = sim.indicator(c.id) {
+            view.indicators.insert(c.id, lights);
+        }
+        if c.kind == Kind::Button {
+            view.buttons
+                .insert(c.id, sim.input(c.id).is_some_and(|v| v.number() == Some(1)));
+        }
+        if c.kind != Kind::Button
+            && let Some(value) = sim.input(c.id)
+        {
             view.inputs.insert(
                 c.id,
                 InputValue {
@@ -118,6 +129,8 @@ pub fn apply_project(
     action: SimulationAction,
 ) {
     match action {
+        SimulationAction::PressButton { id } => sim.set_button(path, id, true),
+        SimulationAction::ReleaseButtons => sim.release_buttons(),
         SimulationAction::ToggleEnabled => sim.set_enabled(!sim.enabled()),
         SimulationAction::Step if !sim.enabled() => {
             sim.step();

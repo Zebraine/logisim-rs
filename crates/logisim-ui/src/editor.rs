@@ -259,6 +259,7 @@ impl Editor {
         self.wire_start = None;
     }
     pub fn set_tool(&mut self, tool: Tool) {
+        self.simulation.release_button();
         self.cancel_gesture();
         self.commit_properties();
         self.tool = tool;
@@ -465,7 +466,24 @@ impl Editor {
         }
         let pointer = ui.input(|i| i.pointer.interact_pos());
         let tolerance = 7.0 / canvas.camera.zoom;
+        if space {
+            self.simulation.release_button();
+        }
         if ui.is_enabled() && !space && !ui.ctx().any_popup_open() {
+            if self.tool == Tool::Poke
+                && response.hovered()
+                && ui.input(|i| i.focused && i.pointer.primary_pressed())
+                && let Some(pos) = pointer
+                && let Some(id) = self.hit(canvas.world(pos), tolerance)
+                && self
+                    .circuit
+                    .component(id)
+                    .is_some_and(|c| c.kind == Kind::Button)
+            {
+                self.selection.clear();
+                self.selection.insert(id);
+                self.simulation.press_button(id);
+            }
             if response.drag_started_by(PointerButton::Primary) {
                 self.commit_properties();
                 if let Some(start) = ui.input(|i| i.pointer.press_origin()) {
@@ -709,7 +727,8 @@ impl Editor {
         {
             let world = canvas.world(pointer);
             for c in self.circuit.components.iter().filter(|c| {
-                c.kind.is_memory()
+                c.kind.is_io()
+                    || c.kind.is_memory()
                     || c.kind.is_sequential()
                     || matches!(c.kind, Kind::Plexer(_) | Kind::Arithmetic(_))
             }) {
@@ -722,6 +741,8 @@ impl Editor {
                                     crate::plexers::port_label(c, c.plexer_terminals()[index].role)
                                 } else if matches!(c.kind, Kind::Arithmetic(_)) {
                                     crate::arithmetic::port_label(c, index)
+                                } else if c.kind.is_io() {
+                                    tr(crate::io::port_label(c, index)).to_owned()
                                 } else if c.kind.is_memory() {
                                     tr(crate::memory::port_label(c, index)).to_owned()
                                 } else {

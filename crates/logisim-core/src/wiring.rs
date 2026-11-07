@@ -132,6 +132,8 @@ impl Component {
             return self.interface.ports.get(index).map(|p| p.bits);
         }
         match self.kind {
+            Kind::Button | Kind::Led | Kind::SevenSegment => Some(1),
+            Kind::HexDisplay => Some(if index == 0 { 4 } else { 1 }),
             Kind::Plexer(_) => self.plexer_terminals().get(index).map(|p| p.bits),
             Kind::Arithmetic(kind) => Some(if index == 0 {
                 self.arithmetic_output_bits()
@@ -169,6 +171,7 @@ impl Component {
         matches!(
             self.kind,
             Kind::Gate(_)
+                | Kind::Button
                 | Kind::Constant
                 | Kind::Power
                 | Kind::Ground

@@ -236,6 +236,10 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
     if !matches!(
         c.kind,
         Kind::Text
+            | Kind::Button
+            | Kind::Led
+            | Kind::SevenSegment
+            | Kind::HexDisplay
             | Kind::Rom
             | Kind::Ram
             | Kind::Probe
@@ -271,6 +275,7 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
     active |= wiring_fields(ui, c);
     active |= crate::sequential::fields(ui, c);
     active |= crate::memory::fields(ui, c);
+    crate::io::fields(ui, c);
     active |= crate::plexers::fields(ui, c);
     active |= crate::arithmetic::fields(ui, c);
     if let Kind::Gate(gate) = c.kind
@@ -359,7 +364,7 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
 fn wiring_fields(ui: &mut Ui, c: &mut Component) -> bool {
     let mut active = false;
     match c.kind {
-        Kind::Subcircuit(_) | Kind::Clock => {
+        Kind::Subcircuit(_) | Kind::Clock | Kind::Button | Kind::Led => {
             ui.label(tr("Label location"));
             egui::ComboBox::from_id_salt("instance_label_location")
                 .selected_text(tr(c.label_facing.name()))

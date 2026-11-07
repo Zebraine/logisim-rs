@@ -15,6 +15,7 @@ pub mod i18n;
 #[cfg(test)]
 mod i18n_tests;
 mod icons;
+mod io;
 mod settings;
 pub use i18n::Language;
 mod project;
@@ -117,6 +118,9 @@ impl Workspace {
             || self.name_dialog.is_some()
             || self.remove_dialog
             || self.editor.project_error.is_some();
+        if modal || !ui.is_enabled() || ui.input(|i| !i.focused || !i.pointer.primary_down()) {
+            self.editor.simulation.release_button();
+        }
         ui.add_enabled_ui(!modal, |ui| self.show_inner(ui));
         if ui.is_enabled() {
             self.project_dialogs(ui.ctx());
@@ -134,6 +138,7 @@ impl Workspace {
                 self.editor.appearance_mode,
             )
         {
+            self.editor.simulation.release_button();
             self.appearance.reset_context();
             self.canvas.reset();
             self.fit_pending = true;
@@ -636,6 +641,11 @@ impl Workspace {
                                             self.library_tool(ui, Kind::ShiftRegister);
                                             self.library_tool(ui, Kind::Rom);
                                             self.library_tool(ui, Kind::Ram);
+                                        }
+                                        "Input/Output" => {
+                                            for kind in [Kind::Button, Kind::Led, Kind::SevenSegment, Kind::HexDisplay] {
+                                                self.library_tool(ui, kind);
+                                            }
                                         }
                                         "Base" => self.library_tool(ui, Kind::Text),
                                         _ => {

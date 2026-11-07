@@ -796,3 +796,134 @@ fn memory_editor_real_input_keeps_rom_history_and_ram_instance_commands_separate
         );
     }
 }
+
+#[test]
+fn io_library_properties_and_momentary_inspector_work_in_both_languages() {
+    for language in Language::ALL {
+        let ctx = Context::default();
+        configure(&ctx);
+        let mut app = Workspace::default();
+        app.set_language(language);
+        let translated = |s: &str| i18n::with_language(language, || i18n::tr(s).to_owned());
+        click(&ctx, &mut app, &translated("Input/Output"));
+        for kind in [
+            Kind::Button,
+            Kind::Led,
+            Kind::SevenSegment,
+            Kind::HexDisplay,
+        ] {
+            if kind == Kind::SevenSegment {
+                frame(
+                    &ctx,
+                    &mut app,
+                    vec![
+                        Event::PointerMoved(Pos2::new(130.0, 350.0)),
+                        Event::MouseWheel {
+                            unit: egui::MouseWheelUnit::Point,
+                            delta: egui::vec2(0.0, -170.0),
+                            modifiers: Modifiers::NONE,
+                            phase: egui::TouchPhase::Move,
+                            source: egui::MouseWheelSource::Unknown,
+                        },
+                    ],
+                );
+                for _ in 0..20 {
+                    frame(&ctx, &mut app, vec![]);
+                }
+            }
+            click(&ctx, &mut app, &translated(kind.name()));
+            assert_eq!(app.editor.tool, Tool::Place(kind));
+            let labels = frame(&ctx, &mut app, vec![]);
+            assert!(has(
+                &labels,
+                &translated(if kind == Kind::Button {
+                    "Button color"
+                } else {
+                    "On color"
+                })
+            ));
+            assert!(!has(&labels, &translated("Data bits")));
+            if matches!(kind, Kind::Led | Kind::SevenSegment) {
+                let rect = labels
+                    .iter()
+                    .find(|(s, _)| s == &translated("Active on high"))
+                    .unwrap()
+                    .1;
+                let checkbox = labels
+                    .iter()
+                    .find(|(s, r)| s.is_empty() && (r.center().y - rect.center().y).abs() < 1.0)
+                    .unwrap()
+                    .1;
+                let pos = Pos2::new(checkbox.left() - 10.0, rect.center().y);
+                for pressed in [true, false] {
+                    frame(
+                        &ctx,
+                        &mut app,
+                        vec![
+                            Event::PointerMoved(pos),
+                            Event::PointerButton {
+                                pos,
+                                button: PointerButton::Primary,
+                                pressed,
+                                modifiers: Modifiers::NONE,
+                            },
+                        ],
+                    );
+                }
+                assert!(!app.editor.template.io.active_high);
+            }
+        }
+        let mut circuit = logisim_core::Circuit::default();
+        let id = circuit.add_component(Component::new(Kind::Button, Point::new(200, 200)));
+        app.replace_circuit(circuit);
+        app.editor.selection.insert(id);
+        let before = app.project().clone();
+        let mut labels = frame(&ctx, &mut app, vec![]);
+        for _ in 0..2 {
+            labels = frame(&ctx, &mut app, vec![]);
+        }
+        let pos = labels
+            .iter()
+            .find(|(s, _)| s == &translated("Hold to press"))
+            .unwrap()
+            .1
+            .center();
+        frame(
+            &ctx,
+            &mut app,
+            vec![
+                Event::PointerMoved(pos),
+                Event::PointerButton {
+                    pos,
+                    button: PointerButton::Primary,
+                    pressed: true,
+                    modifiers: Modifiers::NONE,
+                },
+            ],
+        );
+        assert_eq!(
+            app.take_simulation_actions(),
+            vec![SimulationAction::PressButton { id }]
+        );
+        let pos = egui::pos2(1100.0, 750.0);
+        frame(
+            &ctx,
+            &mut app,
+            vec![
+                Event::PointerMoved(pos),
+                Event::PointerButton {
+                    pos,
+                    button: PointerButton::Primary,
+                    pressed: false,
+                    modifiers: Modifiers::NONE,
+                },
+            ],
+        );
+        assert_eq!(
+            app.take_simulation_actions(),
+            vec![SimulationAction::ReleaseButtons]
+        );
+        assert_eq!(app.project(), &before);
+        assert!(!app.editor.can_undo());
+    }
+}

@@ -7,10 +7,19 @@ use std::collections::BTreeSet;
 fn frame(ctx: &Context, app: &mut Workspace, mut events: Vec<Event>, modifiers: Modifiers) {
     events.insert(0, Event::ModifiersChanged(modifiers));
     let time = ctx.input(|i| i.time) + 0.2;
+    let focused = events
+        .iter()
+        .filter_map(|event| match event {
+            Event::WindowFocused(focused) => Some(*focused),
+            _ => None,
+        })
+        .next_back()
+        .unwrap_or(true);
     let mut out = ctx.run_ui(
         RawInput {
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 820.0))),
             time: Some(time),
+            focused,
             events,
             ..Default::default()
         },
@@ -1022,4 +1031,78 @@ fn arithmetic_canvas_places_wires_and_keeps_fixed_orientation() {
     assert_eq!(app.circuit(), &before);
     key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
     assert!(app.circuit().wires.is_empty());
+}
+
+#[test]
+fn momentary_button_press_drag_release_focus_and_modal_are_runtime_only() {
+    for facing in logisim_core::Facing::ALL {
+        let (ctx, mut app) = setup();
+        let mut c = Component::new(Kind::Button, Point::new(200, 200));
+        c.facing = facing;
+        let mut circuit = logisim_core::Circuit::default();
+        let id = circuit.add_component(c);
+        app.replace_circuit(circuit);
+        app.editor.set_tool(Tool::Poke);
+        frame(&ctx, &mut app, vec![], Modifiers::NONE);
+        let before = app.project().clone();
+        let at = drawing::bounds(app.circuit().component(id).unwrap()).center();
+        let pos = app.canvas.screen_vec(at.to_vec2());
+        button(&ctx, &mut app, pos, true);
+        assert_eq!(
+            app.take_simulation_actions(),
+            vec![SimulationAction::PressButton { id }]
+        );
+        let outside = Pos2::new(100.0, 750.0);
+        frame(
+            &ctx,
+            &mut app,
+            vec![Event::PointerMoved(outside)],
+            Modifiers::NONE,
+        );
+        assert!(app.take_simulation_actions().is_empty());
+        key(&ctx, &mut app, Key::R, Modifiers::COMMAND);
+        assert_eq!(app.take_simulation_actions(), vec![SimulationAction::Reset]);
+        button(&ctx, &mut app, outside, false);
+        assert_eq!(
+            app.take_simulation_actions(),
+            vec![SimulationAction::ReleaseButtons]
+        );
+        assert_eq!(app.project(), &before);
+        assert!(!app.editor.can_undo());
+        button(&ctx, &mut app, pos, true);
+        assert_eq!(
+            app.take_simulation_actions(),
+            vec![SimulationAction::PressButton { id }]
+        );
+        frame(
+            &ctx,
+            &mut app,
+            vec![Event::WindowFocused(false)],
+            Modifiers::NONE,
+        );
+        assert_eq!(
+            app.take_simulation_actions(),
+            vec![SimulationAction::ReleaseButtons]
+        );
+        button(&ctx, &mut app, outside, false);
+        frame(
+            &ctx,
+            &mut app,
+            vec![Event::WindowFocused(true)],
+            Modifiers::NONE,
+        );
+        button(&ctx, &mut app, pos, true);
+        assert_eq!(
+            app.take_simulation_actions(),
+            vec![SimulationAction::PressButton { id }]
+        );
+        app.settings_open = true;
+        frame(&ctx, &mut app, vec![], Modifiers::NONE);
+        assert_eq!(
+            app.take_simulation_actions(),
+            vec![SimulationAction::ReleaseButtons]
+        );
+        assert_eq!(app.project(), &before);
+        assert!(!app.editor.can_undo());
+    }
 }

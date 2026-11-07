@@ -65,6 +65,8 @@ pub struct SimulationView {
     pub automatic_ticks: bool,
     pub tick_hz: u32,
     pub clocks: BTreeSet<Id>,
+    pub buttons: BTreeMap<Id, bool>,
+    pub indicators: BTreeMap<Id, [bool; 8]>,
     pub storage: BTreeMap<Id, SignalView>,
     pub memories: BTreeMap<Id, logisim_core::MemoryContents>,
     pub wires: BTreeMap<Id, SignalView>,
@@ -74,6 +76,10 @@ pub struct SimulationView {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SimulationAction {
+    PressButton {
+        id: Id,
+    },
+    ReleaseButtons,
     ToggleEnabled,
     Step,
     Reset,
@@ -107,8 +113,21 @@ pub(crate) struct SimulationUi {
     pub actions: Vec<SimulationAction>,
     pub focus_value: bool,
     draft: Option<(Id, u32, String)>,
+    held_button: Option<Id>,
 }
 impl SimulationUi {
+    pub fn press_button(&mut self, id: Id) {
+        if self.held_button != Some(id) {
+            self.release_button();
+            self.held_button = Some(id);
+            self.actions.push(SimulationAction::PressButton { id });
+        }
+    }
+    pub fn release_button(&mut self) {
+        if self.held_button.take().is_some() {
+            self.actions.push(SimulationAction::ReleaseButtons);
+        }
+    }
     pub fn status(&self) -> String {
         if self.view.limited {
             return tr("Propagation limit — paused").into();
@@ -280,6 +299,14 @@ impl SimulationUi {
         ));
     }
     pub fn component(&mut self, ui: &mut Ui, c: &Component) {
+        if c.kind == logisim_core::Kind::Button {
+            ui.weak(tr(
+                "Poke: hold the left mouse button to press; release anywhere.",
+            ));
+            if ui.button(tr("Hold to press")).is_pointer_button_down_on() {
+                self.press_button(c.id);
+            }
+        }
         if let Some(state) = self.view.storage.get(&c.id) {
             ui.colored_label(state.tone.color(), tf!("Stored value: {}", state.text))
                 .on_hover_text(&state.binary);
