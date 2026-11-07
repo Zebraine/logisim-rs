@@ -33,6 +33,7 @@ mod sequential_tests;
 #[cfg(test)]
 mod tests;
 mod transistors;
+mod ttl;
 mod value;
 
 use logisim_core::{Circuit, Extension, Id, Kind, Point};
@@ -376,7 +377,7 @@ impl Simulator {
             .circuit
             .components
             .iter()
-            .filter(|c| matches!(c.kind, Kind::Plexer(_) | Kind::Arithmetic(_)))
+            .filter(|c| matches!(c.kind, Kind::Plexer(_) | Kind::Arithmetic(_) | Kind::Ttl(_)))
             // Restore held outputs before sampling freshly compiled inputs.
             .filter(|c| {
                 !(initializing
@@ -389,6 +390,7 @@ impl Simulator {
                     .collect();
                 let outputs = match c.kind {
                     Kind::Arithmetic(_) => arithmetic::evaluate(c, &ports),
+                    Kind::Ttl(_) => ttl::evaluate(c, &ports),
                     _ => plexers::evaluate(c, &ports),
                 };
                 outputs

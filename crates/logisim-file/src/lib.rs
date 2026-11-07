@@ -15,6 +15,7 @@ mod terminal;
 #[cfg(test)]
 mod tests;
 mod transistors;
+mod ttl;
 mod write;
 
 pub use logisim_core::Project as Document;

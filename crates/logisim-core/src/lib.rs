@@ -13,11 +13,13 @@ mod bus;
 mod latches;
 mod parity;
 mod transistors;
+mod ttl;
 pub use arithmetic::{Arithmetic, ArithmeticOptions, BitSearch, Shift};
 pub use bus::{BusControl, Pull};
 pub use latches::{Latch, LatchEnable, LatchRole};
 pub use parity::{Parity, ParityOptions, ParityOutput};
 pub use transistors::{TransistorOptions, TransistorType};
+pub use ttl::{Ttl, TtlOptions};
 
 mod plexers;
 pub use plexers::{Plexer, PlexerRole, PlexerTerminal, Plexing};
@@ -162,6 +164,7 @@ impl Gate {
 pub enum Kind {
     Subcircuit(Id),
     Gate(Gate),
+    Ttl(Ttl),
     Parity(Parity),
     ControlledBuffer,
     ControlledInverter,
@@ -271,6 +274,7 @@ impl Kind {
                 | Self::RgbLed
                 | Self::Pin
                 | Self::Gate(_)
+                | Self::Ttl(_)
                 | Self::Parity(_)
                 | Self::ControlledBuffer
                 | Self::ControlledInverter
@@ -292,6 +296,7 @@ impl Kind {
         match self {
             Self::Subcircuit(_) => "Subcircuit",
             Self::Gate(g) => g.name(),
+            Self::Ttl(t) => t.name(),
             Self::Latch(l) => l.name(),
             Self::Parity(p) => p.name(),
             Self::ControlledBuffer => "Controlled Buffer",
@@ -369,6 +374,7 @@ pub struct Component {
     pub bus: BusControl,
     pub transistor: TransistorOptions,
     pub parity: ParityOptions,
+    pub ttl: TtlOptions,
     pub latch_enable: LatchEnable,
 }
 impl Component {
@@ -408,12 +414,15 @@ impl Component {
             } else {
                 String::new()
             },
-            font_size: if matches!(kind, Kind::Joystick | Kind::PlaRom) {
+            font_size: if matches!(kind, Kind::Joystick | Kind::PlaRom | Kind::Ttl(_)) {
                 12
             } else {
                 14
             },
-            color: if matches!(kind, Kind::Tunnel | Kind::Joystick | Kind::PlaRom) {
+            color: if matches!(
+                kind,
+                Kind::Tunnel | Kind::Joystick | Kind::PlaRom | Kind::Ttl(_)
+            ) {
                 [0, 0, 0]
             } else {
                 [51, 65, 85]
@@ -440,6 +449,7 @@ impl Component {
             bus: BusControl::default(),
             transistor: TransistorOptions::default(),
             parity: ParityOptions::default(),
+            ttl: TtlOptions::default(),
             latch_enable: LatchEnable::default(),
             plexing: Plexing {
                 select_bits: if kind == Kind::Plexer(Plexer::PriorityEncoder) {
@@ -460,6 +470,13 @@ impl Component {
         }
     }
     pub fn local_ports(&self) -> Vec<Point> {
+        if matches!(self.kind, Kind::Ttl(_)) {
+            return self
+                .ttl_pins()
+                .iter()
+                .map(|p| Ttl::pin_position(*p))
+                .collect();
+        }
         if self.kind == Kind::PlaRom {
             return vec![Point::new(60, 0), Point::ZERO, Point::new(30, 30)];
         }
@@ -743,7 +760,7 @@ impl Circuit {
                 || old.kind.is_memory()
                 || matches!(old.kind, Kind::DotMatrix | Kind::Joystick)
                 || old.kind.is_transistor()
-                || matches!(old.kind, Kind::Parity(_) | Kind::Latch(_))
+                || matches!(old.kind, Kind::Parity(_) | Kind::Latch(_) | Kind::Ttl(_))
                 || (old.kind.is_controlled()
                     && (old.bus.control_left != replacement.bus.control_left
                         || old.gate_size != replacement.gate_size))

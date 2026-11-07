@@ -1679,3 +1679,53 @@ fn pla_modal_blocks_canvas_and_file_shortcuts_and_escape_cancels() {
     assert!(app.editor.pla_target.is_none());
     assert_eq!(app.circuit(), &original);
 }
+
+#[test]
+fn ttl_canvas_placement_wiring_rotation_move_duplicate_and_undo() {
+    use logisim_core::{Facing, Ttl};
+    let (ctx, mut app) = setup();
+    app.editor.set_tool(Tool::Place(Kind::Ttl(Ttl::Ic7400)));
+    frame(&ctx, &mut app, vec![], Modifiers::NONE);
+    frame(&ctx, &mut app, vec![], Modifiers::NONE);
+    let at = app.canvas.screen(Point::new(200, 200));
+    click(&ctx, &mut app, at);
+    key(&ctx, &mut app, Key::Escape, Modifiers::NONE);
+    let id = app.circuit().components[0].id;
+    app.editor.set_tool(Tool::Wire);
+    let a = app.canvas.screen(Point::new(210, 230));
+    let b = app.canvas.screen(Point::new(210, 330));
+    click(&ctx, &mut app, a);
+    click(&ctx, &mut app, b);
+    assert_eq!(app.circuit().wires.len(), 1);
+    app.editor.set_tool(Tool::Select);
+    frame(&ctx, &mut app, vec![], Modifiers::NONE);
+    let body = app.canvas.screen(Point::new(270, 200));
+    click(&ctx, &mut app, body);
+    assert!(app.editor.selection.contains(&id));
+    let before = app.circuit().clone();
+    key(&ctx, &mut app, Key::R, Modifiers::NONE);
+    assert_ne!(app.circuit().component(id).unwrap().facing, Facing::East);
+    assert_eq!(app.circuit().wires, before.wires);
+    key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
+    assert_eq!(app.circuit(), &before);
+    frame(&ctx, &mut app, vec![], Modifiers::NONE);
+    let body = app.canvas.screen(Point::new(270, 200));
+    let target = app.canvas.screen(Point::new(350, 200));
+    drag(&ctx, &mut app, body, target);
+    assert_eq!(
+        app.circuit().component(id).unwrap().position,
+        Point::new(280, 200)
+    );
+    assert!(
+        app.circuit()
+            .wires
+            .iter()
+            .any(|w| w.a == Point::new(290, 230) || w.b == Point::new(290, 230))
+    );
+    key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
+    assert_eq!(app.circuit(), &before);
+    key(&ctx, &mut app, Key::D, Modifiers::COMMAND);
+    assert_eq!(app.circuit().components.len(), 2);
+    key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
+    assert_eq!(app.circuit(), &before);
+}

@@ -93,6 +93,12 @@ pub(crate) fn bounds(c: &Component) -> Rect {
             pos(c.position + c.facing.transform(max)),
         );
     }
+    if matches!(c.kind, Kind::Ttl(_)) {
+        return Rect::from_two_pos(
+            pos(c.position + c.facing.transform(Point::new(0, -30))),
+            pos(c.position + c.facing.transform(Point::new(140, 30))),
+        );
+    }
     if c.kind == Kind::PlaRom {
         return Rect::from_min_max(
             pos(c.position + Point::new(0, -30)),
@@ -337,6 +343,7 @@ pub(crate) fn component(
         );
     };
     match c.kind {
+        Kind::Ttl(_) => crate::ttl::draw(p, canvas, c, color),
         Kind::Transistor | Kind::TransmissionGate => crate::transistors::draw(p, canvas, c, color),
         Kind::ControlledBuffer | Kind::ControlledInverter | Kind::PullResistor => {
             crate::bus::draw(p, canvas, c, color)
@@ -681,7 +688,13 @@ pub(crate) fn component(
     }
     if !matches!(c.kind, Kind::Text | Kind::Tunnel | Kind::PlaRom) && !c.label.is_empty() {
         let r = bounds(c);
-        let (anchor, align) = if matches!(
+        let (anchor, align) = if matches!(c.kind, Kind::Ttl(_)) {
+            if matches!(c.facing, Facing::East | Facing::West) {
+                (vec2(r.right() + 8.0, r.center().y), Align2::LEFT_CENTER)
+            } else {
+                (vec2(r.center().x, r.top() - 8.0), Align2::CENTER_BOTTOM)
+            }
+        } else if matches!(
             c.kind,
             Kind::Probe
                 | Kind::Subcircuit(_)

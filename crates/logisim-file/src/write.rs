@@ -45,7 +45,7 @@ pub fn serialize(document: &Document) -> Result<String> {
     }
     let name = escape(&document.main_circuit().name)?;
     let mut out = String::from(
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!-- Written by logisim-rs; source declares the compatible Logisim-ITA format. -->\n<project source=\"2.16.2.2.jar\" version=\"1.0\">\n  <lib desc=\"#Wiring\" name=\"0\"/>\n  <lib desc=\"#Gates\" name=\"1\"/>\n  <lib desc=\"#Base\" name=\"2\"/>\n  <lib desc=\"#Memory\" name=\"3\"/>\n  <lib desc=\"#Plexers\" name=\"4\"/>\n  <lib desc=\"#Arithmetic\" name=\"5\"/>\n  <lib desc=\"#I/O\" name=\"6\"/>\n",
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!-- Written by logisim-rs; source declares the compatible Logisim-ITA format. -->\n<project source=\"2.16.2.2.jar\" version=\"1.0\">\n  <lib desc=\"#Wiring\" name=\"0\"/>\n  <lib desc=\"#Gates\" name=\"1\"/>\n  <lib desc=\"#Base\" name=\"2\"/>\n  <lib desc=\"#Memory\" name=\"3\"/>\n  <lib desc=\"#Plexers\" name=\"4\"/>\n  <lib desc=\"#Arithmetic\" name=\"5\"/>\n  <lib desc=\"#I/O\" name=\"6\"/>\n  <lib desc=\"#TTL\" name=\"7\"/>\n",
     );
     writeln!(out, "  <main name=\"{name}\"/>").unwrap();
     out.push_str("  <options>\n    <a name=\"gateUndefined\" val=\"ignore\"/>\n    <a name=\"simlimit\" val=\"1000\"/>\n    <a name=\"simrand\" val=\"0\"/>\n  </options>\n  <mappings>\n    <tool lib=\"2\" map=\"Button2\" name=\"Poke Tool\"/>\n    <tool lib=\"2\" map=\"Button3\" name=\"Menu Tool\"/>\n    <tool lib=\"2\" map=\"Ctrl Button1\" name=\"Menu Tool\"/>\n  </mappings>\n  <toolbar>\n    <tool lib=\"2\" name=\"Poke Tool\"/>\n    <tool lib=\"2\" name=\"Edit Tool\"/>\n    <sep/>\n    <tool lib=\"2\" name=\"Text Tool\"/>\n    <tool lib=\"0\" name=\"Pin\"><a name=\"tristate\" val=\"false\"/></tool>\n    <tool lib=\"0\" name=\"Pin\"><a name=\"output\" val=\"true\"/><a name=\"facing\" val=\"west\"/></tool>\n    <tool lib=\"1\" name=\"NOT Gate\"/>\n    <tool lib=\"1\" name=\"AND Gate\"/>\n    <tool lib=\"1\" name=\"OR Gate\"/>\n  </toolbar>\n");
@@ -83,6 +83,7 @@ pub fn serialize(document: &Document) -> Result<String> {
                 return Err(Error(format!("Invalid {} attributes.", c.kind.name())));
             }
             let lib = match c.kind {
+                Kind::Ttl(_) => 7,
                 Kind::Plexer(_) => 4,
                 Kind::Arithmetic(_) => 5,
                 Kind::Button
@@ -160,6 +161,7 @@ pub fn serialize(document: &Document) -> Result<String> {
             if !matches!(
                 c.kind,
                 Kind::Text
+                    | Kind::Ttl(_)
                     | Kind::Probe
                     | Kind::PullResistor
                     | Kind::Splitter
@@ -190,6 +192,7 @@ pub fn serialize(document: &Document) -> Result<String> {
             ) {
                 attribute(&mut out, "width", c.bits)?;
             }
+            crate::ttl::write(&mut out, c)?;
             crate::latches::write(&mut out, c)?;
             crate::parity::write(&mut out, c)?;
             crate::bus::write(&mut out, c)?;

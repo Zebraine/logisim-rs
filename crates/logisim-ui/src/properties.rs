@@ -164,6 +164,9 @@ fn component_editor(ui: &mut Ui, editor: &mut Editor, mut c: Component, placing:
             "Resizing preserves the upper-left connections; removed cells are discarded.",
         ));
     }
+    if let Kind::Ttl(t) = c.kind {
+        ui.weak(tr(t.description()));
+    }
     let original = c.clone();
     let mut active = false;
     if c.kind.has_label() {
@@ -254,6 +257,7 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
             | Kind::Keyboard
             | Kind::Tty
             | Kind::Rom
+            | Kind::Ttl(_)
             | Kind::PlaRom
             | Kind::Ram
             | Kind::Probe
@@ -296,6 +300,7 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
         active |= r.has_focus() || r.dragged();
         ui.end_row();
     }
+    crate::ttl::fields(ui, c);
     crate::latches::fields(ui, c);
     crate::bus::fields(ui, c);
     crate::transistors::fields(ui, c);

@@ -121,7 +121,7 @@ Ctrl+Shift+S，Ctrl+Q 退出。文件选择框可浏览目录或输入完整路�
 保存失败不会清除修改状态，检测到文件被外部修改时要求另存为。
 
 当前互通范围：多电路项目、主电路选择、默认或已支持自定义外观的子电路实例，以及各电路中的八种门、1–32 位两态输入/输出 Pin、正交导线、文字、普通 Tunnel
-及 Controlled Buffer、Controlled Inverter、上述基础布线、六种 Plexers 与九种算术元件、Clock、D/T/JK/SR Flip-Flop、Register、Counter、Universal Register、Random、ROM、RAM、PlaRom、Button、Switch、DipSwitch、Slider、LED、RGBLed、DotMatrix、7-Segment Display 和 Hex Digit Display；
+及 TTL 7400/7402/7404/7408/7432/7486/747266、Controlled Buffer、Controlled Inverter、上述基础布线、六种 Plexers 与九种算术元件、Clock、D/T/JK/SR Flip-Flop、Register、Counter、Universal Register、Random、ROM、RAM、PlaRom、Button、Switch、DipSwitch、Slider、LED、RGBLed、DotMatrix、7-Segment Display 和 Hex Digit Display；
 包括门尺寸、2–8 个输入、方向、标签、字号、颜色和文字对齐。导入保留实际坐标及连接端口。
 多行文字数据可往返，但参考程序与本程序的排版不同；字体使用本程序的默认字体，
 不承诺字体族、字形覆盖或样式一致，隧道采用固定文字色。
@@ -135,6 +135,11 @@ Ctrl+Shift+S，Ctrl+Q 退出。文件选择框可浏览目录或输入完整路�
 仿真展开限制为 32 层、1024 个实例、65536 项；超限会报告并停止求值。
 
 ## 电路仿真
+
+TTL 库提供七种基础门芯片，支持 14 脚封装、四向旋转、引脚提示和内部逻辑显示。
+可选显示 Vcc/GND 电源引脚；启用后只有 Vcc=1、GND=0 时工作，其余供电组合释放输出。
+属性编辑和旋转保留原导线位置；移动芯片仍维护附着连线。支持属性撤销及 `.circ` 往返。
+
 
 Memory 库的随机数发生器支持 1–32 位、上升/下降沿、使能和异步复位。非零种子可复现序列，
 种子修改在复位后生效；0 使用本次运行的自动种子，复位保持期间输出稳定。自动种子来源

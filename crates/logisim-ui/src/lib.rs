@@ -10,6 +10,7 @@ mod document;
 mod latches;
 mod parity;
 mod transistors;
+mod ttl;
 pub use document::{DocumentView, FileAction};
 mod drawing;
 mod editor;
@@ -649,6 +650,9 @@ impl Workspace {
                                                 self.library_tool(ui, kind);
                                             }
                                         }
+                                        "TTL" => {
+                                            for t in logisim_core::Ttl::ALL { self.library_tool(ui, Kind::Ttl(t)); }
+                                        }
                                         "Arithmetic" => {
                                     for a in logisim_core::Arithmetic::ALL { self.library_tool(ui, Kind::Arithmetic(a)); }
                                 }
@@ -695,10 +699,13 @@ impl Workspace {
 
     fn library_tool(&mut self, ui: &mut Ui, kind: Kind) {
         let tool = Tool::Place(kind);
-        if ui
-            .selectable_label(self.editor.tool == tool, tr(kind.name()))
-            .clicked()
-        {
+        let response = ui.selectable_label(self.editor.tool == tool, tr(kind.name()));
+        let response = if let Kind::Ttl(t) = kind {
+            response.on_hover_text(tr(t.description()))
+        } else {
+            response
+        };
+        if response.clicked() {
             self.editor.appearance_mode = false;
             self.editor.set_tool(tool);
         }
