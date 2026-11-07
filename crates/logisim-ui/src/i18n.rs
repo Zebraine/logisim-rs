@@ -242,6 +242,7 @@ const MESSAGES: &[(&str, &str)] = &[
     ),
     ("Choose a regular .circ file.", "请选择普通 .circ 文件。"),
     ("Choose a regular .hex file.", "请选择普通 .hex 文件。"),
+    ("Circuit label", "封装标签"),
     ("Circuit layout", "电路布局"),
     ("Circuit name", "电路名称"),
     ("Circuit operation unavailable", "无法执行电路操作"),
@@ -481,6 +482,7 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Label", "标签"),
     ("Label color", "标签颜色"),
     ("Label location", "标签位置"),
+    ("Label up", "标签朝上方向"),
     ("Lamp test (LT, active low)", "灯测试（LT，低电平有效）"),
     ("Language", "语言"),
     (
@@ -845,6 +847,7 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Stick color", "摇杆颜色"),
     ("Store: 0 holds data", "存储：0 保持数据"),
     ("Stored value: {}", "存储值：{}"),
+    ("Style", "样式"),
     ("Subcircuit", "子电路"),
     ("Subtractor", "减法器"),
     ("Switch", "开关"),

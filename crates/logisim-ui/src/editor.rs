@@ -198,6 +198,15 @@ impl Editor {
             self.record(before);
         }
     }
+    pub fn update_circuit_label(&mut self, label: logisim_core::CircuitLabel) {
+        if self.circuit.label == label {
+            return;
+        }
+        if self.property_before.is_none() {
+            self.property_before = Some(self.snapshot());
+        }
+        self.circuit.label = label;
+    }
     pub fn update_appearance(&mut self, appearance: logisim_core::Appearance) {
         if self.circuit.appearance.as_ref() == Some(&appearance) {
             return;

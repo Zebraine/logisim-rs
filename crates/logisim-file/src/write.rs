@@ -63,6 +63,7 @@ pub fn serialize(document: &Document) -> Result<String> {
         let circuit = &definition.circuit;
         let name = escape(&definition.name)?;
         writeln!(out, "  <circuit name=\"{name}\">").unwrap();
+        crate::fonts::write_label(&mut out, &circuit.label)?;
         for w in &circuit.wires {
             if !valid_point(w.a)
                 || !valid_point(w.b)
@@ -87,7 +88,7 @@ pub fn serialize(document: &Document) -> Result<String> {
                     8
                 })
                     .contains(&c.inputs)
-                || c.font_size == 0
+                || c.font.size == 0
                 || c.label.len() > 65_536
                 || (c.kind != Kind::Text && c.color_alpha != 255)
                 || (c.kind != Kind::Button && c.label_center)
@@ -339,7 +340,7 @@ pub fn serialize(document: &Document) -> Result<String> {
                 } else {
                     "labelfont"
                 },
-                format!("Dialog plain {}", c.font_size),
+                crate::fonts::serialize(&c.font)?,
             )?;
             if c.kind != Kind::Tunnel {
                 attribute(

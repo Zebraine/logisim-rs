@@ -58,18 +58,22 @@ pub(crate) fn draw(p: &Painter, canvas: &Canvas, c: &Component, color: Color32) 
     } else {
         &c.label
     };
-    let size = if c.label.is_empty() {
-        10.0
+    let font = if c.label.is_empty() {
+        logisim_core::ArtworkFont {
+            size: 10,
+            ..Default::default()
+        }
     } else {
-        f32::from(c.font_size)
+        c.font.clone()
     };
-    p.text(
-        at(30, -9),
-        Align2::CENTER_CENTER,
-        label,
-        FontId::proportional(size * z),
+    crate::fonts::Text {
+        text: label,
+        font: &font,
         color,
-    );
+        zoom: z,
+        angle: 0.0,
+    }
+    .paint(p, at(30, -9), Align2::CENTER_CENTER);
     let (inputs, terms, outputs) = c.pla.dimensions();
     p.text(
         at(30, 9),

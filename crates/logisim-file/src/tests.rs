@@ -45,7 +45,7 @@ fn full_supported_roundtrip_preserves_attributes_ports_and_wires() {
                 c.bits = 32;
                 c.inputs = 8;
                 c.label = "<&\" > 线\nnext\tend".into();
-                c.font_size = 24;
+                c.font.size = 24;
                 c.color = [1, 2, 255];
                 document.main_circuit_mut().circuit.add_component(c);
             }
@@ -187,7 +187,7 @@ fn main_selection_and_omitted_project_content_are_explicit() {
         "<circuit name=\"other\"/><message>data</message></project>",
     );
     let imported = parse(&s).unwrap();
-    assert_eq!(imported.warnings.len(), 2);
+    assert_eq!(imported.warnings.len(), 1);
     assert_eq!(imported.document.circuits.len(), 2);
     assert!(parse(&s.replace("<main name=\"main\"/>", "<main name=\"missing\"/>")).is_err());
 }
@@ -342,7 +342,7 @@ fn all_wiring_attributes_roundtrip_without_omissions() {
                 c.radix = Radix::Octal;
                 c.label = "Probe & 总线".into();
                 c.label_facing = Facing::East;
-                c.font_size = 18;
+                c.font.size = 18;
             }
             Kind::Splitter => {
                 c.bits = 32;

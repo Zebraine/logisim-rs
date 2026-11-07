@@ -7,6 +7,7 @@ mod bus;
 mod compatibility_tests;
 mod diagnostics;
 mod external;
+mod fonts;
 mod gates;
 mod hex;
 mod io;

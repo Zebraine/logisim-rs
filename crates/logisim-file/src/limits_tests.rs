@@ -64,7 +64,7 @@ fn raw_unsupported_items_still_count_toward_circuit_and_project_limits() {
 fn omissions_remain_visible_after_hundreds_of_unique_display_notes() {
     let mut body = String::new();
     for i in 0..250 {
-        body.push_str(&format!(r#"<comp lib="b" name="Text" loc="({i},0)"><a name="font" val="Family{i} plain 12"/></comp>"#));
+        body.push_str(&format!(r#"<a name="unknown{i}" val="display metadata"/>"#));
     }
     for i in 0..8 {
         body.push_str(&format!(

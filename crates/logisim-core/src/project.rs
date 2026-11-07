@@ -4,6 +4,14 @@ use std::collections::{BTreeMap, BTreeSet};
 
 pub const MAX_CIRCUITS: usize = 128;
 
+/// Text displayed inside every instance, independent of the instance label.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CircuitLabel {
+    pub text: String,
+    pub font: crate::ArtworkFont,
+    pub up: Facing,
+    pub color: [u8; 3],
+}
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct InterfacePort {
     pub pin: Id,
@@ -14,6 +22,7 @@ pub struct InterfacePort {
 }
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Interface {
+    pub label: CircuitLabel,
     pub name: String,
     pub appearance: Option<crate::Appearance>,
     pub ports: Vec<InterfacePort>,
@@ -53,6 +62,7 @@ impl CircuitDefinition {
         let corners =
             [a, b, Point::new(a.x, b.y), Point::new(b.x, a.y)].map(|p| appearance.local(p));
         Interface {
+            label: self.circuit.label.clone(),
             name: self.name.clone(),
             appearance: Some(appearance.clone()),
             ports,
@@ -133,6 +143,7 @@ impl CircuitDefinition {
         // Pin identity, not side order, is the persistent association across edits.
         ports.sort_by_key(|p| p.pin);
         Interface {
+            label: self.circuit.label.clone(),
             appearance: None,
             name: self.name.clone(),
             ports,

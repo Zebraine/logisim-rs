@@ -62,7 +62,7 @@ mod tests {
                         c.ttl.power_pins = power;
                         c.ttl.internal = internal;
                         c.label = "芯片 <&>".into();
-                        c.font_size = 18;
+                        c.font.size = 18;
                         c.color = [30, 60, 90];
                         let mut circuit = Circuit::default();
                         let id = circuit.add_component(c.clone());

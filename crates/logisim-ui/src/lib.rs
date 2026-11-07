@@ -7,6 +7,7 @@ mod artwork;
 mod bus;
 mod canvas;
 mod document;
+mod fonts;
 mod latches;
 mod parity;
 mod transistors;

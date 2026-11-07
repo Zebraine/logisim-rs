@@ -321,6 +321,50 @@ mod tests {
     use super::*;
     use logisim_core::{Facing, Point};
     #[test]
+    fn circuit_label_edits_update_instances_and_undo_without_moving_wires() {
+        let mut e = Editor::default();
+        e.edit_project(CircuitCommand::Add, "child".into()).unwrap();
+        let child = e.active;
+        e.set_tool(Tool::Place(Kind::Pin));
+        e.place(Point::new(100, 100));
+        e.switch_circuit(1);
+        e.set_tool(Tool::Place(Kind::Subcircuit(child)));
+        e.place(Point::new(200, 200));
+        e.circuit
+            .add_wire(Point::new(100, 200), Point::new(200, 200));
+        e.sync_project();
+        let original = e.project.main_circuit().circuit.clone();
+        e.switch_circuit(child);
+        let mut label = e.circuit.label.clone();
+        label.text = "ALU".into();
+        label.font.bold = true;
+        label.up = Facing::North;
+        e.update_circuit_label(label.clone());
+        e.commit_properties();
+        e.sync_project();
+        let main = &e.project.main_circuit().circuit;
+        assert_eq!(main.components[0].interface.label, label);
+        assert_eq!(main.wires, original.wires);
+        assert_eq!(main.components[0].ports(), original.components[0].ports());
+        e.undo();
+        e.sync_project();
+        assert!(
+            e.project.main_circuit().circuit.components[0]
+                .interface
+                .label
+                .text
+                .is_empty()
+        );
+        e.redo();
+        e.sync_project();
+        assert_eq!(
+            e.project.main_circuit().circuit.components[0]
+                .interface
+                .label,
+            label
+        );
+    }
+    #[test]
     fn global_history_restores_definitions_instances_and_main_selection() {
         let mut e = Editor::default();
         e.edit_project(CircuitCommand::Add, "part".into()).unwrap();

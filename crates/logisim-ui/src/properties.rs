@@ -78,8 +78,8 @@ pub(crate) fn show(ui: &mut Ui, editor: &mut Editor, circuit_name: &str) {
 }
 
 fn selection_info(ui: &mut Ui, editor: &mut Editor) {
-    editor.commit_properties();
     if !editor.selection.is_empty() {
+        editor.commit_properties();
         ui.horizontal(|ui| {
             if ui
                 .add_enabled(editor.can_rotate(), egui::Button::new(tr("Rotate")))
@@ -115,6 +115,31 @@ fn selection_info(ui: &mut Ui, editor: &mut Editor) {
         }
         return;
     }
+    let mut label = editor.circuit.label.clone();
+    ui.label(tr("Circuit label"));
+    let mut active = ui.text_edit_singleline(&mut label.text).has_focus();
+    egui::Grid::new("circuit_label_properties")
+        .num_columns(2)
+        .show(ui, |ui| {
+            active |= crate::fonts::properties(ui, &mut label.font);
+            ui.label(tr("Label up"));
+            egui::ComboBox::from_id_salt("circuit_label_up")
+                .selected_text(tr(label.up.name()))
+                .show_ui(ui, |ui| {
+                    for facing in Facing::ALL {
+                        ui.selectable_value(&mut label.up, facing, tr(facing.name()));
+                    }
+                });
+            ui.end_row();
+            ui.label(tr("Label color"));
+            ui.color_edit_button_srgb(&mut label.color);
+            ui.end_row();
+        });
+    editor.update_circuit_label(label);
+    if !active && !ui.ctx().any_popup_open() {
+        editor.commit_properties();
+    }
+    ui.separator();
     ui.label(tf!(
         "{} components · {} wires",
         editor.circuit.components.len(),
@@ -413,10 +438,7 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
         }
     }
     if c.kind.has_label() {
-        ui.label(tr("Font size"));
-        let r = ui.add(egui::DragValue::new(&mut c.font_size).range(8..=48));
-        active |= r.has_focus() || r.dragged();
-        ui.end_row();
+        active |= crate::fonts::properties(ui, &mut c.font);
         if c.kind != Kind::Tunnel {
             ui.label(tr("Color"));
             if c.kind == Kind::Text {

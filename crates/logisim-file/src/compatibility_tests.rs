@@ -170,3 +170,47 @@ fn unsigned_decimal_constants_match_observed_values_and_width_truncation() {
         );
     }
 }
+
+#[test]
+fn styled_fonts_and_circuit_labels_roundtrip_without_changing_ports() {
+    for (style, bold, italic) in [
+        ("plain", false, false),
+        ("bold", true, false),
+        ("italic", false, true),
+        ("bolditalic", true, true),
+    ] {
+        let input = project(
+            &format!(
+                r##"<comp lib="b" name="Text" loc="(30,40)"><a name="text" val="用户文字"/><a name="font" val="Microsoft YaHei UI {style} 16"/></comp><comp name="child" loc="(200,100)"/>"##
+            ),
+            &format!(
+                r##"<circuit name="child"><a name="clabel" val="ALU"/><a name="clabelfont" val="SansSerif {style} 18"/><a name="clabelup" val="north"/><a name="clabelcolor" val="#2255aa"/><comp lib="w" name="Pin" loc="(100,100)"/></circuit>"##
+            ),
+        );
+        let imported = parse(&input).unwrap();
+        assert!(imported.warnings.is_empty(), "{:?}", imported.warnings);
+        let main = &imported.document.main_circuit().circuit;
+        assert_eq!(main.components[0].font.family, "Microsoft YaHei UI");
+        assert_eq!(
+            (main.components[0].font.bold, main.components[0].font.italic),
+            (bold, italic)
+        );
+        assert_eq!(main.components[1].interface.label.text, "ALU");
+        assert_eq!(
+            main.components[1].interface.label.up,
+            logisim_core::Facing::North
+        );
+        assert_eq!(main.components[1].interface.label.color, [34, 85, 170]);
+        let saved = serialize(&imported.document).unwrap();
+        let restored = parse(&saved).unwrap();
+        assert!(restored.warnings.is_empty());
+        assert_eq!(restored.document, imported.document);
+        for invalid in [
+            input.replace("clabelup", "unimplemented"),
+            input.replace(" 18", " 0"),
+            input.replace("#2255aa", "#bad"),
+        ] {
+            assert!(!parse(&invalid).unwrap().warnings.is_empty());
+        }
+    }
+}

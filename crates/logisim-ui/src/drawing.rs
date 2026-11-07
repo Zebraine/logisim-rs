@@ -30,14 +30,14 @@ fn text_width(c: &Component) -> f32 {
     .max()
     .unwrap_or(0)
     .max(1) as f32
-        * f32::from(c.font_size)
+        * f32::from(c.font.size)
         * 0.62)
         .max(24.0)
 }
 fn text_origin(c: &Component) -> Pos2 {
     use logisim_core::{HorizontalAlign as H, VerticalAlign as V};
     let width = text_width(c);
-    let height = f32::from(c.font_size) * 1.35 * c.label.lines().count().max(1) as f32;
+    let height = f32::from(c.font.size) * 1.35 * c.label.lines().count().max(1) as f32;
     pos(c.position)
         - vec2(
             match c.text_horizontal {
@@ -48,7 +48,7 @@ fn text_origin(c: &Component) -> Pos2 {
             match c.text_vertical {
                 V::Top => 0.0,
                 V::Center => height / 2.0,
-                V::Baseline => f32::from(c.font_size),
+                V::Baseline => f32::from(c.font.size),
                 V::Bottom => height,
             },
         )
@@ -191,7 +191,7 @@ pub(crate) fn bounds(c: &Component) -> Rect {
             text_origin(c),
             vec2(
                 text_width(c),
-                f32::from(c.font_size) * 1.35 * c.label.lines().count().max(1) as f32,
+                f32::from(c.font.size) * 1.35 * c.label.lines().count().max(1) as f32,
             ),
         );
     }
@@ -201,7 +201,7 @@ pub(crate) fn bounds(c: &Component) -> Rect {
         Kind::BitExtender | Kind::Arithmetic(_) => (40.0, 20.0),
         Kind::Tunnel => (
             text_width(c) + 22.0,
-            (f32::from(c.font_size) * 0.7 + 5.0).max(16.0),
+            (f32::from(c.font.size) * 0.7 + 5.0).max(16.0),
         ),
         _ => (pin_width(c), 16.0),
     };
@@ -338,7 +338,13 @@ pub(crate) fn component(
             Shape::line(points, stroke)
         });
     };
-    let font = FontId::proportional(f32::from(c.font_size) * canvas.camera.zoom);
+    let text = crate::fonts::Text {
+        text: &c.label,
+        font: &c.font,
+        color,
+        zoom: canvas.camera.zoom,
+        angle: 0.0,
+    };
     let body_text = |at: Pos2, text: String, color: Color32| {
         let galley = p.layout_no_wrap(text, FontId::monospace(12.0 * canvas.camera.zoom), color);
         let angle = match c.facing {
@@ -404,7 +410,6 @@ pub(crate) fn component(
                 }
             } else {
                 let a = c.interface.min;
-                let b = c.interface.max;
                 let rect = bounds(c);
                 let screen = Rect::from_min_max(
                     canvas.screen_vec(rect.min.to_vec2()),
@@ -425,14 +430,25 @@ pub(crate) fn component(
                     ],
                     false,
                 );
-                let max_chars = ((b.x - a.x - 4) / 6).max(1) as usize;
-                let title: String = c.interface.name.chars().take(max_chars).collect();
-                p.text(
-                    screen.center(),
+            }
+            let label = &c.interface.label;
+            if !label.text.is_empty() {
+                let center = (crate::artwork::vector(c.interface.min)
+                    + crate::artwork::vector(c.interface.max))
+                    * 0.5;
+                crate::fonts::Text {
+                    text: &label.text,
+                    font: &label.font,
+                    color: Color32::from_rgb(label.color[0], label.color[1], label.color[2]),
+                    zoom: canvas.camera.zoom,
+                    angle: crate::artwork::angle(c.facing)
+                        + crate::artwork::angle(label.up)
+                        + std::f32::consts::FRAC_PI_2,
+                }
+                .paint(
+                    p,
+                    canvas.screen_vec(local(c, center)),
                     Align2::CENTER_CENTER,
-                    title,
-                    FontId::proportional(10.0 * canvas.camera.zoom),
-                    color,
                 );
             }
         }
@@ -668,7 +684,7 @@ pub(crate) fn component(
         }
         Kind::Tunnel => {
             let width = text_width(c) + 22.0;
-            let height = (f32::from(c.font_size) * 0.7 + 5.0).max(16.0);
+            let height = (f32::from(c.font.size) * 0.7 + 5.0).max(16.0);
             path(
                 vec![
                     vec2(-width, -height),
@@ -684,25 +700,24 @@ pub(crate) fn component(
             } else {
                 &c.label
             };
-            let galley = p.layout_no_wrap(label.to_owned(), font.clone(), color);
             let center = at(-width * 0.5 - 3.0, 0.0);
             let angle = match c.facing {
-                logisim_core::Facing::South => std::f32::consts::FRAC_PI_2,
-                logisim_core::Facing::North => -std::f32::consts::FRAC_PI_2,
+                Facing::South => std::f32::consts::FRAC_PI_2,
+                Facing::North => -std::f32::consts::FRAC_PI_2,
                 _ => 0.0,
             };
-            p.add(
-                egui::epaint::TextShape::new(center - galley.size() * 0.5, galley, color)
-                    .with_angle_and_anchor(angle, Align2::CENTER_CENTER),
-            );
+            crate::fonts::Text {
+                text: label,
+                angle,
+                ..text
+            }
+            .paint(p, center, Align2::CENTER_CENTER);
         }
         Kind::Text => {
-            p.text(
+            text.paint(
+                p,
                 canvas.screen_vec(text_origin(c).to_vec2()),
                 Align2::LEFT_TOP,
-                &c.label,
-                font.clone(),
-                color,
             );
         }
     }
@@ -738,7 +753,7 @@ pub(crate) fn component(
         } else {
             (vec2(r.center().x, r.top() - 8.0), Align2::CENTER_BOTTOM)
         };
-        p.text(canvas.screen_vec(anchor), align, &c.label, font, color);
+        text.paint(p, canvas.screen_vec(anchor), align);
     }
     if c.bits > 1
         && !c.kind.is_io()

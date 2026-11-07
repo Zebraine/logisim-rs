@@ -242,19 +242,11 @@ pub fn parse(xml: &str) -> Result<Import> {
                             .filter_map(|n| n.text())
                             .collect()
                     });
-                    if !((key == "circuit" && val == name)
-                        || matches!(
-                            (key, val.as_str()),
-                            ("clabel", "")
-                                | ("clabelup", "east")
-                                | ("clabelfont", "Dialog plain 12")
-                                | ("clabelcolor", "#000000")
-                        ))
-                    {
-                        warn(
-                            &mut warnings,
-                            format!("Circuit '{name}': attribute {key} was omitted."),
-                        );
+                    if key == "circuit" && val == name {
+                        continue;
+                    }
+                    if let Err(error) = crate::fonts::read_label(&mut circuit.label, key, &val) {
+                        warn(&mut warnings, format!("Circuit '{name}': {error}"));
                     }
                 }
                 tag => warn(
@@ -652,8 +644,7 @@ fn component(
     if c.label.len() > 65_536 {
         return Err(Error("Label exceeds 64 KiB.".into()));
     }
-    let mut notes = vec![];
-    let font = value(
+    c.font = crate::fonts::parse(value(
         &a,
         if kind == Kind::Text {
             "font"
@@ -661,20 +652,7 @@ fn component(
             "labelfont"
         },
         "Dialog plain 12",
-    );
-    let (family_style, size) = font
-        .rsplit_once(' ')
-        .ok_or_else(|| Error("Invalid font".into()))?;
-    c.font_size = size
-        .parse()
-        .ok()
-        .filter(|v| *v > 0)
-        .ok_or_else(|| Error("Unsupported font size".into()))?;
-    if family_style != "Dialog plain" {
-        notes.push(format!(
-            "Font '{font}' is rendered and saved using the default plain font."
-        ));
-    }
+    ))?;
     let color = value(
         &a,
         if kind == Kind::Text {
@@ -711,7 +689,7 @@ fn component(
             _ => return Err(Error("Unsupported text alignment".into())),
         };
     }
-    Ok((c, notes))
+    Ok((c, vec![]))
 }
 
 fn read_wiring(c: &mut Component, a: &Attributes) -> Result<()> {

@@ -7,7 +7,9 @@ pub use appearance::{
 };
 
 mod project;
-pub use project::{CircuitDefinition, Interface, InterfacePort, MAX_CIRCUITS, Project};
+pub use project::{
+    CircuitDefinition, CircuitLabel, Interface, InterfacePort, MAX_CIRCUITS, Project,
+};
 
 mod arithmetic;
 mod bus;
@@ -367,7 +369,7 @@ pub struct Component {
     pub output: bool,
     pub pin: PinOptions,
     pub label: String,
-    pub font_size: u8,
+    pub font: ArtworkFont,
     pub color: [u8; 3],
     pub color_alpha: u8,
     pub gate_size: GateSize,
@@ -434,10 +436,13 @@ impl Component {
             } else {
                 String::new()
             },
-            font_size: if matches!(kind, Kind::Joystick | Kind::PlaRom | Kind::Ttl(_)) {
-                12
-            } else {
-                14
+            font: ArtworkFont {
+                size: if matches!(kind, Kind::Joystick | Kind::PlaRom | Kind::Ttl(_)) {
+                    12
+                } else {
+                    14
+                },
+                ..Default::default()
             },
             color: if matches!(
                 kind,
@@ -648,6 +653,7 @@ impl Wire {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Circuit {
+    pub label: CircuitLabel,
     pub appearance: Option<Appearance>,
     pub components: Vec<Component>,
     pub wires: Vec<Wire>,

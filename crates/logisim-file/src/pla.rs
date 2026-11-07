@@ -166,7 +166,7 @@ mod tests {
             c.pla.select_high = true;
             c.label = "逻辑 & <PLA>".into();
             c.color = [0x12, 0x34, 0x56];
-            c.font_size = 16;
+            c.font.size = 16;
             for row in 0..size {
                 for col in 0..size {
                     c.pla.set_input(

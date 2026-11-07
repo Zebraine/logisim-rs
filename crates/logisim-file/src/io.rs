@@ -357,7 +357,7 @@ mod tests {
                     if kind.has_label() {
                         c.label = "输入 & 输出".into();
                         c.label_facing = facing;
-                        c.font_size = 18;
+                        c.font.size = 18;
                         c.color = [1, 2, 3];
                     }
                     let mut circuit = Circuit::default();
@@ -446,7 +446,7 @@ mod input_tests {
                             c.facing = facing;
                             c.label_facing = facing;
                             c.label = "输入 & Input".into();
-                            c.font_size = 18;
+                            c.font.size = 18;
                             c.color = [24, 53, 70];
                             c.io.on_color = [18, 52, 86, 128];
                             match kind {
@@ -546,7 +546,7 @@ mod display_tests {
                                 c.io.rgb_multibit = flag;
                                 c.label = "红 & Green".into();
                                 c.label_facing = facing;
-                                c.font_size = 18;
+                                c.font.size = 18;
                                 c.color = [1, 2, 3];
                             } else {
                                 c.io.matrix_input = mode;
