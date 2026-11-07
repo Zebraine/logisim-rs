@@ -628,6 +628,8 @@ impl Workspace {
                                 "Memory" => {
                                             for ff in logisim_core::FlipFlop::ALL { self.library_tool(ui, Kind::FlipFlop(ff)); }
                                             self.library_tool(ui, Kind::Register);
+                                            self.library_tool(ui, Kind::Counter);
+                                            self.library_tool(ui, Kind::ShiftRegister);
                                         }
                                         "Base" => self.library_tool(ui, Kind::Text),
                                         _ => {

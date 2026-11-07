@@ -82,7 +82,7 @@ pub fn serialize(document: &Document) -> Result<String> {
                 Kind::Arithmetic(_) => 5,
                 Kind::Gate(_) => 1,
                 Kind::Text => 2,
-                Kind::Register | Kind::FlipFlop(_) => 3,
+                Kind::Register | Kind::FlipFlop(_) | Kind::Counter | Kind::ShiftRegister => 3,
                 _ => 0,
             };
             if let Kind::Subcircuit(id) = c.kind {
@@ -108,6 +108,8 @@ pub fn serialize(document: &Document) -> Result<String> {
                         a.file_name()
                     } else if let Kind::Plexer(p) = c.kind {
                         p.file_name()
+                    } else if c.kind == Kind::ShiftRegister {
+                        "Universal Register"
                     } else {
                         c.kind.name()
                     }
@@ -126,6 +128,7 @@ pub fn serialize(document: &Document) -> Result<String> {
                     | Kind::Subcircuit(_)
                     | Kind::Clock
                     | Kind::FlipFlop(_)
+                    | Kind::ShiftRegister
                     | Kind::Plexer(
                         logisim_core::Plexer::Decoder
                             | logisim_core::Plexer::PriorityEncoder

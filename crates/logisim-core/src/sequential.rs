@@ -48,6 +48,25 @@ pub enum ControlPosition {
     BelowAbove,
     Legacy,
 }
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum CounterOverflow {
+    #[default]
+    Wrap,
+    Stay,
+    Continue,
+    Load,
+}
+impl CounterOverflow {
+    pub const ALL: [Self; 4] = [Self::Wrap, Self::Stay, Self::Continue, Self::Load];
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Wrap => "Wrap around",
+            Self::Stay => "Stay at value",
+            Self::Continue => "Continue counting",
+            Self::Load => "Load next value",
+        }
+    }
+}
 impl ControlPosition {
     pub const ALL: [Self; 3] = [Self::AboveBelow, Self::BelowAbove, Self::Legacy];
     pub fn name(self) -> &'static str {
@@ -67,6 +86,9 @@ pub struct Sequential {
     pub select_high: bool,
     pub high_ticks: u32,
     pub low_ticks: u32,
+    pub counter_max: u32,
+    pub counter_overflow: CounterOverflow,
+    pub counter_old: bool,
 }
 impl Default for Sequential {
     fn default() -> Self {
@@ -78,12 +100,18 @@ impl Default for Sequential {
             select_high: false,
             high_ticks: 1,
             low_ticks: 1,
+            counter_max: 255,
+            counter_overflow: CounterOverflow::Wrap,
+            counter_old: false,
         }
     }
 }
 impl Kind {
     pub fn is_storage(self) -> bool {
-        matches!(self, Self::FlipFlop(_) | Self::Register)
+        matches!(
+            self,
+            Self::FlipFlop(_) | Self::Register | Self::Counter | Self::ShiftRegister
+        )
     }
     pub fn is_sequential(self) -> bool {
         self.is_storage() || self == Self::Clock
@@ -93,6 +121,25 @@ impl Component {
     /// FF: Q, /Q, CLK, data(s), PRE, CLR. Register: Q, D, CLK, EN, CS, PRE, CLR.
     pub fn sequential_ports(&self) -> Option<Vec<Point>> {
         let points = match self.kind {
+            // Q, D, CLK, Load, Count/Reverse, Carry, PRE, CLR, optional EN.
+            Kind::Counter => {
+                let mut p = vec![
+                    (0, 0),
+                    (-30, 0),
+                    (-20, 20),
+                    (-30, -10),
+                    (-30, 10),
+                    (0, 10),
+                    (-10, -20),
+                    (-10, 20),
+                ];
+                if !self.sequential.counter_old {
+                    p.push((-20, -20));
+                }
+                p
+            }
+            // The file anchor is D, rather than Q. Q, D, CLK, Mode, CLR.
+            Kind::ShiftRegister => vec![(30, 0), (0, 0), (0, 10), (10, -20), (10, 20)],
             Kind::Register => vec![
                 (0, 0),
                 (-30, 0),
@@ -153,12 +200,58 @@ impl Component {
         }
         (index == 0 && self.drives_output())
             || (matches!(self.kind, Kind::FlipFlop(_)) && index == 1)
+            || (self.kind == Kind::Counter && index == 5)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn counter_and_shift_geometry_is_fixed_across_width_and_mode_edits() {
+        for bits in [1, 8, 32] {
+            let mut c = Component::new(Kind::Counter, Point::ZERO);
+            c.bits = bits;
+            let ports = [
+                (0, 0),
+                (-30, 0),
+                (-20, 20),
+                (-30, -10),
+                (-30, 10),
+                (0, 10),
+                (-10, -20),
+                (-10, 20),
+                (-20, -20),
+            ]
+            .map(|(x, y)| Point::new(x, y));
+            assert_eq!(c.ports(), ports);
+            for i in 0..9 {
+                assert_eq!(c.port_width(i), Some(if i < 2 { bits } else { 1 }));
+                assert_eq!(c.drives_port(i), i == 0 || i == 5);
+            }
+            let mut circuit = crate::Circuit::default();
+            let id = circuit.add_component(c.clone());
+            for port in ports {
+                circuit.add_wire(port, port + Point::new(0, 100));
+            }
+            let wires = circuit.wires.clone();
+            c.id = id;
+            c.sequential.counter_old = true;
+            assert_eq!(c.ports(), ports[..8]);
+            circuit.replace_component(c);
+            assert_eq!(circuit.wires, wires);
+            let mut r = Component::new(Kind::ShiftRegister, Point::ZERO);
+            r.bits = bits;
+            assert_eq!(
+                r.ports(),
+                [(30, 0), (0, 0), (0, 10), (10, -20), (10, 20)].map(|(x, y)| Point::new(x, y))
+            );
+            assert_eq!(
+                (0..5).map(|i| r.port_width(i).unwrap()).collect::<Vec<_>>(),
+                [bits, bits, 1, 2, 1]
+            );
+        }
+    }
     #[test]
     fn observed_layouts_keep_port_roles_widths_and_connection_edits() {
         for ff in FlipFlop::ALL {

@@ -600,3 +600,100 @@ fn extra_plexer_property_widgets_edit_groups_and_formats_with_undo_in_both_langu
         assert!(!app.circuit().component(c.id).unwrap().plexing.multibit);
     }
 }
+
+#[test]
+fn counter_shift_widgets_edit_modes_width_and_undo_in_both_languages() {
+    fn number(ctx: &Context, app: &mut Workspace, old: &str, new: &str) {
+        click(ctx, app, old);
+        frame(
+            ctx,
+            app,
+            vec![
+                Event::ModifiersChanged(Modifiers::COMMAND),
+                Event::Key {
+                    key: Key::A,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: Modifiers::COMMAND,
+                },
+                Event::Key {
+                    key: Key::A,
+                    physical_key: None,
+                    pressed: false,
+                    repeat: false,
+                    modifiers: Modifiers::COMMAND,
+                },
+                Event::ModifiersChanged(Modifiers::NONE),
+                Event::Text(new.into()),
+                Event::Key {
+                    key: Key::Enter,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: Modifiers::NONE,
+                },
+            ],
+        );
+        frame(
+            ctx,
+            app,
+            vec![Event::Key {
+                key: Key::Enter,
+                physical_key: None,
+                pressed: false,
+                repeat: false,
+                modifiers: Modifiers::NONE,
+            }],
+        );
+    }
+    for language in Language::ALL {
+        let ctx = Context::default();
+        configure(&ctx);
+        let mut app = Workspace::default();
+        app.set_language(language);
+        let t = |s| i18n::with_language(language, || i18n::tr(s).to_owned());
+        app.editor.set_tool(Tool::Place(Kind::Counter));
+        app.editor.template.sequential.counter_max = 5;
+        number(&ctx, &mut app, "8", "4");
+        assert_eq!(app.editor.template.bits, 4);
+        assert_eq!(app.editor.template.sequential.counter_max, 15);
+        for action in logisim_core::CounterOverflow::ALL.into_iter().skip(1) {
+            let previous = t(app.editor.template.sequential.counter_overflow.name());
+            click(&ctx, &mut app, &previous);
+            click(&ctx, &mut app, &t(action.name()));
+            assert_eq!(app.editor.template.sequential.counter_overflow, action);
+        }
+        app.editor.place(Point::new(300, 200));
+        app.editor.set_tool(Tool::Select);
+        let id = app.circuit().components[0].id;
+        app.editor.selection.insert(id);
+        app.editor
+            .circuit
+            .add_wire(Point::new(100, 210), Point::new(270, 210));
+        let before = app.circuit().clone();
+        click(&ctx, &mut app, &t("New behavior"));
+        click(&ctx, &mut app, &t("Old behavior"));
+        assert!(app.circuit().component(id).unwrap().sequential.counter_old);
+        assert_eq!(app.circuit().wires, before.wires);
+        app.editor.undo();
+        assert_eq!(app.circuit(), &before);
+        app.editor.redo();
+        assert!(app.circuit().component(id).unwrap().sequential.counter_old);
+        click(&ctx, &mut app, &t("Rising edge"));
+        click(&ctx, &mut app, &t("Falling edge"));
+        assert_eq!(
+            app.circuit().component(id).unwrap().sequential.trigger,
+            logisim_core::Trigger::Falling
+        );
+        app.editor.set_tool(Tool::Place(Kind::ShiftRegister));
+        number(&ctx, &mut app, "8", "32");
+        assert_eq!(app.editor.template.bits, 32);
+        let labels = frame(&ctx, &mut app, vec![]);
+        assert!(has(&labels, &t("Number of stages")));
+        assert!(!has(&labels, &t("Data bits")));
+        assert!(!has(&labels, &t("Facing")));
+        app.editor.place(Point::new(500, 200));
+        assert_eq!(app.circuit().components.last().unwrap().bits, 32);
+    }
+}

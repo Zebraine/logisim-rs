@@ -242,10 +242,15 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
     ) {
         ui.label(if c.kind == Kind::BitExtender {
             tr("Output bits")
+        } else if c.kind == Kind::ShiftRegister {
+            tr("Number of stages")
         } else {
             tr("Data bits")
         });
         let r = ui.add(egui::DragValue::new(&mut c.bits).range(1..=32));
+        if r.changed() && c.kind == Kind::Counter {
+            c.sequential.counter_max = u32::MAX >> (32 - c.bits);
+        }
         if r.changed() && c.kind == Kind::Splitter {
             c.splitter.distribute(c.bits, c.splitter.descending);
         }

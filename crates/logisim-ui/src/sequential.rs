@@ -1,10 +1,30 @@
 use crate::{canvas::Canvas, i18n::tr, simulation::SimulationView};
 use egui::{Align2, Color32, FontId, Painter, Rect, Stroke, StrokeKind, Ui};
-use logisim_core::{Component, ControlPosition, FlipFlop, Kind, Point, Trigger};
+use logisim_core::{Component, ControlPosition, CounterOverflow, FlipFlop, Kind, Point, Trigger};
 
 pub(crate) fn port_label(c: &Component, index: usize) -> &'static str {
     match c.kind {
         Kind::Clock => "Clock",
+        Kind::Counter => match index {
+            0 => "Q",
+            1 => "D",
+            2 => "Clock",
+            3 if c.sequential.counter_old => "Load: 1 loads when Count=0, otherwise decrements",
+            3 => "Load: 1 loads data",
+            4 if c.sequential.counter_old => "Count: 0 holds or loads; otherwise counts",
+            4 => "Reverse: 1 counts down",
+            5 => "Carry: count is at the directional limit",
+            6 => "Preset: set all bits",
+            7 => "Clear: reset to zero",
+            _ => "Enable: 0 stops counting",
+        },
+        Kind::ShiftRegister => [
+            "Q",
+            "D",
+            "Clock",
+            "Mode: 0 holds; 1 shifts toward bit 0; 2 shifts toward the high bit; 3 loads data",
+            "Clear: reset to zero",
+        ][index],
         Kind::Register => [
             "Q",
             "D",
@@ -74,6 +94,38 @@ pub(crate) fn fields(ui: &mut Ui, c: &mut Component) -> bool {
             });
         ui.end_row();
     }
+    if c.kind == Kind::Counter {
+        ui.label(tr("Maximum value (hex)"));
+        let mask = u32::MAX >> (32 - c.bits.clamp(1, 32));
+        let r = ui.add(
+            egui::DragValue::new(&mut s.counter_max)
+                .range(0..=mask)
+                .hexadecimal(1, false, true),
+        );
+        active |= r.has_focus() || r.dragged();
+        ui.end_row();
+        ui.label(tr("Action on overflow"));
+        egui::ComboBox::from_id_salt("counter_overflow")
+            .selected_text(tr(s.counter_overflow.name()))
+            .show_ui(ui, |ui| {
+                for v in CounterOverflow::ALL {
+                    ui.selectable_value(&mut s.counter_overflow, v, tr(v.name()));
+                }
+            });
+        ui.end_row();
+        ui.label(tr("Behavior"));
+        egui::ComboBox::from_id_salt("counter_behavior")
+            .selected_text(tr(if s.counter_old {
+                "Old behavior"
+            } else {
+                "New behavior"
+            }))
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut s.counter_old, false, tr("New behavior"));
+                ui.selectable_value(&mut s.counter_old, true, tr("Old behavior"));
+            });
+        ui.end_row();
+    }
     if c.kind == Kind::Register {
         ui.label(tr("Chip select active on"));
         egui::ComboBox::from_id_salt("register_select")
@@ -118,7 +170,8 @@ pub(crate) fn fields(ui: &mut Ui, c: &mut Component) -> bool {
 pub(crate) fn body(c: &Component) -> (Point, Point) {
     match c.kind {
         Kind::Clock => (Point::new(-20, -10), Point::new(0, 10)),
-        Kind::Register => (Point::new(-30, -20), Point::new(0, 20)),
+        Kind::Register | Kind::Counter => (Point::new(-30, -20), Point::new(0, 20)),
+        Kind::ShiftRegister => (Point::new(0, -20), Point::new(30, 20)),
         _ if c.sequential.new_layout => (Point::new(-50, -10), Point::new(-10, 50)),
         _ => (Point::new(-40, -10), Point::new(0, 30)),
     }
@@ -162,6 +215,81 @@ pub(crate) fn draw(
             points.into_iter().map(|(x, y)| xy(x, y)).collect(),
             Stroke::new(2.0, signal_color),
         ));
+        return;
+    }
+    if matches!(c.kind, Kind::Counter | Kind::ShiftRegister) {
+        let labels: &[(i32, i32, &str)] = if c.kind == Kind::Counter {
+            &[
+                (-26, 0, "D"),
+                (-4, 0, "Q"),
+                (-26, -10, "LD"),
+                (-26, 10, if c.sequential.counter_old { "CT" } else { "DN" }),
+                (-4, 10, "CO"),
+                (-10, -16, "S"),
+                (-10, 16, "R"),
+            ]
+        } else {
+            &[(4, 0, "D"), (26, 0, "Q"), (10, -16, "M"), (10, 16, "R")]
+        };
+        for &(x, y, label) in labels {
+            p.text(
+                xy(x, y),
+                Align2::CENTER_CENTER,
+                label,
+                FontId::monospace(5.0 * z),
+                color,
+            );
+        }
+        if c.kind == Kind::Counter && !c.sequential.counter_old {
+            p.text(
+                xy(-20, -16),
+                Align2::CENTER_CENTER,
+                "EN",
+                FontId::monospace(5.0 * z),
+                color,
+            );
+        }
+        let clock = c.local_ports()[2];
+        let points = if c.kind == Kind::Counter {
+            [
+                Point::new(clock.x - 4, 20),
+                Point::new(clock.x, 15),
+                Point::new(clock.x + 4, 20),
+            ]
+        } else {
+            [Point::new(0, 6), Point::new(5, 10), Point::new(0, 14)]
+        };
+        p.add(egui::Shape::line(
+            points.into_iter().map(at).collect(),
+            stroke,
+        ));
+        if c.sequential.trigger == Trigger::Falling {
+            p.circle_stroke(at(clock), 2.5 * z, stroke);
+        }
+        let value = simulation.and_then(|s| s.storage.get(&c.id));
+        let label = value.map_or("0", |s| s.text.as_str());
+        let tone = value.map_or(color, |s| s.tone.color());
+        let x = if c.kind == Kind::Counter { -15 } else { 15 };
+        if label.len() > 4 && label.is_ascii() {
+            let mid = label.len().div_ceil(2);
+            for (y, line) in [(-5, &label[..mid]), (5, &label[mid..])] {
+                p.text(
+                    xy(x, y),
+                    Align2::CENTER_CENTER,
+                    line,
+                    FontId::monospace(7.0 * z),
+                    tone,
+                );
+            }
+        } else {
+            p.text(
+                xy(x, 0),
+                Align2::CENTER_CENTER,
+                label,
+                FontId::monospace(8.0 * z),
+                tone,
+            );
+        }
         return;
     }
     let text = |point: Point, label: &str, color| {

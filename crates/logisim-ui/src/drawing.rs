@@ -290,7 +290,7 @@ pub(crate) fn component(
     match c.kind {
         Kind::Plexer(_) => crate::plexers::draw(p, canvas, c, color),
         Kind::Arithmetic(_) => crate::arithmetic::draw(p, canvas, c, color),
-        Kind::Clock | Kind::FlipFlop(_) | Kind::Register => {
+        Kind::Clock | Kind::FlipFlop(_) | Kind::Register | Kind::Counter | Kind::ShiftRegister => {
             crate::sequential::draw(p, canvas, c, color, simulation)
         }
         Kind::Subcircuit(_) => {

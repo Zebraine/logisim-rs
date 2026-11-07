@@ -352,6 +352,8 @@ fn component(
         ),
         ("#Wiring", "Clock") => Kind::Clock,
         ("#Memory", "Register") => Kind::Register,
+        ("#Memory", "Counter") => Kind::Counter,
+        ("#Memory", "Universal Register") => Kind::ShiftRegister,
         ("#Memory", name) => Kind::FlipFlop(
             logisim_core::FlipFlop::ALL
                 .into_iter()
@@ -381,9 +383,11 @@ fn component(
         let allowed = match kind {
             Kind::Plexer(p) => crate::plexers::allowed(p, key),
             Kind::Arithmetic(a) => crate::arithmetic::allowed(a, key),
-            Kind::Clock | Kind::Register | Kind::FlipFlop(_) => {
-                crate::sequential::allowed(kind, key)
-            }
+            Kind::Clock
+            | Kind::Register
+            | Kind::FlipFlop(_)
+            | Kind::Counter
+            | Kind::ShiftRegister => crate::sequential::allowed(kind, key),
             Kind::Constant => matches!(key.as_str(), "facing" | "width" | "value"),
             Kind::Power | Kind::Ground => matches!(key.as_str(), "facing" | "width"),
             Kind::Probe | Kind::Subcircuit(_) => matches!(
@@ -441,7 +445,11 @@ fn component(
         "width",
         if matches!(
             kind,
-            Kind::Register | Kind::Arithmetic(_) | Kind::Plexer(logisim_core::Plexer::BitSelector)
+            Kind::Register
+                | Kind::Counter
+                | Kind::ShiftRegister
+                | Kind::Arithmetic(_)
+                | Kind::Plexer(logisim_core::Plexer::BitSelector)
         ) {
             8
         } else {

@@ -15,7 +15,7 @@ mod plexers;
 pub use plexers::{Plexer, PlexerRole, PlexerTerminal, Plexing};
 
 mod sequential;
-pub use sequential::{ControlPosition, FlipFlop, Sequential, Trigger};
+pub use sequential::{ControlPosition, CounterOverflow, FlipFlop, Sequential, Trigger};
 
 mod wire_geometry;
 mod wiring;
@@ -156,6 +156,8 @@ pub enum Kind {
     Clock,
     FlipFlop(FlipFlop),
     Register,
+    Counter,
+    ShiftRegister,
     Plexer(Plexer),
     Arithmetic(Arithmetic),
 }
@@ -200,6 +202,8 @@ impl Kind {
                 | Self::BitExtender
                 | Self::FlipFlop(_)
                 | Self::Register
+                | Self::Counter
+                | Self::ShiftRegister
                 | Self::Arithmetic(_)
         )
     }
@@ -215,6 +219,8 @@ impl Kind {
                 | Self::Clock
                 | Self::FlipFlop(_)
                 | Self::Register
+                | Self::Counter
+                | Self::ShiftRegister
         )
     }
     pub fn name(self) -> &'static str {
@@ -233,6 +239,8 @@ impl Kind {
             Self::Clock => "Clock",
             Self::FlipFlop(ff) => ff.name(),
             Self::Register => "Register",
+            Self::Counter => "Counter",
+            Self::ShiftRegister => "Shift Register",
             Self::Plexer(p) => p.name(),
             Self::Arithmetic(a) => a.name(),
         }
@@ -282,7 +290,11 @@ impl Component {
             bits: match kind {
                 Kind::Splitter => 4,
                 Kind::BitExtender => 16,
-                Kind::Register | Kind::Arithmetic(_) | Kind::Plexer(Plexer::BitSelector) => 8,
+                Kind::Register
+                | Kind::Counter
+                | Kind::ShiftRegister
+                | Kind::Arithmetic(_)
+                | Kind::Plexer(Plexer::BitSelector) => 8,
                 _ => 1,
             },
             inputs: 2,

@@ -151,7 +151,8 @@ impl Component {
                 self.bits.clamp(1, 32)
             }),
             Kind::Clock | Kind::FlipFlop(_) => Some(1),
-            Kind::Register if index >= 2 => Some(1),
+            Kind::ShiftRegister if index == 3 => Some(2),
+            Kind::Register | Kind::Counter | Kind::ShiftRegister if index >= 2 => Some(1),
             Kind::Probe => None,
             Kind::Splitter if index > 0 => Some(
                 self.splitter
@@ -174,6 +175,8 @@ impl Component {
                 | Kind::Clock
                 | Kind::FlipFlop(_)
                 | Kind::Register
+                | Kind::Counter
+                | Kind::ShiftRegister
         ) || (self.kind == Kind::Pin && !self.output)
     }
 }

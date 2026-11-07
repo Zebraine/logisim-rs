@@ -10,6 +10,8 @@ mod plexer_tests;
 mod plexers;
 mod sequential;
 #[cfg(test)]
+mod sequential_extra_tests;
+#[cfg(test)]
 mod sequential_tests;
 #[cfg(test)]
 mod tests;
@@ -97,7 +99,7 @@ impl Simulator {
                 let state = self
                     .storage
                     .remove(&c.id)
-                    .filter(|s| s.compatible(c))
+                    .and_then(|s| s.adapt(c))
                     .unwrap_or_else(|| sequential::State::new(c));
                 (c.id, state)
             })
@@ -300,6 +302,10 @@ impl Simulator {
                 .expect("sequential state")
                 .evaluate(&c, &ports);
             self.drive_port((c.id, 0), output);
+            if c.kind == Kind::Counter {
+                let carry = self.storage[&c.id].carry(&c, &ports);
+                self.drive_port((c.id, 5), carry);
+            }
             if matches!(c.kind, Kind::FlipFlop(_)) {
                 self.drive_port((c.id, 1), Value::known(1, output.number().unwrap_or(0) ^ 1));
             }

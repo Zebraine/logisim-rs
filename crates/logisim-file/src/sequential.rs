@@ -1,5 +1,5 @@
 use crate::{Error, Result};
-use logisim_core::{Component, ControlPosition, Kind, Trigger};
+use logisim_core::{Component, ControlPosition, CounterOverflow, Kind, Trigger};
 use std::collections::BTreeMap;
 
 pub(crate) fn allowed(kind: Kind, key: &str) -> bool {
@@ -8,6 +8,8 @@ pub(crate) fn allowed(kind: Kind, key: &str) -> bool {
     }
     match kind {
         Kind::Clock => matches!(key, "facing" | "labelloc" | "highDuration" | "lowDuration"),
+        Kind::Counter => matches!(key, "width" | "max" | "ongoal" | "trigger" | "behavior"),
+        Kind::ShiftRegister => matches!(key, "length" | "trigger"),
         Kind::Register => matches!(key, "width" | "trigger" | "Select"),
         Kind::FlipFlop(_) => matches!(
             key,
@@ -23,6 +25,9 @@ pub(crate) fn read(c: &mut Component, attrs: &BTreeMap<String, String>) -> Resul
         "false" => Ok(false),
         v => Err(Error(format!("Invalid {key}: {v}"))),
     };
+    if c.kind == Kind::ShiftRegister {
+        c.bits = crate::read::number(attrs, "length", 8, 1..=32)?;
+    }
     let s = &mut c.sequential;
     if c.kind.is_storage() {
         s.trigger = match get("trigger", "rising") {
@@ -34,6 +39,29 @@ pub(crate) fn read(c: &mut Component, attrs: &BTreeMap<String, String>) -> Resul
         };
     }
     match c.kind {
+        Kind::Counter => {
+            let mask = u32::MAX >> (32 - c.bits);
+            s.counter_max = match attrs.get("max") {
+                None => mask,
+                Some(v) => v
+                    .strip_prefix("0x")
+                    .and_then(|v| u32::from_str_radix(v, 16).ok())
+                    .filter(|v| *v <= mask)
+                    .ok_or_else(|| Error("Counter maximum exceeds its bit width".into()))?,
+            };
+            s.counter_old = match attrs.get("behavior").map(String::as_str) {
+                None => false,
+                Some("old") => true,
+                Some(v) => return Err(Error(format!("Unsupported counter behavior: {v}"))),
+            };
+            s.counter_overflow = match attrs.get("ongoal").map(String::as_str) {
+                None => CounterOverflow::Wrap,
+                Some("stay") => CounterOverflow::Stay,
+                Some("continue") => CounterOverflow::Continue,
+                Some("load") => CounterOverflow::Load,
+                Some(v) => return Err(Error(format!("Unsupported counter overflow: {v}"))),
+            };
+        }
         Kind::Clock => {
             for (key, target) in [
                 ("highDuration", &mut s.high_ticks),
@@ -92,11 +120,33 @@ pub(crate) fn write(out: &mut String, c: &Component) -> Result<()> {
                 Trigger::Falling => "falling",
                 Trigger::High if c.kind == Kind::Register => "high",
                 Trigger::Low if c.kind == Kind::Register => "low",
-                _ => return Err(Error("Flip-flops require an edge trigger".into())),
+                _ => return Err(Error("This component requires an edge trigger".into())),
             },
         )?;
     }
     match c.kind {
+        Kind::ShiftRegister => a(out, "length", c.bits)?,
+        Kind::Counter => {
+            if s.counter_max > (u32::MAX >> (32 - c.bits)) {
+                return Err(Error("Counter maximum exceeds its bit width".into()));
+            }
+            a(out, "max", format!("0x{:x}", s.counter_max))?;
+            if s.counter_old {
+                a(out, "behavior", "old")?;
+            }
+            if s.counter_overflow != CounterOverflow::Wrap {
+                a(
+                    out,
+                    "ongoal",
+                    match s.counter_overflow {
+                        CounterOverflow::Stay => "stay",
+                        CounterOverflow::Continue => "continue",
+                        CounterOverflow::Load => "load",
+                        CounterOverflow::Wrap => unreachable!(),
+                    },
+                )?;
+            }
+        }
         Kind::Clock => {
             if c.bits != 1
                 || !(1..=65_535).contains(&s.high_ticks)
