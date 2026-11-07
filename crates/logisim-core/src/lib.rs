@@ -183,6 +183,7 @@ pub enum Kind {
     Register,
     Counter,
     ShiftRegister,
+    Random,
     Button,
     Switch,
     DipSwitch,
@@ -250,6 +251,7 @@ impl Kind {
                 | Self::Register
                 | Self::Counter
                 | Self::ShiftRegister
+                | Self::Random
                 | Self::Rom
                 | Self::PlaRom
                 | Self::Ram
@@ -280,6 +282,7 @@ impl Kind {
                 | Self::Register
                 | Self::Counter
                 | Self::ShiftRegister
+                | Self::Random
                 | Self::Rom
                 | Self::PlaRom
                 | Self::Ram
@@ -310,6 +313,7 @@ impl Kind {
             Self::Register => "Register",
             Self::Counter => "Counter",
             Self::ShiftRegister => "Shift Register",
+            Self::Random => "Random Generator",
             Self::Button => "Button",
             Self::Switch => "Switch",
             Self::DipSwitch => "Dip Switch",
@@ -388,6 +392,7 @@ impl Component {
                 | Kind::Register
                 | Kind::Counter
                 | Kind::ShiftRegister
+                | Kind::Random
                 | Kind::Rom
                 | Kind::Ram
                 | Kind::Arithmetic(_)

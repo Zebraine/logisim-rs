@@ -182,6 +182,11 @@ impl Component {
                 _ => None,
             },
             Kind::Rom | Kind::Ram => self.memory_terminals().get(index).map(|p| p.bits),
+            Kind::Random => (index < 4).then_some(if index == 0 {
+                self.bits.clamp(1, 32)
+            } else {
+                1
+            }),
             Kind::ShiftRegister if index == 3 => Some(2),
             Kind::Register | Kind::Counter | Kind::ShiftRegister if index >= 2 => Some(1),
             Kind::Transistor | Kind::TransmissionGate => (index < self.transistor_ports().len())
@@ -228,6 +233,7 @@ impl Component {
                 | Kind::Register
                 | Kind::Counter
                 | Kind::ShiftRegister
+                | Kind::Random
                 | Kind::Rom
                 | Kind::PlaRom
                 | Kind::Ram

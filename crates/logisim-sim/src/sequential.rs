@@ -8,19 +8,27 @@ pub(super) struct State {
     pub value: Value,
     clock: Bit,
     phase: u64,
+    random: Option<crate::random::State>,
 }
 impl State {
     pub fn new(c: &Component) -> Self {
+        let random =
+            (c.kind == Kind::Random).then(|| crate::random::State::new(c.sequential.random_seed));
         Self {
+            random,
             kind: c.kind,
-            value: Value::known(
-                if matches!(c.kind, Kind::Register | Kind::Counter | Kind::ShiftRegister) {
-                    c.bits
-                } else {
-                    1
-                },
-                0,
-            ),
+            value: if let Some(state) = &random {
+                state.value(c.bits)
+            } else {
+                Value::known(
+                    if matches!(c.kind, Kind::Register | Kind::Counter | Kind::ShiftRegister) {
+                        c.bits
+                    } else {
+                        1
+                    },
+                    0,
+                )
+            },
             clock: Bit::Unknown,
             phase: 0,
         }
@@ -28,6 +36,10 @@ impl State {
     pub fn adapt(mut self, c: &Component) -> Option<Self> {
         if self.kind != c.kind {
             return None;
+        }
+        if let Some(random) = &self.random {
+            self.value = random.value(c.bits);
+            return Some(self);
         }
         let width = if matches!(c.kind, Kind::Register | Kind::Counter | Kind::ShiftRegister) {
             c.bits.clamp(1, 32)
@@ -141,6 +153,10 @@ impl State {
             Trigger::Low => clock == Bit::Zero,
         };
         self.clock = clock;
+        if let Some(random) = &mut self.random {
+            self.value = random.evaluate(c, ports, triggered);
+            return self.value;
+        }
         if c.kind == Kind::Counter {
             return self.counter(c, ports, triggered);
         }

@@ -121,7 +121,7 @@ Ctrl+Shift+S，Ctrl+Q 退出。文件选择框可浏览目录或输入完整路�
 保存失败不会清除修改状态，检测到文件被外部修改时要求另存为。
 
 当前互通范围：多电路项目、主电路选择、默认或已支持自定义外观的子电路实例，以及各电路中的八种门、1–32 位两态输入/输出 Pin、正交导线、文字、普通 Tunnel
-及 Controlled Buffer、Controlled Inverter、上述基础布线、六种 Plexers 与九种算术元件、Clock、D/T/JK/SR Flip-Flop、Register、Counter、Universal Register、ROM、RAM、PlaRom、Button、Switch、DipSwitch、Slider、LED、RGBLed、DotMatrix、7-Segment Display 和 Hex Digit Display；
+及 Controlled Buffer、Controlled Inverter、上述基础布线、六种 Plexers 与九种算术元件、Clock、D/T/JK/SR Flip-Flop、Register、Counter、Universal Register、Random、ROM、RAM、PlaRom、Button、Switch、DipSwitch、Slider、LED、RGBLed、DotMatrix、7-Segment Display 和 Hex Digit Display；
 包括门尺寸、2–8 个输入、方向、标签、字号、颜色和文字对齐。导入保留实际坐标及连接端口。
 多行文字数据可往返，但参考程序与本程序的排版不同；字体使用本程序的默认字体，
 不承诺字体族、字形覆盖或样式一致，隧道采用固定文字色。
@@ -135,6 +135,10 @@ Ctrl+Shift+S，Ctrl+Q 退出。文件选择框可浏览目录或输入完整路�
 仿真展开限制为 32 层、1024 个实例、65536 项；超限会报告并停止求值。
 
 ## 电路仿真
+
+Memory 库的随机数发生器支持 1–32 位、上升/下降沿、使能和异步复位。非零种子可复现序列，
+种子修改在复位后生效；0 使用本次运行的自动种子，复位保持期间输出稳定。自动种子来源
+与参考程序不同，不保证相同输出；运行序列按实例隔离，不写入 `.circ`。
 
 输入 Pin 默认 0；输出 Pin 只读取网络。在属性中勾选 Output pin 创建输出。
 P 切换 Poke，点击单比特输入切换 0/1；多位输入在左侧用十六进制编辑后按 Enter/Apply，

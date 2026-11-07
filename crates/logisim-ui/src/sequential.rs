@@ -5,6 +5,12 @@ use logisim_core::{Component, ControlPosition, CounterOverflow, FlipFlop, Kind, 
 pub(crate) fn port_label(c: &Component, index: usize) -> &'static str {
     match c.kind {
         Kind::Clock => "Clock",
+        Kind::Random => [
+            "Q",
+            "Enable: 0 holds data",
+            "Clock",
+            "Clear: restart from seed",
+        ][index],
         Kind::Counter => match index {
             0 => "Q",
             1 => "D",
@@ -94,6 +100,16 @@ pub(crate) fn fields(ui: &mut Ui, c: &mut Component) -> bool {
             });
         ui.end_row();
     }
+    if c.kind == Kind::Random {
+        ui.label(tr("Seed (0 = automatic)"));
+        let r = ui.add(
+            egui::DragValue::new(&mut s.random_seed)
+                .range(i32::MIN..=i32::MAX)
+                .speed(1),
+        );
+        active |= r.has_focus() || r.dragged();
+        ui.end_row();
+    }
     if c.kind == Kind::Counter {
         ui.label(tr("Maximum value (hex)"));
         let mask = u32::MAX >> (32 - c.bits.clamp(1, 32));
@@ -170,7 +186,7 @@ pub(crate) fn fields(ui: &mut Ui, c: &mut Component) -> bool {
 pub(crate) fn body(c: &Component) -> (Point, Point) {
     match c.kind {
         Kind::Clock => (Point::new(-20, -10), Point::new(0, 10)),
-        Kind::Register | Kind::Counter => (Point::new(-30, -20), Point::new(0, 20)),
+        Kind::Register | Kind::Counter | Kind::Random => (Point::new(-30, -20), Point::new(0, 20)),
         Kind::ShiftRegister => (Point::new(0, -20), Point::new(30, 20)),
         _ if c.sequential.new_layout => (Point::new(-50, -10), Point::new(-10, 50)),
         _ => (Point::new(-40, -10), Point::new(0, 30)),
@@ -217,7 +233,7 @@ pub(crate) fn draw(
         ));
         return;
     }
-    if matches!(c.kind, Kind::Counter | Kind::ShiftRegister) {
+    if matches!(c.kind, Kind::Counter | Kind::ShiftRegister | Kind::Random) {
         let labels: &[(i32, i32, &str)] = if c.kind == Kind::Counter {
             &[
                 (-26, 0, "D"),
@@ -228,6 +244,8 @@ pub(crate) fn draw(
                 (-10, -16, "S"),
                 (-10, 16, "R"),
             ]
+        } else if c.kind == Kind::Random {
+            &[(-4, 0, "Q"), (-26, 10, "EN"), (-20, 16, "R")]
         } else {
             &[(4, 0, "D"), (26, 0, "Q"), (10, -16, "M"), (10, 16, "R")]
         };
@@ -256,6 +274,12 @@ pub(crate) fn draw(
                 Point::new(clock.x, 15),
                 Point::new(clock.x + 4, 20),
             ]
+        } else if c.kind == Kind::Random {
+            [
+                Point::new(-30, -14),
+                Point::new(-25, -10),
+                Point::new(-30, -6),
+            ]
         } else {
             [Point::new(0, 6), Point::new(5, 10), Point::new(0, 14)]
         };
@@ -269,7 +293,11 @@ pub(crate) fn draw(
         let value = simulation.and_then(|s| s.storage.get(&c.id));
         let label = value.map_or("0", |s| s.text.as_str());
         let tone = value.map_or(color, |s| s.tone.color());
-        let x = if c.kind == Kind::Counter { -15 } else { 15 };
+        let x = if c.kind == Kind::ShiftRegister {
+            15
+        } else {
+            -15
+        };
         if label.len() > 4 && label.is_ascii() {
             let mid = label.len().div_ceil(2);
             for (y, line) in [(-5, &label[..mid]), (5, &label[mid..])] {

@@ -244,6 +244,7 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Circular", "圆形"),
     ("Clear contents", "清空内容"),
     ("Clear: reset to zero", "清零：异步置零"),
+    ("Clear: restart from seed", "复位：从种子重新开始"),
     (
         "Click or drag a wire to branch. Ctrl-click selects; Ctrl-drag moves.",
         "点击或拖动导线以引出支路；Ctrl 单击选择，Ctrl 拖动移动。",
@@ -664,6 +665,7 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Radix", "进制"),
     ("Raise", "上移一层"),
     ("Raise · Ctrl+Up", "上移一层 · Ctrl+Up"),
+    ("Random Generator", "随机数发生器"),
     ("Read enable", "读使能"),
     ("Rect", "矩形"),
     ("Rectangle", "矩形"),
@@ -734,6 +736,7 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Save circuit as", "电路另存为"),
     ("Save · Ctrl+S", "保存 · Ctrl+S"),
     ("Search type", "查找类型"),
+    ("Seed (0 = automatic)", "种子（0 为自动）"),
     ("Segment {}", "段 {}"),
     ("Select", "选择"),
     ("Select All · Ctrl+A", "全选 · Ctrl+A"),

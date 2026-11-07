@@ -1,4 +1,4 @@
-//! Deterministic, bounded signal propagation and sequential state, independent of the GUI.
+//! Bounded signal propagation and sequential state, independent of the GUI.
 mod hierarchy;
 pub use hierarchy::ProjectSimulator;
 mod arithmetic;
@@ -22,6 +22,9 @@ mod pla;
 #[cfg(test)]
 mod plexer_tests;
 mod plexers;
+mod random;
+#[cfg(test)]
+mod random_tests;
 mod sequential;
 #[cfg(test)]
 mod sequential_extra_tests;

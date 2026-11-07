@@ -353,6 +353,7 @@ fn component(
         ("#Wiring", "Clock") => Kind::Clock,
         ("#Memory", "Register") => Kind::Register,
         ("#Memory", "Counter") => Kind::Counter,
+        ("#Memory", "Random") => Kind::Random,
         ("#I/O", "Button") => Kind::Button,
         ("#I/O", "Switch") => Kind::Switch,
         ("#I/O", "DipSwitch") => Kind::DipSwitch,
@@ -431,6 +432,7 @@ fn component(
             | Kind::Register
             | Kind::FlipFlop(_)
             | Kind::Counter
+            | Kind::Random
             | Kind::ShiftRegister => crate::sequential::allowed(kind, key),
             Kind::Constant => matches!(key.as_str(), "facing" | "width" | "value"),
             Kind::Power | Kind::Ground => matches!(key.as_str(), "facing" | "width"),
@@ -494,6 +496,7 @@ fn component(
                 | Kind::Register
                 | Kind::Counter
                 | Kind::ShiftRegister
+                | Kind::Random
                 | Kind::Arithmetic(_)
                 | Kind::Plexer(logisim_core::Plexer::BitSelector)
         ) {

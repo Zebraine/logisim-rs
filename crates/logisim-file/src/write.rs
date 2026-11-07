@@ -106,6 +106,7 @@ pub fn serialize(document: &Document) -> Result<String> {
                 | Kind::FlipFlop(_)
                 | Kind::Latch(_)
                 | Kind::Counter
+                | Kind::Random
                 | Kind::ShiftRegister
                 | Kind::Rom
                 | Kind::PlaRom
@@ -143,6 +144,8 @@ pub fn serialize(document: &Document) -> Result<String> {
                         "DotMatrix"
                     } else if c.kind == Kind::DipSwitch {
                         "DipSwitch"
+                    } else if c.kind == Kind::Random {
+                        "Random"
                     } else if c.kind == Kind::ShiftRegister {
                         "Universal Register"
                     } else {

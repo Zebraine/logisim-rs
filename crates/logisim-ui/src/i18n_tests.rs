@@ -1685,3 +1685,107 @@ fn pla_table_apply_cancel_clear_history_and_document_replacement_in_both_languag
         assert_eq!(app.circuit(), &original);
     }
 }
+
+#[test]
+fn random_library_seed_trigger_and_undo_are_available_in_both_languages() {
+    fn number(ctx: &Context, app: &mut Workspace, old: &str, new: &str) {
+        click(ctx, app, old);
+        frame(
+            ctx,
+            app,
+            vec![
+                Event::ModifiersChanged(Modifiers::COMMAND),
+                Event::Key {
+                    key: Key::A,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: Modifiers::COMMAND,
+                },
+                Event::Key {
+                    key: Key::A,
+                    physical_key: None,
+                    pressed: false,
+                    repeat: false,
+                    modifiers: Modifiers::COMMAND,
+                },
+                Event::ModifiersChanged(Modifiers::NONE),
+                Event::Text(new.into()),
+                Event::Key {
+                    key: Key::Enter,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: Modifiers::NONE,
+                },
+            ],
+        );
+        frame(
+            ctx,
+            app,
+            vec![Event::Key {
+                key: Key::Enter,
+                physical_key: None,
+                pressed: false,
+                repeat: false,
+                modifiers: Modifiers::NONE,
+            }],
+        );
+    }
+
+    for language in Language::ALL {
+        let ctx = Context::default();
+        configure(&ctx);
+        let mut app = Workspace::default();
+        app.set_language(language);
+        let t = |s| i18n::with_language(language, || i18n::tr(s).to_owned());
+        click(&ctx, &mut app, &t("Memory"));
+        frame(
+            &ctx,
+            &mut app,
+            vec![
+                Event::PointerMoved(Pos2::new(150.0, 350.0)),
+                Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: egui::vec2(0.0, -300.0),
+                    phase: egui::TouchPhase::Move,
+                    modifiers: Modifiers::NONE,
+                    source: egui::MouseWheelSource::Unknown,
+                },
+            ],
+        );
+        click(&ctx, &mut app, &t("Random Generator"));
+        assert_eq!(app.editor.tool, Tool::Place(Kind::Random));
+        let labels = frame(&ctx, &mut app, vec![]);
+        for key in ["Data bits", "Trigger", "Seed (0 = automatic)", "Label"] {
+            assert!(has(&labels, &t(key)), "{key}");
+        }
+        assert!(!has(&labels, &t("Facing")));
+        number(&ctx, &mut app, "0", "-2147483648");
+        assert_eq!(app.editor.template.sequential.random_seed, i32::MIN);
+        app.editor.place(Point::new(300, 200));
+        app.editor.set_tool(Tool::Select);
+        let c = app.circuit().components[0].clone();
+        app.editor.selection.insert(c.id);
+        app.editor
+            .circuit
+            .add_wire(c.ports()[0], c.ports()[0] + Point::new(100, 0));
+        let before = app.circuit().clone();
+        click(&ctx, &mut app, &t("Rising edge"));
+        let labels = frame(&ctx, &mut app, vec![]);
+        assert!(!has(&labels, &t("High level")));
+        click(&ctx, &mut app, &t("Falling edge"));
+        assert_eq!(
+            app.circuit().component(c.id).unwrap().sequential.trigger,
+            logisim_core::Trigger::Falling
+        );
+        assert_eq!(app.circuit().wires, before.wires);
+        app.editor.undo();
+        assert_eq!(app.circuit(), &before);
+        app.editor.redo();
+        assert_eq!(
+            app.circuit().component(c.id).unwrap().sequential.trigger,
+            logisim_core::Trigger::Falling
+        );
+    }
+}

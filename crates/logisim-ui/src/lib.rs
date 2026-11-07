@@ -661,6 +661,7 @@ impl Workspace {
                                             self.library_tool(ui, Kind::Register);
                                             self.library_tool(ui, Kind::Counter);
                                             self.library_tool(ui, Kind::ShiftRegister);
+                                            self.library_tool(ui, Kind::Random);
                                             self.library_tool(ui, Kind::Rom);
                                             self.library_tool(ui, Kind::PlaRom);
                                             self.library_tool(ui, Kind::Ram);
