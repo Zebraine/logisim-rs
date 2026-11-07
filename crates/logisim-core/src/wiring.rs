@@ -133,21 +133,23 @@ impl Component {
         }
         match self.kind {
             Kind::Plexer(_) => self.plexer_terminals().get(index).map(|p| p.bits),
-            Kind::Arithmetic(kind) => Some(
-                if (index >= 3
+            Kind::Arithmetic(kind) => Some(if index == 0 {
+                self.arithmetic_output_bits()
+            } else if kind == crate::Arithmetic::BitAdder {
+                self.bits.clamp(1, 32)
+            } else if (kind == crate::Arithmetic::BitFinder && index == 2)
+                || (index >= 3
                     && !matches!(
                         kind,
                         crate::Arithmetic::Multiplier | crate::Arithmetic::Divider
                     ))
-                    || (index == 0 && kind == crate::Arithmetic::Comparator)
-                {
-                    1
-                } else if index == 2 && kind == crate::Arithmetic::Shifter {
-                    self.shift_amount_bits()
-                } else {
-                    self.bits.clamp(1, 32)
-                },
-            ),
+            {
+                1
+            } else if index == 2 && kind == crate::Arithmetic::Shifter {
+                self.shift_amount_bits()
+            } else {
+                self.bits.clamp(1, 32)
+            }),
             Kind::Clock | Kind::FlipFlop(_) => Some(1),
             Kind::Register if index >= 2 => Some(1),
             Kind::Probe => None,

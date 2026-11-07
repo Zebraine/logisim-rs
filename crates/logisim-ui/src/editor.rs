@@ -717,7 +717,7 @@ impl Editor {
                                 if matches!(c.kind, Kind::Plexer(_)) {
                                     crate::plexers::port_label(c.plexer_terminals()[index].role)
                                 } else if matches!(c.kind, Kind::Arithmetic(_)) {
-                                    tr(crate::arithmetic::port_label(c, index)).to_owned()
+                                    crate::arithmetic::port_label(c, index)
                                 } else {
                                     tr(crate::sequential::port_label(c, index)).to_owned()
                                 },

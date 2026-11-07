@@ -13,6 +13,9 @@ fn value(text: &str) -> Value {
 fn fixture(kind: Arithmetic, width: u8) -> (Circuit, Id, Vec<Id>) {
     let mut c = Component::new(Kind::Arithmetic(kind), Point::new(300, 300));
     c.bits = width;
+    component_fixture(c)
+}
+fn component_fixture(c: Component) -> (Circuit, Id, Vec<Id>) {
     let mut circuit = Circuit::default();
     let mut inputs = vec![];
     for (i, point) in c
@@ -382,3 +385,6 @@ fn two_arithmetic_instances_propagate_carry_between_words() {
 
 #[path = "arithmetic_extra_tests.rs"]
 mod extra;
+
+#[path = "bit_arithmetic_tests.rs"]
+mod bit_arithmetic;

@@ -7,6 +7,63 @@ pub(crate) fn evaluate(c: &Component, ports: &[Value]) -> Vec<(usize, Value)> {
     };
     let a = ports[1];
     let width = c.bits.clamp(1, 32);
+    if kind == Arithmetic::BitAdder {
+        let mut minimum = 0_u32;
+        let mut uncertain = 0_u32;
+        for input in &ports[1..] {
+            for i in 0..width {
+                match input.bit(i) {
+                    Bit::One => minimum += 1,
+                    Bit::Unknown | Bit::Error => uncertain += 1,
+                    Bit::Zero => {}
+                }
+            }
+        }
+        let maximum = minimum + uncertain;
+        // All possible counts form an interval; only its common high prefix is known.
+        let uncertain_bits = 32 - (minimum ^ maximum).leading_zeros();
+        let count = Value::from_bits((0..c.arithmetic_output_bits()).map(|i| {
+            if u32::from(i) < uncertain_bits {
+                Bit::Error
+            } else if minimum & (1 << i) != 0 {
+                Bit::One
+            } else {
+                Bit::Zero
+            }
+        }));
+        return vec![(0, count)];
+    }
+    if kind == Arithmetic::BitFinder {
+        let result_width = c.arithmetic_output_bits();
+        let target = if c.arithmetic.search.find_one() {
+            Bit::One
+        } else {
+            Bit::Zero
+        };
+        for offset in 0..width {
+            let i = if c.arithmetic.search.from_high() {
+                width - 1 - offset
+            } else {
+                offset
+            };
+            match a.bit(i) {
+                Bit::Unknown | Bit::Error => {
+                    return vec![
+                        (0, Value::filled(result_width, Bit::Error)),
+                        (2, Value::filled(1, Bit::Error)),
+                    ];
+                }
+                bit if bit == target => {
+                    return vec![
+                        (0, Value::known(result_width, u32::from(i))),
+                        (2, Value::known(1, 1)),
+                    ];
+                }
+                _ => {}
+            }
+        }
+        return vec![(0, Value::known(result_width, 0)), (2, Value::known(1, 0))];
+    }
     if kind == Arithmetic::Negator {
         return vec![(0, negate(a))];
     }
@@ -25,7 +82,9 @@ pub(crate) fn evaluate(c: &Component, ports: &[Value]) -> Vec<(usize, Value)> {
             };
             vec![(0, result), (4, auxiliary)]
         }
-        Arithmetic::Negator => unreachable!("handled before reading a second operand"),
+        Arithmetic::Negator | Arithmetic::BitAdder | Arithmetic::BitFinder => {
+            unreachable!("handled before reading a second operand")
+        }
         Arithmetic::Adder | Arithmetic::Subtractor => {
             let subtract = kind == Arithmetic::Subtractor;
             let mut carry = match ports[3].bit(0) {

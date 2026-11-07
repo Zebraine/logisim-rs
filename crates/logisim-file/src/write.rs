@@ -104,7 +104,11 @@ pub fn serialize(document: &Document) -> Result<String> {
                     "    <comp lib=\"{lib}\" loc=\"({},{})\" name=\"{}\">",
                     c.position.x,
                     c.position.y,
-                    c.kind.name()
+                    if let Kind::Arithmetic(a) = c.kind {
+                        a.file_name()
+                    } else {
+                        c.kind.name()
+                    }
                 )
                 .unwrap();
             }

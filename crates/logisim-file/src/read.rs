@@ -35,7 +35,7 @@ fn attributes(n: Node<'_, '_>) -> Result<Attributes> {
 fn value<'a>(a: &'a Attributes, key: &str, default: &'a str) -> &'a str {
     a.get(key).map(String::as_str).unwrap_or(default)
 }
-fn number(
+pub(crate) fn number(
     a: &Attributes,
     key: &str,
     default: u8,
@@ -341,7 +341,7 @@ fn component(
         ("#Arithmetic", name) => Kind::Arithmetic(
             logisim_core::Arithmetic::ALL
                 .into_iter()
-                .find(|a| a.name() == name)
+                .find(|a| a.file_name() == name)
                 .ok_or_else(|| Error(format!("Unsupported arithmetic component: {name}")))?,
         ),
         ("#Plexers", name) => Kind::Plexer(

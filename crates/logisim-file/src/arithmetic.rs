@@ -1,14 +1,28 @@
 use crate::{Error, Result};
-use logisim_core::{Arithmetic, Component, Facing, Kind, Shift};
+use logisim_core::{Arithmetic, BitSearch, Component, Facing, Kind, Shift};
 use std::collections::BTreeMap;
 
 pub(crate) fn allowed(kind: Arithmetic, key: &str) -> bool {
     key == "width"
         || (kind == Arithmetic::Comparator && key == "mode")
         || (kind == Arithmetic::Shifter && key == "shift")
+        || (kind == Arithmetic::BitAdder && key == "inputs")
+        || (kind == Arithmetic::BitFinder && key == "type")
 }
 pub(crate) fn read(c: &mut Component, attrs: &BTreeMap<String, String>) -> Result<()> {
     match c.kind {
+        Kind::Arithmetic(Arithmetic::BitAdder) => {
+            c.arithmetic.bit_inputs = crate::read::number(attrs, "inputs", 1, 1..=32)?;
+        }
+        Kind::Arithmetic(Arithmetic::BitFinder) => {
+            c.arithmetic.search = match attrs.get("type").map(String::as_str) {
+                None => BitSearch::LowestOne,
+                Some("high1") => BitSearch::HighestOne,
+                Some("low0") => BitSearch::LowestZero,
+                Some("high0") => BitSearch::HighestZero,
+                Some(v) => return Err(Error(format!("Unsupported bit search: {v}"))),
+            };
+        }
         Kind::Arithmetic(Arithmetic::Comparator) => {
             c.arithmetic.signed = match attrs.get("mode").map(String::as_str) {
                 None => true,
@@ -39,6 +53,23 @@ pub(crate) fn write(out: &mut String, c: &Component) -> Result<()> {
         return Err(Error(
             "Arithmetic components have a fixed orientation".into(),
         ));
+    }
+    if kind == Arithmetic::BitAdder {
+        if !(1..=32).contains(&c.arithmetic.bit_inputs) {
+            return Err(Error("Bit Adder input count must be 1–32".into()));
+        }
+        attribute(out, "inputs", c.arithmetic.bit_inputs)?;
+    }
+    if kind == Arithmetic::BitFinder {
+        let mode = match c.arithmetic.search {
+            BitSearch::LowestOne => None,
+            BitSearch::HighestOne => Some("high1"),
+            BitSearch::LowestZero => Some("low0"),
+            BitSearch::HighestZero => Some("high0"),
+        };
+        if let Some(mode) = mode {
+            attribute(out, "type", mode)?;
+        }
     }
     if kind == Arithmetic::Comparator && !c.arithmetic.signed {
         attribute(out, "mode", "unsigned")?;

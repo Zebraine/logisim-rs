@@ -9,7 +9,7 @@ mod project;
 pub use project::{CircuitDefinition, Interface, InterfacePort, MAX_CIRCUITS, Project};
 
 mod arithmetic;
-pub use arithmetic::{Arithmetic, ArithmeticOptions, Shift};
+pub use arithmetic::{Arithmetic, ArithmeticOptions, BitSearch, Shift};
 
 mod plexers;
 pub use plexers::{Plexer, PlexerRole, PlexerTerminal, Plexing};
@@ -593,35 +593,41 @@ impl Circuit {
         }
         let before = old.ports();
         let after = replacement.ports();
-        let pairs: Vec<_> =
-            if matches!(old.kind, Kind::Subcircuit(_)) && old.kind == replacement.kind {
-                old.interface
-                    .ports
-                    .iter()
-                    .zip(&before)
-                    .filter_map(|(port, before)| {
-                        replacement
-                            .interface
-                            .ports
-                            .iter()
-                            .position(|p| p.pin == port.pin)
-                            .map(|index| (*before, after[index]))
-                    })
-                    .collect()
-            } else if matches!(old.kind, Kind::Plexer(_)) && old.kind == replacement.kind {
-                let new = replacement.plexer_terminals();
-                old.plexer_terminals()
-                    .iter()
-                    .zip(&before)
-                    .filter_map(|(port, point)| {
-                        new.iter()
-                            .position(|p| p.role == port.role)
-                            .map(|i| (*point, after[i]))
-                    })
-                    .collect()
-            } else {
-                before.iter().copied().zip(after).collect()
-            };
+        let pairs: Vec<_> = if old.kind == Kind::Arithmetic(Arithmetic::BitAdder)
+            && old.kind == replacement.kind
+            && old.bit_adder_inputs() != replacement.bit_adder_inputs()
+        {
+            // Observed count edits keep wire geometry; only a simultaneous move translates it.
+            let delta = replacement.position - old.position;
+            before.iter().map(|p| (*p, *p + delta)).collect()
+        } else if matches!(old.kind, Kind::Subcircuit(_)) && old.kind == replacement.kind {
+            old.interface
+                .ports
+                .iter()
+                .zip(&before)
+                .filter_map(|(port, before)| {
+                    replacement
+                        .interface
+                        .ports
+                        .iter()
+                        .position(|p| p.pin == port.pin)
+                        .map(|index| (*before, after[index]))
+                })
+                .collect()
+        } else if matches!(old.kind, Kind::Plexer(_)) && old.kind == replacement.kind {
+            let new = replacement.plexer_terminals();
+            old.plexer_terminals()
+                .iter()
+                .zip(&before)
+                .filter_map(|(port, point)| {
+                    new.iter()
+                        .position(|p| p.role == port.role)
+                        .map(|i| (*point, after[i]))
+                })
+                .collect()
+        } else {
+            before.iter().copied().zip(after).collect()
+        };
         let map: BTreeMap<_, _> = pairs.into_iter().filter(|(a, b)| a != b).collect();
         if !map.is_empty() {
             self.split_at(&before, &BTreeSet::new());

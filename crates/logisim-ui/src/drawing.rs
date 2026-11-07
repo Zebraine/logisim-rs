@@ -73,6 +73,10 @@ fn probe_width(c: &Component) -> f32 {
     }
 }
 pub(crate) fn bounds(c: &Component) -> Rect {
+    if matches!(c.kind, Kind::Arithmetic(_)) {
+        let [min, max] = c.arithmetic_body();
+        return Rect::from_min_max(pos(c.position + min), pos(c.position + max));
+    }
     if matches!(c.kind, Kind::Plexer(_)) {
         let mut r = Rect::NOTHING;
         for point in c.plexer_body().into_iter().chain(c.local_ports()) {

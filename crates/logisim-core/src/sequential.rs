@@ -131,6 +131,12 @@ impl Component {
     }
     pub fn drives_port(&self, index: usize) -> bool {
         if let Kind::Arithmetic(kind) = self.kind {
+            if kind == crate::Arithmetic::BitAdder {
+                return index == 0;
+            }
+            if kind == crate::Arithmetic::BitFinder {
+                return index == 0 || index == 2;
+            }
             return index == 0
                 || (index == 4
                     && !matches!(
