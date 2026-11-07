@@ -1,5 +1,5 @@
 use super::*;
-use logisim_core::{Arithmetic, Component, Point, Shift};
+use logisim_core::{Arithmetic, Component, Kind, Point, Shift};
 
 fn value(text: &str) -> Value {
     Value::from_bits(text.chars().rev().map(|b| match b {

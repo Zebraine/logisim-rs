@@ -1,5 +1,5 @@
 use super::*;
-use logisim_core::{Component, MemoryInterface, MemoryRole, Point, Project};
+use logisim_core::{Component, Kind, MemoryInterface, MemoryRole, Point, Project};
 fn fixture(interface: MemoryInterface) -> (Circuit, Id, Vec<(MemoryRole, Id)>) {
     let mut c = Component::new(Kind::Ram, Point::new(200, 100));
     c.bits = 32;

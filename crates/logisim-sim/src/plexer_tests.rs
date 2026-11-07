@@ -1,6 +1,6 @@
 use super::*;
 use PlexerRole::*;
-use logisim_core::{Component, Facing, Plexer, PlexerRole, Point};
+use logisim_core::{Component, Facing, Kind, Plexer, PlexerRole, Point};
 fn fixture(mut c: Component) -> (Circuit, Id, Vec<(PlexerRole, Id)>) {
     c.position = Point::new(300, 300);
     let mut circuit = Circuit::default();

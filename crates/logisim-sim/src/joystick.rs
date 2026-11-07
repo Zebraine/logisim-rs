@@ -38,7 +38,7 @@ impl Simulator {
         }
         *current = offset;
         self.limited = false;
-        self.unsettled_steps = 0;
+        self.progress.restart();
         self.schedule_controls();
     }
     pub fn release_joysticks(&mut self) {

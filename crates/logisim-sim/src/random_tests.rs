@@ -1,5 +1,5 @@
 use super::*;
-use logisim_core::{Component, Point, Project, Trigger};
+use logisim_core::{Component, Kind, Point, Project, Trigger};
 
 fn settle(s: &mut Simulator) {
     s.advance(128);

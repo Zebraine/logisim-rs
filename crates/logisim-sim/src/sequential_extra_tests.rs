@@ -1,5 +1,5 @@
 use super::*;
-use logisim_core::{Component, CounterOverflow, Point, Trigger};
+use logisim_core::{Component, CounterOverflow, Kind, Point, Trigger};
 
 // Controls are real input pins on the observed terminals; output/carry never get input drivers.
 fn fixture(

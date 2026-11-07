@@ -119,7 +119,7 @@ impl Simulator {
         }
         s.buffer.push_back(value);
         self.limited = false;
-        self.unsettled_steps = 0;
+        self.progress.restart();
         self.schedule_terminals();
     }
     pub(crate) fn synchronize_terminals(&mut self, circuit: &Circuit) {

@@ -1,5 +1,5 @@
 use super::*;
-use logisim_core::{Component, ControlPosition, FlipFlop, Point, Trigger};
+use logisim_core::{Component, ControlPosition, FlipFlop, Kind, Point, Trigger};
 
 fn fixture(kind: Kind, trigger: Trigger) -> (Circuit, Id, Vec<Id>) {
     let mut circuit = Circuit::default();

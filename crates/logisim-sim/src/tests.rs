@@ -1,5 +1,5 @@
 use super::*;
-use logisim_core::{Component, Gate, Point};
+use logisim_core::{Component, Extension, Gate, Kind, Point};
 
 fn pin(circuit: &mut Circuit, point: Point, bits: u8, output: bool) -> Id {
     let mut pin = Component::new(Kind::Pin, point);

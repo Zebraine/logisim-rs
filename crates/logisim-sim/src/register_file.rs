@@ -53,7 +53,7 @@ impl Simulator {
         };
         state.words[usize::from(address)] = Value::known(32, value);
         self.limited = false;
-        self.unsettled_steps = 0;
+        self.progress.restart();
         self.schedule_register_files();
     }
     pub(crate) fn schedule_register_files(&mut self) {
