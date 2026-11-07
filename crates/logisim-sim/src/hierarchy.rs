@@ -312,15 +312,35 @@ impl ProjectSimulator {
             self.unsettled = 0;
         }
     }
-    // Only standalone root inputs are pokable; nested pins are driven by the enclosing instance.
+    // Nested interface pins are parent-driven; local switches remain interactive.
     pub fn set_input(&mut self, id: Id, value: u32) {
-        if let Some(state) = self.states.get_mut(&vec![]) {
+        self.set_input_at(&[], id, value);
+    }
+    pub fn toggle_input(&mut self, id: Id, bit: u8) {
+        self.toggle_input_at(&[], id, bit);
+    }
+    pub fn set_input_at(&mut self, path: &[Id], id: Id, value: u32) {
+        if let Some(state) = self.states.get_mut(path)
+            && (path.is_empty()
+                || state
+                    .sim
+                    .circuit
+                    .component(id)
+                    .is_some_and(|c| matches!(c.kind, Kind::Switch | Kind::DipSwitch)))
+        {
             state.sim.set_input(id, value);
             self.unsettled = 0;
         }
     }
-    pub fn toggle_input(&mut self, id: Id, bit: u8) {
-        if let Some(state) = self.states.get_mut(&vec![]) {
+    pub fn toggle_input_at(&mut self, path: &[Id], id: Id, bit: u8) {
+        if let Some(state) = self.states.get_mut(path)
+            && (path.is_empty()
+                || state
+                    .sim
+                    .circuit
+                    .component(id)
+                    .is_some_and(|c| matches!(c.kind, Kind::Switch | Kind::DipSwitch)))
+        {
             state.sim.toggle_input(id, bit);
             self.unsettled = 0;
         }

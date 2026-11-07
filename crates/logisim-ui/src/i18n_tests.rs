@@ -808,11 +808,14 @@ fn io_library_properties_and_momentary_inspector_work_in_both_languages() {
         click(&ctx, &mut app, &translated("Input/Output"));
         for kind in [
             Kind::Button,
+            Kind::Switch,
+            Kind::DipSwitch,
+            Kind::Slider,
             Kind::Led,
             Kind::SevenSegment,
             Kind::HexDisplay,
         ] {
-            if kind == Kind::SevenSegment {
+            if matches!(kind, Kind::DipSwitch | Kind::SevenSegment) {
                 frame(
                     &ctx,
                     &mut app,
@@ -838,11 +841,28 @@ fn io_library_properties_and_momentary_inspector_work_in_both_languages() {
                 &labels,
                 &translated(if kind == Kind::Button {
                     "Button color"
+                } else if matches!(kind, Kind::Switch | Kind::DipSwitch | Kind::Slider) {
+                    "Body color"
                 } else {
                     "On color"
                 })
             ));
-            assert!(!has(&labels, &translated("Data bits")));
+            assert_eq!(
+                has(&labels, &translated("Data bits")),
+                matches!(kind, Kind::Switch | Kind::Slider)
+            );
+            if kind == Kind::DipSwitch {
+                assert!(has(&labels, &translated("Number of switches")));
+            }
+            if kind == Kind::Slider {
+                assert!(has(&labels, &translated("Value (hex)")));
+                click(&ctx, &mut app, &translated("Left to right"));
+                click(&ctx, &mut app, &translated("Right to left"));
+                assert!(app.editor.template.io.slider_reverse);
+                click(&ctx, &mut app, &translated("Binary"));
+                click(&ctx, &mut app, &translated("Hexadecimal"));
+                assert_eq!(app.editor.template.radix, logisim_core::Radix::Hex);
+            }
             if matches!(kind, Kind::Led | Kind::SevenSegment) {
                 let rect = labels
                     .iter()

@@ -46,6 +46,10 @@ struct Edit {
     after: Snapshot,
 }
 enum Gesture {
+    Slider {
+        id: Id,
+        before: Snapshot,
+    },
     Move {
         start: Point,
         before: Snapshot,
@@ -250,9 +254,17 @@ impl Editor {
             self.undo.push(edit);
         }
     }
+    pub fn cancel_slider(&mut self) {
+        if matches!(self.gesture, Some(Gesture::Slider { .. })) {
+            self.cancel_gesture();
+        }
+    }
     pub fn cancel_gesture(&mut self) {
-        if let Some(Gesture::Move { before, .. } | Gesture::Endpoint { before, .. }) =
-            self.gesture.take()
+        if let Some(
+            Gesture::Move { before, .. }
+            | Gesture::Endpoint { before, .. }
+            | Gesture::Slider { before, .. },
+        ) = self.gesture.take()
         {
             self.restore(before);
         }
@@ -506,7 +518,20 @@ impl Editor {
                                 None
                             }
                         });
-                    if self.tool == Tool::Wire
+                    if self.tool == Tool::Poke {
+                        if let Some(id) = hit
+                            && let Some(c) = self.circuit.component(id)
+                            && c.kind == Kind::Slider
+                            && (crate::io::slider_knob(c) - world).length() <= tolerance
+                        {
+                            self.selection.clear();
+                            self.selection.insert(id);
+                            self.gesture = Some(Gesture::Slider {
+                                id,
+                                before: self.snapshot(),
+                            });
+                        }
+                    } else if self.tool == Tool::Wire
                         || (self.tool == Tool::Select
                             && !ctrl
                             && (self.wire_start.is_some()
@@ -561,6 +586,13 @@ impl Editor {
                 let snap = self.connection_point(world, tolerance);
                 if let Some(gesture) = &mut self.gesture {
                     match gesture {
+                        Gesture::Slider { id, .. } => {
+                            if let Some(c) =
+                                self.circuit.components.iter_mut().find(|c| c.id == *id)
+                            {
+                                crate::io::move_slider(c, world);
+                            }
+                        }
                         Gesture::Move { start, before } => {
                             self.circuit = before.circuit.clone();
                             // Movement snaps to the grid, never to the component being moved.
@@ -625,9 +657,11 @@ impl Editor {
             }
             if response.drag_stopped_by(PointerButton::Primary) {
                 match self.gesture.take() {
-                    Some(Gesture::Move { before, .. } | Gesture::Endpoint { before, .. }) => {
-                        self.record(before)
-                    }
+                    Some(
+                        Gesture::Move { before, .. }
+                        | Gesture::Endpoint { before, .. }
+                        | Gesture::Slider { before, .. },
+                    ) => self.record(before),
                     Some(Gesture::Wire {
                         start,
                         end,
@@ -661,7 +695,21 @@ impl Editor {
                                     .actions
                                     .push(SimulationAction::ToggleStored { id });
                             }
-                            if let Some(input) = self.simulation.view.inputs.get(&id) {
+                            if self
+                                .circuit
+                                .component(id)
+                                .is_some_and(|c| c.kind == Kind::DipSwitch)
+                            {
+                                if let Some(bit) = self
+                                    .circuit
+                                    .component(id)
+                                    .and_then(|c| crate::io::dip_bit(c, world))
+                                {
+                                    self.simulation
+                                        .actions
+                                        .push(SimulationAction::ToggleInput { id, bit });
+                                }
+                            } else if let Some(input) = self.simulation.view.inputs.get(&id) {
                                 if input.bits == 1 {
                                     self.simulation
                                         .actions

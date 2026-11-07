@@ -301,9 +301,13 @@ pub(crate) fn component(
         );
     };
     match c.kind {
-        Kind::Button | Kind::Led | Kind::SevenSegment | Kind::HexDisplay => {
-            crate::io::draw(p, canvas, c, color, simulation)
-        }
+        Kind::Button
+        | Kind::Switch
+        | Kind::DipSwitch
+        | Kind::Slider
+        | Kind::Led
+        | Kind::SevenSegment
+        | Kind::HexDisplay => crate::io::draw(p, canvas, c, color, simulation),
         Kind::Rom | Kind::Ram => crate::memory::draw(p, canvas, c, color, simulation),
         Kind::Plexer(_) => crate::plexers::draw(p, canvas, c, color),
         Kind::Arithmetic(_) => crate::arithmetic::draw(p, canvas, c, color),
@@ -628,7 +632,14 @@ pub(crate) fn component(
         let r = bounds(c);
         let (anchor, align) = if matches!(
             c.kind,
-            Kind::Probe | Kind::Subcircuit(_) | Kind::Clock | Kind::Button | Kind::Led
+            Kind::Probe
+                | Kind::Subcircuit(_)
+                | Kind::Clock
+                | Kind::Button
+                | Kind::Switch
+                | Kind::DipSwitch
+                | Kind::Slider
+                | Kind::Led
         ) {
             match c.label_facing {
                 Facing::North => (vec2(r.center().x, r.top() - 8.0), Align2::CENTER_BOTTOM),

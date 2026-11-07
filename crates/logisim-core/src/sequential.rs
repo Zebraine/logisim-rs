@@ -177,6 +177,9 @@ impl Component {
         Some(points.into_iter().map(|(x, y)| Point::new(x, y)).collect())
     }
     pub fn drives_port(&self, index: usize) -> bool {
+        if self.kind == Kind::DipSwitch {
+            return index < usize::from(self.io.switch_count.clamp(1, 32));
+        }
         if let Kind::Arithmetic(kind) = self.kind {
             if kind == crate::Arithmetic::BitAdder {
                 return index == 0;

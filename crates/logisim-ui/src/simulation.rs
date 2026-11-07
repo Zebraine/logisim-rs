@@ -299,6 +299,20 @@ impl SimulationUi {
         ));
     }
     pub fn component(&mut self, ui: &mut Ui, c: &Component) {
+        match c.kind {
+            logisim_core::Kind::Switch => {
+                ui.weak(tr("Poke: click to open or close the switch."));
+            }
+            logisim_core::Kind::DipSwitch => {
+                ui.weak(tr("Poke: click each switch to toggle its output."));
+            }
+            logisim_core::Kind::Slider => {
+                ui.weak(tr(
+                    "Poke: drag the handle. The value is saved with the circuit.",
+                ));
+            }
+            _ => {}
+        }
         if c.kind == logisim_core::Kind::Button {
             ui.weak(tr(
                 "Poke: hold the left mouse button to press; release anywhere.",

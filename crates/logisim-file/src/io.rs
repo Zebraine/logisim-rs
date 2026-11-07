@@ -1,16 +1,21 @@
 use crate::{Error, Result};
-use logisim_core::{Component, Facing, Kind};
+use logisim_core::{Component, Facing, Kind, Radix};
 use std::collections::BTreeMap;
 pub(crate) fn allowed(kind: Kind, key: &str) -> bool {
     key == "color"
-        || (kind != Kind::Button && key == "offcolor")
+        || (matches!(kind, Kind::Switch | Kind::Slider) && key == "width")
+        || (kind == Kind::DipSwitch && key == "NSwitches")
+        || (kind == Kind::Slider && matches!(key, "radix" | "Direction" | "value"))
+        || (matches!(kind, Kind::Led | Kind::SevenSegment | Kind::HexDisplay) && key == "offcolor")
         || (matches!(kind, Kind::Led | Kind::SevenSegment) && key == "active")
         || (matches!(kind, Kind::SevenSegment | Kind::HexDisplay) && key == "bg")
-        || (matches!(kind, Kind::Button | Kind::Led)
-            && matches!(
-                key,
-                "facing" | "label" | "labelloc" | "labelfont" | "labelcolor"
-            ))
+        || (matches!(
+            kind,
+            Kind::Button | Kind::Switch | Kind::DipSwitch | Kind::Slider | Kind::Led
+        ) && matches!(
+            key,
+            "facing" | "label" | "labelloc" | "labelfont" | "labelcolor"
+        ))
 }
 fn rgba(text: &str) -> Result<[u8; 4]> {
     let hex = text
@@ -29,7 +34,37 @@ pub(crate) fn read(c: &mut Component, a: &BTreeMap<String, String>) -> Result<()
     if !c.kind.is_io() {
         return Ok(());
     }
-    c.bits = if c.kind == Kind::HexDisplay { 4 } else { 1 };
+    c.bits = match c.kind {
+        Kind::Switch | Kind::Slider => c.bits,
+        Kind::HexDisplay => 4,
+        _ => 1,
+    };
+    if c.kind == Kind::DipSwitch {
+        c.io.switch_count = crate::read::number(a, "NSwitches", 4, 1..=32)?;
+    }
+    if c.kind == Kind::Slider {
+        c.io.slider_reverse = match a.get("Direction").map(String::as_str) {
+            None => false,
+            Some("right_to_left") => true,
+            _ => return Err(Error("Unsupported slider direction".into())),
+        };
+        c.io.slider_value = match a.get("value") {
+            None => 0,
+            Some(v) => v
+                .strip_prefix("0x")
+                .and_then(|n| u32::from_str_radix(n, 16).ok())
+                .filter(|v| *v <= c.slider_max())
+                .ok_or_else(|| Error("Invalid slider value".into()))?,
+        };
+        c.radix = match a.get("radix").map(String::as_str) {
+            None | Some("2") => Radix::Binary,
+            Some("8") => Radix::Octal,
+            Some("10signed") => Radix::Signed,
+            Some("10unsigned") => Radix::Unsigned,
+            Some("16") => Radix::Hex,
+            _ => return Err(Error("Unsupported slider radix".into())),
+        };
+    }
     for (name, value) in [
         ("color", &mut c.io.on_color),
         ("offcolor", &mut c.io.off_color),
@@ -58,14 +93,43 @@ pub(crate) fn write(out: &mut String, c: &Component) -> Result<()> {
     if !c.kind.is_io() {
         return Ok(());
     }
-    if c.bits != if c.kind == Kind::HexDisplay { 4 } else { 1 }
-        || (!c.kind.rotatable() && c.facing != Facing::East)
+    if (match c.kind {
+        Kind::Switch | Kind::Slider => !(1..=32).contains(&c.bits),
+        Kind::HexDisplay => c.bits != 4,
+        _ => c.bits != 1,
+    }) || (!c.kind.rotatable() && c.facing != Facing::East)
     {
         return Err(Error("Invalid I/O width or orientation".into()));
     }
     use crate::write::attribute as a;
+    if c.kind == Kind::DipSwitch {
+        if !(1..=32).contains(&c.io.switch_count) {
+            return Err(Error("Invalid switch count".into()));
+        }
+        a(out, "NSwitches", c.io.switch_count)?;
+    }
+    if c.kind == Kind::Slider {
+        if c.io.slider_value > c.slider_max() {
+            return Err(Error("Invalid slider value".into()));
+        }
+        if c.io.slider_reverse {
+            a(out, "Direction", "right_to_left")?;
+        }
+        a(out, "value", format!("0x{:x}", c.io.slider_value))?;
+        a(
+            out,
+            "radix",
+            match c.radix {
+                Radix::Binary => "2",
+                Radix::Octal => "8",
+                Radix::Signed => "10signed",
+                Radix::Unsigned => "10unsigned",
+                Radix::Hex => "16",
+            },
+        )?;
+    }
     a(out, "color", color_text(c.io.on_color))?;
-    if c.kind != Kind::Button {
+    if matches!(c.kind, Kind::Led | Kind::SevenSegment | Kind::HexDisplay) {
         a(out, "offcolor", color_text(c.io.off_color))?;
     }
     if matches!(c.kind, Kind::SevenSegment | Kind::HexDisplay) {
@@ -74,7 +138,10 @@ pub(crate) fn write(out: &mut String, c: &Component) -> Result<()> {
     if matches!(c.kind, Kind::Led | Kind::SevenSegment) {
         a(out, "active", c.io.active_high)?;
     }
-    if matches!(c.kind, Kind::Button | Kind::Led) {
+    if matches!(
+        c.kind,
+        Kind::Button | Kind::Switch | Kind::DipSwitch | Kind::Slider | Kind::Led
+    ) {
         a(out, "labelloc", c.label_facing.name().to_ascii_lowercase())?;
     }
     Ok(())
@@ -180,6 +247,104 @@ mod tests {
         assert!(write(&mut String::new(), &c).is_err());
         c.facing = Facing::East;
         c.bits = 8;
+        assert!(write(&mut String::new(), &c).is_err());
+    }
+}
+
+#[cfg(test)]
+mod input_tests {
+    use super::*;
+    use crate::{Document, parse, serialize};
+    use logisim_core::{Circuit, Point};
+    fn xml(kind: &str, attrs: &str) -> String {
+        format!(
+            r##"<project source="2.16.2.2.jar" version="1.0"><lib name="io" desc="#I/O"/><main name="main"/><circuit name="main"><comp lib="io" name="{kind}" loc="(200,100)">{attrs}</comp></circuit></project>"##
+        )
+    }
+    #[test]
+    fn input_defaults_and_observed_attributes_roundtrip_without_runtime_state() {
+        for (kind, name, bits) in [
+            (Kind::Switch, "Switch", 1),
+            (Kind::DipSwitch, "DipSwitch", 1),
+            (Kind::Slider, "Slider", 8),
+        ] {
+            let i = parse(&xml(name, "")).unwrap();
+            assert!(i.warnings.is_empty(), "{:?}", i.warnings);
+            let c = &i.document.main_circuit().circuit.components[0];
+            assert_eq!(c.bits, bits);
+            assert_eq!(c.io, Component::new(kind, Point::ZERO).io);
+            for facing in Facing::ALL {
+                for n in [1, 4, 32] {
+                    for radix in Radix::ALL {
+                        for reverse in [false, true] {
+                            let mut c = Component::new(kind, Point::new(200, 100));
+                            c.facing = facing;
+                            c.label_facing = facing;
+                            c.label = "输入 & Input".into();
+                            c.font_size = 18;
+                            c.color = [24, 53, 70];
+                            c.io.on_color = [18, 52, 86, 128];
+                            match kind {
+                                Kind::DipSwitch => c.io.switch_count = n,
+                                Kind::Slider => {
+                                    c.bits = n;
+                                    c.radix = radix;
+                                    c.io.slider_reverse = reverse;
+                                    c.io.slider_value = c.slider_max();
+                                }
+                                _ => c.bits = n,
+                            }
+                            let mut circuit = Circuit::default();
+                            let id = circuit.add_component(c);
+                            let d = Document::single("main", circuit);
+                            let s = serialize(&d).unwrap();
+                            assert!(s.contains("#12345680"));
+                            assert!(!s.contains("offcolor"));
+                            assert!(!s.contains("pressed"));
+                            if kind == Kind::DipSwitch {
+                                assert!(!s.contains("name=\"width\""));
+                                assert!(s.contains("NSwitches"));
+                            }
+                            if kind == Kind::Slider {
+                                assert_eq!(s.contains("right_to_left"), reverse);
+                            } else {
+                                assert!(!s.contains("name=\"value\""));
+                            }
+                            let i = parse(&s).unwrap();
+                            assert!(i.warnings.is_empty(), "{:?}", i.warnings);
+                            let mut after = i.document.main_circuit().circuit.components[0].clone();
+                            after.id = id;
+                            assert_eq!(&after, d.main_circuit().circuit.component(id).unwrap());
+                            assert_eq!(serialize(&i.document).unwrap(), s);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    #[test]
+    fn unsupported_input_options_and_invalid_ranges_protect_originals() {
+        for (kind, attrs) in [
+            ("Switch", r##"<a name="state" val="1"/>"##),
+            ("Switch", r##"<a name="width" val="33"/>"##),
+            ("DipSwitch", r##"<a name="NSwitches" val="0"/>"##),
+            ("DipSwitch", r##"<a name="NSwitches" val="33"/>"##),
+            ("DipSwitch", r##"<a name="width" val="4"/>"##),
+            ("Slider", r##"<a name="value" val="0x100"/>"##),
+            ("Slider", r##"<a name="value" val="-1"/>"##),
+            ("Slider", r##"<a name="Direction" val="unobserved"/>"##),
+            ("Slider", r##"<a name="radix" val="unknown"/>"##),
+            ("Slider", r##"<a name="offcolor" val="#000000"/>"##),
+        ] {
+            let i = parse(&xml(kind, attrs)).unwrap();
+            assert!(!i.warnings.is_empty(), "{kind} {attrs}");
+            assert!(i.document.main_circuit().circuit.components.is_empty());
+        }
+        let mut c = Component::new(Kind::Slider, Point::ZERO);
+        c.io.slider_value = 256;
+        assert!(write(&mut String::new(), &c).is_err());
+        c = Component::new(Kind::DipSwitch, Point::ZERO);
+        c.io.switch_count = 33;
         assert!(write(&mut String::new(), &c).is_err());
     }
 }

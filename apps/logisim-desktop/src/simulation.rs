@@ -147,8 +147,8 @@ pub fn apply_project(
             value,
         } => sim.fill_memory(path, id, start, end, value),
         SimulationAction::ToggleStored { id } => sim.toggle_stored(path, id),
-        SimulationAction::ToggleInput { id, bit } if path.is_empty() => sim.toggle_input(id, bit),
-        SimulationAction::SetInput { id, value } if path.is_empty() => sim.set_input(id, value),
+        SimulationAction::ToggleInput { id, bit } => sim.toggle_input_at(path, id, bit),
+        SimulationAction::SetInput { id, value } => sim.set_input_at(path, id, value),
         _ => {}
     }
 }
@@ -168,7 +168,11 @@ pub fn present_project(
     view.has_clocks = sim.has_clocks();
     view.ticks = sim.ticks();
     if !path.is_empty() {
-        view.inputs.clear();
+        view.inputs.retain(|id, _| {
+            circuit
+                .component(*id)
+                .is_some_and(|c| matches!(c.kind, Kind::Switch | Kind::DipSwitch))
+        });
     }
     view.issues.clear();
     append_issues(&mut view, circuit, sim.diagnostics(path));
@@ -279,6 +283,51 @@ fn probe_text(value: Value, radix: Radix) -> String {
 mod tests {
     use super::*;
     use logisim_core::{Component, Kind, Point};
+    #[test]
+    fn nested_switches_are_pokable_but_parent_driven_pins_are_protected() {
+        let mut p = logisim_core::Project::default();
+        let root = p.main;
+        let cell = p.add("Cell".into()).unwrap();
+        let c = &mut p.circuit_mut(cell).unwrap().circuit;
+        let pin = c.add_component(Component::new(Kind::Pin, Point::new(100, 100)));
+        let switch = c.add_component(Component::new(Kind::Switch, Point::new(200, 100)));
+        let dip = c.add_component(Component::new(Kind::DipSwitch, Point::new(200, 200)));
+        let instance = p.instance(cell, Point::new(300, 100)).unwrap();
+        let id = p.circuit_mut(root).unwrap().circuit.add_component(instance);
+        let mut sim = logisim_sim::ProjectSimulator::default();
+        sim.synchronize(&p, root);
+        sim.advance(64);
+        let before = sim.view(&[id]).unwrap().input(pin);
+        apply_project(
+            &mut sim,
+            &[id],
+            SimulationAction::SetInput { id: pin, value: 1 },
+        );
+        apply_project(
+            &mut sim,
+            &[id],
+            SimulationAction::ToggleInput { id: pin, bit: 0 },
+        );
+        assert_eq!(sim.view(&[id]).unwrap().input(pin), before);
+        apply_project(
+            &mut sim,
+            &[id],
+            SimulationAction::ToggleInput { id: switch, bit: 0 },
+        );
+        apply_project(
+            &mut sim,
+            &[id],
+            SimulationAction::SetInput { id: dip, value: 9 },
+        );
+        sim.advance(64);
+        let view = present_project(&p.circuit(cell).unwrap().circuit, &sim, &[id]);
+        assert!(!view.inputs.contains_key(&pin));
+        assert_eq!(view.inputs[&switch].value, 1);
+        assert_eq!(view.inputs[&switch].bits, 1);
+        assert_eq!(view.inputs[&dip].value, 9);
+        assert_eq!(view.inputs[&dip].bits, 4);
+        assert_eq!(view.ports[&(dip, 3)].tone, SignalTone::High);
+    }
     #[test]
     fn probe_formats_runtime_values_and_full_width_signed_numbers() {
         let value = Value::known(8, 0xa6);

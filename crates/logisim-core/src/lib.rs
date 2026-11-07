@@ -164,6 +164,9 @@ pub enum Kind {
     Counter,
     ShiftRegister,
     Button,
+    Switch,
+    DipSwitch,
+    Slider,
     Led,
     SevenSegment,
     HexDisplay,
@@ -228,6 +231,9 @@ impl Kind {
             Self::Text
                 | Self::Tunnel
                 | Self::Button
+                | Self::Switch
+                | Self::DipSwitch
+                | Self::Slider
                 | Self::Led
                 | Self::Pin
                 | Self::Gate(_)
@@ -261,6 +267,9 @@ impl Kind {
             Self::Counter => "Counter",
             Self::ShiftRegister => "Shift Register",
             Self::Button => "Button",
+            Self::Switch => "Switch",
+            Self::DipSwitch => "Dip Switch",
+            Self::Slider => "Slider",
             Self::Led => "LED",
             Self::SevenSegment => "7-Segment Display",
             Self::HexDisplay => "Hex Digit Display",
@@ -318,7 +327,8 @@ impl Component {
             bits: match kind {
                 Kind::Splitter | Kind::HexDisplay => 4,
                 Kind::BitExtender => 16,
-                Kind::Register
+                Kind::Slider
+                | Kind::Register
                 | Kind::Counter
                 | Kind::ShiftRegister
                 | Kind::Rom

@@ -86,14 +86,21 @@ impl Simulator {
         self.inputs = circuit
             .components
             .iter()
-            .filter(|c| (c.kind == Kind::Pin && !c.output) || c.kind == Kind::Button)
+            .filter(|c| io::control_bits(c).is_some())
             .map(|c| {
-                let value = self
-                    .inputs
-                    .get(&c.id)
-                    .copied()
-                    .filter(|v| v.width() == c.bits.clamp(1, 32))
-                    .unwrap_or_else(|| Value::known(c.bits, 0));
+                let bits = io::control_bits(c).expect("interactive input");
+                let previous = self.inputs.get(&c.id).copied().filter(|_| {
+                    self.circuit
+                        .component(c.id)
+                        .is_some_and(|old| old.kind == c.kind)
+                });
+                let value = if c.kind == Kind::DipSwitch {
+                    Value::known(bits, previous.and_then(Value::number).unwrap_or(0))
+                } else {
+                    previous
+                        .filter(|v| v.width() == bits)
+                        .unwrap_or_else(|| Value::known(bits, 0))
+                };
                 (c.id, value)
             })
             .collect();
@@ -176,7 +183,15 @@ impl Simulator {
         *input = value;
         self.limited = false;
         self.unsettled_steps = 0;
-        self.schedule(id, value);
+        if self
+            .circuit
+            .component(id)
+            .is_some_and(|c| matches!(c.kind, Kind::Switch | Kind::DipSwitch))
+        {
+            self.schedule_controls();
+        } else {
+            self.schedule(id, value);
+        }
     }
     pub fn toggle_input(&mut self, id: Id, bit: u8) {
         if let Some(value) = self.input(id)
@@ -210,6 +225,11 @@ impl Simulator {
         self.pending = self
             .inputs
             .iter()
+            .filter(|(id, _)| {
+                self.circuit
+                    .component(**id)
+                    .is_some_and(|c| !matches!(c.kind, Kind::Switch | Kind::DipSwitch))
+            })
             .map(|(id, value)| ((*id, 0), *value))
             .collect();
         self.values = self.network.resolve(&self.drives);
@@ -306,6 +326,7 @@ impl Simulator {
         for (port, value) in multiple_outputs {
             self.drive_port(port, value);
         }
+        self.schedule_controls();
         self.schedule_storage();
         self.schedule_memories();
     }
@@ -576,6 +597,7 @@ fn electrically_equal(a: &Circuit, b: &Circuit) -> bool {
                 matches!(c.kind, Kind::Plexer(_)).then_some(c.plexing),
                 matches!(c.kind, Kind::Arithmetic(_)).then_some(c.arithmetic),
                 c.kind.is_memory().then_some(c.memory.clone()),
+                (c.kind == Kind::Slider).then_some(c.io.slider_value),
             ),
             if c.kind == Kind::Tunnel {
                 c.label.clone()

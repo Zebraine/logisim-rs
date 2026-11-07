@@ -80,7 +80,13 @@ pub fn serialize(document: &Document) -> Result<String> {
             let lib = match c.kind {
                 Kind::Plexer(_) => 4,
                 Kind::Arithmetic(_) => 5,
-                Kind::Button | Kind::Led | Kind::SevenSegment | Kind::HexDisplay => 6,
+                Kind::Button
+                | Kind::Switch
+                | Kind::DipSwitch
+                | Kind::Slider
+                | Kind::Led
+                | Kind::SevenSegment
+                | Kind::HexDisplay => 6,
                 Kind::Gate(_) => 1,
                 Kind::Text => 2,
                 Kind::Register
@@ -114,6 +120,8 @@ pub fn serialize(document: &Document) -> Result<String> {
                         a.file_name()
                     } else if let Kind::Plexer(p) = c.kind {
                         p.file_name()
+                    } else if c.kind == Kind::DipSwitch {
+                        "DipSwitch"
                     } else if c.kind == Kind::ShiftRegister {
                         "Universal Register"
                     } else {
@@ -136,6 +144,7 @@ pub fn serialize(document: &Document) -> Result<String> {
                     | Kind::FlipFlop(_)
                     | Kind::ShiftRegister
                     | Kind::Button
+                    | Kind::DipSwitch
                     | Kind::Led
                     | Kind::SevenSegment
                     | Kind::HexDisplay

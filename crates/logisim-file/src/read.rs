@@ -354,6 +354,9 @@ fn component(
         ("#Memory", "Register") => Kind::Register,
         ("#Memory", "Counter") => Kind::Counter,
         ("#I/O", "Button") => Kind::Button,
+        ("#I/O", "Switch") => Kind::Switch,
+        ("#I/O", "DipSwitch") => Kind::DipSwitch,
+        ("#I/O", "Slider") => Kind::Slider,
         ("#I/O", "LED") => Kind::Led,
         ("#I/O", "7-Segment Display") => Kind::SevenSegment,
         ("#I/O", "Hex Digit Display") => Kind::HexDisplay,
@@ -389,9 +392,13 @@ fn component(
         let allowed = match kind {
             Kind::Plexer(p) => crate::plexers::allowed(p, key),
             Kind::Rom | Kind::Ram => crate::memory::allowed(kind, key),
-            Kind::Button | Kind::Led | Kind::SevenSegment | Kind::HexDisplay => {
-                crate::io::allowed(kind, key)
-            }
+            Kind::Button
+            | Kind::Switch
+            | Kind::DipSwitch
+            | Kind::Slider
+            | Kind::Led
+            | Kind::SevenSegment
+            | Kind::HexDisplay => crate::io::allowed(kind, key),
             Kind::Arithmetic(a) => crate::arithmetic::allowed(a, key),
             Kind::Clock
             | Kind::Register
@@ -456,7 +463,8 @@ fn component(
         "width",
         if matches!(
             kind,
-            Kind::Register
+            Kind::Slider
+                | Kind::Register
                 | Kind::Counter
                 | Kind::ShiftRegister
                 | Kind::Arithmetic(_)
@@ -476,7 +484,13 @@ fn component(
     read_wiring(&mut c, &a)?;
     if matches!(
         kind,
-        Kind::Subcircuit(_) | Kind::Clock | Kind::Button | Kind::Led
+        Kind::Subcircuit(_)
+            | Kind::Clock
+            | Kind::Button
+            | Kind::Switch
+            | Kind::DipSwitch
+            | Kind::Slider
+            | Kind::Led
     ) {
         c.label_facing = match value(
             &a,

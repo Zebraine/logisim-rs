@@ -237,6 +237,7 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
         c.kind,
         Kind::Text
             | Kind::Button
+            | Kind::DipSwitch
             | Kind::Led
             | Kind::SevenSegment
             | Kind::HexDisplay
@@ -260,6 +261,9 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
             tr("Data bits")
         });
         let r = ui.add(egui::DragValue::new(&mut c.bits).range(1..=32));
+        if r.changed() && c.kind == Kind::Slider {
+            c.io.slider_value = c.io.slider_value.min(c.slider_max());
+        }
         if r.changed() && c.kind == Kind::Counter {
             c.sequential.counter_max = u32::MAX >> (32 - c.bits);
         }
@@ -275,7 +279,7 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
     active |= wiring_fields(ui, c);
     active |= crate::sequential::fields(ui, c);
     active |= crate::memory::fields(ui, c);
-    crate::io::fields(ui, c);
+    active |= crate::io::fields(ui, c);
     active |= crate::plexers::fields(ui, c);
     active |= crate::arithmetic::fields(ui, c);
     if let Kind::Gate(gate) = c.kind
@@ -364,7 +368,13 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
 fn wiring_fields(ui: &mut Ui, c: &mut Component) -> bool {
     let mut active = false;
     match c.kind {
-        Kind::Subcircuit(_) | Kind::Clock | Kind::Button | Kind::Led => {
+        Kind::Subcircuit(_)
+        | Kind::Clock
+        | Kind::Button
+        | Kind::Switch
+        | Kind::DipSwitch
+        | Kind::Slider
+        | Kind::Led => {
             ui.label(tr("Label location"));
             egui::ComboBox::from_id_salt("instance_label_location")
                 .selected_text(tr(c.label_facing.name()))

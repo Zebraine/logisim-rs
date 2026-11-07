@@ -118,6 +118,9 @@ impl Workspace {
             || self.name_dialog.is_some()
             || self.remove_dialog
             || self.editor.project_error.is_some();
+        if modal || !ui.is_enabled() || ui.input(|i| !i.focused) {
+            self.editor.cancel_slider();
+        }
         if modal || !ui.is_enabled() || ui.input(|i| !i.focused || !i.pointer.primary_down()) {
             self.editor.simulation.release_button();
         }
@@ -643,7 +646,7 @@ impl Workspace {
                                             self.library_tool(ui, Kind::Ram);
                                         }
                                         "Input/Output" => {
-                                            for kind in [Kind::Button, Kind::Led, Kind::SevenSegment, Kind::HexDisplay] {
+                                            for kind in [Kind::Button, Kind::Switch, Kind::DipSwitch, Kind::Slider, Kind::Led, Kind::SevenSegment, Kind::HexDisplay] {
                                                 self.library_tool(ui, kind);
                                             }
                                         }
