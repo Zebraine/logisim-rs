@@ -64,10 +64,11 @@ impl DesktopApp {
         self.simulator.set_plugins(self.files.plugins.clone());
         self.simulator
             .synchronize(self.workspace.project(), self.workspace.simulation_root());
-        if !self.files.busy()
-            && let Some(delay) = self
-                .clocks
-                .poll(std::time::Instant::now(), &mut self.simulator)
+        if self.files.busy() {
+            self.clocks.suspend();
+        } else if let Some(delay) = self
+            .clocks
+            .poll(std::time::Instant::now(), &mut self.simulator)
         {
             ui.ctx().request_repaint_after(delay);
         }

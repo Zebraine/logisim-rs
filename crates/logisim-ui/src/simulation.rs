@@ -1,6 +1,8 @@
 //! Presentation and commands only; the desktop host owns the simulation service.
+mod frequency;
 use crate::{i18n::tr, tf};
 use egui::{Color32, Key, Modifiers, Ui};
+pub use frequency::{DEFAULT_TICK_HZ, MAX_TICK_HZ};
 use logisim_core::{Component, Id, Point};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -160,6 +162,8 @@ pub enum SimulationAction {
 }
 #[derive(Default)]
 pub(crate) struct SimulationUi {
+    pub tick_rate_draft: Option<String>,
+    tick_rate_focus: bool,
     pub plugin_arguments: BTreeMap<(Id, String), String>,
     pub view: SimulationView,
     pub actions: Vec<SimulationAction>,
@@ -291,17 +295,7 @@ impl SimulationUi {
         {
             self.actions.push(SimulationAction::ToggleTicks);
         }
-        ui.menu_button(tr("Tick frequency"), |ui| {
-            for hz in [1, 2, 4, 8, 16, 32, 64, 128] {
-                if ui
-                    .selectable_label(self.view.tick_hz == hz, tf!("{} ticks/s", hz))
-                    .clicked()
-                {
-                    self.actions.push(SimulationAction::SetTickRate(hz));
-                    ui.close();
-                }
-            }
-        });
+        self.frequency_menu(ui);
     }
     pub fn toolbar(&mut self, ui: &mut Ui) {
         if ui

@@ -39,7 +39,8 @@ mod plexers;
 mod sequential;
 mod simulation;
 pub use simulation::{
-    InputValue, SignalTone, SignalView, SimulationAction, SimulationIssue, SimulationView,
+    DEFAULT_TICK_HZ, InputValue, MAX_TICK_HZ, SignalTone, SignalView, SimulationAction,
+    SimulationIssue, SimulationView,
 };
 
 use canvas::Canvas;

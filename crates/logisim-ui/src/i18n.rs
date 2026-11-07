@@ -319,6 +319,8 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Counter", "计数器"),
     ("Curve", "曲线"),
     ("Custom appearance", "自定义外观"),
+    ("Custom tick frequency", "自定义时钟频率"),
+    ("Custom…", "自定义…"),
     ("Cut · Ctrl+X", "剪切 · Ctrl+X"),
     ("D Flip-Flop", "D 触发器"),
     ("D Latch", "D 锁存器"),
@@ -395,6 +397,10 @@ const MESSAGES: &[(&str, &str)] = &[
         "Enter a hexadecimal value within {} bits.",
         "请输入 {} 位范围内的十六进制数值。",
     ),
+    (
+        "Enter a whole number from 1 to {}.",
+        "请输入 1 至 {} 之间的整数。",
+    ),
     ("Equal", "相等"),
     ("Error", "错误"),
     (
@@ -426,6 +432,7 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Font family", "字体"),
     ("Font size", "字号"),
     ("Found", "找到目标位"),
+    ("Frequency (Hz)", "频率（Hz）"),
     ("Front", "置于顶层"),
     ("Gate location", "栅极位置"),
     ("Gate size", "门尺寸"),

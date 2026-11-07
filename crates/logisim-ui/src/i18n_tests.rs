@@ -2283,3 +2283,92 @@ fn centered_button_label_is_editable_and_drawn_inside_the_button_in_both_languag
         assert!(app.circuit().component(id).unwrap().label_center);
     }
 }
+
+#[test]
+fn tick_frequency_presets_custom_validation_cancel_and_modal_shortcuts_in_both_languages() {
+    fn replace_input(ctx: &Context, app: &mut Workspace, value: &str) {
+        // The modal's input initially owns focus; Ctrl+A must not select the circuit.
+        frame(
+            ctx,
+            app,
+            vec![Event::Key {
+                key: Key::A,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: Modifiers::COMMAND,
+            }],
+        );
+        frame(ctx, app, vec![Event::Text(value.into())]);
+        assert_eq!(
+            app.editor.simulation.tick_rate_draft.as_deref(),
+            Some(value)
+        );
+    }
+    for language in Language::ALL {
+        let ctx = Context::default();
+        configure(&ctx);
+        let mut app = Workspace::default();
+        app.set_language(language);
+        app.editor.simulation.view.tick_hz = DEFAULT_TICK_HZ;
+        let t = |s| i18n::with_language(language, || i18n::tr(s).to_owned());
+        let before = app.project().clone();
+        click(&ctx, &mut app, &t("Simulate"));
+        click(&ctx, &mut app, &t("Tick frequency"));
+        click(&ctx, &mut app, "4096 Hz");
+        assert_eq!(
+            app.take_simulation_actions(),
+            vec![SimulationAction::SetTickRate(4096)]
+        );
+        app.editor.simulation.view.tick_hz = 4096;
+        click(&ctx, &mut app, &t("Simulate"));
+        click(&ctx, &mut app, &t("Tick frequency"));
+        click(&ctx, &mut app, &t("Custom…"));
+        frame(&ctx, &mut app, vec![]);
+        for bad in ["0", "4097", "abc", "1.5"] {
+            replace_input(&ctx, &mut app, bad);
+            let labels = frame(&ctx, &mut app, vec![]);
+            assert!(has(
+                &labels,
+                &i18n::with_language(language, || tf!(
+                    "Enter a whole number from 1 to {}.",
+                    MAX_TICK_HZ
+                ))
+            ));
+            click(&ctx, &mut app, &t("Apply"));
+            assert!(app.take_simulation_actions().is_empty());
+            assert!(app.editor.simulation.tick_rate_draft.is_some());
+            click(&ctx, &mut app, bad); // restore input focus for the next edit
+        }
+        replace_input(&ctx, &mut app, "250");
+        frame(
+            &ctx,
+            &mut app,
+            vec![Event::Key {
+                key: Key::N,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: Modifiers::COMMAND,
+            }],
+        );
+        assert!(app.take_file_actions().is_empty());
+        click(&ctx, &mut app, &t("Apply"));
+        assert_eq!(
+            app.take_simulation_actions(),
+            vec![SimulationAction::SetTickRate(250)]
+        );
+        assert!(app.editor.simulation.tick_rate_draft.is_none());
+        app.editor.simulation.view.tick_hz = 250;
+        click(&ctx, &mut app, &t("Simulate"));
+        click(&ctx, &mut app, &t("Tick frequency"));
+        click(&ctx, &mut app, &t("Custom…"));
+        frame(&ctx, &mut app, vec![]);
+        replace_input(&ctx, &mut app, "37");
+        click(&ctx, &mut app, &t("Cancel"));
+        assert!(app.take_simulation_actions().is_empty());
+        assert!(app.editor.simulation.tick_rate_draft.is_none());
+        assert_eq!(app.project(), &before);
+        assert!(!app.editor.can_undo());
+    }
+}
