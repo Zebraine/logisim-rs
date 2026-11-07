@@ -1,4 +1,4 @@
-use super::{Document, Error, MAX_BYTES, MAX_ITEMS, Result, valid_point};
+use super::{Document, Error, MAX_BYTES, MAX_CIRCUIT_ITEMS, MAX_ITEMS, Result, valid_point};
 use logisim_core::{Gate, HorizontalAlign, Kind, Radix, SplitAppearance, VerticalAlign};
 use std::fmt::Write;
 
@@ -42,6 +42,15 @@ pub fn serialize(document: &Document) -> Result<String> {
         > MAX_ITEMS
     {
         return Err(Error(format!("Project exceeds {MAX_ITEMS} items.")));
+    }
+    for definition in &document.circuits {
+        if definition.circuit.components.len() + definition.circuit.wires.len() > MAX_CIRCUIT_ITEMS
+        {
+            return Err(Error(format!(
+                "Circuit '{}' exceeds {MAX_CIRCUIT_ITEMS} items.",
+                definition.name
+            )));
+        }
     }
     let name = escape(&document.main_circuit().name)?;
     let mut out = String::from(

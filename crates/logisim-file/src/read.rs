@@ -1,4 +1,7 @@
-use super::{Document, Error, Import, MAX_BYTES, MAX_ITEMS, Result, valid_point};
+use super::{
+    Document, Error, Import, MAX_BYTES, MAX_CIRCUIT_ITEMS, MAX_ITEMS, MAX_XML_NODES, Result,
+    valid_point,
+};
 use logisim_core::{
     Circuit, Component, Facing, Gate, GateSize, HorizontalAlign, Kind, Point, VerticalAlign,
 };
@@ -70,12 +73,8 @@ fn point(s: &str) -> Result<Point> {
         .filter(|p| valid_point(*p))
         .ok_or_else(|| Error(format!("Invalid or out-of-range coordinate: {s}")))
 }
-fn warn(warnings: &mut Vec<String>, message: String) {
-    if warnings.len() < 200 {
-        warnings.push(message);
-    } else if warnings.len() == 200 {
-        warnings.push("Further omissions are not listed.".into());
-    }
+fn warn(warnings: &mut crate::diagnostics::Warnings, message: String) {
+    warnings.add(message);
 }
 
 pub fn parse(xml: &str) -> Result<Import> {
@@ -86,15 +85,20 @@ pub fn parse(xml: &str) -> Result<Import> {
         xml,
         roxmltree::ParsingOptions {
             allow_dtd: false,
-            nodes_limit: 100_000,
+            nodes_limit: MAX_XML_NODES,
         },
     )
-    .map_err(|e| Error(format!("Invalid XML: {e}")))?;
+    .map_err(|e| match e {
+        roxmltree::Error::NodesLimitReached => {
+            Error(format!("XML exceeds the {MAX_XML_NODES} node limit."))
+        }
+        _ => Error(format!("Invalid XML: {e}")),
+    })?;
     let root = xml.root_element();
     if !root.has_tag_name("project") || root.attribute("version") != Some("1.0") {
         return Err(Error("Expected a .circ project with version=1.0.".into()));
     }
-    let mut warnings = vec![];
+    let mut warnings = crate::diagnostics::Warnings::default();
     if root.attribute("source") != Some("2.16.2.2.jar") {
         warn(
             &mut warnings,
@@ -129,6 +133,26 @@ pub fn parse(xml: &str) -> Result<Import> {
         .children()
         .filter(|n| n.has_tag_name("circuit"))
         .collect();
+    // Count raw items before any component parsing or topology work, including unsupported ones.
+    let mut raw_items = 0;
+    for circuit in &circuits {
+        let items = circuit
+            .children()
+            .filter(|n| n.has_tag_name("comp") || n.has_tag_name("wire"))
+            .count();
+        if items > MAX_CIRCUIT_ITEMS {
+            return Err(Error(format!(
+                "Circuit '{}' exceeds {MAX_CIRCUIT_ITEMS} items.",
+                attr(*circuit, "name")?
+            )));
+        }
+        raw_items += items;
+    }
+    if raw_items > MAX_ITEMS {
+        return Err(Error(format!(
+            "Project exceeds {MAX_ITEMS} items ({raw_items} found)."
+        )));
+    }
     let selected: Vec<_> = circuits
         .iter()
         .filter(|n| n.attribute("name") == Some(name))
@@ -172,14 +196,8 @@ pub fn parse(xml: &str) -> Result<Import> {
             tag => warn(&mut warnings, format!("Project <{tag}> was omitted.")),
         }
     }
-    let mut total_items = 0;
     for selected in circuits {
         let name = attr(selected, "name")?;
-        if selected.children().filter(Node::is_element).count() > MAX_ITEMS + 32 {
-            return Err(Error(format!(
-                "Circuit exceeds the {MAX_ITEMS} item limit."
-            )));
-        }
         let mut circuit = Circuit::default();
         for n in selected.children().filter(Node::is_element) {
             match n.tag_name().name() {
@@ -194,28 +212,25 @@ pub fn parse(xml: &str) -> Result<Import> {
                     }
                     circuit.add_wire(a, b);
                 }
-                "comp" => match component(n, &libraries, &names, &blocked) {
+                "comp" => match component(n, &libraries, &names) {
                     Ok((c, notes)) => {
                         for note in notes {
-                            warn(
-                                &mut warnings,
-                                format!(
-                                    "{} at ({},{}): {note}",
-                                    c.kind.name(),
-                                    c.position.x,
-                                    c.position.y
-                                ),
+                            warnings.component(
+                                name,
+                                c.kind.name(),
+                                format!("({},{})", c.position.x, c.position.y),
+                                &note,
+                                false,
                             );
                         }
                         circuit.add_component(c);
                     }
-                    Err(e) => warn(
-                        &mut warnings,
-                        format!(
-                            "Skipped {} at {}: {e}",
-                            n.attribute("name").unwrap_or("component"),
-                            n.attribute("loc").unwrap_or("?")
-                        ),
+                    Err(e) => warnings.component(
+                        name,
+                        n.attribute("name").unwrap_or("component"),
+                        n.attribute("loc").unwrap_or("?").into(),
+                        &e.0,
+                        true,
                     ),
                 },
                 "appear" => {}
@@ -238,19 +253,15 @@ pub fn parse(xml: &str) -> Result<Import> {
                     {
                         warn(
                             &mut warnings,
-                            format!("Circuit attribute {key} was omitted."),
+                            format!("Circuit '{name}': attribute {key} was omitted."),
                         );
                     }
                 }
-                tag => warn(&mut warnings, format!("Circuit <{tag}> was omitted.")),
+                tag => warn(
+                    &mut warnings,
+                    format!("Circuit '{name}': <{tag}> was omitted."),
+                ),
             }
-        }
-        if circuit.components.len() + circuit.wires.len() > MAX_ITEMS {
-            return Err(Error("Circuit has too many items.".into()));
-        }
-        total_items += circuit.components.len() + circuit.wires.len();
-        if total_items > MAX_ITEMS {
-            return Err(Error("Project has too many items.".into()));
         }
         // Unsupported input-pin attributes would change the default interface geometry.
         let original_pins = selected
@@ -302,16 +313,39 @@ pub fn parse(xml: &str) -> Result<Import> {
         }
         document.circuit_mut(names[name]).unwrap().circuit = circuit;
     }
+    let definition_names: BTreeMap<_, _> = names
+        .iter()
+        .map(|(name, id)| (*id, name.as_str()))
+        .collect();
     for definition in &mut document.circuits {
-        definition
-            .circuit
-            .components
-            .retain(|c| !matches!(c.kind,Kind::Subcircuit(id) if blocked.contains(&id)));
+        definition.circuit.components.retain(|c| {
+            if let Kind::Subcircuit(id) = c.kind
+                && blocked.contains(&id)
+            {
+                warnings.component(
+                    &definition.name,
+                    definition_names[&id],
+                    format!("({},{})", c.position.x, c.position.y),
+                    "Target circuit has unsupported interface pins or appearance.",
+                    true,
+                );
+                false
+            } else {
+                true
+            }
+        });
     }
     document.validate().map_err(Error)?;
     document.refresh_interfaces(false);
     for definition in &mut document.circuits {
         definition.circuit.normalize_wires();
+        if definition.circuit.components.len() + definition.circuit.wires.len() > MAX_CIRCUIT_ITEMS
+        {
+            return Err(Error(format!(
+                "Circuit '{}' exceeds {MAX_CIRCUIT_ITEMS} items after preserving wire junctions.",
+                definition.name
+            )));
+        }
     }
     if document
         .circuits
@@ -324,14 +358,16 @@ pub fn parse(xml: &str) -> Result<Import> {
             "Project exceeds item limit after preserving wire junctions.".into(),
         ));
     }
-    Ok(Import { document, warnings })
+    Ok(Import {
+        document,
+        warnings: warnings.finish(),
+    })
 }
 
 fn component(
     n: Node<'_, '_>,
     libraries: &BTreeMap<&str, &str>,
     names: &BTreeMap<String, logisim_core::Id>,
-    blocked: &std::collections::BTreeSet<logisim_core::Id>,
 ) -> Result<(Component, Vec<String>)> {
     let lib = n
         .attribute("lib")
@@ -343,11 +379,7 @@ fn component(
         (lib, name) if crate::external::identify(lib, name).is_some() => {
             crate::external::identify(lib, name).unwrap()
         }
-        ("", name)
-            if n.attribute("lib").is_none()
-                && names.contains_key(name)
-                && !blocked.contains(&names[name]) =>
-        {
+        ("", name) if n.attribute("lib").is_none() && names.contains_key(name) => {
             Kind::Subcircuit(names[name])
         }
         ("#TTL", name) => Kind::Ttl(

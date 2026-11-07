@@ -3,10 +3,13 @@
 mod appearance;
 mod arithmetic;
 mod bus;
+mod diagnostics;
 mod external;
 mod hex;
 mod io;
 mod latches;
+#[cfg(test)]
+mod limits_tests;
 mod memory;
 mod parity;
 mod pla;
@@ -26,7 +29,10 @@ pub use read::parse;
 pub use write::serialize;
 
 pub const MAX_BYTES: usize = 8 * 1024 * 1024;
-pub const MAX_ITEMS: usize = 4096;
+/// Project-wide budget, independent of the per-circuit topology budget.
+pub const MAX_ITEMS: usize = 65_536;
+pub const MAX_CIRCUIT_ITEMS: usize = 4096;
+const MAX_XML_NODES: u32 = 1_000_000;
 
 #[derive(Debug)]
 pub struct Import {
