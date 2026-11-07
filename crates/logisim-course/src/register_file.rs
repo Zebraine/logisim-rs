@@ -14,6 +14,16 @@ impl Default for RegisterFile {
     }
 }
 impl RegisterFile {
+    /// Opaque-state transports may encode these values without serializing a simulator.
+    pub fn snapshot(&self) -> ([Value; 32], Bit) {
+        (self.words, self.clock)
+    }
+    pub fn restore(words: [Value; 32], clock: Bit) -> Result<Self, String> {
+        if words.iter().any(|v| v.width() != 32) || words[0] != Value::known(32, 0) {
+            return Err("Invalid register-file snapshot.".into());
+        }
+        Ok(Self { words, clock })
+    }
     pub fn words(&self) -> &[Value; 32] {
         &self.words
     }

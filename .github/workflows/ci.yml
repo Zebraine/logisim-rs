@@ -16,6 +16,7 @@ jobs:
         run: |
           rustup show
           rustup component add rustfmt clippy
+          rustup target add wasm32-unknown-unknown
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Fetch locked dependencies
@@ -26,3 +27,7 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked --offline -- -D warnings
       - name: Test workspace
         run: cargo test --workspace --locked --offline
+      - name: Build and verify dynamic plugin
+        run: |
+          cargo build -p logisim-course-plugin --release --target wasm32-unknown-unknown --locked --offline
+          cargo run -p logisim-plugin --bin logisim-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_course_plugin.wasm

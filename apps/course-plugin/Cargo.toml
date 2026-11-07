@@ -1,0 +1,22 @@
+[package]
+name = "logisim-course-plugin"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+[lib]
+crate-type = ["cdylib", "rlib"]
+[dependencies]
+logisim-core.workspace = true
+logisim-course.workspace = true
+logisim-plugin-api.workspace = true
+logisim-plugin-sdk.workspace = true
+serde_json.workspace = true
+# The SDK export macro locally permits only unsafe symbol attributes for the Wasm ABI.
+# No unsafe blocks are used; all other workspace crates continue to forbid unsafe code.
+[lints.rust]
+unsafe_code = "deny"
+[lints.clippy]
+dbg_macro = "warn"
+todo = "warn"

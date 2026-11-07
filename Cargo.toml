@@ -4,6 +4,10 @@ members = [
     "apps/logisim-desktop",
     "crates/logisim-core",
     "crates/logisim-course",
+    "crates/logisim-plugin-api",
+    "crates/logisim-plugin",
+    "crates/logisim-plugin-sdk",
+    "apps/course-plugin",
     "crates/logisim-sim",
     "crates/logisim-file",
     "crates/logisim-ui",
@@ -20,6 +24,11 @@ publish = false
 [workspace.dependencies]
 logisim-core = { path = "crates/logisim-core" }
 logisim-course = { path = "crates/logisim-course" }
+logisim-plugin-api = { path = "crates/logisim-plugin-api" }
+logisim-plugin = { path = "crates/logisim-plugin" }
+logisim-plugin-sdk = { path = "crates/logisim-plugin-sdk" }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.154"
 logisim-sim = { path = "crates/logisim-sim" }
 logisim-file = { path = "crates/logisim-file" }
 logisim-ui = { path = "crates/logisim-ui" }

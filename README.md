@@ -43,6 +43,19 @@ crates/logisim-ui/       egui 编辑器与画布
 
 ## 运行与检查
 
+动态插件使用 Wasm32 ABI v1。协议类型和约束位于 `logisim-plugin-api` 的 Rust 文档，
+`logisim-plugin-sdk` 提供安全缓冲区与导出宏，`apps/course-plugin` 是包含图形、端口、
+属性、运行时动作和四态逻辑的完整示例。插件没有 Java/egui 依赖，不使用主机函数或 WASI。
+运行器限制每次调用的 fuel、16 MiB 内存、256 KiB 消息、64 KiB 状态和 4 MiB 模块。
+元件定义改变时须提升插件版本；保存的定义与加载模块不一致时拒绝运行。
+
+```sh
+rustup target add wasm32-unknown-unknown
+cargo build -p logisim-course-plugin --release --target wasm32-unknown-unknown --locked --offline
+cargo run -p logisim-plugin --bin logisim-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_course_plugin.wasm
+cargo doc -p logisim-plugin-api --no-deps --locked --offline
+```
+
 ```sh
 cargo run -p logisim-rs --locked
 # 启动时打开文件（也可通过 File 菜单打开）
