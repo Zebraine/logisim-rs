@@ -11,5 +11,9 @@ publish.workspace = true
 egui.workspace = true
 logisim-core.workspace = true
 
+[dev-dependencies]
+# Match desktop text metrics when this crate's input tests run on their own.
+egui = { workspace = true, features = ["default_fonts"] }
+
 [lints]
 workspace = true

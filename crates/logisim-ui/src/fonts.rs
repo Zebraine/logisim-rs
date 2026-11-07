@@ -9,7 +9,7 @@ pub(crate) struct Text<'a> {
     pub angle: f32,
 }
 impl Text<'_> {
-    pub fn paint(&self, p: &Painter, at: Pos2, align: Align2) {
+    pub fn layout(&self, p: &Painter) -> std::sync::Arc<egui::Galley> {
         let family = if self.font.family.to_ascii_lowercase().contains("mono") {
             egui::FontFamily::Monospace
         } else {
@@ -26,10 +26,23 @@ impl Text<'_> {
                 ..Default::default()
             },
         );
-        let galley = p.layout_job(job);
+        p.layout_job(job)
+    }
+    pub fn paint(&self, p: &Painter, at: Pos2, align: Align2) {
+        let galley = self.layout(p);
         let origin = align.anchor_size(at, galley.size()).min;
         let shape = egui::epaint::TextShape::new(origin, galley, self.color)
             .with_angle_and_anchor(self.angle, align);
+        self.paint_shape(p, shape);
+    }
+    /// Paint a pre-laid-out run from an origin computed by the caller (e.g. an SVG baseline).
+    pub fn paint_galley(&self, p: &Painter, origin: Pos2, galley: std::sync::Arc<egui::Galley>) {
+        self.paint_shape(
+            p,
+            egui::epaint::TextShape::new(origin, galley, self.color).with_angle(self.angle),
+        );
+    }
+    fn paint_shape(&self, p: &Painter, shape: egui::epaint::TextShape) {
         p.add(shape.clone());
         if self.font.bold {
             let mut second = shape;

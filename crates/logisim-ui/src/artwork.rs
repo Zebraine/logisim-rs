@@ -158,20 +158,14 @@ pub(crate) fn paint(
             return;
         };
         let fill = color(fill);
-        let family = if font.family.to_ascii_lowercase().contains("mono") {
-            egui::FontFamily::Monospace
-        } else {
-            egui::FontFamily::Proportional
-        };
-        let format = egui::TextFormat {
-            font_id: egui::FontId::new(f32::from(font.size) * canvas.camera.zoom, family),
+        let style = crate::fonts::Text {
+            text,
+            font,
             color: fill,
-            italics: font.italic,
-            ..Default::default()
+            zoom: canvas.camera.zoom,
+            angle: text_angle,
         };
-        let mut job = egui::text::LayoutJob::default();
-        job.append(text, 0.0, format);
-        let galley = p.layout_job(job);
+        let galley = style.layout(p);
         let shift = match anchor {
             TextAnchor::Start => 0.0,
             TextAnchor::Middle => galley.size().x * 0.5,
@@ -180,17 +174,7 @@ pub(crate) fn paint(
         let offset = vec2(-shift, -f32::from(font.size) * canvas.camera.zoom);
         let rot = egui::emath::Rot2::from_angle(text_angle);
         let origin = canvas.screen_vec(map(vector(*at))) + rot * offset;
-        p.add(egui::epaint::TextShape::new(origin, galley.clone(), fill).with_angle(text_angle));
-        if font.bold {
-            p.add(
-                egui::epaint::TextShape::new(
-                    origin + rot * vec2(canvas.camera.zoom * 0.5, 0.0),
-                    galley,
-                    fill,
-                )
-                .with_angle(text_angle),
-            );
-        }
+        style.paint_galley(p, origin, galley);
         return;
     }
     let (outline, closed) = outline(&art.geometry);

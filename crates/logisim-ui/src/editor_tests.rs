@@ -1,7 +1,8 @@
 //! Input-level regressions: drive the same widgets/gestures as the desktop application.
 use super::*;
+use crate::editor::Tool;
 use egui::{Context, Event, Key, Modifiers, PointerButton, Pos2, RawInput, Rect};
-use logisim_core::{Component, Point};
+use logisim_core::{Component, Gate, Kind, Point};
 use std::collections::BTreeSet;
 
 fn frame(ctx: &Context, app: &mut Workspace, mut events: Vec<Event>, modifiers: Modifiers) {
