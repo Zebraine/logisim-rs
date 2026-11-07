@@ -34,7 +34,7 @@ fn rgba(text: &str) -> Result<[u8; 4]> {
         return Err(Error("Invalid I/O color".into()));
     }
     let mut color = [255; 4];
-    for (i, pair) in hex.as_bytes().chunks_exact(2).enumerate() {
+    for (i, pair) in hex.as_bytes().as_chunks::<2>().0.iter().enumerate() {
         color[i] = u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap();
     }
     Ok(color)
