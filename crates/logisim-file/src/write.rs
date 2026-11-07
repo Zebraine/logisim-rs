@@ -82,7 +82,12 @@ pub fn serialize(document: &Document) -> Result<String> {
                 Kind::Arithmetic(_) => 5,
                 Kind::Gate(_) => 1,
                 Kind::Text => 2,
-                Kind::Register | Kind::FlipFlop(_) | Kind::Counter | Kind::ShiftRegister => 3,
+                Kind::Register
+                | Kind::FlipFlop(_)
+                | Kind::Counter
+                | Kind::ShiftRegister
+                | Kind::Rom
+                | Kind::Ram => 3,
                 _ => 0,
             };
             if let Kind::Subcircuit(id) = c.kind {
@@ -129,6 +134,8 @@ pub fn serialize(document: &Document) -> Result<String> {
                     | Kind::Clock
                     | Kind::FlipFlop(_)
                     | Kind::ShiftRegister
+                    | Kind::Rom
+                    | Kind::Ram
                     | Kind::Plexer(
                         logisim_core::Plexer::Decoder
                             | logisim_core::Plexer::PriorityEncoder
@@ -138,6 +145,7 @@ pub fn serialize(document: &Document) -> Result<String> {
                 attribute(&mut out, "width", c.bits)?;
             }
             crate::sequential::write(&mut out, c)?;
+            crate::memory::write(&mut out, c)?;
             crate::plexers::write(&mut out, c)?;
             crate::arithmetic::write(&mut out, c)?;
             if let Kind::Gate(g) = c.kind {

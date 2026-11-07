@@ -151,6 +151,7 @@ impl Component {
                 self.bits.clamp(1, 32)
             }),
             Kind::Clock | Kind::FlipFlop(_) => Some(1),
+            Kind::Rom | Kind::Ram => self.memory_terminals().get(index).map(|p| p.bits),
             Kind::ShiftRegister if index == 3 => Some(2),
             Kind::Register | Kind::Counter | Kind::ShiftRegister if index >= 2 => Some(1),
             Kind::Probe => None,
@@ -177,6 +178,8 @@ impl Component {
                 | Kind::Register
                 | Kind::Counter
                 | Kind::ShiftRegister
+                | Kind::Rom
+                | Kind::Ram
         ) || (self.kind == Kind::Pin && !self.output)
     }
 }

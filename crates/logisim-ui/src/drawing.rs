@@ -73,6 +73,12 @@ fn probe_width(c: &Component) -> f32 {
     }
 }
 pub(crate) fn bounds(c: &Component) -> Rect {
+    if c.kind.is_memory() {
+        return Rect::from_min_max(
+            pos(c.position + Point::new(-140, -40)),
+            pos(c.position + Point::new(0, 40)),
+        );
+    }
     if matches!(c.kind, Kind::Arithmetic(_)) {
         let [min, max] = c.arithmetic_body();
         return Rect::from_min_max(pos(c.position + min), pos(c.position + max));
@@ -288,6 +294,7 @@ pub(crate) fn component(
         );
     };
     match c.kind {
+        Kind::Rom | Kind::Ram => crate::memory::draw(p, canvas, c, color, simulation),
         Kind::Plexer(_) => crate::plexers::draw(p, canvas, c, color),
         Kind::Arithmetic(_) => crate::arithmetic::draw(p, canvas, c, color),
         Kind::Clock | Kind::FlipFlop(_) | Kind::Register | Kind::Counter | Kind::ShiftRegister => {

@@ -353,6 +353,8 @@ fn component(
         ("#Wiring", "Clock") => Kind::Clock,
         ("#Memory", "Register") => Kind::Register,
         ("#Memory", "Counter") => Kind::Counter,
+        ("#Memory", "ROM") => Kind::Rom,
+        ("#Memory", "RAM") => Kind::Ram,
         ("#Memory", "Universal Register") => Kind::ShiftRegister,
         ("#Memory", name) => Kind::FlipFlop(
             logisim_core::FlipFlop::ALL
@@ -382,6 +384,7 @@ fn component(
     for key in a.keys() {
         let allowed = match kind {
             Kind::Plexer(p) => crate::plexers::allowed(p, key),
+            Kind::Rom | Kind::Ram => crate::memory::allowed(kind, key),
             Kind::Arithmetic(a) => crate::arithmetic::allowed(a, key),
             Kind::Clock
             | Kind::Register
@@ -458,6 +461,7 @@ fn component(
         1..=32,
     )?;
     crate::sequential::read(&mut c, &a)?;
+    crate::memory::read(&mut c, &a)?;
     crate::plexers::read(&mut c, &a)?;
     crate::arithmetic::read(&mut c, &a)?;
     read_wiring(&mut c, &a)?;

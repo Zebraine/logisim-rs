@@ -150,6 +150,12 @@ fn component_editor(ui: &mut Ui, editor: &mut Editor, mut c: Component, placing:
             c.interface.ports.len()
         ));
     }
+    if c.kind.is_memory()
+        && (!placing || c.kind == Kind::Rom)
+        && ui.button(tr("Edit contents…")).clicked()
+    {
+        editor.memory_target = Some((placing, c.id));
+    }
     let original = c.clone();
     let mut active = false;
     if c.kind.has_label() {
@@ -230,6 +236,8 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
     if !matches!(
         c.kind,
         Kind::Text
+            | Kind::Rom
+            | Kind::Ram
             | Kind::Probe
             | Kind::Subcircuit(_)
             | Kind::Clock
@@ -262,6 +270,7 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
     }
     active |= wiring_fields(ui, c);
     active |= crate::sequential::fields(ui, c);
+    active |= crate::memory::fields(ui, c);
     active |= crate::plexers::fields(ui, c);
     active |= crate::arithmetic::fields(ui, c);
     if let Kind::Gate(gate) = c.kind

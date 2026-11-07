@@ -166,7 +166,7 @@ fn sequential_runtime_defaults_and_options_roundtrip_with_exact_terminals() {
 
 #[test]
 fn unknown_sequential_attributes_are_omitted_with_source_protection_warnings() {
-    let input=xml(r#"<comp lib="m" name="D Flip-Flop" loc="(0,0)"><a name="trigger" val="high"/></comp><comp lib="w" name="Clock" loc="(100,0)"><a name="highDuration" val="0"/></comp><comp lib="m" name="Register" loc="(200,0)"><a name="initialValue" val="123"/></comp><comp lib="m" name="RAM" loc="(300,0)"/>"#).replace("<main","<lib name=\"m\" desc=\"#Memory\"/><main");
+    let input=xml(r#"<comp lib="m" name="D Flip-Flop" loc="(0,0)"><a name="trigger" val="high"/></comp><comp lib="w" name="Clock" loc="(100,0)"><a name="highDuration" val="0"/></comp><comp lib="m" name="Register" loc="(200,0)"><a name="initialValue" val="123"/></comp><comp lib="m" name="RAM" loc="(300,0)"><a name="initialValue" val="123"/></comp>"#).replace("<main","<lib name=\"m\" desc=\"#Memory\"/><main");
     let imported = parse(&input).unwrap();
     assert_eq!(imported.warnings.len(), 4);
     assert!(

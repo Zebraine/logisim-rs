@@ -66,6 +66,7 @@ pub struct SimulationView {
     pub tick_hz: u32,
     pub clocks: BTreeSet<Id>,
     pub storage: BTreeMap<Id, SignalView>,
+    pub memories: BTreeMap<Id, logisim_core::MemoryContents>,
     pub wires: BTreeMap<Id, SignalView>,
     pub ports: BTreeMap<(Id, usize), SignalView>,
     pub inputs: BTreeMap<Id, InputValue>,
@@ -79,10 +80,26 @@ pub enum SimulationAction {
     Tick,
     ToggleTicks,
     SetTickRate(u32),
-    PokeClock { id: Id },
-    ToggleStored { id: Id },
-    ToggleInput { id: Id, bit: u8 },
-    SetInput { id: Id, value: u32 },
+    PokeClock {
+        id: Id,
+    },
+    ToggleStored {
+        id: Id,
+    },
+    ToggleInput {
+        id: Id,
+        bit: u8,
+    },
+    SetInput {
+        id: Id,
+        value: u32,
+    },
+    FillMemory {
+        id: Id,
+        start: u32,
+        end: u32,
+        value: u32,
+    },
 }
 #[derive(Default)]
 pub(crate) struct SimulationUi {

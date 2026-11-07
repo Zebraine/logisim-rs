@@ -270,6 +270,21 @@ impl ProjectSimulator {
         self.ticks = self.ticks.saturating_add(1);
         true
     }
+    pub fn set_memory_word(&mut self, path: &[Id], id: Id, address: u32, value: u32) {
+        if let Some(state) = self.states.get_mut(path) {
+            state.sim.set_memory_word(id, address, value);
+        }
+    }
+    pub fn fill_memory(&mut self, path: &[Id], id: Id, start: u32, end: u32, value: u32) {
+        if let Some(state) = self.states.get_mut(path) {
+            state.sim.fill_memory(id, start, end, value);
+        }
+    }
+    pub fn clear_memory(&mut self, path: &[Id], id: Id) {
+        if let Some(state) = self.states.get_mut(path) {
+            state.sim.clear_memory(id);
+        }
+    }
     pub fn poke_clock(&mut self, path: &[Id], id: Id) {
         if let Some(state) = self.states.get_mut(path) {
             state.sim.poke_clock(id);

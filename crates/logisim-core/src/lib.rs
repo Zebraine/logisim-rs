@@ -17,6 +17,9 @@ pub use plexers::{Plexer, PlexerRole, PlexerTerminal, Plexing};
 mod sequential;
 pub use sequential::{ControlPosition, CounterOverflow, FlipFlop, Sequential, Trigger};
 
+mod memory;
+pub use memory::{Memory, MemoryContents, MemoryInterface, MemoryRole, MemoryTerminal};
+
 mod wire_geometry;
 mod wiring;
 pub use wiring::{Extension, Radix, SplitAppearance, Splitter};
@@ -158,6 +161,8 @@ pub enum Kind {
     Register,
     Counter,
     ShiftRegister,
+    Rom,
+    Ram,
     Plexer(Plexer),
     Arithmetic(Arithmetic),
 }
@@ -204,6 +209,8 @@ impl Kind {
                 | Self::Register
                 | Self::Counter
                 | Self::ShiftRegister
+                | Self::Rom
+                | Self::Ram
                 | Self::Arithmetic(_)
         )
     }
@@ -221,6 +228,8 @@ impl Kind {
                 | Self::Register
                 | Self::Counter
                 | Self::ShiftRegister
+                | Self::Rom
+                | Self::Ram
         )
     }
     pub fn name(self) -> &'static str {
@@ -241,6 +250,8 @@ impl Kind {
             Self::Register => "Register",
             Self::Counter => "Counter",
             Self::ShiftRegister => "Shift Register",
+            Self::Rom => "ROM",
+            Self::Ram => "RAM",
             Self::Plexer(p) => p.name(),
             Self::Arithmetic(a) => a.name(),
         }
@@ -274,6 +285,7 @@ pub struct Component {
     pub sequential: Sequential,
     pub plexing: Plexing,
     pub arithmetic: ArithmeticOptions,
+    pub memory: Memory,
 }
 impl Component {
     pub fn new(kind: Kind, position: Point) -> Self {
@@ -293,6 +305,8 @@ impl Component {
                 Kind::Register
                 | Kind::Counter
                 | Kind::ShiftRegister
+                | Kind::Rom
+                | Kind::Ram
                 | Kind::Arithmetic(_)
                 | Kind::Plexer(Plexer::BitSelector) => 8,
                 _ => 1,
@@ -327,6 +341,7 @@ impl Component {
             extension: Extension::Zero,
             sequential: Sequential::default(),
             arithmetic: ArithmeticOptions::default(),
+            memory: Memory::default(),
             plexing: Plexing {
                 select_bits: if kind == Kind::Plexer(Plexer::PriorityEncoder) {
                     3
@@ -345,6 +360,9 @@ impl Component {
         }
     }
     pub fn local_ports(&self) -> Vec<Point> {
+        if self.kind.is_memory() {
+            return self.memory_terminals().iter().map(|p| p.offset).collect();
+        }
         if matches!(self.kind, Kind::Plexer(_)) {
             return self
                 .plexer_terminals()
@@ -606,8 +624,9 @@ impl Circuit {
         let before = old.ports();
         let after = replacement.ports();
         let pairs: Vec<_> = if old.kind == replacement.kind
-            && ((old.kind == Kind::Arithmetic(Arithmetic::BitAdder)
-                && old.bit_adder_inputs() != replacement.bit_adder_inputs())
+            && (old.kind.is_memory()
+                || (old.kind == Kind::Arithmetic(Arithmetic::BitAdder)
+                    && old.bit_adder_inputs() != replacement.bit_adder_inputs())
                 || (old.kind == Kind::Plexer(Plexer::DisplayDecoder)
                     && old.plexing.multibit != replacement.plexing.multibit))
         {

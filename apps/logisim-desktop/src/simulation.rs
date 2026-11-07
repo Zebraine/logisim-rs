@@ -22,6 +22,12 @@ pub fn apply(sim: &mut Simulator, action: SimulationAction) {
         SimulationAction::ToggleTicks | SimulationAction::SetTickRate(_) => {}
         SimulationAction::ToggleInput { id, bit } => sim.toggle_input(id, bit),
         SimulationAction::SetInput { id, value } => sim.set_input(id, value),
+        SimulationAction::FillMemory {
+            id,
+            start,
+            end,
+            value,
+        } => sim.fill_memory(id, start, end, value),
     }
 }
 
@@ -51,6 +57,9 @@ pub fn present(circuit: &Circuit, sim: &Simulator) -> SimulationView {
         }
         if c.kind == Kind::Clock {
             view.clocks.insert(c.id);
+        }
+        if let Some(contents) = sim.memory_contents(c.id) {
+            view.memories.insert(c.id, contents.clone());
         }
         if let Some(value) = sim.stored_value(c.id) {
             view.storage.insert(c.id, signal(value, false));
@@ -118,6 +127,12 @@ pub fn apply_project(
             sim.tick();
         }
         SimulationAction::PokeClock { id } => sim.poke_clock(path, id),
+        SimulationAction::FillMemory {
+            id,
+            start,
+            end,
+            value,
+        } => sim.fill_memory(path, id, start, end, value),
         SimulationAction::ToggleStored { id } => sim.toggle_stored(path, id),
         SimulationAction::ToggleInput { id, bit } if path.is_empty() => sim.toggle_input(id, bit),
         SimulationAction::SetInput { id, value } if path.is_empty() => sim.set_input(id, value),

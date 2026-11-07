@@ -80,6 +80,7 @@ pub(crate) struct Editor {
     pub selection: BTreeSet<Id>,
     pub tool: Tool,
     pub template: Component,
+    pub memory_target: Option<(bool, Id)>,
     pub focus_text: bool,
     pub simulation: SimulationUi,
     undo: Vec<Edit>,
@@ -105,6 +106,7 @@ impl Default for Editor {
             selection: BTreeSet::new(),
             tool: Tool::Select,
             template: Component::new(Kind::Gate(Gate::And), Point::ZERO),
+            memory_target: None,
             focus_text: false,
             simulation: SimulationUi::default(),
             undo: vec![],
@@ -707,7 +709,9 @@ impl Editor {
         {
             let world = canvas.world(pointer);
             for c in self.circuit.components.iter().filter(|c| {
-                c.kind.is_sequential() || matches!(c.kind, Kind::Plexer(_) | Kind::Arithmetic(_))
+                c.kind.is_memory()
+                    || c.kind.is_sequential()
+                    || matches!(c.kind, Kind::Plexer(_) | Kind::Arithmetic(_))
             }) {
                 for (index, point) in c.ports().iter().enumerate() {
                     if (drawing::pos(*point).to_vec2() - world).length() <= tolerance {
@@ -718,6 +722,8 @@ impl Editor {
                                     crate::plexers::port_label(c, c.plexer_terminals()[index].role)
                                 } else if matches!(c.kind, Kind::Arithmetic(_)) {
                                     crate::arithmetic::port_label(c, index)
+                                } else if c.kind.is_memory() {
+                                    tr(crate::memory::port_label(c, index)).to_owned()
                                 } else {
                                     tr(crate::sequential::port_label(c, index)).to_owned()
                                 },

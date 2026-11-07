@@ -21,6 +21,7 @@ mod project;
 mod properties;
 use project::{CircuitCommand, NameDialog};
 mod arithmetic;
+mod memory;
 mod plexers;
 mod sequential;
 mod simulation;
@@ -60,6 +61,7 @@ pub fn configure(ctx: &egui::Context) {
 /// Circuit editing and viewport state. Signal simulation is not part of this layer.
 #[derive(Default)]
 pub struct Workspace {
+    memory_editor: memory::MemoryEditor,
     language: Language,
     settings_open: bool,
     settings_error: Option<String>,
@@ -110,7 +112,8 @@ impl Workspace {
             self.editor.path.clone(),
             self.editor.appearance_mode,
         );
-        let modal = self.settings_open
+        let modal = self.editor.memory_target.is_some()
+            || self.settings_open
             || self.name_dialog.is_some()
             || self.remove_dialog
             || self.editor.project_error.is_some();
@@ -118,6 +121,7 @@ impl Workspace {
         if ui.is_enabled() {
             self.project_dialogs(ui.ctx());
             self.settings(ui.ctx());
+            self.memory_editor.show(ui.ctx(), &mut self.editor);
         }
         if let Some(id) = self.editor.open_instance.take() {
             self.editor.enter_instance(id);
@@ -630,6 +634,8 @@ impl Workspace {
                                             self.library_tool(ui, Kind::Register);
                                             self.library_tool(ui, Kind::Counter);
                                             self.library_tool(ui, Kind::ShiftRegister);
+                                            self.library_tool(ui, Kind::Rom);
+                                            self.library_tool(ui, Kind::Ram);
                                         }
                                         "Base" => self.library_tool(ui, Kind::Text),
                                         _ => {

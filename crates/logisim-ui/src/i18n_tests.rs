@@ -697,3 +697,102 @@ fn counter_shift_widgets_edit_modes_width_and_undo_in_both_languages() {
         assert_eq!(app.circuit().components.last().unwrap().bits, 32);
     }
 }
+
+#[test]
+fn memory_editor_real_input_keeps_rom_history_and_ram_instance_commands_separate() {
+    for language in Language::ALL {
+        let ctx = Context::default();
+        configure(&ctx);
+        let mut app = Workspace::default();
+        app.set_language(language);
+        let translated = |s: &str| i18n::with_language(language, || i18n::tr(s).to_owned());
+        let mut circuit = logisim_core::Circuit::default();
+        let rom = circuit.add_component(Component::new(Kind::Rom, Point::new(200, 100)));
+        let ram = circuit.add_component(Component::new(Kind::Ram, Point::new(400, 100)));
+        app.replace_circuit(circuit);
+        app.editor.selection.insert(rom);
+        click(&ctx, &mut app, &translated("Edit contents…"));
+        let labels = frame(&ctx, &mut app, vec![]);
+        assert!(has(&labels, &translated("ROM contents")));
+        let rect = labels
+            .iter()
+            .find(|(s, _)| s == &translated("Value (hex)"))
+            .unwrap()
+            .1;
+        let pos = Pos2::new(rect.right() + 50.0, rect.center().y);
+        for pressed in [true, false] {
+            frame(
+                &ctx,
+                &mut app,
+                vec![
+                    Event::PointerMoved(pos),
+                    Event::PointerButton {
+                        pos,
+                        button: PointerButton::Primary,
+                        pressed,
+                        modifiers: Modifiers::NONE,
+                    },
+                ],
+            );
+        }
+        frame(
+            &ctx,
+            &mut app,
+            vec![
+                Event::Key {
+                    key: Key::A,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: Modifiers::COMMAND,
+                },
+                Event::Text("A5".into()),
+            ],
+        );
+        click(&ctx, &mut app, &translated("Write word"));
+        assert_eq!(
+            app.circuit().component(rom).unwrap().memory.contents.get(0),
+            0xa5
+        );
+        assert!(app.take_simulation_actions().is_empty());
+        click(&ctx, &mut app, &translated("Close"));
+        app.editor.undo();
+        assert_eq!(
+            app.circuit().component(rom).unwrap().memory.contents.get(0),
+            0
+        );
+        app.editor.redo();
+        assert_eq!(
+            app.circuit().component(rom).unwrap().memory.contents.get(0),
+            0xa5
+        );
+        let before = app.project().clone();
+        app.editor.selection.clear();
+        app.editor.selection.insert(ram);
+        let mut contents = logisim_core::MemoryContents::default();
+        contents.set(0, 0x5a);
+        app.editor.simulation.view.memories.insert(ram, contents);
+        click(&ctx, &mut app, &translated("Edit contents…"));
+        assert!(has(
+            &frame(&ctx, &mut app, vec![]),
+            &translated("RAM contents")
+        ));
+        click(&ctx, &mut app, &translated("Clear contents"));
+        assert_eq!(
+            app.take_simulation_actions(),
+            vec![SimulationAction::FillMemory {
+                id: ram,
+                start: 0,
+                end: 256,
+                value: 0
+            }]
+        );
+        assert_eq!(app.project(), &before);
+        click(&ctx, &mut app, &translated("Close"));
+        app.editor.undo();
+        assert_eq!(
+            app.circuit().component(rom).unwrap().memory.contents.get(0),
+            0
+        );
+    }
+}

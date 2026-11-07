@@ -4,6 +4,9 @@ pub use hierarchy::ProjectSimulator;
 mod arithmetic;
 #[cfg(test)]
 mod arithmetic_tests;
+mod memory;
+#[cfg(test)]
+mod memory_tests;
 mod network;
 #[cfg(test)]
 mod plexer_tests;
@@ -42,6 +45,7 @@ pub struct Simulator {
     network: Network,
     inputs: BTreeMap<Id, Value>,
     storage: BTreeMap<Id, sequential::State>,
+    memories: BTreeMap<Id, memory::State>,
     drives: BTreeMap<network::Port, Value>,
     pending: BTreeMap<network::Port, Value>,
     values: Vec<Value>,
@@ -57,6 +61,7 @@ impl Default for Simulator {
             network: Network::default(),
             inputs: BTreeMap::new(),
             storage: BTreeMap::new(),
+            memories: BTreeMap::new(),
             drives: BTreeMap::new(),
             pending: BTreeMap::new(),
             values: vec![],
@@ -101,6 +106,19 @@ impl Simulator {
                     .remove(&c.id)
                     .and_then(|s| s.adapt(c))
                     .unwrap_or_else(|| sequential::State::new(c));
+                (c.id, state)
+            })
+            .collect();
+        self.memories = circuit
+            .components
+            .iter()
+            .filter(|c| c.kind == Kind::Ram)
+            .map(|c| {
+                let state = self
+                    .memories
+                    .remove(&c.id)
+                    .map(|s| s.adapt(c))
+                    .unwrap_or_else(|| memory::State::new(c));
                 (c.id, state)
             })
             .collect();
@@ -176,6 +194,13 @@ impl Simulator {
             .iter()
             .filter(|c| c.kind.is_sequential())
             .map(|c| (c.id, sequential::State::new(c)))
+            .collect();
+        self.memories = self
+            .circuit
+            .components
+            .iter()
+            .filter(|c| c.kind == Kind::Ram)
+            .map(|c| (c.id, memory::State::new(c)))
             .collect();
         self.initialize(BTreeMap::new());
     }
@@ -281,6 +306,65 @@ impl Simulator {
             self.drive_port(port, value);
         }
         self.schedule_storage();
+        self.schedule_memories();
+    }
+    fn schedule_memories(&mut self) {
+        let samples: Vec<_> = self
+            .circuit
+            .components
+            .iter()
+            .filter(|c| c.kind.is_memory())
+            .map(|c| {
+                let ports = (0..c.ports().len())
+                    .map(|i| self.port_value(c.id, i).expect("compiled memory port"))
+                    .collect::<Vec<_>>();
+                (c.clone(), ports)
+            })
+            .collect();
+        for (c, ports) in samples {
+            let output = if c.kind == Kind::Rom {
+                memory::rom(&c, &ports)
+            } else {
+                self.memories
+                    .get_mut(&c.id)
+                    .expect("RAM state")
+                    .evaluate(&c, &ports)
+            };
+            self.drive_port((c.id, 0), output);
+        }
+    }
+    pub fn memory_contents(&self, id: Id) -> Option<&logisim_core::MemoryContents> {
+        self.memories.get(&id).map(|s| &s.contents)
+    }
+    pub fn set_memory_word(&mut self, id: Id, address: u32, value: u32) {
+        if let Some(end) = address.checked_add(1) {
+            self.fill_memory(id, address, end, value);
+        }
+    }
+    pub fn fill_memory(&mut self, id: Id, start: u32, end: u32, value: u32) {
+        let Some(c) = self.circuit.component(id) else {
+            return;
+        };
+        if start >= end || end > c.memory_capacity() {
+            return;
+        }
+        let mask = u32::MAX >> (32 - c.bits.clamp(1, 32));
+        let Some(state) = self.memories.get_mut(&id) else {
+            return;
+        };
+        state.contents.fill(start, end, value & mask);
+        self.limited = false;
+        self.unsettled_steps = 0;
+        self.schedule_components(false);
+    }
+    pub fn clear_memory(&mut self, id: Id) {
+        let Some(state) = self.memories.get_mut(&id) else {
+            return;
+        };
+        state.contents.clear();
+        self.limited = false;
+        self.unsettled_steps = 0;
+        self.schedule_components(false);
     }
     fn schedule_storage(&mut self) {
         let samples: Vec<_> = self
@@ -490,6 +574,7 @@ fn electrically_equal(a: &Circuit, b: &Circuit) -> bool {
             (
                 matches!(c.kind, Kind::Plexer(_)).then_some(c.plexing),
                 matches!(c.kind, Kind::Arithmetic(_)).then_some(c.arithmetic),
+                c.kind.is_memory().then_some(c.memory.clone()),
             ),
             if c.kind == Kind::Tunnel {
                 c.label.clone()
