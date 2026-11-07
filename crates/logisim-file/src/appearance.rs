@@ -112,8 +112,8 @@ pub fn read(node: Node<'_, '_>, circuit: &Circuit) -> Result<Appearance> {
                     return Err(Error("Missing or ambiguous appearance Pin binding".into()));
                 }
                 let pin = pins[0];
-                let size = if pin.output { 10 } else { 8 };
-                if width != size || height != size || result.ports.insert(pin.id, at).is_some() {
+                let valid_size = width == height && (width == 8 || (pin.output && width == 10));
+                if !valid_size || result.ports.insert(pin.id, at).is_some() {
                     return Err(Error("Invalid or duplicate appearance port".into()));
                 }
             }

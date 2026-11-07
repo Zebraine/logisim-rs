@@ -419,7 +419,15 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
         ui.end_row();
         if c.kind != Kind::Tunnel {
             ui.label(tr("Color"));
-            ui.color_edit_button_srgb(&mut c.color);
+            if c.kind == Kind::Text {
+                let mut rgba = [c.color[0], c.color[1], c.color[2], c.color_alpha];
+                if ui.color_edit_button_srgba_unmultiplied(&mut rgba).changed() {
+                    c.color = [rgba[0], rgba[1], rgba[2]];
+                    c.color_alpha = rgba[3];
+                }
+            } else {
+                ui.color_edit_button_srgb(&mut c.color);
+            }
             ui.end_row();
         }
     }
@@ -452,10 +460,29 @@ fn wiring_fields(ui: &mut Ui, c: &mut Component) -> bool {
         | Kind::RgbLed => {
             ui.label(tr("Label location"));
             egui::ComboBox::from_id_salt("instance_label_location")
-                .selected_text(tr(c.label_facing.name()))
+                .selected_text(tr(if c.label_center {
+                    "Center"
+                } else {
+                    c.label_facing.name()
+                }))
                 .show_ui(ui, |ui| {
                     for facing in Facing::ALL {
-                        ui.selectable_value(&mut c.label_facing, facing, tr(facing.name()));
+                        if ui
+                            .selectable_label(
+                                !c.label_center && c.label_facing == facing,
+                                tr(facing.name()),
+                            )
+                            .clicked()
+                        {
+                            c.label_center = false;
+                            c.label_facing = facing;
+                        }
+                    }
+                    if c.kind == Kind::Button
+                        && ui.selectable_label(c.label_center, tr("Center")).clicked()
+                    {
+                        c.label_center = true;
+                        c.label_facing = Facing::North;
                     }
                 });
             ui.end_row();

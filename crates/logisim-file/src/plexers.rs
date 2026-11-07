@@ -9,6 +9,7 @@ pub(crate) fn allowed(kind: Plexer, key: &str) -> bool {
         return matches!(key, "facing" | "multibit");
     }
     matches!(key, "facing" | "select" | "disabled")
+        || (kind == Plexer::Multiplexer && key == "size")
         || match kind {
             Plexer::PriorityEncoder => key == "noInputState",
             _ => {
@@ -22,6 +23,9 @@ pub(crate) fn read(c: &mut Component, attrs: &BTreeMap<String, String>) -> Resul
     let Kind::Plexer(kind) = c.kind else {
         return Ok(());
     };
+    if kind == Plexer::Multiplexer && attrs.get("size").is_some_and(|v| v != "30") {
+        return Err(Error("Unsupported multiplexer size".into()));
+    }
     let get = |key, default| attrs.get(key).map(String::as_str).unwrap_or(default);
     let boolean = |key, default| match get(key, default) {
         "true" => Ok(true),

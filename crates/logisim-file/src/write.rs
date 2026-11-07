@@ -89,6 +89,8 @@ pub fn serialize(document: &Document) -> Result<String> {
                     .contains(&c.inputs)
                 || c.font_size == 0
                 || c.label.len() > 65_536
+                || (c.kind != Kind::Text && c.color_alpha != 255)
+                || (c.kind != Kind::Button && c.label_center)
             {
                 return Err(Error(format!("Invalid {} attributes.", c.kind.name())));
             }
@@ -347,7 +349,7 @@ pub fn serialize(document: &Document) -> Result<String> {
                     } else {
                         "labelcolor"
                     },
-                    format!("#{:02x}{:02x}{:02x}", c.color[0], c.color[1], c.color[2]),
+                    crate::io::color_text([c.color[0], c.color[1], c.color[2], c.color_alpha]),
                 )?;
             }
             if c.kind == Kind::Text {

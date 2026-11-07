@@ -369,6 +369,7 @@ pub struct Component {
     pub label: String,
     pub font_size: u8,
     pub color: [u8; 3],
+    pub color_alpha: u8,
     pub gate_size: GateSize,
     pub gate_options: GateOptions,
     pub text_horizontal: HorizontalAlign,
@@ -376,6 +377,7 @@ pub struct Component {
     pub constant: u32,
     pub radix: Radix,
     pub label_facing: Facing,
+    pub label_center: bool,
     pub splitter: Splitter,
     pub input_bits: u8,
     pub extension: Extension,
@@ -445,6 +447,7 @@ impl Component {
             } else {
                 [51, 65, 85]
             },
+            color_alpha: 255,
             gate_size: GateSize::Narrow,
             gate_options: GateOptions::default(),
             text_horizontal: HorizontalAlign::Left,
@@ -456,6 +459,7 @@ impl Component {
             } else {
                 Facing::North
             },
+            label_center: false,
             splitter: Splitter::default(),
             input_bits: 8,
             extension: Extension::Zero,

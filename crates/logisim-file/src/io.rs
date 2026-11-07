@@ -235,7 +235,15 @@ pub(crate) fn write(out: &mut String, c: &Component) -> Result<()> {
         c.kind,
         Kind::Button | Kind::Switch | Kind::DipSwitch | Kind::Slider | Kind::Led | Kind::RgbLed
     ) {
-        a(out, "labelloc", c.label_facing.name().to_ascii_lowercase())?;
+        a(
+            out,
+            "labelloc",
+            if c.kind == Kind::Button && c.label_center {
+                "center".into()
+            } else {
+                c.label_facing.name().to_ascii_lowercase()
+            },
+        )?;
     }
     Ok(())
 }

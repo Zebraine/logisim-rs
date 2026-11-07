@@ -2268,3 +2268,37 @@ fn ordinary_gate_xor_mode_and_input_inversion_edit_with_undo_in_both_languages()
         assert!(app.circuit().component(id).unwrap().gate_negated(0));
     }
 }
+
+#[test]
+fn centered_button_label_is_editable_and_drawn_inside_the_button_in_both_languages() {
+    for language in Language::ALL {
+        let ctx = Context::default();
+        configure(&ctx);
+        let mut app = Workspace::default();
+        app.set_language(language);
+        let t = |s| i18n::with_language(language, || i18n::tr(s).to_owned());
+        app.editor.set_tool(Tool::Place(Kind::Button));
+        app.editor.place(Point::new(300, 300));
+        app.editor.circuit.components[0].label = "C".into();
+        let id = app.editor.circuit.components[0].id;
+        click(&ctx, &mut app, &t("North"));
+        click(&ctx, &mut app, &t("Center"));
+        assert!(app.circuit().component(id).unwrap().label_center);
+        let labels = frame(&ctx, &mut app, vec![]);
+        let label = labels
+            .iter()
+            .find(|(s, r)| s == "C" && r.center().x > 300.0)
+            .unwrap()
+            .1;
+        let center = app.canvas.screen_vec(
+            crate::drawing::bounds(app.circuit().component(id).unwrap())
+                .center()
+                .to_vec2(),
+        );
+        assert!(label.center().distance(center) < 1.0);
+        app.editor.undo();
+        assert!(!app.circuit().component(id).unwrap().label_center);
+        app.editor.redo();
+        assert!(app.circuit().component(id).unwrap().label_center);
+    }
+}

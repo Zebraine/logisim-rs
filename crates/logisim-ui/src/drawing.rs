@@ -310,7 +310,7 @@ pub(crate) fn component(
     let color = if ghost {
         ACCENT.gamma_multiply(0.45)
     } else {
-        Color32::from_rgb(c.color[0], c.color[1], c.color[2])
+        Color32::from_rgba_unmultiplied(c.color[0], c.color[1], c.color[2], c.color_alpha)
     };
     if !ghost && c.kind != Kind::Text {
         let body = bounds(c);
@@ -708,7 +708,9 @@ pub(crate) fn component(
     }
     if !matches!(c.kind, Kind::Text | Kind::Tunnel | Kind::PlaRom) && !c.label.is_empty() {
         let r = bounds(c);
-        let (anchor, align) = if matches!(c.kind, Kind::Ttl(_)) {
+        let (anchor, align) = if c.kind == Kind::Button && c.label_center {
+            (r.center().to_vec2(), Align2::CENTER_CENTER)
+        } else if matches!(c.kind, Kind::Ttl(_)) {
             if matches!(c.facing, Facing::East | Facing::West) {
                 (vec2(r.right() + 8.0, r.center().y), Align2::LEFT_CENTER)
             } else {

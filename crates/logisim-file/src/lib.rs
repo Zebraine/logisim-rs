@@ -3,6 +3,8 @@
 mod appearance;
 mod arithmetic;
 mod bus;
+#[cfg(test)]
+mod compatibility_tests;
 mod diagnostics;
 mod external;
 mod gates;

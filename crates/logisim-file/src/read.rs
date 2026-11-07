@@ -492,10 +492,12 @@ fn component(
             | Kind::ShiftRegister => crate::sequential::allowed(kind, key),
             Kind::Constant => matches!(key.as_str(), "facing" | "width" | "value"),
             Kind::Power | Kind::Ground => matches!(key.as_str(), "facing" | "width"),
-            Kind::Probe | Kind::Subcircuit(_) => matches!(
-                key.as_str(),
-                "facing" | "radix" | "label" | "labelloc" | "labelfont" | "labelcolor"
-            ),
+            Kind::Probe | Kind::Subcircuit(_) => {
+                matches!(
+                    key.as_str(),
+                    "facing" | "radix" | "label" | "labelloc" | "labelfont" | "labelcolor"
+                ) || (kind == Kind::Probe && key == "width")
+            }
             Kind::BitExtender => matches!(key.as_str(), "in_width" | "out_width" | "type"),
             Kind::Splitter => {
                 matches!(
@@ -604,6 +606,10 @@ fn component(
             "south" => Facing::South,
             "west" => Facing::West,
             "north" => Facing::North,
+            "center" if kind == Kind::Button => {
+                c.label_center = true;
+                Facing::North
+            }
             _ => return Err(Error("Invalid label location".into())),
         };
     }
@@ -678,12 +684,18 @@ fn component(
         },
         "#000000",
     );
-    let rgb = color
-        .strip_prefix('#')
-        .filter(|s| s.len() == 6)
-        .and_then(|s| u32::from_str_radix(s, 16).ok())
-        .ok_or_else(|| Error("Invalid RGB color".into()))?;
-    c.color = [(rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8];
+    let rgba = if kind == Kind::Text {
+        crate::io::rgba(color)?
+    } else {
+        let rgb = color
+            .strip_prefix('#')
+            .filter(|s| s.len() == 6)
+            .and_then(|s| u32::from_str_radix(s, 16).ok())
+            .ok_or_else(|| Error("Invalid RGB color".into()))?;
+        [(rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8, 255]
+    };
+    c.color = [rgba[0], rgba[1], rgba[2]];
+    c.color_alpha = rgba[3];
     if kind == Kind::Text {
         c.text_horizontal = match value(&a, "halign", "center") {
             "left" => HorizontalAlign::Left,
@@ -707,15 +719,28 @@ fn read_wiring(c: &mut Component, a: &Attributes) -> Result<()> {
     match c.kind {
         Kind::Constant => {
             let text = value(a, "value", "0x1");
-            c.constant = text
-                .strip_prefix("0x")
-                .and_then(|v| u32::from_str_radix(v, 16).ok())
-                .ok_or_else(|| Error("Invalid constant value".into()))?;
+            c.constant = if let Some(hex) = text.strip_prefix("0x") {
+                u32::from_str_radix(hex, 16).ok()
+            } else if text == "0"
+                || (!text.starts_with('0') && text.bytes().all(|b| b.is_ascii_digit()))
+            {
+                text.parse::<u32>().ok()
+            } else {
+                None
+            }
+            .ok_or_else(|| Error("Invalid constant value".into()))?;
             if c.bits < 32 {
                 c.constant &= (1 << c.bits) - 1;
             }
         }
         Kind::Probe => {
+            if let Some(width) = a.get("width") {
+                if width != "16" {
+                    return Err(Error("Unsupported probe width attribute".into()));
+                }
+                // The reference infers the bus width and drops this legacy attribute on save.
+                c.bits = 1;
+            }
             c.radix = match value(a, "radix", "2") {
                 "2" => Radix::Binary,
                 "8" => Radix::Octal,
