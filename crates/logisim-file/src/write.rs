@@ -89,7 +89,7 @@ pub fn serialize(document: &Document) -> Result<String> {
                 | Kind::RgbLed
                 | Kind::DotMatrix
                 | Kind::HexDisplay => 6,
-                Kind::Gate(_) => 1,
+                Kind::Gate(_) | Kind::ControlledBuffer | Kind::ControlledInverter => 1,
                 Kind::Text => 2,
                 Kind::Register
                 | Kind::FlipFlop(_)
@@ -143,6 +143,7 @@ pub fn serialize(document: &Document) -> Result<String> {
                 c.kind,
                 Kind::Text
                     | Kind::Probe
+                    | Kind::PullResistor
                     | Kind::Splitter
                     | Kind::BitExtender
                     | Kind::Subcircuit(_)
@@ -166,6 +167,7 @@ pub fn serialize(document: &Document) -> Result<String> {
             ) {
                 attribute(&mut out, "width", c.bits)?;
             }
+            crate::bus::write(&mut out, c)?;
             crate::sequential::write(&mut out, c)?;
             crate::memory::write(&mut out, c)?;
             crate::io::write(&mut out, c)?;

@@ -126,7 +126,7 @@ impl Splitter {
     }
 }
 impl Component {
-    /// None denotes a probe whose width is inferred; Some(0) is an empty splitter branch.
+    /// None denotes a probe or pull resistor whose width is inferred; Some(0) is an empty splitter branch.
     pub fn port_width(&self, index: usize) -> Option<u8> {
         if matches!(self.kind, Kind::Subcircuit(_)) {
             return self.interface.ports.get(index).map(|p| p.bits);
@@ -170,7 +170,14 @@ impl Component {
             Kind::Rom | Kind::Ram => self.memory_terminals().get(index).map(|p| p.bits),
             Kind::ShiftRegister if index == 3 => Some(2),
             Kind::Register | Kind::Counter | Kind::ShiftRegister if index >= 2 => Some(1),
-            Kind::Probe => None,
+            Kind::Probe | Kind::PullResistor => None,
+            Kind::ControlledBuffer | Kind::ControlledInverter => {
+                (index < 3).then_some(if index == 2 {
+                    1
+                } else {
+                    self.bits.clamp(1, 32)
+                })
+            }
             Kind::Splitter if index > 0 => Some(
                 self.splitter
                     .branch_bits(self.bits, (index - 1) as u8)
@@ -185,6 +192,8 @@ impl Component {
         matches!(
             self.kind,
             Kind::Gate(_)
+                | Kind::ControlledBuffer
+                | Kind::ControlledInverter
                 | Kind::Button
                 | Kind::Switch
                 | Kind::DipSwitch

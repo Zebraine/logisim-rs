@@ -9,7 +9,9 @@ mod project;
 pub use project::{CircuitDefinition, Interface, InterfacePort, MAX_CIRCUITS, Project};
 
 mod arithmetic;
+mod bus;
 pub use arithmetic::{Arithmetic, ArithmeticOptions, BitSearch, Shift};
+pub use bus::{BusControl, Pull};
 
 mod plexers;
 pub use plexers::{Plexer, PlexerRole, PlexerTerminal, Plexing};
@@ -149,6 +151,9 @@ impl Gate {
 pub enum Kind {
     Subcircuit(Id),
     Gate(Gate),
+    ControlledBuffer,
+    ControlledInverter,
+    PullResistor,
     Pin,
     Tunnel,
     Text,
@@ -241,6 +246,8 @@ impl Kind {
                 | Self::RgbLed
                 | Self::Pin
                 | Self::Gate(_)
+                | Self::ControlledBuffer
+                | Self::ControlledInverter
                 | Self::Probe
                 | Self::Subcircuit(_)
                 | Self::Clock
@@ -256,6 +263,9 @@ impl Kind {
         match self {
             Self::Subcircuit(_) => "Subcircuit",
             Self::Gate(g) => g.name(),
+            Self::ControlledBuffer => "Controlled Buffer",
+            Self::ControlledInverter => "Controlled Inverter",
+            Self::PullResistor => "Pull Resistor",
             Self::Pin => "Pin",
             Self::Tunnel => "Tunnel",
             Self::Text => "Text",
@@ -316,6 +326,7 @@ pub struct Component {
     pub arithmetic: ArithmeticOptions,
     pub memory: Memory,
     pub io: Io,
+    pub bus: BusControl,
 }
 impl Component {
     pub fn new(kind: Kind, position: Point) -> Self {
@@ -326,7 +337,7 @@ impl Component {
             kind,
             facing: match kind {
                 Kind::Power => Facing::North,
-                Kind::Ground => Facing::South,
+                Kind::Ground | Kind::PullResistor => Facing::South,
                 Kind::Led | Kind::RgbLed => Facing::West,
                 _ => Facing::East,
             },
@@ -375,6 +386,7 @@ impl Component {
             arithmetic: ArithmeticOptions::default(),
             memory: Memory::default(),
             io: Io::for_kind(kind),
+            bus: BusControl::default(),
             plexing: Plexing {
                 select_bits: if kind == Kind::Plexer(Plexer::PriorityEncoder) {
                     3
@@ -393,6 +405,9 @@ impl Component {
         }
     }
     pub fn local_ports(&self) -> Vec<Point> {
+        if self.kind.is_controlled() {
+            return self.controlled_ports();
+        }
         if self.kind.is_io() {
             return self.io_ports();
         }
@@ -459,8 +474,8 @@ impl Component {
     }
     pub fn gate_width(&self) -> i32 {
         match self.kind {
-            Kind::Gate(Gate::Buffer) => 20,
-            Kind::Gate(Gate::Not) => {
+            Kind::Gate(Gate::Buffer) | Kind::ControlledBuffer => 20,
+            Kind::Gate(Gate::Not) | Kind::ControlledInverter => {
                 if self.gate_size == GateSize::Wide {
                     30
                 } else {
@@ -662,6 +677,9 @@ impl Circuit {
         let pairs: Vec<_> = if old.kind == replacement.kind
             && (old.kind.is_memory()
                 || old.kind == Kind::DotMatrix
+                || (old.kind.is_controlled()
+                    && (old.bus.control_left != replacement.bus.control_left
+                        || old.gate_size != replacement.gate_size))
                 || (old.kind == Kind::Arithmetic(Arithmetic::BitAdder)
                     && old.bit_adder_inputs() != replacement.bit_adder_inputs())
                 || (old.kind == Kind::Plexer(Plexer::DisplayDecoder)

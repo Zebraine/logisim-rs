@@ -380,6 +380,9 @@ fn component(
         ("#Wiring", "Splitter") => Kind::Splitter,
         ("#Wiring", "Bit Extender") => Kind::BitExtender,
         ("#Base", "Text") => Kind::Text,
+        ("#Gates", "Controlled Buffer") => Kind::ControlledBuffer,
+        ("#Gates", "Controlled Inverter") => Kind::ControlledInverter,
+        ("#Wiring", "Pull Resistor") => Kind::PullResistor,
         ("#Gates", name) => Kind::Gate(
             Gate::ALL
                 .into_iter()
@@ -392,6 +395,9 @@ fn component(
     let a = attributes(n)?;
     for key in a.keys() {
         let allowed = match kind {
+            Kind::ControlledBuffer | Kind::ControlledInverter | Kind::PullResistor => {
+                crate::bus::allowed(kind, key)
+            }
             Kind::Plexer(p) => crate::plexers::allowed(p, key),
             Kind::Rom | Kind::Ram => crate::memory::allowed(kind, key),
             Kind::Button
@@ -451,7 +457,7 @@ fn component(
         "facing",
         match kind {
             Kind::Power => "north",
-            Kind::Ground => "south",
+            Kind::Ground | Kind::PullResistor => "south",
             Kind::Led | Kind::RgbLed => "west",
             _ => "east",
         },
@@ -480,6 +486,7 @@ fn component(
         },
         1..=32,
     )?;
+    crate::bus::read(&mut c, &a)?;
     crate::sequential::read(&mut c, &a)?;
     crate::memory::read(&mut c, &a)?;
     crate::io::read(&mut c, &a)?;

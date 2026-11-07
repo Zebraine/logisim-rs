@@ -9,6 +9,7 @@ pub(crate) struct Network {
     pub ports: BTreeMap<Port, usize>,
     pub wires: BTreeMap<Id, usize>,
     bit_drivers: Vec<Vec<(Port, u8)>>,
+    bit_pulls: Vec<crate::Bit>,
 }
 #[derive(Default)]
 pub(crate) struct Net {
@@ -18,6 +19,7 @@ pub(crate) struct Net {
     pub mismatch: bool,
     pub drivers: Vec<Port>,
     bits: Vec<usize>,
+    pulls: Vec<crate::Bit>,
 }
 impl Network {
     pub fn compile(circuit: &Circuit) -> Self {
@@ -80,6 +82,11 @@ impl Network {
                 if let Some(width) = c.port_width(index).filter(|w| *w > 0) {
                     widths[net].insert(width);
                 }
+                if c.kind == Kind::PullResistor {
+                    network.nets[net]
+                        .pulls
+                        .push(crate::bus::pull_bit(c.bus.pull));
+                }
                 if c.drives_port(index) {
                     network.nets[net].drivers.push((c.id, index));
                 }
@@ -124,11 +131,15 @@ impl Network {
             }
         }
         self.bit_drivers = vec![vec![]; count];
+        self.bit_pulls = vec![crate::Bit::Unknown; count];
         for net in &mut self.nets {
             for (bit, node) in net.bits.iter_mut().enumerate() {
                 *node = groups.root(*node);
                 if !net.mismatch {
                     self.bit_drivers[*node].extend(net.drivers.iter().map(|id| (*id, bit as u8)));
+                    for pull in &net.pulls {
+                        self.bit_pulls[*node] = merge(self.bit_pulls[*node], *pull);
+                    }
                 }
             }
         }
@@ -138,15 +149,17 @@ impl Network {
         let bits: Vec<_> = self
             .bit_drivers
             .iter()
-            .map(|drivers| {
-                drivers
+            .zip(&self.bit_pulls)
+            .map(|(drivers, pull)| {
+                let driven = drivers
                     .iter()
                     .filter_map(|(id, bit)| drives.get(id).map(|v| v.bit(*bit)))
-                    .fold(Bit::Unknown, |old, next| match (old, next) {
-                        (Bit::Unknown, b) | (b, Bit::Unknown) => b,
-                        (a, b) if a == b => a,
-                        _ => Bit::Error,
-                    })
+                    .fold(Bit::Unknown, merge);
+                if driven == Bit::Unknown {
+                    *pull
+                } else {
+                    driven
+                }
             })
             .collect();
         self.nets
@@ -180,5 +193,14 @@ impl Groups {
         let a = self.root(a);
         let b = self.root(b);
         self.0[a] = b;
+    }
+}
+
+fn merge(a: crate::Bit, b: crate::Bit) -> crate::Bit {
+    use crate::Bit;
+    match (a, b) {
+        (Bit::Unknown, b) | (b, Bit::Unknown) => b,
+        (a, b) if a == b => a,
+        _ => Bit::Error,
     }
 }

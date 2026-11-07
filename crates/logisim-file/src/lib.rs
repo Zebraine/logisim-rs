@@ -2,6 +2,7 @@
 //! No filesystem or simulator dependency; unsupported content is never silently saved.
 mod appearance;
 mod arithmetic;
+mod bus;
 mod io;
 mod memory;
 mod plexers;

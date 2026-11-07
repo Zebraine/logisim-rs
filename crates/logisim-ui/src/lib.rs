@@ -4,6 +4,7 @@ use crate::i18n::tr;
 mod appearance;
 mod appearance_properties;
 mod artwork;
+mod bus;
 mod canvas;
 mod document;
 pub use document::{DocumentView, FileAction};
@@ -607,6 +608,8 @@ impl Workspace {
                                             for gate in Gate::ALL {
                                                 self.library_tool(ui, Kind::Gate(gate));
                                             }
+                                            self.library_tool(ui, Kind::ControlledBuffer);
+                                            self.library_tool(ui, Kind::ControlledInverter);
                                         }
                                         "Wiring" => {
                                             for kind in [
@@ -614,6 +617,7 @@ impl Workspace {
                                                 Kind::Pin,
                                                 Kind::Probe,
                                                 Kind::Tunnel,
+                                                Kind::PullResistor,
                                                 Kind::Clock,
                                                 Kind::Constant,
                                                 Kind::Power,
@@ -625,7 +629,6 @@ impl Workspace {
                                             disabled_actions(
                                                 ui,
                                                 &[
-                                                    "Pull Resistor",
                                                     "Transistor",
                                                     "Transmission Gate",
                                                 ],

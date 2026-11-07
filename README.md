@@ -27,7 +27,7 @@ cargo clippy --workspace --all-targets --locked --offline -- -D warnings
 cargo test --workspace --locked --offline
 ```
 
-使用 Rust 2024，声明最低 Rust 1.95，工具链暂用 stable；已在 1.97.1 检查。
+使用 Rust 2024，声明最低 Rust 1.95，工具链暂用 stable；已在 1.97.1 和 1.99.0 检查。
 界面基于 egui/eframe 0.37.0 和 wgpu，启用 Wayland/X11 后端；已在 Linux X11 环境运行验证。
 Linux 构建另需 `pkg-config` 与 Fontconfig 开发包（Debian/Ubuntu：`libfontconfig1-dev`）。
 
@@ -51,7 +51,8 @@ Linux 构建另需 `pkg-config` 与 Fontconfig 开发包（Debian/Ubuntu：`libf
 ## 基本编辑
 
 - 可放置 NOT、Buffer、AND、OR、NAND、NOR、XOR、XNOR、Pin、文字和 Tunnel。
-- Wiring 库新增 Constant、Power、Ground、Probe、Splitter 和 Bit Extender，支持属性编辑、复制、撤销及文件往返。
+- Gates 库另提供 1–32 位受控缓冲器、受控反相器，可设置控制端位置和反转使能极性。
+- Wiring 库新增 Constant、Power、Ground、Probe、Splitter、Bit Extender 和 Pull Resistor，支持属性编辑、复制、撤销及文件往返。
 - Plexers 库提供多路选择器、解复用器、译码器和优先编码器，支持 1–5 位选择信号（2–32 路）、四个朝向及端口提示；选择器/解复用器的数据位宽为 1–32。
   另有位选择器和七段译码器，支持分组取数与总线/分立输入编辑。
 - Input/Output 库提供按钮、开关、拨码开关、滑块、LED、RGB LED、LED 点阵、七段数码管和十六进制显示器，支持颜色、透明度及对应属性编辑。
@@ -115,12 +116,12 @@ Ctrl+Shift+S，Ctrl+Q 退出。文件选择框可浏览目录或输入完整路�
 保存失败不会清除修改状态，检测到文件被外部修改时要求另存为。
 
 当前互通范围：多电路项目、主电路选择、默认或已支持自定义外观的子电路实例，以及各电路中的八种门、1–32 位两态输入/输出 Pin、正交导线、文字、普通 Tunnel
-及上述基础布线、六种 Plexers 与九种算术元件、Clock、D/T/JK/SR Flip-Flop、Register、Counter、Universal Register、ROM、RAM、Button、Switch、DipSwitch、Slider、LED、RGBLed、DotMatrix、7-Segment Display 和 Hex Digit Display；
+及 Controlled Buffer、Controlled Inverter、上述基础布线、六种 Plexers 与九种算术元件、Clock、D/T/JK/SR Flip-Flop、Register、Counter、Universal Register、ROM、RAM、Button、Switch、DipSwitch、Slider、LED、RGBLed、DotMatrix、7-Segment Display 和 Hex Digit Display；
 包括门尺寸、2–8 个输入、方向、标签、字号、颜色和文字对齐。导入保留实际坐标及连接端口。
 多行文字数据可往返，但参考程序与本程序的排版不同；字体使用本程序的默认字体，
 不承诺字体族、字形覆盖或样式一致，隧道采用固定文字色。
 
-未支持的存储器选项、三态输入、输入取反等元件/电气属性会跳过并报告；
+未支持的存储器选项、三态输入、普通门的逐输入取反等元件/电气属性会跳过并报告；
 其他不支持的项目内容或外观设置也会报告。含省略内容的文件标记为 `partial`，
 禁止覆盖原文件，必须另存为其他路径；只写出已支持的项目内容。
 未支持的外观、无效端口绑定或未支持的接口 Pin 会使相关实例被省略，避免错误地套用默认端口坐标。
@@ -192,6 +193,10 @@ Simulate 菜单与工具栏提供单 tick、自动 tick，菜单可选 1–128 t
 才能推进下一 tick；自动时钟随仿真暂停，不补发暂停期间的 tick。
 
 多输入 XOR 默认按“恰好一个输入为 1”求值，XNOR 取反。
+受控缓冲器与受控反相器禁用时释放总线，使能端未知或错误时输出错误。
+拉电阻提供 Zero、One、Error，逐位补足未被驱动的信号，已有有效驱动优先；
+拉电阻不指定总线位宽，作用可通过分线器传递。修改控制端位置或反相器尺寸保留原导线坐标，需重新接线。
+
 完全未接线的门输入与接了悬空导线的输入不同；全空门报错（Buffer 保持 X）。
 求值有传播预算，超限暂停并提示检查反馈，可修改输入/电路或复位恢复。
 当前覆盖已有组合与基础时序元件，不承诺参考程序的全部传播延迟或反馈行为兼容。

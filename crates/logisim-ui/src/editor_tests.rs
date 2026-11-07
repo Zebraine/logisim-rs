@@ -1255,3 +1255,55 @@ fn slider_drag_is_persistent_one_undo_clamped_reversible_and_cancelable() {
         }
     }
 }
+
+#[test]
+fn bus_components_place_rotate_connect_move_and_undo_through_canvas() {
+    let (ctx, mut app) = setup();
+    for (i, kind) in [
+        Kind::ControlledBuffer,
+        Kind::ControlledInverter,
+        Kind::PullResistor,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        app.editor.set_tool(Tool::Place(kind));
+        let at = app.canvas.screen(Point::new(200 + i as i32 * 180, 200));
+        click(&ctx, &mut app, at);
+    }
+    key(&ctx, &mut app, Key::Escape, Modifiers::NONE);
+    assert_eq!(app.circuit().components.len(), 3);
+    let pull = app.circuit().components[2].id;
+    key(&ctx, &mut app, Key::R, Modifiers::NONE);
+    assert_eq!(
+        app.circuit().component(pull).unwrap().facing,
+        logisim_core::Facing::West
+    );
+    key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
+    assert_eq!(
+        app.circuit().component(pull).unwrap().facing,
+        logisim_core::Facing::South
+    );
+    app.editor.set_tool(Tool::Wire);
+    let a = app.canvas.screen(Point::new(200, 200));
+    let b = app.canvas.screen(Point::new(560, 200));
+    click(&ctx, &mut app, a);
+    click(&ctx, &mut app, b);
+    assert!(!app.circuit().wires.is_empty());
+    app.editor.set_tool(Tool::Select);
+    let body = app.canvas.screen(Point::new(560, 175));
+    drag(&ctx, &mut app, body, body + vec2(0.0, 80.0));
+    assert_eq!(
+        app.circuit().component(pull).unwrap().position,
+        Point::new(560, 280)
+    );
+    key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
+    assert_eq!(
+        app.circuit().component(pull).unwrap().position,
+        Point::new(560, 200)
+    );
+    key(&ctx, &mut app, Key::D, Modifiers::COMMAND);
+    assert_eq!(app.circuit().components.len(), 4);
+    key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
+    assert_eq!(app.circuit().components.len(), 3);
+}

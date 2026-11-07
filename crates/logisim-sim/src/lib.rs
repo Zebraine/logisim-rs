@@ -4,6 +4,7 @@ pub use hierarchy::ProjectSimulator;
 mod arithmetic;
 #[cfg(test)]
 mod arithmetic_tests;
+mod bus;
 mod displays;
 mod io;
 mod memory;
@@ -276,6 +277,13 @@ impl Simulator {
                             .collect();
                         value::evaluate(gate, c.bits, &inputs)
                     }
+                    Kind::ControlledBuffer | Kind::ControlledInverter => bus::evaluate(
+                        c,
+                        self.port_value(c.id, 1).expect("compiled data port"),
+                        self.port_value(c.id, 2)
+                            .expect("compiled enable port")
+                            .bit(0),
+                    ),
                     Kind::Constant => Value::known(c.bits, c.constant),
                     Kind::Power => Value::filled(c.bits, Bit::One),
                     Kind::Ground => Value::known(c.bits, 0),
@@ -605,6 +613,7 @@ fn electrically_equal(a: &Circuit, b: &Circuit) -> bool {
             (c.kind == Kind::BitExtender).then_some((c.input_bits, c.extension)),
             c.kind.is_sequential().then_some(c.sequential),
             (
+                (c.kind.is_controlled() || c.kind == Kind::PullResistor).then_some(c.bus),
                 matches!(c.kind, Kind::Plexer(_)).then_some(c.plexing),
                 matches!(c.kind, Kind::Arithmetic(_)).then_some(c.arithmetic),
                 c.kind.is_memory().then_some(c.memory.clone()),

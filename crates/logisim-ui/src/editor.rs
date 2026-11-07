@@ -776,6 +776,8 @@ impl Editor {
             let world = canvas.world(pointer);
             for c in self.circuit.components.iter().filter(|c| {
                 c.kind.is_io()
+                    || c.kind.is_controlled()
+                    || c.kind == Kind::PullResistor
                     || c.kind.is_memory()
                     || c.kind.is_sequential()
                     || matches!(c.kind, Kind::Plexer(_) | Kind::Arithmetic(_))
@@ -789,6 +791,8 @@ impl Editor {
                                     crate::plexers::port_label(c, c.plexer_terminals()[index].role)
                                 } else if matches!(c.kind, Kind::Arithmetic(_)) {
                                     crate::arithmetic::port_label(c, index)
+                                } else if c.kind.is_controlled() || c.kind == Kind::PullResistor {
+                                    tr(crate::bus::port_label(c, index)).to_owned()
                                 } else if c.kind.is_io() {
                                     tr(crate::io::port_label(c, index)).to_owned()
                                 } else if c.kind.is_memory() {
@@ -796,7 +800,12 @@ impl Editor {
                                 } else {
                                     tr(crate::sequential::port_label(c, index)).to_owned()
                                 },
-                                c.port_width(index).unwrap_or(1)
+                                c.port_width(index).unwrap_or_else(|| self
+                                    .simulation
+                                    .view
+                                    .ports
+                                    .get(&(c.id, index))
+                                    .map_or(0, |s| s.binary.len() as u8))
                             ));
                             if let Some(signal) = self.simulation.view.ports.get(&(c.id, index)) {
                                 ui.monospace(&signal.binary);

@@ -190,6 +190,10 @@ const MESSAGES: &[(&str, &str)] = &[
         "修改会更新所有实例。导线保留原位置；端口移动后请在电路布局中重新接线。",
     ),
     (
+        "Changing control location or gate size keeps wire positions; reconnect moved ports.",
+        "修改控制端位置或门尺寸会保留导线位置，请重新连接移动后的端口。",
+    ),
+    (
         "Changing the input count keeps wire positions; reconnect moved inputs.",
         "修改输入数量会保留导线位置，请重新连接移动后的输入端口。",
     ),
@@ -266,6 +270,9 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Constant", "常量"),
     ("Continue counting", "继续计数"),
     ("Control", "控制点"),
+    ("Control location", "控制端位置"),
+    ("Controlled Buffer", "受控缓冲器"),
+    ("Controlled Inverter", "受控反相器"),
     ("Copy · Ctrl+C", "复制 · Ctrl+C"),
     ("Corner radius ", "圆角半径 "),
     (
@@ -332,6 +339,8 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Ellipse", "椭圆"),
     ("Enable", "使能"),
     ("Enable (0 holds outputs)", "使能（0 时保持输出）"),
+    ("Enable (active high)", "使能（高电平有效）"),
+    ("Enable (active low)", "使能（低电平有效）"),
     (
         "Enable / pause simulation · Ctrl+E",
         "启用 / 暂停仿真 · Ctrl+E",
@@ -348,6 +357,7 @@ const MESSAGES: &[(&str, &str)] = &[
         "请输入 {} 位范围内的十六进制数值。",
     ),
     ("Equal", "相等"),
+    ("Error", "错误"),
     (
         "Error signal: conflicting drivers / undefined input",
         "错误信号：驱动冲突 / 未定义输入",
@@ -493,6 +503,7 @@ const MESSAGES: &[(&str, &str)] = &[
     ("NOR Gate", "或非门"),
     ("NOT Gate", "非门"),
     ("Narrow", "窄"),
+    ("Negate control input", "反转控制输入"),
     ("Negator", "取负器"),
     ("New behavior", "新行为"),
     ("New layout", "新布局"),
@@ -584,7 +595,9 @@ const MESSAGES: &[(&str, &str)] = &[
         "Propagation limit: check feedback, then Reset or Run",
         "达到传播上限：请检查反馈，再重置或运行",
     ),
+    ("Pull", "拉电阻端口"),
     ("Pull Resistor", "上拉 / 下拉电阻"),
+    ("Pull direction", "拉电阻方向"),
     (
         "Queue one clock tick · Ctrl+T; paused simulation uses Step or Run",
         "时钟步进 · Ctrl+T；暂停时使用单步或运行来传播",

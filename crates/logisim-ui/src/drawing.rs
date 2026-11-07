@@ -73,6 +73,17 @@ fn probe_width(c: &Component) -> f32 {
     }
 }
 pub(crate) fn bounds(c: &Component) -> Rect {
+    if c.kind == Kind::PullResistor || c.kind.is_controlled() {
+        let (depth, half_height) = if c.kind == Kind::PullResistor {
+            (46, 7)
+        } else {
+            (c.gate_width(), 11)
+        };
+        return Rect::from_two_pos(
+            pos(c.position + c.facing.transform(Point::new(-depth, -half_height))),
+            pos(c.position + c.facing.transform(Point::new(0, half_height))),
+        );
+    }
     if c.kind.is_io() {
         let [min, max] = c.io_body();
         return Rect::from_two_pos(
@@ -301,6 +312,9 @@ pub(crate) fn component(
         );
     };
     match c.kind {
+        Kind::ControlledBuffer | Kind::ControlledInverter | Kind::PullResistor => {
+            crate::bus::draw(p, canvas, c, color)
+        }
         Kind::Button
         | Kind::Switch
         | Kind::DipSwitch
@@ -659,7 +673,12 @@ pub(crate) fn component(
         && !c.kind.is_io()
         && !matches!(
             c.kind,
-            Kind::Text | Kind::Probe | Kind::Splitter | Kind::BitExtender | Kind::Subcircuit(_)
+            Kind::Text
+                | Kind::Probe
+                | Kind::PullResistor
+                | Kind::Splitter
+                | Kind::BitExtender
+                | Kind::Subcircuit(_)
         )
     {
         let r = bounds(c);
