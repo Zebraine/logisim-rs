@@ -31,6 +31,9 @@ pub(crate) fn write(
         crate::external::write(out, c, external_libraries[&c.external_library])?;
         return Ok(());
     }
+    if c.kind == Kind::Plugin {
+        return crate::plugin::write(out, c);
+    }
     let lib = match c.kind {
         Kind::Ttl(_) => 7,
         Kind::Plexer(_) => 4,

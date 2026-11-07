@@ -7,6 +7,11 @@ pub fn apply_project(
     action: SimulationAction,
 ) {
     match action {
+        SimulationAction::PluginAction {
+            id,
+            action,
+            argument,
+        } => sim.plugin_action(path, id, action, argument),
         SimulationAction::SetRegisterFileWord { id, address, value } => {
             sim.set_register_file_word(path, id, address, value)
         }

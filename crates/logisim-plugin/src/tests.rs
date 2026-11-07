@@ -114,3 +114,115 @@ fn protocol_rejects_unknown_fields_and_noncanonical_signals() {
     ];
     assert!(m.validate().is_err());
 }
+
+#[test]
+fn evaluation_validates_actions_outputs_graphics_state_and_fuel() {
+    // Distinguish the Describe message from Evaluate in a minimal standalone VM.
+    // No native handler is substituted for Wasm execution in this test.
+    fn module(manifest: &Manifest, response: &Response, execution: &str) -> Vec<u8> {
+        let data = |response: &Response| {
+            let json = serde_json::to_vec(response).unwrap();
+            (
+                json.len(),
+                json.iter()
+                    .map(|b| format!("\\{b:02x}"))
+                    .collect::<String>(),
+            )
+        };
+        let (mlen, m) = data(&Response::Manifest(manifest.clone()));
+        let (rlen, r) = data(response);
+        let describe_len = serde_json::to_vec(&Request::Describe).unwrap().len();
+        let mp = ((mlen as u64) << 32) | 4096;
+        let rp = ((rlen as u64) << 32) | 32768;
+        wat::parse_str(format!(
+            r#"(module (memory (export "memory") 8)
+          (data (i32.const 4096) "{m}") (data (i32.const 32768) "{r}")
+          (func (export "logisim_abi") (result i32) i32.const 1)
+          (func (export "logisim_buffer") (param i32) (result i32) i32.const 0)
+          (func (export "logisim_call") (param $n i32) (result i64)
+            local.get $n i32.const {describe_len} i32.eq
+            if (result i64) i64.const {mp}
+            else {execution} i64.const {rp} end))"#
+        ))
+        .unwrap()
+    }
+    let mut m = manifest();
+    m.tools[0].ports.push(Port {
+        id: "out".into(),
+        label: "Output".into(),
+        at: [0, 0],
+        width: 1,
+        output: true,
+    });
+    let c = m.components().remove(0);
+    let request = Evaluation {
+        tool: c.tool.id.clone(),
+        properties: c.properties.clone(),
+        inputs: vec![Signal {
+            width: 1,
+            value: 0,
+            unknown: 1,
+            error: 0,
+        }],
+        state: vec![],
+        event: Event::Reset,
+    };
+    let good = Update {
+        outputs: vec![Signal {
+            width: 1,
+            value: 1,
+            unknown: 0,
+            error: 0,
+        }],
+        state: vec![42],
+        graphics: vec![],
+    };
+    let p = Plugin::load(&module(&m, &Response::Update(good.clone()), "")).unwrap();
+    let mut vm = p.instantiate(&c).unwrap();
+    assert_eq!(vm.evaluate(&c, request.clone()).unwrap(), good);
+    let mut invalid_action = request.clone();
+    invalid_action.event = Event::Action {
+        id: "undeclared".into(),
+        argument: String::new(),
+    };
+    assert!(vm.evaluate(&c, invalid_action).is_err());
+    let mut bad_width = good.clone();
+    bad_width.outputs[0].width = 2;
+    let mut bad_signal = good.clone();
+    bad_signal.outputs[0].error = 1;
+    let mut bad_state = good.clone();
+    bad_state.state.resize(MAX_STATE + 1, 0);
+    let mut bad_graphic = good.clone();
+    bad_graphic.graphics.push(Shape::Line {
+        a: [0, 0],
+        b: [5000, 0],
+        color: [0; 4],
+    });
+    for update in [
+        bad_width,
+        bad_signal,
+        bad_state,
+        bad_graphic,
+        Update {
+            outputs: vec![],
+            ..good.clone()
+        },
+    ] {
+        let p = Plugin::load(&module(&m, &Response::Update(update), "")).unwrap();
+        assert!(
+            p.instantiate(&c)
+                .unwrap()
+                .evaluate(&c, request.clone())
+                .is_err()
+        );
+    }
+    for execution in ["unreachable", "(loop $forever br $forever)"] {
+        let p = Plugin::load(&module(&m, &Response::Update(good.clone()), execution)).unwrap();
+        assert!(
+            p.instantiate(&c)
+                .unwrap()
+                .evaluate(&c, request.clone())
+                .is_err()
+        );
+    }
+}

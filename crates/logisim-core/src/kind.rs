@@ -3,6 +3,7 @@ use crate::{Arithmetic, FlipFlop, Gate, Id, Latch, Parity, Plexer, Ttl};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
+    Plugin,
     Subcircuit(Id),
     Gate(Gate),
     Ttl(Ttl),
@@ -53,7 +54,8 @@ impl Kind {
     pub fn rotatable(self) -> bool {
         !matches!(
             self,
-            Self::RegisterFile
+            Self::Plugin
+                | Self::RegisterFile
                 | Self::RiscVProbe
                 | Self::Text
                 | Self::Keyboard
@@ -107,6 +109,7 @@ impl Kind {
     }
     pub fn name(self) -> &'static str {
         match self {
+            Self::Plugin => "Plugin component",
             Self::Subcircuit(_) => "Subcircuit",
             Self::Gate(g) => g.name(),
             Self::Ttl(t) => t.name(),

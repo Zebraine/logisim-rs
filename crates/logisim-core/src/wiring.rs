@@ -128,6 +128,9 @@ impl Splitter {
 impl Component {
     /// None denotes a probe or pull resistor whose width is inferred; Some(0) is an empty splitter branch.
     pub fn port_width(&self, index: usize) -> Option<u8> {
+        if self.kind == Kind::Plugin {
+            return self.plugin.as_ref()?.tool.ports.get(index).map(|p| p.width);
+        }
         if matches!(self.kind, Kind::Subcircuit(_)) {
             return self.interface.ports.get(index).map(|p| p.bits);
         }

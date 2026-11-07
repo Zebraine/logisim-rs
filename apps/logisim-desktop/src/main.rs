@@ -60,6 +60,7 @@ impl eframe::App for DesktopApp {
 }
 impl DesktopApp {
     fn show(&mut self, ui: &mut eframe::egui::Ui) {
+        self.simulator.set_plugins(self.files.plugins.clone());
         self.simulator
             .synchronize(self.workspace.project(), self.workspace.simulation_root());
         if let Some(delay) = self
@@ -115,7 +116,7 @@ impl DesktopApp {
         let actions = self.workspace.take_simulation_actions();
         let acted = !actions.is_empty();
         for action in actions {
-            self.clocks.action(action);
+            self.clocks.action(&action);
             simulation::apply_project(
                 &mut self.simulator,
                 self.workspace.simulation_path(),

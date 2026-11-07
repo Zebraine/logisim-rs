@@ -25,9 +25,9 @@ Linux 构建需安装 `pkg-config` 和 Fontconfig 开发包（Debian/Ubuntu：`l
 ```sh
 cargo fmt --all -- --check
 cargo fetch --locked
-cargo check --workspace --all-targets --locked --offline
-cargo clippy --workspace --all-targets --locked --offline -- -D warnings
-cargo test --workspace --locked --offline
+cargo check --workspace --all-targets --all-features --locked --offline
+cargo clippy --workspace --all-targets --all-features --locked --offline -- -D warnings
+cargo test --workspace --all-features --locked --offline
 git diff --check
 ```
 
@@ -51,6 +51,8 @@ P/N晶体管与传输门四态/部分未知/双控制/32位/单向传播/四向�
 多输入位计数及不确定结果前缀/四种位查找模式/输入数量编辑与连线保持，
 以及 Plexers 选择/使能/三态/编码级联、分组取数/补零、七段译码双输入形式/控制优先级/输出保持与复位/实例隔离、端口角色保持及文件边界；语言切换、格式占位符、用户文本隔离、偏好持久化与失败重试。
 课程外部元件另覆盖库入口匹配/未知属性与原文件保护、无JAR文件往返、寄存器文件四态/四触发/双读写/零号保护/同沿采样/实例隔离，以及指令探针格式和中英文实际输入路径。
+动态插件另按 README 的命令构建实际 Wasm，再运行 ABI 校验器和课程插件端到端校验器；
+后者覆盖时钟、图形、动作、错误恢复、属性重置、文件往返、层级隔离与同沿采样，不依赖本地 fixtures。
 界面改动还需真实启动窗口检查。每步实现前先运行参考程序并截图，行为依据遵循
 [AGENTS.md](AGENTS.md) 中的 Cleanroom 约定。
 

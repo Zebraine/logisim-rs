@@ -306,6 +306,18 @@ impl Project {
                 )?;
             }
             for component in &c.circuit.components {
+                if component.kind == Kind::Plugin {
+                    component
+                        .plugin
+                        .as_ref()
+                        .ok_or("Missing plugin definition.")?
+                        .validate()?;
+                    if component.facing != Facing::East {
+                        return Err("Plugin ABI v1 components must face East.".into());
+                    }
+                } else if component.plugin.is_some() {
+                    return Err("Plugin definition on a non-plugin component.".into());
+                }
                 if let Kind::Subcircuit(target) = component.kind
                     && !self.can_instantiate(c.id, target)
                 {

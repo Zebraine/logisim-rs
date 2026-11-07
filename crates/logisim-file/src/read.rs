@@ -33,7 +33,10 @@ pub fn parse(xml: &str) -> Result<Import> {
         return Err(Error("Expected a .circ project with version=1.0.".into()));
     }
     let mut warnings = crate::diagnostics::Warnings::default();
-    if root.attribute("source") != Some("2.16.2.2.jar") {
+    if !matches!(
+        root.attribute("source"),
+        Some("2.16.2.2.jar" | "logisim-rs-plugin-v1")
+    ) {
         warn(
             &mut warnings,
             "Unverified source version; port geometry follows Logisim-ITA 2.16.2.2.".into(),

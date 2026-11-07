@@ -145,6 +145,7 @@ impl Simulator {
         self.schedule_controls();
         self.schedule_storage();
         self.schedule_register_files();
+        self.schedule_plugins(None);
         self.update_displays();
         self.schedule_memories();
         self.schedule_terminals();

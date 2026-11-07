@@ -1231,6 +1231,9 @@ checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
 [[package]]
 name = "logisim-core"
 version = "0.1.0"
+dependencies = [
+ "logisim-plugin-api",
+]
 
 [[package]]
 name = "logisim-course"
@@ -1245,8 +1248,11 @@ version = "0.1.0"
 dependencies = [
  "logisim-core",
  "logisim-course",
+ "logisim-file",
+ "logisim-plugin",
  "logisim-plugin-api",
  "logisim-plugin-sdk",
+ "logisim-sim",
  "serde_json",
 ]
 
@@ -1257,6 +1263,7 @@ dependencies = [
  "logisim-core",
  "logisim-course",
  "roxmltree 0.20.0",
+ "serde_json",
 ]
 
 [[package]]
@@ -1292,6 +1299,7 @@ dependencies = [
  "eframe",
  "logisim-core",
  "logisim-file",
+ "logisim-plugin",
  "logisim-sim",
  "logisim-ui",
 ]
@@ -1302,6 +1310,7 @@ version = "0.1.0"
 dependencies = [
  "logisim-core",
  "logisim-course",
+ "logisim-plugin",
 ]
 
 [[package]]

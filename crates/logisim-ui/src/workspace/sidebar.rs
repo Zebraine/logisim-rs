@@ -77,6 +77,7 @@ impl Workspace {
                                     ui.weak(self.editor.context_label()).on_hover_text(tr("Viewing this instance. Edits change the shared circuit definition."));
                                 }
                                 self.library_groups(ui);
+                                self.plugin_groups(ui);
                                 for group in super::library::groups() {
                                     egui::CollapsingHeader::new(tr(group.key))
                                         .id_salt(group.key)

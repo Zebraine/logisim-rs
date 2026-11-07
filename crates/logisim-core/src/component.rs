@@ -25,6 +25,7 @@ pub enum VerticalAlign {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Component {
+    pub plugin: Option<logisim_plugin_api::Component>,
     /// Derived interface; rebuilt from the project definition, never independently serialized.
     pub interface: Interface,
     /// Inert .circ library descriptor, never a runtime dependency.
@@ -69,6 +70,7 @@ pub struct Component {
 impl Component {
     pub fn new(kind: Kind, position: Point) -> Self {
         Self {
+            plugin: None,
             interface: Interface::default(),
             external_library: kind.default_external_library().into(),
             id: 0,

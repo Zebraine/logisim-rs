@@ -8,6 +8,7 @@ pub(crate) enum Mode {
     Save,
     Memory,
     Library,
+    Plugin,
 }
 pub(crate) struct Picker {
     pub mode: Mode,
@@ -46,7 +47,9 @@ impl Picker {
                     let dir = path.is_dir();
                     if dir
                         || path.extension().is_some_and(|s| {
-                            s.eq_ignore_ascii_case(if self.mode == Mode::Memory {
+                            s.eq_ignore_ascii_case(if self.mode == Mode::Plugin {
+                                "wasm"
+                            } else if self.mode == Mode::Memory {
                                 "hex"
                             } else {
                                 "circ"
@@ -76,13 +79,16 @@ impl Picker {
             Mode::Save => tr("Save circuit as"),
             Mode::Memory => tr("Import memory image"),
             Mode::Library => tr("Load .circ Library…"),
+            Mode::Plugin => tr("Load Wasm Plugin…"),
         });
-        ui.label(tr(if self.mode == Mode::Library {
+        ui.label(tr(if self.mode == Mode::Plugin {
+            "Wasm plugins provide component graphics and behavior."
+        } else if self.mode == Mode::Library {
             "Import an editable snapshot; saved projects do not need the source library."
         } else if self.mode == Mode::Memory {
             "Logisim .hex · v2.0 raw · replaces all words"
         } else {
-            "Logisim-ITA compatible .circ · supported components only"
+            "Logisim .circ · Wasm components require logisim-rs"
         }));
         ui.horizontal(|ui| {
             if ui.button(tr("Up")).clicked()

@@ -19,6 +19,9 @@ fn present(circuit: &Circuit, sim: &Simulator) -> SimulationView {
         }
     }
     for c in &circuit.components {
+        if let Some(graphics) = sim.plugin_graphics(c.id) {
+            view.plugin_graphics.insert(c.id, graphics.to_vec());
+        }
         for index in 0..c.ports().len() {
             if let Some(value) = sim.port_value(c.id, index) {
                 let mut presented = signal(value, sim.port_mismatch(c.id, index));
@@ -88,6 +91,9 @@ fn present(circuit: &Circuit, sim: &Simulator) -> SimulationView {
     }
     view.has_clocks = sim.has_clocks();
     append_issues(&mut view, circuit, sim.diagnostics());
+    for (id, error) in sim.plugin_errors() {
+        view.plugin_errors.insert(id, error.into());
+    }
     view
 }
 fn append_issues(
@@ -147,6 +153,17 @@ pub fn present_project(
         });
     }
     view.issues.clear();
+    let plugin_failures = sim.plugin_failures();
+    view.plugin_error_count = plugin_failures.len();
+    for (instance, id, error) in plugin_failures {
+        if instance.starts_with(path) {
+            let target = instance.get(path.len()).copied().unwrap_or(id);
+            view.issues.push(SimulationIssue {
+                message: format!("{} #{}: {error}", tr("Plugin"), id),
+                targets: std::collections::BTreeSet::from([target]),
+            });
+        }
+    }
     append_issues(&mut view, circuit, sim.diagnostics(path));
     if let Some(error) = sim.error() {
         view.issues.push(SimulationIssue {

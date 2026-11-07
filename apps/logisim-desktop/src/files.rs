@@ -17,6 +17,7 @@ use logisim_ui::{i18n::tr, tf};
 use std::path::{Path, PathBuf};
 
 pub(crate) struct Files {
+    pub plugins: logisim_plugin::Registry,
     pub storage: Storage,
     dialog: Option<Dialog>,
     after_save: Option<FileAction>,
@@ -26,6 +27,7 @@ pub(crate) struct Files {
 impl Default for Files {
     fn default() -> Self {
         Self {
+            plugins: Default::default(),
             storage: Storage::new(),
             dialog: None,
             after_save: None,
@@ -138,6 +140,7 @@ impl Files {
             }
             FileAction::Open => self.picker(Mode::Open),
             FileAction::ImportLibrary => self.picker(Mode::Library),
+            FileAction::LoadPlugin => self.picker(Mode::Plugin),
             FileAction::ImportMemory => {
                 if let Some(target) = workspace.memory_import_target() {
                     self.dialog = Some(Dialog::MemoryPicker {
@@ -226,7 +229,21 @@ impl Files {
                 }
             }
             (Dialog::Picker(picker), Response::Pick(path)) => {
-                if picker.mode == Mode::Library {
+                if picker.mode == Mode::Plugin {
+                    match storage::read_file(&path, "Choose a regular .wasm file.")
+                        .and_then(|bytes| self.plugins.load(&bytes))
+                    {
+                        Ok(()) => {
+                            workspace
+                                .set_plugin_catalogue(self.plugins.manifests().cloned().collect());
+                            sim.set_plugins(self.plugins.clone());
+                            if let Some(parent) = path.parent() {
+                                self.directory = parent.to_path_buf();
+                            }
+                        }
+                        Err(error) => self.error(format!("{}\n\n{error}", path.display())),
+                    }
+                } else if picker.mode == Mode::Library {
                     match crate::library_import::load(&path, workspace.project()) {
                         Ok(imported) => {
                             workspace.apply_library_import(imported);

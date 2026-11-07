@@ -101,6 +101,10 @@ impl Workspace {
                 }
             });
             ui.menu_button(tr("Project"), |ui| {
+                if ui.button(tr("Load Wasm Plugin…")).clicked() {
+                    self.file_actions.push(FileAction::LoadPlugin);
+                    ui.close();
+                }
                 if ui.button(tr("Load .circ Library…")).clicked() {
                     self.file_actions.push(FileAction::ImportLibrary);
                     ui.close();

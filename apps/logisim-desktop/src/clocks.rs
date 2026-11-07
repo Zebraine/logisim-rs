@@ -18,14 +18,14 @@ impl Default for Clocks {
     }
 }
 impl Clocks {
-    pub fn action(&mut self, action: SimulationAction) {
+    pub fn action(&mut self, action: &SimulationAction) {
         match action {
             SimulationAction::ToggleTicks => {
                 self.automatic = !self.automatic;
                 self.deadline = None;
             }
-            SimulationAction::SetTickRate(hz) if [1, 2, 4, 8, 16, 32, 64, 128].contains(&hz) => {
-                self.hz = hz;
+            SimulationAction::SetTickRate(hz) if [1, 2, 4, 8, 16, 32, 64, 128].contains(hz) => {
+                self.hz = *hz;
                 self.deadline = None;
             }
             SimulationAction::Reset | SimulationAction::ToggleEnabled => self.deadline = None,
@@ -76,7 +76,7 @@ mod tests {
         let mut clocks = Clocks::default();
         let start = Instant::now();
         assert_eq!(clocks.poll(start, &mut sim), None);
-        clocks.action(SimulationAction::ToggleTicks);
+        clocks.action(&SimulationAction::ToggleTicks);
         assert_eq!(clocks.poll(start, &mut sim), Some(Duration::from_secs(1)));
         clocks.poll(start + Duration::from_millis(999), &mut sim);
         assert_eq!(sim.ticks(), 0);
@@ -95,7 +95,7 @@ mod tests {
         assert_eq!(sim.ticks(), 2);
         clocks.poll(start + Duration::from_secs(61), &mut sim);
         assert_eq!(sim.ticks(), 3);
-        clocks.action(SimulationAction::SetTickRate(4));
+        clocks.action(&SimulationAction::SetTickRate(4));
         sim.advance(16);
         assert_eq!(
             clocks.poll(start + Duration::from_secs(62), &mut sim),

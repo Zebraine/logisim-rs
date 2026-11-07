@@ -11,6 +11,7 @@ publish.workspace = true
 eframe.workspace = true
 logisim-core.workspace = true
 logisim-sim.workspace = true
+logisim-plugin.workspace = true
 logisim-file.workspace = true
 logisim-ui.workspace = true
 

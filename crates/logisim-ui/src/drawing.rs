@@ -73,6 +73,16 @@ fn probe_width(c: &Component) -> f32 {
     }
 }
 pub(crate) fn bounds(c: &Component) -> Rect {
+    if c.kind == Kind::Plugin {
+        if let Some(p) = &c.plugin {
+            let [a, b] = p.tool.bounds;
+            return Rect::from_min_max(
+                pos(c.position + Point::new(a[0], a[1])),
+                pos(c.position + Point::new(b[0], b[1])),
+            );
+        }
+        return Rect::from_center_size(pos(c.position), vec2(20.0, 20.0));
+    }
     if c.kind.is_external() {
         let [min, max] = c.external_body();
         return Rect::from_min_max(pos(c.position + min), pos(c.position + max));
@@ -358,6 +368,7 @@ pub(crate) fn component(
         );
     };
     match c.kind {
+        Kind::Plugin => crate::plugins::draw(p, canvas, c, simulation, ghost),
         Kind::RegisterFile | Kind::RiscVProbe => {
             crate::external::draw(p, canvas, c, color, simulation)
         }

@@ -25,6 +25,7 @@ struct Bridge {
 }
 
 pub struct ProjectSimulator {
+    plugins: logisim_plugin::Registry,
     project: Project,
     root: Id,
     states: BTreeMap<Path, Instance>,
@@ -39,6 +40,7 @@ pub struct ProjectSimulator {
 impl Default for ProjectSimulator {
     fn default() -> Self {
         Self {
+            plugins: Default::default(),
             project: Project::default(),
             root: 0,
             states: BTreeMap::new(),
@@ -53,6 +55,39 @@ impl Default for ProjectSimulator {
     }
 }
 impl ProjectSimulator {
+    pub fn plugin_failures(&self) -> Vec<(Vec<Id>, Id, String)> {
+        self.states
+            .iter()
+            .flat_map(|(path, instance)| {
+                instance
+                    .sim
+                    .plugin_errors()
+                    .map(|(id, e)| (path.clone(), id, e.into()))
+            })
+            .collect()
+    }
+    pub fn set_plugins(&mut self, plugins: logisim_plugin::Registry) {
+        if self.plugins.same(&plugins) {
+            return;
+        }
+        self.plugins = plugins;
+        for instance in self.states.values_mut().chain(
+            self.cached_roots
+                .values_mut()
+                .flat_map(|c| c.states.values_mut()),
+        ) {
+            instance.sim.set_plugins(self.plugins.clone());
+        }
+        self.progress.restart();
+        self.limited = false;
+    }
+    pub fn plugin_action(&mut self, path: &[Id], id: Id, action: String, argument: String) {
+        if let Some(instance) = self.states.get_mut(path) {
+            instance.sim.plugin_action(id, action, argument);
+            self.progress.restart();
+            self.limited = false;
+        }
+    }
     pub fn synchronize(&mut self, project: &Project, root: Id) -> bool {
         if self.project == *project && self.root == root {
             return false;
@@ -111,6 +146,7 @@ impl ProjectSimulator {
                             sim: Simulator::default(),
                         }
                     });
+                instance.sim.set_plugins(self.plugins.clone());
                 changed |= instance.sim.synchronize(circuit);
                 for c in &circuit.components {
                     if let Kind::Subcircuit(id) = c.kind {

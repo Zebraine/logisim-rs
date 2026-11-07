@@ -29,6 +29,7 @@ pub use terminal::TtyView;
 mod settings;
 pub use i18n::Language;
 mod libraries;
+mod plugins;
 mod project;
 mod properties;
 use project::NameDialog;
@@ -73,6 +74,7 @@ pub fn configure(ctx: &egui::Context) {
 /// Circuit editing and viewport state. Signal simulation is not part of this layer.
 #[derive(Default)]
 pub struct Workspace {
+    plugins: Vec<logisim_core::plugin::api::Manifest>,
     libraries: Vec<libraries::LibraryGroup>,
     memory_editor: memory::MemoryEditor,
     pla_editor: pla::PlaEditor,

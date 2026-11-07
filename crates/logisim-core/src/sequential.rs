@@ -189,6 +189,13 @@ impl Component {
         Some(points.into_iter().map(|(x, y)| Point::new(x, y)).collect())
     }
     pub fn drives_port(&self, index: usize) -> bool {
+        if self.kind == Kind::Plugin {
+            return self
+                .plugin
+                .as_ref()
+                .and_then(|p| p.tool.ports.get(index))
+                .is_some_and(|p| p.output);
+        }
         if self.kind == Kind::RegisterFile {
             return index < 2;
         }

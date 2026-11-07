@@ -124,19 +124,7 @@ impl Instance {
         }
     }
     pub fn evaluate(&mut self, component: &Component, request: Evaluation) -> Result<Update> {
-        component.tool.validate_properties(&request.properties)?;
-        if request.tool != component.tool.id
-            || request.inputs.len() != component.tool.ports.len()
-            || request.state.len() > logisim_plugin_api::MAX_STATE
-        {
-            return Err("Invalid plugin evaluation request.".into());
-        }
-        for (v, p) in request.inputs.iter().zip(&component.tool.ports) {
-            v.validate()?;
-            if v.width != p.width {
-                return Err("Invalid plugin input width.".into());
-            }
-        }
+        component.tool.validate_evaluation(&request)?;
         let Response::Update(update) = self.call(&Request::Evaluate(request))? else {
             return Err("Plugin did not return an evaluation result.".into());
         };
@@ -151,6 +139,14 @@ pub struct Registry {
 impl Registry {
     pub fn same(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.entries, &other.entries)
+    }
+    /// Preserve a running VM only when its exact loaded module is still registered.
+    pub fn same_plugin(&self, other: &Self, component: &Component) -> bool {
+        let key = (component.plugin.clone(), component.version.clone());
+        match (self.entries.get(&key), other.entries.get(&key)) {
+            (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+            _ => false,
+        }
     }
     pub fn load(&mut self, bytes: &[u8]) -> Result<()> {
         let plugin = Plugin::load(bytes)?;

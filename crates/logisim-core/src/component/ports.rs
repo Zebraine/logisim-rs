@@ -13,6 +13,15 @@ impl Component {
         }
     }
     pub fn local_ports(&self) -> Vec<Point> {
+        if self.kind == Kind::Plugin {
+            return self.plugin.as_ref().map_or_else(Vec::new, |p| {
+                p.tool
+                    .ports
+                    .iter()
+                    .map(|p| Point::new(p.at[0], p.at[1]))
+                    .collect()
+            });
+        }
         if self.kind.is_external() {
             return self.external_ports();
         }

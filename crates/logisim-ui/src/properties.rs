@@ -24,7 +24,9 @@ pub(crate) fn show(ui: &mut Ui, editor: &mut Editor, circuit_name: &str) {
     } else {
         None
     };
-    let title = if placing {
+    let title = if let Some(plugin) = target.as_ref().and_then(|c| c.plugin.as_ref()) {
+        plugin.tool.name.clone()
+    } else if placing {
         tf!("Tool: {}", tr(editor.tool.name()))
     } else if let Some(c) = &target {
         tf!("Selection: {}", tr(c.kind.name()))
@@ -256,6 +258,9 @@ fn component_editor(ui: &mut Ui, editor: &mut Editor, mut c: Component, placing:
 }
 
 fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
+    if c.kind == Kind::Plugin {
+        return crate::plugins::fields(ui, c);
+    }
     let mut active = false;
     if c.kind.rotatable() {
         ui.label(tr("Facing"));

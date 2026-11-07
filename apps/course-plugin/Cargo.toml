@@ -13,6 +13,15 @@ logisim-course.workspace = true
 logisim-plugin-api.workspace = true
 logisim-plugin-sdk.workspace = true
 serde_json.workspace = true
+logisim-plugin = { workspace = true, optional = true }
+logisim-sim = { workspace = true, optional = true }
+logisim-file = { workspace = true, optional = true }
+[features]
+host-check = ["dep:logisim-plugin", "dep:logisim-sim", "dep:logisim-file"]
+[[bin]]
+name = "course-plugin-check"
+path = "src/bin/check.rs"
+required-features = ["host-check"]
 # The SDK export macro locally permits only unsafe symbol attributes for the Wasm ABI.
 # No unsafe blocks are used; all other workspace crates continue to forbid unsafe code.
 [lints.rust]

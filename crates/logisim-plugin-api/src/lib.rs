@@ -16,6 +16,28 @@
 //! A schema change requires a new plugin version; identity/version/definition must match
 //! the saved document exactly. V1 ports and bounds are fixed, components face East.
 //! Plugin strings are opaque to host translation. Protocol evolution uses a new ABI.
+//!
+//! Coordinates are integer grid units relative to the component origin, with +x right
+//! and +y down. Ports lie on multiples of ten. Shapes are painted in vector order,
+//! static graphics first, then runtime graphics, clipped to the declared bounds.
+//! Text uses a host monospace font, top-left alignment and a size in grid units.
+//! Colors are unpremultiplied RGBA. No egui objects, callbacks or external resources
+//! cross this interface. Boolean properties are `true`/`false`, integers are decimal,
+//! and choices are their declared string values; keys must match the schema exactly.
+//!
+//! Each runtime instance starts with Reset, even if all inputs are unknown. A property
+//! edit or Reset creates a new VM; moves and rewiring retain the VM and explicit state.
+//! Hosts may skip Propagate when the sampled inputs have not changed. Do not use the
+//! invocation count as a clock. Stateful edge detection belongs in explicit state.
+//! Action arguments are UTF-8, at most 1024 bytes; actions without an argument use "".
+//! Invalid responses, traps or exhausted fuel fault the instance until Reset: output
+//! ports drive Error and runtime graphics are discarded. Document snapshots retain
+//! only identity/version, tool metadata and properties, never runtime state or code.
+//!
+//! V1 host limits: a 4 MiB module, 16 MiB linear memory per VM, one memory/table,
+//! at most 10,000 table entries, 10,000,000 Wasm fuel units per call (including buffer
+//! allocation), 256 KiB UTF-8 messages, and 64 KiB opaque state. Metadata constraints
+//! are enforced by `Manifest::validate` and `Tool::validate_evaluation/validate_update`.
 mod validate;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;

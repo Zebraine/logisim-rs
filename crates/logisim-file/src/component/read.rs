@@ -19,6 +19,9 @@ pub(crate) fn read(
         .copied()
         .unwrap_or("");
     let name = attr(n, "name")?;
+    if lib == crate::plugin::DESCRIPTOR {
+        return Ok((crate::plugin::read(n)?, vec![]));
+    }
     let kind = match (lib, name) {
         (lib, name) if crate::external::identify(lib, name).is_some() => {
             crate::external::identify(lib, name).unwrap()
@@ -104,7 +107,7 @@ pub(crate) fn read(
     }
     for key in a.keys() {
         let allowed = match kind {
-            Kind::RegisterFile | Kind::RiscVProbe => false,
+            Kind::Plugin | Kind::RegisterFile | Kind::RiscVProbe => false,
             Kind::Ttl(_) => crate::ttl::allowed(key),
             Kind::Parity(_) => crate::parity::allowed(key),
             Kind::Latch(_) => crate::latches::allowed(key),

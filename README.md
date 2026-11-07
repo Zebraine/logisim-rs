@@ -15,10 +15,14 @@ Rust＋egui 数字逻辑电路工具，以 Logisim-ITA v2.16.2.2 的实际运行
 这是可编辑的快照：保存时嵌入当前项目，重新打开无需原库文件，定义仍显示在项目树中；
 本次会话的库分组不另行保存。导入不会修改原库文件，不跟随其后续变化。
 存在未支持内容或超出项目限制时整库拒绝导入，并报告原因。
-暂不解析 `file#` 链接库或执行 JAR / Rust 动态插件；请导入包含完整子电路定义的 `.circ`。
+暂不解析 `file#` 链接库或执行 JAR；请导入包含完整子电路定义的 `.circ`。
 
 ```text
 apps/logisim-desktop/    应用入口与组装（logisim-rs）
+apps/course-plugin/     独立构建的课程 Wasm 插件及端到端校验器
+crates/logisim-plugin-api/  版本化协议、图形和属性模式及验证
+crates/logisim-plugin-sdk/  插件缓冲区与 ABI 导出宏
+crates/logisim-plugin/      Wasm 加载、资源限制和注册表
 crates/logisim-core/     电路领域模型
 crates/logisim-course/   独立课程元件行为包（RegisterFile、RISC-V Probe）
 crates/logisim-sim/      无界面仿真及元件行为
@@ -28,7 +32,7 @@ crates/logisim-ui/       egui 编辑器与画布
 
 `logisim-course` 只依赖 `core`，可独立构建和测试；提供寄存器文件状态机、指令探针解码
 和工具注册列表。仿真调度、文件格式与界面适配分别留在 `sim`、`file`、`ui`。
-这是静态 Rust 元件包；固定 `Kind` 和端口合同仍在 `core`，尚不支持运行时加载任意元件代码。
+这条静态兼容路径继续支持已有课程文件；新插件通过通用 `Kind::Plugin` 加载，无需在宿主增加元件分支。
 
 各 crate 保持稳定的公开入口，内部按职责扩展：
 
@@ -49,10 +53,22 @@ crates/logisim-ui/       egui 编辑器与画布
 运行器限制每次调用的 fuel、16 MiB 内存、256 KiB 消息、64 KiB 状态和 4 MiB 模块。
 元件定义改变时须提升插件版本；保存的定义与加载模块不一致时拒绝运行。
 
+通过 **Project → Load Wasm Plugin… / 项目 → 加载 Wasm 插件…** 选择 `.wasm`，
+从左侧插件分组放置元件。选中元件可编辑插件声明的属性、查看信号并执行插件动作。
+当前 ABI 支持矩形、椭圆、线段和文字，固定端口/位宽与朝向；属性支持布尔、整数和枚举。
+属性修改初始化该元件状态；几何编辑保留状态，Reset 重建实例。运行故障输出 E 并显示原因。
+
+插件元件保存身份、版本、定义快照及属性；不保存 Wasm、磁盘路径或运行状态。
+重新启动应用后需手动加载匹配插件，加载前仍可查看图形与编辑电路，并明确显示插件错误。
+包含插件的 `.circ` 使用 `logisim-rs#plugin-v1` 扩展，需 logisim-rs 运行；普通元件保留原有兼容格式。
+同版本重复加载会被拒绝，暂不支持卸载、热替换或插件自定义 egui 控件。
+
 ```sh
 rustup target add wasm32-unknown-unknown
+cargo fetch --locked
 cargo build -p logisim-course-plugin --release --target wasm32-unknown-unknown --locked --offline
 cargo run -p logisim-plugin --bin logisim-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_course_plugin.wasm
+cargo run -p logisim-course-plugin --features host-check --bin course-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_course_plugin.wasm
 cargo doc -p logisim-plugin-api --no-deps --locked --offline
 ```
 

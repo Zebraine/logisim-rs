@@ -80,6 +80,9 @@ pub struct SimulationIssue {
 }
 #[derive(Default)]
 pub struct SimulationView {
+    pub plugin_error_count: usize,
+    pub plugin_graphics: BTreeMap<Id, Vec<logisim_core::plugin::api::Shape>>,
+    pub plugin_errors: BTreeMap<Id, String>,
     pub enabled: bool,
     pub pending: usize,
     pub steps: u64,
@@ -106,8 +109,13 @@ pub struct SimulationView {
     pub inputs: BTreeMap<Id, InputValue>,
     pub issues: Vec<SimulationIssue>,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SimulationAction {
+    PluginAction {
+        id: Id,
+        action: String,
+        argument: String,
+    },
     SetRegisterFileWord {
         id: Id,
         address: u8,
@@ -158,6 +166,7 @@ pub enum SimulationAction {
 }
 #[derive(Default)]
 pub(crate) struct SimulationUi {
+    pub plugin_arguments: BTreeMap<(Id, String), String>,
     pub register_editor: crate::external::RegisterEditor,
     pub view: SimulationView,
     pub actions: Vec<SimulationAction>,
@@ -211,7 +220,9 @@ impl SimulationUi {
             } else {
                 tr("Paused")
             },
-            if self.view.pending == 0 {
+            if self.view.plugin_error_count > 0 {
+                tf!("{} plugin error(s)", self.view.plugin_error_count)
+            } else if self.view.pending == 0 {
                 tr("settled").into()
             } else {
                 tf!("{} pending", self.view.pending)
@@ -371,6 +382,10 @@ impl SimulationUi {
         ));
     }
     pub fn component(&mut self, ui: &mut Ui, c: &Component) {
+        if c.kind == logisim_core::Kind::Plugin {
+            crate::plugins::runtime(ui, self, c);
+            return;
+        }
         if c.kind.is_external() {
             crate::external::runtime(ui, self, c);
             return;

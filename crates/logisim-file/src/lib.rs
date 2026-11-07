@@ -20,6 +20,7 @@ mod memory;
 mod parity;
 mod pla;
 mod plexers;
+mod plugin;
 mod read;
 mod sequential;
 mod terminal;

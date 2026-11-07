@@ -16,37 +16,6 @@ pub fn handle(request: Request) -> Response {
         },
     }
 }
-fn value(s: Signal) -> Value {
-    Value::from_bits((0..s.width).map(|i| {
-        let mask = 1 << i;
-        if s.error & mask != 0 {
-            Bit::Error
-        } else if s.unknown & mask != 0 {
-            Bit::Unknown
-        } else if s.value & mask != 0 {
-            Bit::One
-        } else {
-            Bit::Zero
-        }
-    }))
-}
-fn signal(v: Value) -> Signal {
-    let mut s = Signal {
-        width: v.width(),
-        value: 0,
-        unknown: 0,
-        error: 0,
-    };
-    for i in 0..v.width() {
-        match v.bit(i) {
-            Bit::One => s.value |= 1 << i,
-            Bit::Unknown => s.unknown |= 1 << i,
-            Bit::Error => s.error |= 1 << i,
-            Bit::Zero => {}
-        }
-    }
-    s
-}
 fn evaluate(request: Evaluation) -> Result<Update, String> {
     let manifest = graphics::manifest();
     let tool = manifest
@@ -54,17 +23,8 @@ fn evaluate(request: Evaluation) -> Result<Update, String> {
         .iter()
         .find(|t| t.id == request.tool)
         .ok_or("Unknown tool")?;
-    tool.validate_properties(&request.properties)?;
-    if request.inputs.len() != tool.ports.len() {
-        return Err("Invalid input count".into());
-    }
-    for (input, port) in request.inputs.iter().zip(&tool.ports) {
-        input.validate()?;
-        if input.width != port.width {
-            return Err("Invalid input width".into());
-        }
-    }
-    let inputs: Vec<_> = request.inputs.iter().copied().map(value).collect();
+    tool.validate_evaluation(&request)?;
+    let inputs: Vec<_> = request.inputs.iter().copied().map(Value::from).collect();
     let mut update = Update {
         outputs: request.inputs.clone(),
         state: vec![],
@@ -95,8 +55,8 @@ fn evaluate(request: Evaluation) -> Result<Update, String> {
         for v in &saved {
             v.validate()?;
         }
-        let words = std::array::from_fn(|i| value(saved[i]));
-        file = RegisterFile::restore(words, value(saved[32]).bit(0))?;
+        let words = std::array::from_fn(|i| Value::from(saved[i]));
+        file = RegisterFile::restore(words, Value::from(saved[32]).bit(0))?;
     }
     if let Event::Action { id, argument } = &request.event {
         if id != "write" {
@@ -126,11 +86,11 @@ fn evaluate(request: Evaluation) -> Result<Update, String> {
             .map_err(|_| "Invalid register-file ports")?,
     );
     for (i, v) in outputs.into_iter().enumerate() {
-        update.outputs[i] = signal(v);
+        update.outputs[i] = Signal::from(v);
     }
     let (words, clock) = file.snapshot();
-    let mut saved: Vec<_> = words.into_iter().map(signal).collect();
-    saved.push(signal(Value::filled(1, clock)));
+    let mut saved: Vec<_> = words.into_iter().map(Signal::from).collect();
+    saved.push(Signal::from(Value::filled(1, clock)));
     update.state = serde_json::to_vec(&saved).map_err(|e| e.to_string())?;
     for (i, word) in file.words().iter().enumerate() {
         let text = word.number().map_or_else(

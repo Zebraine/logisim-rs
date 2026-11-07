@@ -1,5 +1,6 @@
 //! Circuit geometry and signal values. No GUI, file format or simulation runtime dependencies.
 
+pub mod plugin;
 mod signal;
 pub use signal::{Bit, Value};
 

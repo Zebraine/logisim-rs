@@ -12,6 +12,7 @@ impl Simulator {
         }
         self.synchronize_displays(circuit);
         self.synchronize_terminals(circuit);
+        self.synchronize_plugins(circuit);
         if electrically_equal(&self.circuit, circuit) {
             self.circuit = circuit.clone();
             self.update_displays();
@@ -97,6 +98,8 @@ impl Simulator {
         true
     }
     pub fn reset(&mut self) {
+        self.plugin_states.clear();
+        self.synchronize_plugins(&self.circuit.clone());
         self.reset_displays();
         self.terminals = self
             .circuit
@@ -171,6 +174,7 @@ fn electrically_equal(a: &Circuit, b: &Circuit) -> bool {
             (
                 (c.kind == Kind::Pin).then_some((c.output, c.pin)),
                 matches!(c.kind, Kind::Gate(_)).then_some(c.gate_options),
+                c.plugin.clone(),
             ),
             (c.kind == Kind::Constant).then_some(c.constant),
             (c.kind == Kind::Splitter).then_some(c.splitter.clone()),

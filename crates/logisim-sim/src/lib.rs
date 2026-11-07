@@ -26,6 +26,7 @@ mod pla;
 #[cfg(test)]
 mod plexer_tests;
 mod plexers;
+mod plugins;
 mod random;
 #[cfg(test)]
 mod random_tests;
@@ -62,6 +63,8 @@ pub struct Diagnostic {
 }
 
 pub struct Simulator {
+    plugins: logisim_plugin::Registry,
+    plugin_states: BTreeMap<Id, plugins::State>,
     circuit: Circuit,
     network: Network,
     inputs: BTreeMap<Id, Value>,
@@ -82,6 +85,8 @@ pub struct Simulator {
 impl Default for Simulator {
     fn default() -> Self {
         Self {
+            plugins: Default::default(),
+            plugin_states: BTreeMap::new(),
             circuit: Circuit::default(),
             network: Network::default(),
             inputs: BTreeMap::new(),

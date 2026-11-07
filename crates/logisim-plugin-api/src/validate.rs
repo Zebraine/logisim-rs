@@ -63,6 +63,30 @@ impl Property {
     }
 }
 impl Tool {
+    pub fn validate_evaluation(&self, request: &Evaluation) -> Result {
+        self.validate_properties(&request.properties)?;
+        require(
+            request.tool == self.id
+                && request.inputs.len() == self.ports.len()
+                && request.state.len() <= MAX_STATE,
+            "Invalid plugin evaluation request.",
+        )?;
+        if let Event::Action { id, argument } = &request.event {
+            require(
+                argument.len() <= 1024
+                    && self
+                        .actions
+                        .iter()
+                        .any(|a| a.id == *id && (a.argument.is_some() || argument.is_empty())),
+                "Invalid plugin action.",
+            )?;
+        }
+        for (v, p) in request.inputs.iter().zip(&self.ports) {
+            v.validate()?;
+            require(v.width == p.width, "Invalid plugin input width.")?;
+        }
+        Ok(())
+    }
     pub fn validate(&self) -> Result {
         require(
             id(&self.id) && label(&self.name) && rect(self.bounds[0], self.bounds[1]),
