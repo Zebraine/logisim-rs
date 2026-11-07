@@ -16,11 +16,13 @@ mod drawing;
 mod editor;
 #[cfg(test)]
 mod editor_tests;
+mod external;
 pub mod i18n;
 #[cfg(test)]
 mod i18n_tests;
 mod icons;
 mod io;
+mod riscv;
 mod terminal;
 pub use terminal::TtyView;
 mod settings;
@@ -622,6 +624,7 @@ impl Workspace {
                                     "Memory",
                                     "Input/Output",
                                     "Base",
+                                    "Course components",
                                 ] {
                                     egui::CollapsingHeader::new(tr(group)).id_salt(group).show(ui, |ui| match group {
                                         "Gates" => {
@@ -676,6 +679,10 @@ impl Workspace {
                                             for kind in [Kind::Button, Kind::Switch, Kind::DipSwitch, Kind::Slider, Kind::Joystick, Kind::Keyboard, Kind::Tty, Kind::Led, Kind::RgbLed, Kind::SevenSegment, Kind::HexDisplay, Kind::DotMatrix] {
                                                 self.library_tool(ui, kind);
                                             }
+                                        }
+                                        "Course components" => {
+                                            self.library_tool(ui, Kind::RegisterFile);
+                                            self.library_tool(ui, Kind::RiscVProbe);
                                         }
                                         "Base" => self.library_tool(ui, Kind::Text),
                                         _ => {

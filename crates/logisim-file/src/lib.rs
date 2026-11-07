@@ -3,6 +3,7 @@
 mod appearance;
 mod arithmetic;
 mod bus;
+mod external;
 mod hex;
 mod io;
 mod latches;

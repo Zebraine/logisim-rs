@@ -104,6 +104,15 @@ pub fn parse(xml: &str) -> Result<Import> {
     let mut libraries = BTreeMap::new();
     for lib in root.children().filter(|n| n.has_tag_name("lib")) {
         let id = attr(lib, "name")?;
+        if attr(lib, "desc")?.starts_with("jar#") && lib.descendants().any(|a| a.has_tag_name("a"))
+        {
+            warn(
+                &mut warnings,
+                format!(
+                    "Library {id}: palette tool settings were omitted; circuit instances use their own attributes."
+                ),
+            );
+        }
         if libraries.insert(id, attr(lib, "desc")?).is_some() {
             return Err(Error(format!("Duplicate library: {id}")));
         }
@@ -331,6 +340,9 @@ fn component(
         .unwrap_or("");
     let name = attr(n, "name")?;
     let kind = match (lib, name) {
+        (lib, name) if crate::external::identify(lib, name).is_some() => {
+            crate::external::identify(lib, name).unwrap()
+        }
         ("", name)
             if n.attribute("lib").is_none()
                 && names.contains_key(name)
@@ -410,8 +422,13 @@ fn component(
     };
     let mut c = Component::new(kind, point(attr(n, "loc")?)?);
     let a = attributes(n)?;
+    if kind.is_external() {
+        crate::external::read(&mut c, lib, &a)?;
+        return Ok((c, vec![]));
+    }
     for key in a.keys() {
         let allowed = match kind {
+            Kind::RegisterFile | Kind::RiscVProbe => false,
             Kind::Ttl(_) => crate::ttl::allowed(key),
             Kind::Parity(_) => crate::parity::allowed(key),
             Kind::Latch(_) => crate::latches::allowed(key),

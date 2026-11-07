@@ -75,6 +75,7 @@ impl Editor {
             self.selection.clear();
             self.set_tool(Tool::Select);
             self.simulation.view = Default::default();
+            self.simulation.register_editor = Default::default();
         }
     }
     pub fn enter_instance(&mut self, id: Id) {
@@ -92,6 +93,7 @@ impl Editor {
             self.selection.clear();
             self.set_tool(Tool::Select);
             self.simulation.view = Default::default();
+            self.simulation.register_editor = Default::default();
         }
     }
     pub fn leave_instance(&mut self) {
@@ -118,6 +120,7 @@ impl Editor {
         self.selection.clear();
         self.set_tool(Tool::Select);
         self.simulation.view = Default::default();
+        self.simulation.register_editor = Default::default();
     }
     pub fn edit_project(&mut self, command: CircuitCommand, name: String) -> Result<(), String> {
         self.cancel_gesture();

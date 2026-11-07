@@ -8,6 +8,9 @@ use logisim_ui::{
 #[cfg(test)]
 pub fn apply(sim: &mut Simulator, action: SimulationAction) {
     match action {
+        SimulationAction::SetRegisterFileWord { id, address, value } => {
+            sim.set_register_file_word(id, address, value)
+        }
         SimulationAction::PressButton { id } => sim.set_button(id, true),
         SimulationAction::ReleaseButtons => sim.release_buttons(),
         SimulationAction::SetJoystick { id, offset } => sim.set_joystick(id, offset),
@@ -62,6 +65,10 @@ pub fn present(circuit: &Circuit, sim: &Simulator) -> SimulationView {
         }
         if c.kind == Kind::Clock {
             view.clocks.insert(c.id);
+        }
+        if let Some(words) = sim.register_file(c.id) {
+            view.register_files
+                .insert(c.id, words.iter().map(|v| signal(*v, false)).collect());
         }
         if let Some(contents) = sim.memory_contents(c.id) {
             view.memories.insert(c.id, contents.clone());
@@ -164,6 +171,9 @@ pub fn apply_project(
     action: SimulationAction,
 ) {
     match action {
+        SimulationAction::SetRegisterFileWord { id, address, value } => {
+            sim.set_register_file_word(path, id, address, value)
+        }
         SimulationAction::PressButton { id } => sim.set_button(path, id, true),
         SimulationAction::SetJoystick { id, offset } => sim.set_joystick(path, id, offset),
         SimulationAction::ReleaseJoysticks => sim.release_joysticks(),

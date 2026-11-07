@@ -51,6 +51,15 @@ Linux 构建另需 `pkg-config` 与 Fontconfig 开发包（Debian/Ubuntu：`libf
 或 `~/.config`，Windows 使用 `%APPDATA%`，macOS 使用 `~/Library/Application Support`。
 保存失败时当前选择仍生效，可在设置窗口重试，不影响电路保存。
 
+## 课程外部库兼容
+
+Course components（课程元件）提供 Rust 原生 Register File 和 RiscV Probe，无需 Java 或 JAR。
+寄存器文件固定为32×32位、双读单写，支持四种触发模式；零号寄存器只读，其他单元可在属性区用十六进制编辑运行值。
+状态按子电路实例隔离，复位清零，不写入文件。指令探针按已观察的课程库规则显示32位输入。
+`.circ` 通过库入口与元件名识别这两个实现，保存时保留原库路径描述；原 Logisim 打开导出文件仍需对应 JAR。
+这不是通用 JAR 执行器；其他外部元件仍会报告省略并保护原文件。库工具放置设置不继承到已有实例，省略这些设置也会报告。
+兼容范围限于已验证的课程库版本；大型课程 CPU 文件仍可能受项目条目上限、未支持属性或其他元件限制。
+
 ## 基本编辑
 
 - 可放置 NOT、Buffer、AND、OR、NAND、NOR、XOR、XNOR、Pin、文字和 Tunnel。

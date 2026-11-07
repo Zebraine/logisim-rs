@@ -1,6 +1,7 @@
 //! Editable circuit geometry. No GUI, file format or signal evaluation dependencies.
 
 mod appearance;
+mod external;
 pub use appearance::{
     Appearance, Artwork, ArtworkFont, Geometry, MAX_SHAPES, Paint, Rgb, TextAnchor,
 };
@@ -184,6 +185,8 @@ pub enum Kind {
     FlipFlop(FlipFlop),
     Latch(Latch),
     Register,
+    RegisterFile,
+    RiscVProbe,
     Counter,
     ShiftRegister,
     Random,
@@ -242,7 +245,9 @@ impl Kind {
     pub fn rotatable(self) -> bool {
         !matches!(
             self,
-            Self::Text
+            Self::RegisterFile
+                | Self::RiscVProbe
+                | Self::Text
                 | Self::Keyboard
                 | Self::Tty
                 | Self::SevenSegment
@@ -316,6 +321,8 @@ impl Kind {
             Self::Clock => "Clock",
             Self::FlipFlop(ff) => ff.name(),
             Self::Register => "Register",
+            Self::RegisterFile => "Register File",
+            Self::RiscVProbe => "RiscV Probe",
             Self::Counter => "Counter",
             Self::ShiftRegister => "Shift Register",
             Self::Random => "Random Generator",
@@ -344,6 +351,8 @@ impl Kind {
 pub struct Component {
     /// Derived interface; rebuilt from the project definition, never independently serialized.
     pub interface: Interface,
+    /// Inert .circ library descriptor, never a runtime dependency.
+    pub external_library: String,
     pub id: Id,
     /// Gate output / single terminal, or text anchor. Imported positions stay exact.
     pub position: Point,
@@ -381,6 +390,7 @@ impl Component {
     pub fn new(kind: Kind, position: Point) -> Self {
         Self {
             interface: Interface::default(),
+            external_library: kind.default_external_library().into(),
             id: 0,
             position,
             kind,
@@ -391,6 +401,7 @@ impl Component {
                 _ => Facing::East,
             },
             bits: match kind {
+                Kind::RegisterFile | Kind::RiscVProbe => 32,
                 Kind::Splitter | Kind::HexDisplay | Kind::Joystick => 4,
                 Kind::BitExtender => 16,
                 Kind::Keyboard | Kind::Tty => 7,
@@ -470,6 +481,9 @@ impl Component {
         }
     }
     pub fn local_ports(&self) -> Vec<Point> {
+        if self.kind.is_external() {
+            return self.external_ports();
+        }
         if matches!(self.kind, Kind::Ttl(_)) {
             return self
                 .ttl_pins()

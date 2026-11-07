@@ -75,6 +75,7 @@ pub struct SimulationView {
     /// Row-major cells: None is an unknown/error signal.
     pub matrices: BTreeMap<Id, Vec<Option<bool>>>,
     pub storage: BTreeMap<Id, SignalView>,
+    pub register_files: BTreeMap<Id, Vec<SignalView>>,
     pub memories: BTreeMap<Id, logisim_core::MemoryContents>,
     pub wires: BTreeMap<Id, SignalView>,
     pub ports: BTreeMap<(Id, usize), SignalView>,
@@ -83,6 +84,11 @@ pub struct SimulationView {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SimulationAction {
+    SetRegisterFileWord {
+        id: Id,
+        address: u8,
+        value: u32,
+    },
     PressButton {
         id: Id,
     },
@@ -125,6 +131,7 @@ pub enum SimulationAction {
 }
 #[derive(Default)]
 pub(crate) struct SimulationUi {
+    pub register_editor: crate::external::RegisterEditor,
     pub view: SimulationView,
     pub actions: Vec<SimulationAction>,
     pub focus_value: bool,
@@ -337,6 +344,10 @@ impl SimulationUi {
         ));
     }
     pub fn component(&mut self, ui: &mut Ui, c: &Component) {
+        if c.kind.is_external() {
+            crate::external::runtime(ui, self, c);
+            return;
+        }
         match c.kind {
             logisim_core::Kind::Ttl(_) => {
                 ui.horizontal_wrapped(|ui| {

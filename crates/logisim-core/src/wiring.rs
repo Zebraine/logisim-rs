@@ -132,6 +132,8 @@ impl Component {
             return self.interface.ports.get(index).map(|p| p.bits);
         }
         match self.kind {
+            Kind::RegisterFile => [32, 32, 32, 1, 1, 5, 5, 5].get(index).copied(),
+            Kind::RiscVProbe => (index == 0).then_some(32),
             Kind::Ttl(_) => (index < self.ttl_pins().len()).then_some(1),
             Kind::Parity(_) => {
                 (index <= usize::from(self.input_count())).then_some(self.bits.clamp(1, 32))

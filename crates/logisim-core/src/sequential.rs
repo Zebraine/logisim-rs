@@ -189,6 +189,9 @@ impl Component {
         Some(points.into_iter().map(|(x, y)| Point::new(x, y)).collect())
     }
     pub fn drives_port(&self, index: usize) -> bool {
+        if self.kind == Kind::RegisterFile {
+            return index < 2;
+        }
         if matches!(self.kind, Kind::Ttl(_)) {
             return self.ttl_output(index);
         }

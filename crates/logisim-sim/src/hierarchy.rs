@@ -310,6 +310,11 @@ impl ProjectSimulator {
             state.sim.set_memory_word(id, address, value);
         }
     }
+    pub fn set_register_file_word(&mut self, path: &[Id], id: Id, address: u8, value: u32) {
+        if let Some(state) = self.states.get_mut(path) {
+            state.sim.set_register_file_word(id, address, value);
+        }
+    }
     pub fn fill_memory(&mut self, path: &[Id], id: Id, start: u32, end: u32, value: u32) {
         if let Some(state) = self.states.get_mut(path) {
             state.sim.fill_memory(id, start, end, value);

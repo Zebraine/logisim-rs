@@ -25,6 +25,7 @@ mod plexers;
 mod random;
 #[cfg(test)]
 mod random_tests;
+mod register_file;
 mod sequential;
 #[cfg(test)]
 mod sequential_extra_tests;
@@ -66,6 +67,7 @@ pub struct Simulator {
     display_ticks: u64,
     storage: BTreeMap<Id, sequential::State>,
     memories: BTreeMap<Id, memory::State>,
+    register_files: BTreeMap<Id, register_file::State>,
     drives: BTreeMap<network::Port, Value>,
     pending: BTreeMap<network::Port, Value>,
     values: Vec<Value>,
@@ -86,6 +88,7 @@ impl Default for Simulator {
             display_ticks: 0,
             storage: BTreeMap::new(),
             memories: BTreeMap::new(),
+            register_files: BTreeMap::new(),
             drives: BTreeMap::new(),
             pending: BTreeMap::new(),
             values: vec![],
@@ -161,6 +164,12 @@ impl Simulator {
                     .unwrap_or_else(|| memory::State::new(c));
                 (c.id, state)
             })
+            .collect();
+        self.register_files = circuit
+            .components
+            .iter()
+            .filter(|c| c.kind == Kind::RegisterFile)
+            .map(|c| (c.id, self.register_files.remove(&c.id).unwrap_or_default()))
             .collect();
         let held = self
             .drives
@@ -260,6 +269,13 @@ impl Simulator {
             .iter()
             .filter(|c| c.kind == Kind::Ram)
             .map(|c| (c.id, memory::State::new(c)))
+            .collect();
+        self.register_files = self
+            .circuit
+            .components
+            .iter()
+            .filter(|c| c.kind == Kind::RegisterFile)
+            .map(|c| (c.id, register_file::State::default()))
             .collect();
         self.initialize(BTreeMap::new());
     }
@@ -404,6 +420,7 @@ impl Simulator {
         }
         self.schedule_controls();
         self.schedule_storage();
+        self.schedule_register_files();
         self.update_displays();
         self.schedule_memories();
         self.schedule_terminals();
@@ -687,7 +704,7 @@ fn electrically_equal(a: &Circuit, b: &Circuit) -> bool {
             (c.kind == Kind::Constant).then_some(c.constant),
             (c.kind == Kind::Splitter).then_some(c.splitter.clone()),
             (c.kind == Kind::BitExtender).then_some((c.input_bits, c.extension)),
-            c.kind.is_sequential().then_some(c.sequential),
+            (c.kind.is_sequential() || c.kind == Kind::RegisterFile).then_some(c.sequential),
             (
                 (c.kind.is_controlled() || c.kind == Kind::PullResistor).then_some(c.bus),
                 c.kind.is_transistor().then_some(c.transistor),
