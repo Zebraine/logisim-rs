@@ -307,6 +307,8 @@ pub(crate) fn component(
         | Kind::Slider
         | Kind::Led
         | Kind::SevenSegment
+        | Kind::RgbLed
+        | Kind::DotMatrix
         | Kind::HexDisplay => crate::io::draw(p, canvas, c, color, simulation),
         Kind::Rom | Kind::Ram => crate::memory::draw(p, canvas, c, color, simulation),
         Kind::Plexer(_) => crate::plexers::draw(p, canvas, c, color),
@@ -640,6 +642,7 @@ pub(crate) fn component(
                 | Kind::DipSwitch
                 | Kind::Slider
                 | Kind::Led
+                | Kind::RgbLed
         ) {
             match c.label_facing {
                 Facing::North => (vec2(r.center().x, r.top() - 8.0), Align2::CENTER_BOTTOM),

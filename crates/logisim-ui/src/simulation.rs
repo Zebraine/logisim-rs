@@ -67,6 +67,9 @@ pub struct SimulationView {
     pub clocks: BTreeSet<Id>,
     pub buttons: BTreeMap<Id, bool>,
     pub indicators: BTreeMap<Id, [bool; 8]>,
+    pub rgb: BTreeMap<Id, [u8; 3]>,
+    /// Row-major cells: None is an unknown/error signal.
+    pub matrices: BTreeMap<Id, Vec<Option<bool>>>,
     pub storage: BTreeMap<Id, SignalView>,
     pub memories: BTreeMap<Id, logisim_core::MemoryContents>,
     pub wires: BTreeMap<Id, SignalView>,

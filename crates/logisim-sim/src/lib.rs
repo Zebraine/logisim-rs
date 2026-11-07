@@ -4,6 +4,7 @@ pub use hierarchy::ProjectSimulator;
 mod arithmetic;
 #[cfg(test)]
 mod arithmetic_tests;
+mod displays;
 mod io;
 mod memory;
 #[cfg(test)]
@@ -45,6 +46,8 @@ pub struct Simulator {
     circuit: Circuit,
     network: Network,
     inputs: BTreeMap<Id, Value>,
+    matrices: BTreeMap<Id, displays::MatrixState>,
+    display_ticks: u64,
     storage: BTreeMap<Id, sequential::State>,
     memories: BTreeMap<Id, memory::State>,
     drives: BTreeMap<network::Port, Value>,
@@ -61,6 +64,8 @@ impl Default for Simulator {
             circuit: Circuit::default(),
             network: Network::default(),
             inputs: BTreeMap::new(),
+            matrices: BTreeMap::new(),
+            display_ticks: 0,
             storage: BTreeMap::new(),
             memories: BTreeMap::new(),
             drives: BTreeMap::new(),
@@ -79,8 +84,10 @@ impl Simulator {
         if self.circuit == *circuit {
             return false;
         }
+        self.synchronize_displays(circuit);
         if electrically_equal(&self.circuit, circuit) {
             self.circuit = circuit.clone();
+            self.update_displays();
             return false;
         }
         self.inputs = circuit
@@ -201,6 +208,7 @@ impl Simulator {
         }
     }
     pub fn reset(&mut self) {
+        self.reset_displays();
         for input in self.inputs.values_mut() {
             *input = Value::known(input.width(), 0);
         }
@@ -328,6 +336,7 @@ impl Simulator {
         }
         self.schedule_controls();
         self.schedule_storage();
+        self.update_displays();
         self.schedule_memories();
     }
     fn schedule_memories(&mut self) {
@@ -427,11 +436,11 @@ impl Simulator {
             })
             .map(|s| s.value)
     }
+    /// Tick controls are useful for clock sources and for display persistence.
     pub fn has_clocks(&self) -> bool {
-        self.circuit
-            .components
-            .iter()
-            .any(|c| c.kind == Kind::Clock)
+        self.circuit.components.iter().any(|c| {
+            c.kind == Kind::Clock || (c.kind == Kind::DotMatrix && c.io.matrix_persistence > 0)
+        })
     }
     /// Queue a tick only on a settled network, so separate edges cannot collapse into one batch.
     pub fn tick(&mut self) -> bool {
@@ -442,6 +451,8 @@ impl Simulator {
         self.has_clocks()
     }
     fn tick_clocks(&mut self) {
+        self.display_ticks = self.display_ticks.saturating_add(1);
+        self.update_displays();
         let clocks: Vec<_> = self
             .circuit
             .components
@@ -598,6 +609,12 @@ fn electrically_equal(a: &Circuit, b: &Circuit) -> bool {
                 matches!(c.kind, Kind::Arithmetic(_)).then_some(c.arithmetic),
                 c.kind.is_memory().then_some(c.memory.clone()),
                 (c.kind == Kind::Slider).then_some(c.io.slider_value),
+                (c.kind == Kind::RgbLed).then_some(c.io.rgb_multibit),
+                (c.kind == Kind::DotMatrix).then_some((
+                    c.io.matrix_columns,
+                    c.io.matrix_rows,
+                    c.io.matrix_input,
+                )),
             ),
             if c.kind == Kind::Tunnel {
                 c.label.clone()

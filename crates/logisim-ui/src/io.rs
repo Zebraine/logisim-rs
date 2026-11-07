@@ -1,6 +1,6 @@
 use crate::{canvas::Canvas, i18n::tr, simulation::SimulationView};
 use egui::{Color32, Painter, Rect, Stroke, StrokeKind, Ui};
-use logisim_core::{Component, Facing, Kind, Point, Radix};
+use logisim_core::{Component, Facing, Kind, MatrixInput, Point, Radix};
 pub(crate) fn port_label(c: &Component, index: usize) -> &'static str {
     match c.kind {
         Kind::Button | Kind::DipSwitch | Kind::Slider => "Output",
@@ -12,6 +12,18 @@ pub(crate) fn port_label(c: &Component, index: usize) -> &'static str {
             }
         }
         Kind::Led => "Input",
+        Kind::RgbLed => ["Red", "Green", "Blue"][index],
+        Kind::DotMatrix => match c.io.matrix_input {
+            MatrixInput::Columns => "Column data",
+            MatrixInput::Rows => "Row data",
+            MatrixInput::Select => {
+                if index == 0 {
+                    "Column data"
+                } else {
+                    "Row selection"
+                }
+            }
+        },
         Kind::HexDisplay => {
             if index == 0 {
                 "Hexadecimal input"
@@ -36,6 +48,49 @@ pub(crate) fn fields(ui: &mut Ui, c: &mut Component) -> bool {
     let mut active = false;
     if !c.kind.is_io() {
         return false;
+    }
+    if c.kind == Kind::RgbLed {
+        ui.label(tr("8-bit color channels"));
+        ui.checkbox(&mut c.io.rgb_multibit, "");
+        ui.end_row();
+        return active;
+    }
+    if c.kind == Kind::DotMatrix {
+        ui.label(tr("Input format"));
+        egui::ComboBox::from_id_salt("matrix_input")
+            .selected_text(tr(c.io.matrix_input.name()))
+            .show_ui(ui, |ui| {
+                for mode in MatrixInput::ALL {
+                    ui.selectable_value(&mut c.io.matrix_input, mode, tr(mode.name()));
+                }
+            });
+        ui.end_row();
+        for (label, value) in [
+            ("Matrix columns", &mut c.io.matrix_columns),
+            ("Matrix rows", &mut c.io.matrix_rows),
+        ] {
+            ui.label(tr(label));
+            let r = ui.add(egui::DragValue::new(value).range(1..=32));
+            active |= r.has_focus() || r.dragged();
+            ui.end_row();
+        }
+        ui.label(tr("Light persistence (ticks)"));
+        let r =
+            ui.add(egui::DragValue::new(&mut c.io.matrix_persistence).range(0..=i32::MAX as u32));
+        active |= r.has_focus() || r.dragged();
+        ui.end_row();
+        ui.label(tr("Dot shape"));
+        egui::ComboBox::from_id_salt("matrix_shape")
+            .selected_text(tr(if c.io.matrix_circular {
+                "Circular"
+            } else {
+                "Square"
+            }))
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut c.io.matrix_circular, false, tr("Square"));
+                ui.selectable_value(&mut c.io.matrix_circular, true, tr("Circular"));
+            });
+        ui.end_row();
     }
     if c.kind == Kind::DipSwitch {
         ui.label(tr("Number of switches"));
@@ -84,7 +139,10 @@ pub(crate) fn fields(ui: &mut Ui, c: &mut Component) -> bool {
     }));
     ui.color_edit_button_srgba_unmultiplied(&mut c.io.on_color);
     ui.end_row();
-    if matches!(c.kind, Kind::Led | Kind::SevenSegment | Kind::HexDisplay) {
+    if matches!(
+        c.kind,
+        Kind::Led | Kind::SevenSegment | Kind::HexDisplay | Kind::DotMatrix
+    ) {
         ui.label(tr("Off color"));
         ui.color_edit_button_srgba_unmultiplied(&mut c.io.off_color);
         ui.end_row();
@@ -160,6 +218,56 @@ pub(crate) fn draw(
         .and_then(|s| s.inputs.get(&c.id))
         .map_or(0, |v| v.value);
     match c.kind {
+        Kind::RgbLed => {
+            for (i, point) in c.io_ports().into_iter().enumerate() {
+                p.line_segment(
+                    [at(point), at(Point::new(-15, point.y))],
+                    Stroke::new(2.0 * z, [Color32::RED, Color32::GREEN, Color32::BLUE][i]),
+                );
+            }
+            let rgb = simulation
+                .and_then(|s| s.rgb.get(&c.id))
+                .copied()
+                .unwrap_or([0; 3]);
+            p.circle(
+                at(Point::new(-20, 0)),
+                10.0 * z,
+                Color32::from_rgb(rgb[0], rgb[1], rgb[2]),
+                stroke,
+            );
+        }
+        Kind::DotMatrix => {
+            p.rect_filled(body, 0.0, Color32::WHITE);
+            let cols = c.io.matrix_columns.clamp(1, 32);
+            let rows = c.io.matrix_rows.clamp(1, 32);
+            let cells = simulation.and_then(|s| s.matrices.get(&c.id));
+            for row in 0..rows {
+                for col in 0..cols {
+                    let index = usize::from(row) * usize::from(cols) + usize::from(col);
+                    let state = cells
+                        .and_then(|cells| cells.get(index))
+                        .copied()
+                        .unwrap_or(Some(false));
+                    let fill = match state {
+                        Some(true) => color(c.io.on_color),
+                        Some(false) => color(c.io.off_color),
+                        None => Color32::from_rgb(192, 0, 0),
+                    };
+                    let center =
+                        at(min + Point::new(i32::from(col) * 10 + 5, i32::from(row) * 10 + 5));
+                    if c.io.matrix_circular {
+                        p.circle_filled(center, 4.0 * z, fill);
+                    } else {
+                        p.rect_filled(
+                            Rect::from_center_size(center, egui::vec2(10.0, 10.0) * z),
+                            0.0,
+                            fill,
+                        );
+                    }
+                }
+            }
+            p.rect_stroke(body, 0.0, stroke, StrokeKind::Inside);
+        }
         Kind::Switch => {
             p.rect(
                 body,

@@ -360,6 +360,8 @@ fn component(
         ("#I/O", "LED") => Kind::Led,
         ("#I/O", "7-Segment Display") => Kind::SevenSegment,
         ("#I/O", "Hex Digit Display") => Kind::HexDisplay,
+        ("#I/O", "RGBLed") => Kind::RgbLed,
+        ("#I/O", "DotMatrix") => Kind::DotMatrix,
         ("#Memory", "ROM") => Kind::Rom,
         ("#Memory", "RAM") => Kind::Ram,
         ("#Memory", "Universal Register") => Kind::ShiftRegister,
@@ -398,6 +400,8 @@ fn component(
             | Kind::Slider
             | Kind::Led
             | Kind::SevenSegment
+            | Kind::RgbLed
+            | Kind::DotMatrix
             | Kind::HexDisplay => crate::io::allowed(kind, key),
             Kind::Arithmetic(a) => crate::arithmetic::allowed(a, key),
             Kind::Clock
@@ -448,7 +452,7 @@ fn component(
         match kind {
             Kind::Power => "north",
             Kind::Ground => "south",
-            Kind::Led => "west",
+            Kind::Led | Kind::RgbLed => "west",
             _ => "east",
         },
     ) {
@@ -491,6 +495,7 @@ fn component(
             | Kind::DipSwitch
             | Kind::Slider
             | Kind::Led
+            | Kind::RgbLed
     ) {
         c.label_facing = match value(
             &a,

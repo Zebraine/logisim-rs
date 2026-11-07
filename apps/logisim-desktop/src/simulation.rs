@@ -66,6 +66,22 @@ pub fn present(circuit: &Circuit, sim: &Simulator) -> SimulationView {
         if let Some(value) = sim.stored_value(c.id) {
             view.storage.insert(c.id, signal(value, false));
         }
+        if let Some(rgb) = sim.rgb_color(c.id) {
+            view.rgb.insert(c.id, rgb);
+        }
+        if let Some(cells) = sim.matrix_cells(c.id) {
+            view.matrices.insert(
+                c.id,
+                cells
+                    .into_iter()
+                    .map(|bit| match bit {
+                        Bit::One => Some(true),
+                        Bit::Zero => Some(false),
+                        _ => None,
+                    })
+                    .collect(),
+            );
+        }
         if let Some(lights) = sim.indicator(c.id) {
             view.indicators.insert(c.id, lights);
         }

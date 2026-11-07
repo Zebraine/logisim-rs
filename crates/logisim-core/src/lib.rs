@@ -18,7 +18,7 @@ mod sequential;
 pub use sequential::{ControlPosition, CounterOverflow, FlipFlop, Sequential, Trigger};
 
 mod io;
-pub use io::Io;
+pub use io::{Io, MatrixInput};
 mod memory;
 pub use memory::{Memory, MemoryContents, MemoryInterface, MemoryRole, MemoryTerminal};
 
@@ -170,6 +170,8 @@ pub enum Kind {
     Led,
     SevenSegment,
     HexDisplay,
+    RgbLed,
+    DotMatrix,
     Rom,
     Ram,
     Plexer(Plexer),
@@ -215,6 +217,7 @@ impl Kind {
             Self::Text
                 | Self::SevenSegment
                 | Self::HexDisplay
+                | Self::DotMatrix
                 | Self::BitExtender
                 | Self::FlipFlop(_)
                 | Self::Register
@@ -235,6 +238,7 @@ impl Kind {
                 | Self::DipSwitch
                 | Self::Slider
                 | Self::Led
+                | Self::RgbLed
                 | Self::Pin
                 | Self::Gate(_)
                 | Self::Probe
@@ -273,6 +277,8 @@ impl Kind {
             Self::Led => "LED",
             Self::SevenSegment => "7-Segment Display",
             Self::HexDisplay => "Hex Digit Display",
+            Self::RgbLed => "RGB LED",
+            Self::DotMatrix => "LED Matrix",
             Self::Rom => "ROM",
             Self::Ram => "RAM",
             Self::Plexer(p) => p.name(),
@@ -321,7 +327,7 @@ impl Component {
             facing: match kind {
                 Kind::Power => Facing::North,
                 Kind::Ground => Facing::South,
-                Kind::Led => Facing::West,
+                Kind::Led | Kind::RgbLed => Facing::West,
                 _ => Facing::East,
             },
             bits: match kind {
@@ -655,6 +661,7 @@ impl Circuit {
         let after = replacement.ports();
         let pairs: Vec<_> = if old.kind == replacement.kind
             && (old.kind.is_memory()
+                || old.kind == Kind::DotMatrix
                 || (old.kind == Kind::Arithmetic(Arithmetic::BitAdder)
                     && old.bit_adder_inputs() != replacement.bit_adder_inputs())
                 || (old.kind == Kind::Plexer(Plexer::DisplayDecoder)

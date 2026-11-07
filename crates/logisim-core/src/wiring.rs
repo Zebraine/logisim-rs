@@ -134,6 +134,20 @@ impl Component {
         match self.kind {
             Kind::Button | Kind::DipSwitch | Kind::Led | Kind::SevenSegment => Some(1),
             Kind::HexDisplay => Some(if index == 0 { 4 } else { 1 }),
+            Kind::RgbLed => (index < 3).then_some(if self.io.rgb_multibit { 8 } else { 1 }),
+            Kind::DotMatrix => {
+                (index < self.io_ports().len()).then_some(match self.io.matrix_input {
+                    crate::MatrixInput::Columns => self.io.matrix_rows.clamp(1, 32),
+                    crate::MatrixInput::Rows => self.io.matrix_columns.clamp(1, 32),
+                    crate::MatrixInput::Select => {
+                        if index == 0 {
+                            self.io.matrix_columns.clamp(1, 32)
+                        } else {
+                            self.io.matrix_rows.clamp(1, 32)
+                        }
+                    }
+                })
+            }
             Kind::Plexer(_) => self.plexer_terminals().get(index).map(|p| p.bits),
             Kind::Arithmetic(kind) => Some(if index == 0 {
                 self.arithmetic_output_bits()

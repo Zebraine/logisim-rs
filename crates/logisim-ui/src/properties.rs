@@ -240,6 +240,8 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
             | Kind::DipSwitch
             | Kind::Led
             | Kind::SevenSegment
+            | Kind::RgbLed
+            | Kind::DotMatrix
             | Kind::HexDisplay
             | Kind::Rom
             | Kind::Ram
@@ -374,7 +376,8 @@ fn wiring_fields(ui: &mut Ui, c: &mut Component) -> bool {
         | Kind::Switch
         | Kind::DipSwitch
         | Kind::Slider
-        | Kind::Led => {
+        | Kind::Led
+        | Kind::RgbLed => {
             ui.label(tr("Label location"));
             egui::ComboBox::from_id_salt("instance_label_location")
                 .selected_text(tr(c.label_facing.name()))

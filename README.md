@@ -54,7 +54,7 @@ Linux 构建另需 `pkg-config` 与 Fontconfig 开发包（Debian/Ubuntu：`libf
 - Wiring 库新增 Constant、Power、Ground、Probe、Splitter 和 Bit Extender，支持属性编辑、复制、撤销及文件往返。
 - Plexers 库提供多路选择器、解复用器、译码器和优先编码器，支持 1–5 位选择信号（2–32 路）、四个朝向及端口提示；选择器/解复用器的数据位宽为 1–32。
   另有位选择器和七段译码器，支持分组取数与总线/分立输入编辑。
-- Input/Output 库提供按钮、开关、拨码开关、滑块、LED、七段数码管和十六进制显示器，支持颜色、透明度及对应属性编辑。
+- Input/Output 库提供按钮、开关、拨码开关、滑块、LED、RGB LED、LED 点阵、七段数码管和十六进制显示器，支持颜色、透明度及对应属性编辑。
 - Arithmetic 库提供 1–32 位加法器、减法器、乘法器、除法器、取负器、比较器、移位器、位加法器和位查找器，端口方向固定。
 - 工具栏/元件树选择工具，点击画布放置；左侧编辑标签、方向、位宽、门尺寸、输入数量、字号和位置；文字可选择对齐方式。
   当前门支持 2–8 个输入（NOT/Buffer 为单输入），信号位宽为 1–32。
@@ -115,7 +115,7 @@ Ctrl+Shift+S，Ctrl+Q 退出。文件选择框可浏览目录或输入完整路�
 保存失败不会清除修改状态，检测到文件被外部修改时要求另存为。
 
 当前互通范围：多电路项目、主电路选择、默认或已支持自定义外观的子电路实例，以及各电路中的八种门、1–32 位两态输入/输出 Pin、正交导线、文字、普通 Tunnel
-及上述基础布线、六种 Plexers 与九种算术元件、Clock、D/T/JK/SR Flip-Flop、Register、Counter、Universal Register、ROM、RAM、Button、Switch、DipSwitch、Slider、LED、7-Segment Display 和 Hex Digit Display；
+及上述基础布线、六种 Plexers 与九种算术元件、Clock、D/T/JK/SR Flip-Flop、Register、Counter、Universal Register、ROM、RAM、Button、Switch、DipSwitch、Slider、LED、RGBLed、DotMatrix、7-Segment Display 和 Hex Digit Display；
 包括门尺寸、2–8 个输入、方向、标签、字号、颜色和文字对齐。导入保留实际坐标及连接端口。
 多行文字数据可往返，但参考程序与本程序的排版不同；字体使用本程序的默认字体，
 不承诺字体族、字形覆盖或样式一致，隧道采用固定文字色。
@@ -222,6 +222,14 @@ LED 和七段数码管支持高/低电平点亮、点亮/熄灭颜色；数码�
 悬停端口查看用途。按钮与 LED 支持四向和标签位置，两种显示器方向固定。
 LED 的 X/E 输入均熄灭；七段数码管的 X/E 在高电平模式熄灭、低电平模式点亮。
 十六进制输入含 X/E 时显示横杠，小数点仅在明确为 1 时点亮。
+
+RGB LED 提供红、绿、蓝三个输入，每路可选 1 位开关或 8 位亮度，支持四向与标签编辑。
+通道含 X/E 时该通道亮度为零，其余通道独立显示。
+
+LED 点阵支持 1–32 行、1–32 列、按列/按行/行列选择三种输入形式，以及方形/圆形光点和透明配色。
+按列模式最低位在底部，按行模式最低位在右侧；行列选择模式的列数据最低位在左侧，
+行选择最低位在底部。X/E 显示红色，未选中行熄灭。修改输入形式或尺寸保留原导线坐标。
+余辉按仿真 Tick 计数，支持 Ctrl+T 单次推进及自动 Tick；实例状态独立，复位清空且不写入文件。
 
 ## ROM 与 RAM
 

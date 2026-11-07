@@ -1,5 +1,22 @@
 //! Input/output geometry and persistent attributes. Switch states belong to each simulator instance.
 use crate::{Component, Facing, Kind, Point};
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MatrixInput {
+    #[default]
+    Columns,
+    Rows,
+    Select,
+}
+impl MatrixInput {
+    pub const ALL: [Self; 3] = [Self::Columns, Self::Rows, Self::Select];
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Columns => "Columns",
+            Self::Rows => "Rows",
+            Self::Select => "Select rows/columns",
+        }
+    }
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Io {
     pub on_color: [u8; 4],
@@ -9,6 +26,12 @@ pub struct Io {
     pub switch_count: u8,
     pub slider_reverse: bool,
     pub slider_value: u32,
+    pub rgb_multibit: bool,
+    pub matrix_columns: u8,
+    pub matrix_rows: u8,
+    pub matrix_input: MatrixInput,
+    pub matrix_circular: bool,
+    pub matrix_persistence: u32,
 }
 impl Default for Io {
     fn default() -> Self {
@@ -20,6 +43,12 @@ impl Default for Io {
             switch_count: 4,
             slider_reverse: false,
             slider_value: 0,
+            rgb_multibit: false,
+            matrix_columns: 5,
+            matrix_rows: 7,
+            matrix_input: MatrixInput::Columns,
+            matrix_circular: false,
+            matrix_persistence: 0,
         }
     }
 }
@@ -32,7 +61,10 @@ impl Io {
         ) {
             io.on_color = [255; 4];
         }
-        if kind == Kind::Led {
+        if kind == Kind::DotMatrix {
+            io.on_color = [0, 255, 0, 255];
+        }
+        if matches!(kind, Kind::Led | Kind::DotMatrix) {
             io.off_color = [64, 64, 64, 255];
         }
         io
@@ -49,6 +81,8 @@ impl Kind {
                 | Self::Led
                 | Self::SevenSegment
                 | Self::HexDisplay
+                | Self::RgbLed
+                | Self::DotMatrix
         )
     }
 }
@@ -83,6 +117,17 @@ impl Component {
             return [a, b].map(|(x, y)| self.facing.inverse().transform(Point::new(x, y)));
         }
         match self.kind {
+            Kind::RgbLed => [Point::new(-30, -10), Point::new(0, 10)],
+            Kind::DotMatrix => {
+                let cols = i32::from(self.io.matrix_columns.clamp(1, 32));
+                let rows = i32::from(self.io.matrix_rows.clamp(1, 32));
+                let min = match self.io.matrix_input {
+                    MatrixInput::Columns => Point::new(-5, -10 * rows),
+                    MatrixInput::Rows => Point::new(0, -5),
+                    MatrixInput::Select => Point::new(0, -10 * ((rows - 1) / 2)),
+                };
+                [min, min + Point::new(10 * cols, 10 * rows)]
+            }
             Kind::Switch => [Point::new(-20, -15), Point::new(0, 15)],
             Kind::SevenSegment => [Point::new(-5, 0), Point::new(35, 60)],
             Kind::HexDisplay => [Point::new(-15, -60), Point::new(25, 0)],
@@ -91,6 +136,26 @@ impl Component {
     }
     pub fn io_ports(&self) -> Vec<Point> {
         match self.kind {
+            Kind::RgbLed => (-1..=1)
+                .map(|i| {
+                    self.facing.inverse().transform(
+                        if matches!(self.facing, Facing::East | Facing::West) {
+                            Point::new(0, i * 10)
+                        } else {
+                            Point::new(i * 10, 0)
+                        },
+                    )
+                })
+                .collect(),
+            Kind::DotMatrix => match self.io.matrix_input {
+                MatrixInput::Columns => (0..self.io.matrix_columns.clamp(1, 32))
+                    .map(|i| Point::new(i32::from(i) * 10, 0))
+                    .collect(),
+                MatrixInput::Rows => (0..self.io.matrix_rows.clamp(1, 32))
+                    .map(|i| Point::new(0, i32::from(i) * 10))
+                    .collect(),
+                MatrixInput::Select => vec![Point::ZERO, Point::new(0, 10)],
+            },
             Kind::SevenSegment => (0..8)
                 .map(|i| Point::new((i % 4) * 10, (i / 4) * 60))
                 .collect(),
@@ -255,5 +320,112 @@ mod input_tests {
             assert_eq!(c.slider_value_at(100), 0);
             c.io.slider_reverse = false;
         }
+    }
+}
+
+#[cfg(test)]
+mod display_tests {
+    use super::*;
+    use crate::Circuit;
+    #[test]
+    fn rgb_channels_keep_world_order_and_have_independent_fixed_widths() {
+        for facing in Facing::ALL {
+            let mut c = Component::new(Kind::RgbLed, Point::new(200, 200));
+            c.facing = facing;
+            for multi in [false, true] {
+                c.io.rgb_multibit = multi;
+                let expected: Vec<_> = (-1..=1)
+                    .map(|i| {
+                        c.position
+                            + if matches!(facing, Facing::East | Facing::West) {
+                                Point::new(0, 10 * i)
+                            } else {
+                                Point::new(10 * i, 0)
+                            }
+                    })
+                    .collect();
+                assert_eq!(c.ports(), expected);
+                for i in 0..3 {
+                    assert_eq!(c.port_width(i), Some(if multi { 8 } else { 1 }));
+                    assert!(!c.drives_port(i));
+                }
+                assert_eq!(c.port_width(3), None);
+            }
+        }
+    }
+    #[test]
+    fn matrix_dimensions_geometry_and_mode_edits_keep_existing_wire_paths() {
+        for mode in MatrixInput::ALL {
+            for (cols, rows) in [(1, 1), (3, 4), (5, 7), (32, 32)] {
+                let mut c = Component::new(Kind::DotMatrix, Point::new(200, 400));
+                c.io.matrix_columns = cols;
+                c.io.matrix_rows = rows;
+                c.io.matrix_input = mode;
+                let ports = c.ports();
+                assert_eq!(
+                    ports.len(),
+                    match mode {
+                        MatrixInput::Columns => cols as usize,
+                        MatrixInput::Rows => rows as usize,
+                        MatrixInput::Select => 2,
+                    }
+                );
+                for (i, p) in ports.iter().enumerate() {
+                    let offset = if mode == MatrixInput::Columns {
+                        Point::new(10 * i as i32, 0)
+                    } else {
+                        Point::new(0, 10 * i as i32)
+                    };
+                    assert_eq!(*p, c.position + offset);
+                    assert_eq!(
+                        c.port_width(i),
+                        Some(match mode {
+                            MatrixInput::Columns => rows,
+                            MatrixInput::Rows => cols,
+                            MatrixInput::Select =>
+                                if i == 0 {
+                                    cols
+                                } else {
+                                    rows
+                                },
+                        })
+                    );
+                    assert!(!c.drives_port(i));
+                }
+                assert_eq!(c.port_width(ports.len()), None);
+                let [min, max] = c.io_body();
+                assert_eq!(
+                    max - min,
+                    Point::new(i32::from(cols) * 10, i32::from(rows) * 10)
+                );
+                let mut circuit = Circuit::default();
+                c.id = circuit.add_component(c.clone());
+                for p in ports {
+                    circuit.add_wire(
+                        p,
+                        p + if mode == MatrixInput::Columns {
+                            Point::new(0, 100)
+                        } else {
+                            Point::new(-100, 0)
+                        },
+                    );
+                }
+                let before = circuit.wires.clone();
+                c.io.matrix_input = MatrixInput::Select;
+                c.io.matrix_columns = 2;
+                c.io.matrix_rows = 2;
+                circuit.replace_component(c);
+                // Every resulting segment remains on the original geometric wire union.
+                for wire in &circuit.wires {
+                    assert!(
+                        before
+                            .iter()
+                            .any(|w| w.contains(wire.a) && w.contains(wire.b))
+                    );
+                }
+            }
+        }
+        assert!(!Kind::DotMatrix.rotatable());
+        assert!(!Kind::DotMatrix.has_label());
     }
 }

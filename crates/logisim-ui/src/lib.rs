@@ -646,7 +646,7 @@ impl Workspace {
                                             self.library_tool(ui, Kind::Ram);
                                         }
                                         "Input/Output" => {
-                                            for kind in [Kind::Button, Kind::Switch, Kind::DipSwitch, Kind::Slider, Kind::Led, Kind::SevenSegment, Kind::HexDisplay] {
+                                            for kind in [Kind::Button, Kind::Switch, Kind::DipSwitch, Kind::Slider, Kind::Led, Kind::RgbLed, Kind::SevenSegment, Kind::HexDisplay, Kind::DotMatrix] {
                                                 self.library_tool(ui, kind);
                                             }
                                         }

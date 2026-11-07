@@ -86,6 +86,8 @@ pub fn serialize(document: &Document) -> Result<String> {
                 | Kind::Slider
                 | Kind::Led
                 | Kind::SevenSegment
+                | Kind::RgbLed
+                | Kind::DotMatrix
                 | Kind::HexDisplay => 6,
                 Kind::Gate(_) => 1,
                 Kind::Text => 2,
@@ -120,6 +122,10 @@ pub fn serialize(document: &Document) -> Result<String> {
                         a.file_name()
                     } else if let Kind::Plexer(p) = c.kind {
                         p.file_name()
+                    } else if c.kind == Kind::RgbLed {
+                        "RGBLed"
+                    } else if c.kind == Kind::DotMatrix {
+                        "DotMatrix"
                     } else if c.kind == Kind::DipSwitch {
                         "DipSwitch"
                     } else if c.kind == Kind::ShiftRegister {
@@ -147,6 +153,8 @@ pub fn serialize(document: &Document) -> Result<String> {
                     | Kind::DipSwitch
                     | Kind::Led
                     | Kind::SevenSegment
+                    | Kind::RgbLed
+                    | Kind::DotMatrix
                     | Kind::HexDisplay
                     | Kind::Rom
                     | Kind::Ram
