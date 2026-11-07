@@ -41,7 +41,7 @@ pub(crate) fn read(c: &mut Component, a: &BTreeMap<String, String>) -> Result<()
     Ok(())
 }
 pub(crate) fn write(out: &mut String, c: &Component) -> Result<()> {
-    use crate::write::attribute as a;
+    use crate::xml::attribute as a;
     if c.kind == Kind::PullResistor {
         a(
             out,

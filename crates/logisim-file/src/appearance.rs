@@ -1,5 +1,5 @@
 //! The vector subset emitted by the observed appearance editor, not a general SVG importer.
-use crate::{Error, Result, write::escape};
+use crate::{Error, Result, xml::escape};
 use logisim_core::{
     Appearance, ArtworkFont, Circuit, Facing, Geometry, Kind, Paint, Point, TextAnchor,
 };

@@ -13,8 +13,8 @@ pub(crate) fn read(c: &mut Component, a: &BTreeMap<String, String>) -> Result<()
     if !c.kind.is_memory() {
         return Ok(());
     }
-    c.bits = crate::read::number(a, "dataWidth", 8, 1..=32)?;
-    c.memory.address_bits = crate::read::number(a, "addrWidth", 8, 2..=24)?;
+    c.bits = crate::attributes::number(a, "dataWidth", 8, 1..=32)?;
+    c.memory.address_bits = crate::attributes::number(a, "addrWidth", 8, 2..=24)?;
     c.memory.select_high = match a.get("Select").map(String::as_str) {
         None | Some("low") => false,
         Some("high") => true,
@@ -90,7 +90,7 @@ pub(crate) fn write(out: &mut String, c: &Component) -> Result<()> {
             "Unsupported memory orientation or address width".into(),
         ));
     }
-    use crate::write::attribute as a;
+    use crate::xml::attribute as a;
     a(out, "addrWidth", c.memory.address_bits)?;
     a(out, "dataWidth", c.bits)?;
     if c.memory.select_high {

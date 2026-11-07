@@ -2,9 +2,11 @@
 //! No filesystem or simulator dependency; unsupported content is never silently saved.
 mod appearance;
 mod arithmetic;
+mod attributes;
 mod bus;
 #[cfg(test)]
 mod compatibility_tests;
+mod component;
 mod diagnostics;
 mod external;
 mod fonts;
@@ -26,6 +28,7 @@ mod tests;
 mod transistors;
 mod ttl;
 mod write;
+mod xml;
 
 pub use hex::{HexError, parse_hex};
 pub use logisim_core::Project as Document;

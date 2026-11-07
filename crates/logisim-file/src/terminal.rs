@@ -8,7 +8,7 @@ pub(crate) fn allowed(kind: Kind, key: &str) -> bool {
         || (kind == Kind::Tty && matches!(key, "rows" | "cols" | "color" | "bg"))
 }
 pub(crate) fn read(c: &mut Component, a: &BTreeMap<String, String>) -> Result<()> {
-    c.bits = crate::read::number(a, "Char bit width", 7, 7..=16)?;
+    c.bits = crate::attributes::number(a, "Char bit width", 7, 7..=16)?;
     if !matches!(c.bits, 7 | 16) {
         return Err(Error("Unsupported character width".into()));
     }
@@ -27,8 +27,8 @@ pub(crate) fn read(c: &mut Component, a: &BTreeMap<String, String>) -> Result<()
                 .ok_or_else(|| Error("Invalid keyboard buffer length".into()))?,
         };
     } else {
-        c.terminal.rows = crate::read::number(a, "rows", 8, 1..=48)?;
-        c.terminal.columns = crate::read::number(a, "cols", 32, 1..=120)?;
+        c.terminal.rows = crate::attributes::number(a, "rows", 8, 1..=48)?;
+        c.terminal.columns = crate::attributes::number(a, "cols", 32, 1..=120)?;
         for (key, color) in [("color", &mut c.io.on_color), ("bg", &mut c.io.background)] {
             if let Some(text) = a.get(key) {
                 *color = crate::io::rgba(text)?;
@@ -47,7 +47,7 @@ pub(crate) fn write(out: &mut String, c: &Component) -> Result<()> {
     {
         return Err(Error("Invalid character terminal attributes".into()));
     }
-    use crate::write::attribute as a;
+    use crate::xml::attribute as a;
     if c.bits != 7 {
         a(out, "Char bit width", c.bits)?;
     }

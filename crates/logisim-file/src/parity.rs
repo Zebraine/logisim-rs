@@ -17,7 +17,7 @@ pub(crate) fn read(c: &mut Component, a: &BTreeMap<String, String>) -> Result<()
     if !matches!(c.kind, Kind::Parity(_)) {
         return Ok(());
     }
-    c.inputs = crate::read::number(a, "inputs", 2, 2..=32)?;
+    c.inputs = crate::attributes::number(a, "inputs", 2, 2..=32)?;
     c.gate_size = match a.get("size").map(String::as_str) {
         None | Some("30") => GateSize::Narrow,
         Some("50") => GateSize::Medium,
@@ -45,7 +45,7 @@ pub(crate) fn read(c: &mut Component, a: &BTreeMap<String, String>) -> Result<()
     Ok(())
 }
 pub(crate) fn write(out: &mut String, c: &Component) -> Result<()> {
-    use crate::write::attribute as a;
+    use crate::xml::attribute as a;
     if !matches!(c.kind, Kind::Parity(_)) {
         return Ok(());
     }

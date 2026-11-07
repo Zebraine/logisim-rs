@@ -1,3 +1,4 @@
+use crate::attributes::{boolean, value};
 use crate::{Error, Result};
 use logisim_core::{Component, ControlPosition, CounterOverflow, Kind, Trigger};
 use std::collections::BTreeMap;
@@ -20,18 +21,12 @@ pub(crate) fn allowed(kind: Kind, key: &str) -> bool {
     }
 }
 pub(crate) fn read(c: &mut Component, attrs: &BTreeMap<String, String>) -> Result<()> {
-    let get = |key, default| attrs.get(key).map(String::as_str).unwrap_or(default);
-    let boolean = |key, default| match get(key, default) {
-        "true" => Ok(true),
-        "false" => Ok(false),
-        v => Err(Error(format!("Invalid {key}: {v}"))),
-    };
     if c.kind == Kind::ShiftRegister {
-        c.bits = crate::read::number(attrs, "length", 8, 1..=32)?;
+        c.bits = crate::attributes::number(attrs, "length", 8, 1..=32)?;
     }
     let s = &mut c.sequential;
     if c.kind.is_storage() && !matches!(c.kind, Kind::Latch(_)) {
-        s.trigger = match get("trigger", "rising") {
+        s.trigger = match value(attrs, "trigger", "rising") {
             "rising" => Trigger::Rising,
             "falling" => Trigger::Falling,
             "high" if c.kind == Kind::Register => Trigger::High,
@@ -41,7 +36,7 @@ pub(crate) fn read(c: &mut Component, attrs: &BTreeMap<String, String>) -> Resul
     }
     match c.kind {
         Kind::Random => {
-            s.random_seed = get("seed", "0").parse().map_err(|_| {
+            s.random_seed = value(attrs, "seed", "0").parse().map_err(|_| {
                 Error("Invalid random seed: expected a signed 32-bit integer".into())
             })?;
         }
@@ -73,7 +68,7 @@ pub(crate) fn read(c: &mut Component, attrs: &BTreeMap<String, String>) -> Resul
                 ("highDuration", &mut s.high_ticks),
                 ("lowDuration", &mut s.low_ticks),
             ] {
-                *target = get(key, "1")
+                *target = value(attrs, key, "1")
                     .parse()
                     .ok()
                     .filter(|v| (1..=65_535).contains(v))
@@ -81,16 +76,17 @@ pub(crate) fn read(c: &mut Component, attrs: &BTreeMap<String, String>) -> Resul
             }
         }
         Kind::Register => {
-            s.select_high = match get("Select", "low") {
+            s.select_high = match value(attrs, "Select", "low") {
                 "low" => false,
                 "high" => true,
                 v => return Err(Error(format!("Unsupported chip select: {v}"))),
             }
         }
         Kind::FlipFlop(_) => {
-            s.new_layout = boolean("NewFFLayout", "true")?;
-            s.negate_controls = boolean("NegatePresetClear", "false")?;
-            s.controls = match get(
+            s.new_layout = boolean(attrs, "NewFFLayout", true)?;
+            s.negate_controls = boolean(attrs, "NegatePresetClear", false)?;
+            s.controls = match value(
+                attrs,
                 "Pre/Clr Positions",
                 if s.new_layout { "" } else { "LEGACY" },
             ) {
@@ -108,7 +104,7 @@ pub(crate) fn read(c: &mut Component, attrs: &BTreeMap<String, String>) -> Resul
     Ok(())
 }
 pub(crate) fn write(out: &mut String, c: &Component) -> Result<()> {
-    use crate::write::attribute as a;
+    use crate::xml::attribute as a;
     let s = c.sequential;
     if c.kind.is_storage() && !matches!(c.kind, Kind::Latch(_)) {
         if c.facing != logisim_core::Facing::East

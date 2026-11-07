@@ -1,5 +1,5 @@
 //! Font strings and package labels observed through runtime load/save.
-use crate::{Error, Result, write::attribute};
+use crate::{Error, Result, xml::attribute};
 use logisim_core::{ArtworkFont, CircuitLabel, Facing};
 
 pub(crate) fn parse(text: &str) -> Result<ArtworkFont> {

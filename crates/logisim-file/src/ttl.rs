@@ -29,8 +29,8 @@ pub(crate) fn write(out: &mut String, c: &Component) -> Result<()> {
         if c.bits != 1 {
             return Err(Error("TTL pins must be one bit".into()));
         }
-        crate::write::attribute(out, "VccGndPorts", c.ttl.power_pins)?;
-        crate::write::attribute(out, "ShowInternalStructure", c.ttl.internal)?;
+        crate::xml::attribute(out, "VccGndPorts", c.ttl.power_pins)?;
+        crate::xml::attribute(out, "ShowInternalStructure", c.ttl.internal)?;
     }
     Ok(())
 }

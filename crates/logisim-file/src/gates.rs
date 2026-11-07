@@ -33,7 +33,7 @@ pub(crate) fn read(c: &mut Component, a: &BTreeMap<String, String>) -> Result<()
     Ok(())
 }
 pub(crate) fn write(out: &mut String, c: &Component) -> Result<()> {
-    use crate::write::attribute;
+    use crate::xml::attribute;
     let Kind::Gate(gate) = c.kind else {
         return Ok(());
     };

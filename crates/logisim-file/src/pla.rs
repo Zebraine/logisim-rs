@@ -12,9 +12,9 @@ pub(crate) fn read(c: &mut Component, a: &BTreeMap<String, String>) -> Result<()
     if c.kind != Kind::PlaRom {
         return Ok(());
     }
-    let inputs = crate::read::number(a, "inputs", 4, 1..=32)?;
-    let terms = crate::read::number(a, "and", 4, 1..=32)?;
-    let outputs = crate::read::number(a, "outputs", 4, 1..=32)?;
+    let inputs = crate::attributes::number(a, "inputs", 4, 1..=32)?;
+    let terms = crate::attributes::number(a, "and", 4, 1..=32)?;
+    let outputs = crate::attributes::number(a, "outputs", 4, 1..=32)?;
     c.pla = Pla::new(inputs, terms, outputs);
     c.pla.select_high = match a.get("Select").map(String::as_str) {
         None | Some("low") => false,
@@ -80,7 +80,7 @@ pub(crate) fn write(out: &mut String, c: &Component) -> Result<()> {
     if c.facing != Facing::East {
         return Err(Error("Unsupported PLA orientation".into()));
     }
-    use crate::write::attribute as a;
+    use crate::xml::attribute as a;
     let (inputs, terms, outputs) = c.pla.dimensions();
     for (name, value) in [("inputs", inputs), ("and", terms), ("outputs", outputs)] {
         a(out, name, value)?;

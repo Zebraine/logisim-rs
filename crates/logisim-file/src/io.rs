@@ -54,7 +54,7 @@ pub(crate) fn read(c: &mut Component, a: &BTreeMap<String, String>) -> Result<()
     }
     c.bits = match c.kind {
         Kind::Switch | Kind::Slider => c.bits,
-        Kind::Joystick => crate::read::number(a, "bits", 4, 2..=5)?,
+        Kind::Joystick => crate::attributes::number(a, "bits", 4, 2..=5)?,
         Kind::HexDisplay => 4,
         _ => 1,
     };
@@ -75,8 +75,8 @@ pub(crate) fn read(c: &mut Component, a: &BTreeMap<String, String>) -> Result<()
         };
     }
     if c.kind == Kind::DotMatrix {
-        c.io.matrix_columns = crate::read::number(a, "matrixcols", 5, 1..=32)?;
-        c.io.matrix_rows = crate::read::number(a, "matrixrows", 7, 1..=32)?;
+        c.io.matrix_columns = crate::attributes::number(a, "matrixcols", 5, 1..=32)?;
+        c.io.matrix_rows = crate::attributes::number(a, "matrixrows", 7, 1..=32)?;
         c.io.matrix_input = match a.get("inputtype").map(String::as_str) {
             None | Some("column") => MatrixInput::Columns,
             Some("row") => MatrixInput::Rows,
@@ -98,7 +98,7 @@ pub(crate) fn read(c: &mut Component, a: &BTreeMap<String, String>) -> Result<()
         };
     }
     if c.kind == Kind::DipSwitch {
-        c.io.switch_count = crate::read::number(a, "NSwitches", 4, 1..=32)?;
+        c.io.switch_count = crate::attributes::number(a, "NSwitches", 4, 1..=32)?;
     }
     if c.kind == Kind::Slider {
         c.io.slider_reverse = match a.get("Direction").map(String::as_str) {
@@ -163,7 +163,7 @@ pub(crate) fn write(out: &mut String, c: &Component) -> Result<()> {
     {
         return Err(Error("Invalid I/O width or orientation".into()));
     }
-    use crate::write::attribute as a;
+    use crate::xml::attribute as a;
     if c.kind == Kind::Joystick {
         a(out, "bits", c.bits)?;
         let [r, g, b] = c.color;

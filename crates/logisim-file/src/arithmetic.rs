@@ -12,7 +12,7 @@ pub(crate) fn allowed(kind: Arithmetic, key: &str) -> bool {
 pub(crate) fn read(c: &mut Component, attrs: &BTreeMap<String, String>) -> Result<()> {
     match c.kind {
         Kind::Arithmetic(Arithmetic::BitAdder) => {
-            c.arithmetic.bit_inputs = crate::read::number(attrs, "inputs", 1, 1..=32)?;
+            c.arithmetic.bit_inputs = crate::attributes::number(attrs, "inputs", 1, 1..=32)?;
         }
         Kind::Arithmetic(Arithmetic::BitFinder) => {
             c.arithmetic.search = match attrs.get("type").map(String::as_str) {
@@ -45,7 +45,7 @@ pub(crate) fn read(c: &mut Component, attrs: &BTreeMap<String, String>) -> Resul
     Ok(())
 }
 pub(crate) fn write(out: &mut String, c: &Component) -> Result<()> {
-    use crate::write::attribute;
+    use crate::xml::attribute;
     let Kind::Arithmetic(kind) = c.kind else {
         return Ok(());
     };

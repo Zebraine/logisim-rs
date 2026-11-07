@@ -1,7 +1,7 @@
 //! Library descriptors are inert format metadata. No filesystem or JAR loader.
 use crate::{
     Error, Result,
-    write::{attribute, escape},
+    xml::{attribute, escape},
 };
 use logisim_core::{Component, Kind, Trigger};
 use std::{collections::BTreeMap, fmt::Write};
