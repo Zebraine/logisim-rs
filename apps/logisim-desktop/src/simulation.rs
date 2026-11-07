@@ -30,6 +30,7 @@ pub fn apply(sim: &mut Simulator, action: SimulationAction) {
         SimulationAction::ToggleTicks | SimulationAction::SetTickRate(_) => {}
         SimulationAction::ToggleInput { id, bit } => sim.toggle_input(id, bit),
         SimulationAction::SetInput { id, value } => sim.set_input(id, value),
+        SimulationAction::SetInputUnknown { id } => sim.set_input_unknown(id),
         SimulationAction::FillMemory {
             id,
             start,
@@ -118,13 +119,7 @@ pub fn present(circuit: &Circuit, sim: &Simulator) -> SimulationView {
         if c.kind != Kind::Button
             && let Some(value) = sim.input(c.id)
         {
-            view.inputs.insert(
-                c.id,
-                InputValue {
-                    bits: value.width(),
-                    value: value.number().unwrap_or(0),
-                },
-            );
+            view.inputs.insert(c.id, input_value(value));
         }
     }
     view.has_clocks = sim.has_clocks();
@@ -197,6 +192,7 @@ pub fn apply_project(
         SimulationAction::ToggleStored { id } => sim.toggle_stored(path, id),
         SimulationAction::ToggleInput { id, bit } => sim.toggle_input_at(path, id, bit),
         SimulationAction::SetInput { id, value } => sim.set_input_at(path, id, value),
+        SimulationAction::SetInputUnknown { id } => sim.set_input_unknown_at(path, id),
         _ => {}
     }
 }
@@ -233,6 +229,22 @@ pub fn present_project(
     view
 }
 
+fn input_value(value: Value) -> InputValue {
+    let mut input = InputValue {
+        bits: value.width(),
+        ..Default::default()
+    };
+    for bit in 0..value.width() {
+        match value.bit(bit) {
+            Bit::One => input.value |= 1 << bit,
+            Bit::Unknown => input.unknown |= 1 << bit,
+            Bit::Error => input.error |= 1 << bit,
+            Bit::Zero => {}
+        }
+    }
+    input
+}
+
 fn signal(value: Value, mismatch: bool) -> SignalView {
     let tone = if mismatch {
         SignalTone::WidthMismatch
@@ -253,6 +265,7 @@ fn signal(value: Value, mismatch: bool) -> SignalView {
         InputValue {
             bits: value.width(),
             value: number,
+            ..Default::default()
         }
         .text()
     } else if value.contains(Bit::Error) {
@@ -394,6 +407,27 @@ mod tests {
             "-2147483648"
         );
         assert_eq!(probe_text(Value::known(0, 0), Radix::Binary), "—");
+    }
+    #[test]
+    fn tristate_input_presentation_does_not_turn_unknown_bits_into_zero() {
+        let mut circuit = Circuit::default();
+        let mut pin = Component::new(Kind::Pin, Point::ZERO);
+        pin.bits = 8;
+        pin.pin.three_state = true;
+        let id = circuit.add_component(pin);
+        let mut sim = Simulator::default();
+        sim.synchronize(&circuit);
+        sim.advance(8);
+        assert_eq!(present(&circuit, &sim).inputs[&id].text(), "XX");
+        apply(&mut sim, SimulationAction::SetInput { id, value: 0xab });
+        apply(&mut sim, SimulationAction::ToggleInput { id, bit: 0 });
+        let input = present(&circuit, &sim).inputs[&id];
+        assert_eq!(input.text(), "AX");
+        assert_eq!(input.bit_text(0), "X");
+        assert_eq!(input.bit_text(1), "1");
+        assert_eq!(input.bit_text(2), "0");
+        apply(&mut sim, SimulationAction::SetInputUnknown { id });
+        assert_eq!(present(&circuit, &sim).inputs[&id].unknown, 255);
     }
     #[test]
     fn host_commands_and_presentation_keep_input_and_net_values_distinct_while_paused() {

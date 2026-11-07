@@ -227,7 +227,21 @@ pub fn serialize(document: &Document) -> Result<String> {
             }
             if c.kind == Kind::Pin {
                 attribute(&mut out, "output", c.output)?;
-                attribute(&mut out, "tristate", false)?;
+                attribute(&mut out, "tristate", c.pin.three_state)?;
+                attribute(
+                    &mut out,
+                    "pull",
+                    match c.pin.pull {
+                        logisim_core::PinPull::None => "none",
+                        logisim_core::PinPull::Up => "up",
+                        logisim_core::PinPull::Down => "down",
+                    },
+                )?;
+                attribute(
+                    &mut out,
+                    "labelloc",
+                    c.label_facing.name().to_ascii_lowercase(),
+                )?;
             }
             match c.kind {
                 Kind::Constant => {

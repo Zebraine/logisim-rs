@@ -91,7 +91,7 @@ fn full_supported_roundtrip_preserves_attributes_ports_and_wires() {
 }
 #[test]
 fn unsupported_content_is_reported_without_becoming_a_supported_component() {
-    let body = r#"<comp lib="w" name="Unknown Wiring Component" loc="(0,0)"/><comp lib="g" name="AND Gate" loc="(100,0)"><a name="negated-unknown" val="true"/></comp><comp lib="w" name="Pin" loc="(10,0)"/><comp name="sub" loc="(20,0)"/><comp lib="g" name="OR Gate" loc="(100,100)"/>"#;
+    let body = r#"<comp lib="w" name="Unknown Wiring Component" loc="(0,0)"/><comp lib="g" name="AND Gate" loc="(100,0)"><a name="negated-unknown" val="true"/></comp><comp lib="w" name="Pin" loc="(10,0)"><a name="pull" val="invalid"/></comp><comp name="sub" loc="(20,0)"/><comp lib="g" name="OR Gate" loc="(100,100)"/>"#;
     let imported = parse(&xml(body)).unwrap();
     assert_eq!(imported.warnings.len(), 5);
     assert_eq!(imported.document.main_circuit().circuit.components.len(), 1);
@@ -434,7 +434,7 @@ fn recursive_missing_and_custom_interfaces_never_silently_change_coordinates() {
     assert!(!serialize(&imported.document).unwrap().contains("<appear>"));
     let source = source.replace(
         "<appear><rect x=\"0\" y=\"0\" width=\"80\" height=\"40\"/></appear>",
-        "<comp lib=\"w\" name=\"Pin\" loc=\"(0,0)\"/>",
+        "<comp lib=\"w\" name=\"Pin\" loc=\"(0,0)\"><a name=\"pull\" val=\"invalid\"/></comp>",
     );
     let imported = parse(&source).unwrap();
     assert!(
@@ -989,4 +989,34 @@ fn counter_and_universal_register_runtime_schema_roundtrip_and_unsupported_prote
         d.main_circuit_mut().circuit.add_component(c);
         assert!(serialize(&d).is_err());
     }
+}
+
+#[test]
+fn pin_tristate_pull_and_world_label_locations_roundtrip() {
+    use logisim_core::{Facing, PinPull};
+    let mut body = String::new();
+    for (i, (tri, pull, location)) in [
+        ("true", "none", "north"),
+        ("false", "up", "east"),
+        ("true", "down", "south"),
+        ("false", "none", "west"),
+    ]
+    .iter()
+    .enumerate()
+    {
+        body.push_str(&format!(r#"<comp lib="w" name="Pin" loc="({},0)"><a name="tristate" val="{tri}"/><a name="pull" val="{pull}"/><a name="labelloc" val="{location}"/><a name="width" val="32"/></comp>"#, i*100));
+    }
+    body.push_str(r#"<comp lib="w" name="Pin" loc="(0,100)"/>"#);
+    let imported = parse(&xml(&body)).unwrap();
+    assert!(imported.warnings.is_empty(), "{:?}", imported.warnings);
+    let components = &imported.document.main_circuit().circuit.components;
+    assert_eq!(components.len(), 5);
+    assert_eq!(components[1].pin.pull, PinPull::Up);
+    assert_eq!(components[2].pin.pull, PinPull::Down);
+    assert_eq!(components[3].label_facing, Facing::West);
+    assert!(components[4].pin.three_state);
+    let saved = serialize(&imported.document).unwrap();
+    let restored = parse(&saved).unwrap();
+    assert!(restored.warnings.is_empty());
+    assert_eq!(restored.document, imported.document);
 }

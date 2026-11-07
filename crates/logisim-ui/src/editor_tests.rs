@@ -346,11 +346,14 @@ fn poke_and_simulation_shortcuts_emit_commands_without_editing_the_circuit() {
         .editor
         .circuit
         .add_component(Component::new(Kind::Pin, Point::new(200, 100)));
-    app.editor
-        .simulation
-        .view
-        .inputs
-        .insert(id, InputValue { bits: 1, value: 0 });
+    app.editor.simulation.view.inputs.insert(
+        id,
+        InputValue {
+            bits: 1,
+            value: 0,
+            ..Default::default()
+        },
+    );
     let before = app.editor.circuit.clone();
     let body = app.canvas.screen(Point::new(180, 100));
     click(&ctx, &mut app, body);
@@ -403,11 +406,14 @@ fn multibit_poke_focuses_hex_input_and_enter_applies_without_global_commands() {
     let mut pin = Component::new(Kind::Pin, Point::new(200, 100));
     pin.bits = 4;
     let id = app.editor.circuit.add_component(pin);
-    app.editor
-        .simulation
-        .view
-        .inputs
-        .insert(id, InputValue { bits: 4, value: 0 });
+    app.editor.simulation.view.inputs.insert(
+        id,
+        InputValue {
+            bits: 4,
+            value: 0,
+            ..Default::default()
+        },
+    );
     app.editor.set_tool(Tool::Poke);
     let body = app.canvas.screen(Point::new(180, 100));
     click(&ctx, &mut app, body);
@@ -1250,6 +1256,7 @@ fn switch_and_dip_clicks_are_runtime_only_and_follow_oriented_cells() {
                 InputValue {
                     bits: if kind == Kind::Switch { 1 } else { 4 },
                     value: 0,
+                    ..Default::default()
                 },
             );
             frame(&ctx, &mut app, vec![], Modifiers::NONE);

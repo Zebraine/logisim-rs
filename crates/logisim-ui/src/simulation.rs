@@ -31,21 +31,45 @@ pub struct SignalView {
     pub binary: String,
     pub tone: SignalTone,
 }
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct InputValue {
     pub bits: u8,
     pub value: u32,
+    pub unknown: u32,
+    pub error: u32,
 }
 impl InputValue {
+    pub fn bit_text(self, bit: u8) -> &'static str {
+        let mask = 1u32 << bit;
+        if self.error & mask != 0 {
+            "E"
+        } else if self.unknown & mask != 0 {
+            "X"
+        } else if self.value & mask != 0 {
+            "1"
+        } else {
+            "0"
+        }
+    }
     pub fn text(self) -> String {
         if self.bits == 1 {
-            self.value.to_string()
+            self.bit_text(0).into()
         } else {
-            format!(
-                "{:0width$X}",
-                self.value,
-                width = usize::from(self.bits.div_ceil(4))
-            )
+            (0..self.bits.div_ceil(4))
+                .rev()
+                .map(|n| {
+                    let mask = 15u32 << (n * 4);
+                    if self.error & mask != 0 {
+                        'E'
+                    } else if self.unknown & mask != 0 {
+                        'X'
+                    } else {
+                        char::from_digit((self.value >> (n * 4)) & 15, 16)
+                            .unwrap()
+                            .to_ascii_uppercase()
+                    }
+                })
+                .collect()
         }
     }
 }
@@ -122,6 +146,9 @@ pub enum SimulationAction {
         id: Id,
         value: u32,
     },
+    SetInputUnknown {
+        id: Id,
+    },
     FillMemory {
         id: Id,
         start: u32,
@@ -136,7 +163,7 @@ pub(crate) struct SimulationUi {
     pub actions: Vec<SimulationAction>,
     pub focus_value: bool,
     pub keyboard_focus: Option<Id>,
-    draft: Option<(Id, u32, String)>,
+    draft: Option<(Id, InputValue, String)>,
     held_button: Option<Id>,
     held_joystick: Option<(Id, Point)>,
 }
@@ -418,12 +445,22 @@ impl SimulationUi {
         let Some(input) = self.view.inputs.get(&c.id).copied() else {
             return;
         };
+        if c.kind == logisim_core::Kind::Pin
+            && c.pin.three_state
+            && ui.button(tr("Set input to X")).clicked()
+        {
+            self.actions
+                .push(SimulationAction::SetInputUnknown { id: c.id });
+        }
         if input.bits == 1 {
             ui.horizontal(|ui| {
                 ui.label(tr("Input"));
                 for value in [0, 1] {
                     if ui
-                        .selectable_label(input.value == value, value.to_string())
+                        .selectable_label(
+                            input.unknown == 0 && input.error == 0 && input.value == value,
+                            value.to_string(),
+                        )
                         .clicked()
                     {
                         self.actions
@@ -434,7 +471,7 @@ impl SimulationUi {
             return;
         }
         if self.draft.as_ref().is_none_or(|(id, _, _)| *id != c.id) {
-            self.draft = Some((c.id, input.value, input.text()));
+            self.draft = Some((c.id, input, input.text()));
         }
         let (_, previous, text) = self.draft.as_mut().unwrap();
         ui.label(tr("Input (hex)"));
@@ -464,17 +501,17 @@ impl SimulationUi {
                 tf!("Enter a hexadecimal value within {} bits.", input.bits),
             );
         }
-        if *previous != input.value {
+        if *previous != input {
             if !response.has_focus() {
                 *text = input.text();
             }
-            *previous = input.value;
+            *previous = input;
         }
         ui.horizontal_wrapped(|ui| {
             for bit in (0..input.bits).rev() {
-                let high = input.value & (1 << bit) != 0;
+                let text = input.bit_text(bit);
                 if ui
-                    .selectable_label(high, if high { "1" } else { "0" })
+                    .selectable_label(text == "1", text)
                     .on_hover_text(tf!("Toggle bit {}", bit))
                     .clicked()
                 {

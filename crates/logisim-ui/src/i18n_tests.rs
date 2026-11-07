@@ -2141,3 +2141,72 @@ fn course_components_library_trigger_undo_and_runtime_edit_in_both_languages() {
         );
     }
 }
+
+#[test]
+fn pin_pull_label_and_tristate_properties_edit_in_both_languages() {
+    for language in Language::ALL {
+        let ctx = Context::default();
+        configure(&ctx);
+        let mut app = Workspace::default();
+        app.set_language(language);
+        let t = |s| i18n::with_language(language, || i18n::tr(s).to_owned());
+        app.editor.set_tool(Tool::Place(Kind::Pin));
+        app.editor.place(Point::new(300, 300));
+        let id = app.circuit().components[0].id;
+        app.editor
+            .circuit
+            .add_wire(Point::new(300, 300), Point::new(400, 300));
+        let wires = app.circuit().wires.clone();
+        for _ in 0..3 {
+            frame(&ctx, &mut app, vec![]);
+        }
+        let labels = frame(&ctx, &mut app, vec![]);
+        for name in ["Label location", "Three-state input", "Pull behavior"] {
+            assert!(has(&labels, &t(name)));
+        }
+        let row = labels
+            .iter()
+            .find(|(s, _)| *s == t("Three-state input"))
+            .unwrap()
+            .1;
+        let checkbox = labels
+            .iter()
+            .find(|(s, r)| s.is_empty() && (r.center().y - row.center().y).abs() < 1.0)
+            .unwrap()
+            .1;
+        let pos = Pos2::new(checkbox.left() - 10.0, row.center().y);
+        for pressed in [true, false] {
+            frame(
+                &ctx,
+                &mut app,
+                vec![
+                    Event::PointerMoved(pos),
+                    Event::PointerButton {
+                        pos,
+                        button: PointerButton::Primary,
+                        pressed,
+                        modifiers: Modifiers::NONE,
+                    },
+                ],
+            );
+        }
+        assert!(app.circuit().component(id).unwrap().pin.three_state);
+        click(&ctx, &mut app, &t("Unchanged"));
+        click(&ctx, &mut app, &t("Pull down"));
+        assert_eq!(
+            app.circuit().component(id).unwrap().pin.pull,
+            logisim_core::PinPull::Down
+        );
+        assert_eq!(app.circuit().wires, wires);
+        app.editor.undo();
+        assert_eq!(
+            app.circuit().component(id).unwrap().pin.pull,
+            logisim_core::PinPull::None
+        );
+        app.editor.redo();
+        assert_eq!(
+            app.circuit().component(id).unwrap().pin.pull,
+            logisim_core::PinPull::Down
+        );
+    }
+}

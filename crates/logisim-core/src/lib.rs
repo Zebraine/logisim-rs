@@ -13,12 +13,14 @@ mod arithmetic;
 mod bus;
 mod latches;
 mod parity;
+mod pins;
 mod transistors;
 mod ttl;
 pub use arithmetic::{Arithmetic, ArithmeticOptions, BitSearch, Shift};
 pub use bus::{BusControl, Pull};
 pub use latches::{Latch, LatchEnable, LatchRole};
 pub use parity::{Parity, ParityOptions, ParityOutput};
+pub use pins::{PinOptions, PinPull};
 pub use transistors::{TransistorOptions, TransistorType};
 pub use ttl::{Ttl, TtlOptions};
 
@@ -361,6 +363,7 @@ pub struct Component {
     pub bits: u8,
     pub inputs: u8,
     pub output: bool,
+    pub pin: PinOptions,
     pub label: String,
     pub font_size: u8,
     pub color: [u8; 3],
@@ -418,6 +421,7 @@ impl Component {
             },
             inputs: 2,
             output: false,
+            pin: PinOptions::default(),
             label: if kind == Kind::Tunnel {
                 "tunnel".into()
             } else if kind == Kind::Text {

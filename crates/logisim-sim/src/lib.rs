@@ -18,6 +18,7 @@ mod memory;
 mod memory_tests;
 mod network;
 mod parity;
+mod pins;
 mod pla;
 #[cfg(test)]
 mod plexer_tests;
@@ -128,7 +129,7 @@ impl Simulator {
                 } else {
                     previous
                         .filter(|v| v.width() == bits)
-                        .unwrap_or_else(|| Value::known(bits, 0))
+                        .unwrap_or_else(|| pins::initial(c, bits))
                 };
                 (c.id, value)
             })
@@ -214,10 +215,14 @@ impl Simulator {
         self.inputs.get(&id).copied()
     }
     pub fn set_input(&mut self, id: Id, number: u32) {
+        if let Some(value) = self.input(id) {
+            self.set_input_value(id, Value::known(value.width(), number));
+        }
+    }
+    fn set_input_value(&mut self, id: Id, value: Value) {
         let Some(input) = self.inputs.get_mut(&id) else {
             return;
         };
-        let value = Value::known(input.width(), number);
         if *input == value {
             return;
         }
@@ -234,13 +239,6 @@ impl Simulator {
             self.schedule(id, value);
         }
     }
-    pub fn toggle_input(&mut self, id: Id, bit: u8) {
-        if let Some(value) = self.input(id)
-            && bit < value.width()
-        {
-            self.set_input(id, value.number().unwrap_or(0) ^ (1 << bit));
-        }
-    }
     pub fn reset(&mut self) {
         self.reset_displays();
         self.terminals = self
@@ -253,8 +251,11 @@ impl Simulator {
         for offset in self.joysticks.values_mut() {
             *offset = Point::ZERO;
         }
-        for input in self.inputs.values_mut() {
-            *input = Value::known(input.width(), 0);
+        for (id, input) in &mut self.inputs {
+            *input = pins::initial(
+                self.circuit.component(*id).expect("interactive input"),
+                input.width(),
+            );
         }
         self.storage = self
             .circuit
@@ -308,7 +309,12 @@ impl Simulator {
         }
     }
     fn external_input(&mut self, id: Id, value: Value) {
-        if let Some(input) = self.inputs.get_mut(&id) {
+        if let Some(input) = self.inputs.get_mut(&id)
+            && *input != value
+        {
+            // A three-state pin initially receiving all X retains X, even with a pull.
+            // Pulls apply when an external value changes the pin's current state.
+            let value = pins::pulled(self.circuit.component(id).expect("interface pin"), value);
             *input = value;
             self.schedule(id, value);
         }
@@ -700,7 +706,7 @@ fn electrically_equal(a: &Circuit, b: &Circuit) -> bool {
                 .iter()
                 .map(|p| (p.pin, p.bits, p.output))
                 .collect::<Vec<_>>(),
-            c.output && c.kind == Kind::Pin,
+            (c.kind == Kind::Pin).then_some((c.output, c.pin)),
             (c.kind == Kind::Constant).then_some(c.constant),
             (c.kind == Kind::Splitter).then_some(c.splitter.clone()),
             (c.kind == Kind::BitExtender).then_some((c.input_bits, c.extension)),

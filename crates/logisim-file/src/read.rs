@@ -513,7 +513,15 @@ fn component(
             Kind::Tunnel => matches!(key.as_str(), "facing" | "width" | "label" | "labelfont"),
             Kind::Pin => matches!(
                 key.as_str(),
-                "facing" | "width" | "label" | "labelfont" | "labelcolor" | "output" | "tristate"
+                "facing"
+                    | "width"
+                    | "label"
+                    | "labelfont"
+                    | "labelcolor"
+                    | "output"
+                    | "tristate"
+                    | "pull"
+                    | "labelloc"
             ),
             Kind::Gate(g) => {
                 matches!(
@@ -576,6 +584,7 @@ fn component(
     if matches!(
         kind,
         Kind::Subcircuit(_)
+            | Kind::Pin
             | Kind::Clock
             | Kind::Button
             | Kind::Switch
@@ -606,10 +615,14 @@ fn component(
         c.inputs = number(&a, "inputs", 2, 2..=8)?;
     }
     c.output = boolean(&a, "output", false)?;
-    if kind == Kind::Pin && !c.output && boolean(&a, "tristate", true)? {
-        return Err(Error(
-            "Three-state inputs are not implemented (tristate must be false).".into(),
-        ));
+    if kind == Kind::Pin {
+        c.pin.three_state = boolean(&a, "tristate", true)?;
+        c.pin.pull = match value(&a, "pull", "none") {
+            "none" => logisim_core::PinPull::None,
+            "up" => logisim_core::PinPull::Up,
+            "down" => logisim_core::PinPull::Down,
+            _ => return Err(Error("Invalid pin pull behavior".into())),
+        };
     }
     if let Kind::Gate(g) = kind {
         c.gate_size = match (g, value(&a, "size", if g.unary() { "20" } else { "30" })) {

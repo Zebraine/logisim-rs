@@ -359,6 +359,14 @@ impl ProjectSimulator {
     pub fn toggle_input(&mut self, id: Id, bit: u8) {
         self.toggle_input_at(&[], id, bit);
     }
+    pub fn set_input_unknown_at(&mut self, path: &[Id], id: Id) {
+        if path.is_empty()
+            && let Some(state) = self.states.get_mut(path)
+        {
+            state.sim.set_input_unknown(id);
+            self.unsettled = 0;
+        }
+    }
     pub fn set_input_at(&mut self, path: &[Id], id: Id, value: u32) {
         if let Some(state) = self.states.get_mut(path)
             && (path.is_empty()

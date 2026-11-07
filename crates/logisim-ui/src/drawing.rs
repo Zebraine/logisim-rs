@@ -704,6 +704,7 @@ pub(crate) fn component(
         } else if matches!(
             c.kind,
             Kind::Probe
+                | Kind::Pin
                 | Kind::Subcircuit(_)
                 | Kind::Clock
                 | Kind::Button

@@ -371,6 +371,20 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
         ui.label(tr("Output pin"));
         ui.checkbox(&mut c.output, "");
         ui.end_row();
+        if !c.output {
+            ui.label(tr("Three-state input"));
+            ui.checkbox(&mut c.pin.three_state, "");
+            ui.end_row();
+            ui.label(tr("Pull behavior"));
+            egui::ComboBox::from_id_salt("pin_pull")
+                .selected_text(tr(c.pin.pull.name()))
+                .show_ui(ui, |ui| {
+                    for pull in logisim_core::PinPull::ALL {
+                        ui.selectable_value(&mut c.pin.pull, pull, tr(pull.name()));
+                    }
+                });
+            ui.end_row();
+        }
     }
     if c.kind.has_label() {
         ui.label(tr("Font size"));
@@ -402,6 +416,7 @@ fn wiring_fields(ui: &mut Ui, c: &mut Component) -> bool {
     let mut active = false;
     match c.kind {
         Kind::Subcircuit(_)
+        | Kind::Pin
         | Kind::Clock
         | Kind::Button
         | Kind::Switch
