@@ -7,6 +7,7 @@ pub(crate) enum Mode {
     Open,
     Save,
     Memory,
+    Library,
 }
 pub(crate) struct Picker {
     pub mode: Mode,
@@ -74,8 +75,11 @@ impl Picker {
             Mode::Open => tr("Open circuit"),
             Mode::Save => tr("Save circuit as"),
             Mode::Memory => tr("Import memory image"),
+            Mode::Library => tr("Load .circ Library…"),
         });
-        ui.label(tr(if self.mode == Mode::Memory {
+        ui.label(tr(if self.mode == Mode::Library {
+            "Import an editable snapshot; saved projects do not need the source library."
+        } else if self.mode == Mode::Memory {
             "Logisim .hex · v2.0 raw · replaces all words"
         } else {
             "Logisim-ITA compatible .circ · supported components only"

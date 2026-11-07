@@ -367,6 +367,7 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Edit contents…", "编辑内容…"),
     ("Edit programming table…", "编辑编程表…"),
     ("Ellipse", "椭圆"),
+    ("Embedded library snapshot", "已嵌入的库快照"),
     ("Enable", "使能"),
     ("Enable (0 holds outputs)", "使能（0 时保持输出）"),
     ("Enable (active high)", "使能（高电平有效）"),
@@ -406,6 +407,7 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Fan out", "分支数量"),
     ("File", "文件"),
     ("File exceeds the 8 MiB limit.", "文件超过 8 MiB 限制。"),
+    ("File is not UTF-8", "文件不是 UTF-8 编码"),
     ("File is not UTF-8: {}", "文件不是 UTF-8 编码：{}"),
     ("File name or full path", "文件名或完整路径"),
     ("File operation failed", "文件操作失败"),
@@ -443,6 +445,10 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Hold to press", "按住按钮"),
     ("Horizontal", "水平对齐"),
     ("Import .hex…", "导入 .hex…"),
+    (
+        "Import an editable snapshot; saved projects do not need the source library.",
+        "导入可编辑快照；保存后的项目无需原库文件。",
+    ),
     ("Import memory image", "导入存储器映像"),
     ("Imported supported content only", "仅导入已支持的内容"),
     ("Include Vcc/Gnd pins", "显示 Vcc/GND 引脚"),
@@ -472,6 +478,7 @@ const MESSAGES: &[(&str, &str)] = &[
     ),
     ("Instruction", "指令"),
     ("Internal Pin: ({}, {})", "内部引脚：（{}, {}）"),
+    ("Invalid library name.", "库名称无效。"),
     ("Invert input {}", "输入 {} 取反"),
     ("Italic", "斜体"),
     ("J-K Flip-Flop", "JK 触发器"),
@@ -494,6 +501,10 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Left-handed", "左侧"),
     ("Legacy", "传统"),
     ("Less than", "小于"),
+    (
+        "Library import cancelled: unsupported content would be omitted.\n\n{}",
+        "已取消库导入：以下未支持内容会被省略。\n\n{}",
+    ),
     ("Light persistence (ticks)", "余辉（Tick 数）"),
     ("Line", "线段"),
     (
@@ -508,6 +519,7 @@ const MESSAGES: &[(&str, &str)] = &[
         "Line {}: the image exceeds this memory's address capacity.",
         "第 {} 行：映像超出此存储器的地址容量。",
     ),
+    ("Load .circ Library…", "加载 .circ 库…"),
     ("Load Library…", "加载元件库…"),
     ("Load next value", "加载下一值"),
     (
@@ -875,6 +887,10 @@ const MESSAGES: &[(&str, &str)] = &[
     (
         "The highlight follows the connected net, including matching tunnel labels.",
         "高亮显示整个相连网络，包括同名隧道。",
+    ),
+    (
+        "The library would exceed the project circuit limit.",
+        "导入此库将超出项目电路数量限制。",
     ),
     (
         "The memory dimensions are not supported.",

@@ -6,6 +6,7 @@ pub enum FileAction {
     Save,
     SaveAs,
     ImportMemory,
+    ImportLibrary,
     Close,
 }
 #[derive(Clone, Debug)]

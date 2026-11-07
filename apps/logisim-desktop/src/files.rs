@@ -137,6 +137,7 @@ impl Files {
                 *sim = Simulator::default();
             }
             FileAction::Open => self.picker(Mode::Open),
+            FileAction::ImportLibrary => self.picker(Mode::Library),
             FileAction::ImportMemory => {
                 if let Some(target) = workspace.memory_import_target() {
                     self.dialog = Some(Dialog::MemoryPicker {
@@ -225,7 +226,17 @@ impl Files {
                 }
             }
             (Dialog::Picker(picker), Response::Pick(path)) => {
-                if picker.mode == Mode::Open {
+                if picker.mode == Mode::Library {
+                    match crate::library_import::load(&path, workspace.project()) {
+                        Ok(imported) => {
+                            workspace.apply_library_import(imported);
+                            if let Some(parent) = path.parent() {
+                                self.directory = parent.to_path_buf();
+                            }
+                        }
+                        Err(error) => self.error(format!("{}\n\n{error}", path.display())),
+                    }
+                } else if picker.mode == Mode::Open {
                     self.load(&path, workspace, sim);
                 } else {
                     match storage::destination(&path) {

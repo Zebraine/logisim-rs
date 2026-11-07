@@ -6,7 +6,9 @@ pub use appearance::{
     Appearance, Artwork, ArtworkFont, Geometry, MAX_SHAPES, Paint, Rgb, TextAnchor,
 };
 
+mod library;
 mod project;
+pub use library::LibraryImport;
 pub use project::{
     CircuitDefinition, CircuitLabel, Interface, InterfacePort, MAX_CIRCUITS, Project,
 };

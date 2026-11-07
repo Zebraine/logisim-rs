@@ -101,6 +101,11 @@ impl Workspace {
                 }
             });
             ui.menu_button(tr("Project"), |ui| {
+                if ui.button(tr("Load .circ Library…")).clicked() {
+                    self.file_actions.push(FileAction::ImportLibrary);
+                    ui.close();
+                }
+                ui.separator();
                 for (label, command, enabled) in [
                     ("Add Circuit… · Ctrl+Shift+N", CircuitCommand::Add, true),
                     ("Rename Circuit…", CircuitCommand::Rename, true),
@@ -166,7 +171,7 @@ impl Workspace {
                     self.appearance.revert(&mut self.editor);
                     ui.close();
                 }
-                disabled_actions(ui, &["Load Library…", "Project Options…"]);
+                disabled_actions(ui, &["Project Options…"]);
             });
             ui.menu_button(tr("Simulate"), |ui| {
                 self.editor.simulation.menu(ui);

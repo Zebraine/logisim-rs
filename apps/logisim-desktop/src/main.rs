@@ -4,6 +4,7 @@ mod file_picker;
 #[cfg(test)]
 mod file_tests;
 mod files;
+mod library_import;
 mod memory_import;
 mod preferences;
 mod simulation;
