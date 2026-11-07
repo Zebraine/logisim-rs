@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dependencies]
 logisim-core.workspace = true
+logisim-course.workspace = true
 roxmltree = "=0.20.0"
 
 [lints]

@@ -1,57 +1,20 @@
-use crate::{Bit, Simulator, Value};
-use logisim_core::{Id, Kind, Trigger};
+//! Adapter between the scheduler and the independent native component pack.
+use crate::{Simulator, Value};
+use logisim_core::{Id, Kind};
+pub(crate) use logisim_course::RegisterFile as State;
 
-pub(crate) struct State {
-    pub words: [Value; 32],
-    clock: Bit,
-}
-impl Default for State {
-    fn default() -> Self {
-        Self {
-            words: [Value::known(32, 0); 32],
-            clock: Bit::Unknown,
-        }
-    }
-}
-impl State {
-    fn read(&self, address: Value) -> Value {
-        address
-            .number()
-            .and_then(|i| self.words.get(i as usize).copied())
-            .unwrap_or_else(|| Value::filled(32, Bit::Unknown))
-    }
-    fn evaluate(&mut self, trigger: Trigger, ports: &[Value]) -> [Value; 2] {
-        let clock = ports[3].bit(0);
-        let write = match trigger {
-            Trigger::Rising => self.clock == Bit::Zero && clock == Bit::One,
-            Trigger::Falling => self.clock == Bit::One && clock == Bit::Zero,
-            Trigger::High => clock == Bit::One,
-            Trigger::Low => clock == Bit::Zero,
-        };
-        self.clock = clock;
-        if write && ports[4].bit(0) != Bit::Zero {
-            match ports[5].number() {
-                Some(1..=31) => self.words[ports[5].number().unwrap() as usize] = ports[2],
-                Some(_) => {}
-                None => self.words[1..].fill(Value::filled(32, Bit::Unknown)),
-            }
-        }
-        [self.read(ports[6]), self.read(ports[7])]
-    }
-}
 impl Simulator {
     pub fn register_file(&self, id: Id) -> Option<&[Value; 32]> {
-        self.register_files.get(&id).map(|s| &s.words)
+        self.register_files.get(&id).map(State::words)
     }
     /// Runtime-only Poke; zero is immutable and each hierarchy instance owns its state.
     pub fn set_register_file_word(&mut self, id: Id, address: u8, value: u32) {
-        if !(1..32).contains(&address) {
-            return;
-        }
         let Some(state) = self.register_files.get_mut(&id) else {
             return;
         };
-        state.words[usize::from(address)] = Value::known(32, value);
+        if !state.poke(address, value) {
+            return;
+        }
         self.limited = false;
         self.progress.restart();
         self.schedule_register_files();
@@ -66,12 +29,10 @@ impl Simulator {
                 (
                     c.id,
                     c.sequential.trigger,
-                    (0..8)
-                        .map(|i| {
-                            self.port_value(c.id, i)
-                                .expect("compiled register-file port")
-                        })
-                        .collect::<Vec<_>>(),
+                    std::array::from_fn(|i| {
+                        self.port_value(c.id, i)
+                            .expect("compiled register-file port")
+                    }),
                 )
             })
             .collect();
@@ -91,121 +52,6 @@ impl Simulator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn ports() -> [Value; 8] {
-        [
-            Value::known(32, 0),
-            Value::known(32, 0),
-            Value::known(32, 0xa5a55a5a),
-            Value::known(1, 0),
-            Value::known(1, 1),
-            Value::known(5, 1),
-            Value::known(5, 1),
-            Value::known(5, 0),
-        ]
-    }
-    #[test]
-    fn all_triggers_initial_clock_transparency_and_dual_read() {
-        for trigger in Trigger::ALL {
-            let mut s = State::default();
-            let mut p = ports();
-            assert_eq!(
-                s.evaluate(trigger, &p)[0].number(),
-                Some(if trigger == Trigger::Low {
-                    0xa5a55a5a
-                } else {
-                    0
-                })
-            );
-            p[3] = Value::known(1, 1);
-            s.evaluate(trigger, &p);
-            assert_eq!(
-                s.words[1].number(),
-                Some(if trigger == Trigger::Falling {
-                    0
-                } else {
-                    0xa5a55a5a
-                })
-            );
-            p[2] = Value::known(32, 42);
-            s.evaluate(trigger, &p);
-            assert_eq!(
-                s.words[1].number(),
-                Some(if trigger == Trigger::High {
-                    42
-                } else if trigger == Trigger::Falling {
-                    0
-                } else {
-                    0xa5a55a5a
-                })
-            );
-            p[3] = Value::known(1, 0);
-            let out = s.evaluate(trigger, &p);
-            assert_eq!(out[1].number(), Some(0));
-            assert_eq!(
-                out[0].number(),
-                Some(if trigger == Trigger::Rising {
-                    0xa5a55a5a
-                } else {
-                    42
-                })
-            );
-        }
-        for (trigger, clock) in [(Trigger::Rising, 1), (Trigger::Falling, 0)] {
-            let mut s = State::default();
-            let mut p = ports();
-            p[3] = Value::known(1, clock);
-            assert_eq!(s.evaluate(trigger, &p)[0].number(), Some(0));
-        }
-    }
-    #[test]
-    fn four_state_controls_addresses_and_data() {
-        for we in [Bit::Zero, Bit::One, Bit::Unknown, Bit::Error] {
-            let mut s = State::default();
-            let mut p = ports();
-            p[3] = Value::known(1, 1);
-            p[4] = Value::filled(1, we);
-            assert_eq!(
-                s.evaluate(Trigger::High, &p)[0].number(),
-                Some(if we == Bit::Zero { 0 } else { 0xa5a55a5a })
-            );
-        }
-        for bad in [Bit::Unknown, Bit::Error] {
-            let mut s = State::default();
-            let mut p = ports();
-            p[3] = Value::filled(1, bad);
-            assert_eq!(s.evaluate(Trigger::High, &p)[0].number(), Some(0));
-            p[3] = Value::known(1, 1);
-            p[2] = Value::filled(32, bad);
-            assert_eq!(s.evaluate(Trigger::High, &p)[0], p[2]);
-            p[2] = Value::known(32, 7);
-            p[5] = Value::filled(5, bad);
-            s.evaluate(Trigger::High, &p);
-            assert_eq!(s.words[0].number(), Some(0));
-            assert!(
-                s.words[1..]
-                    .iter()
-                    .all(|v| *v == Value::filled(32, Bit::Unknown))
-            );
-            p[4] = Value::known(1, 0);
-            p[6] = Value::filled(5, bad);
-            assert_eq!(
-                s.evaluate(Trigger::High, &p)[0],
-                Value::filled(32, Bit::Unknown)
-            );
-        }
-        let mut s = State::default();
-        let mut p = ports();
-        p[3] = Value::known(1, 1);
-        p[5] = Value::known(5, 0);
-        p[6] = p[5];
-        assert_eq!(s.evaluate(Trigger::High, &p)[0].number(), Some(0));
-        p[5] = Value::known(5, 31);
-        p[6] = p[5];
-        p[7] = p[5];
-        p[2] = Value::from_bits((0..32).map(|i| if i == 0 { Bit::Unknown } else { Bit::Zero }));
-        assert_eq!(s.evaluate(Trigger::High, &p), [p[2]; 2]);
-    }
-
     fn add_file(circuit: &mut logisim_core::Circuit, x: i32) -> Id {
         use logisim_core::{Component, Point};
         let c = Component::new(Kind::RegisterFile, Point::new(x, 200));

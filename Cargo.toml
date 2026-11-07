@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "apps/logisim-desktop",
     "crates/logisim-core",
+    "crates/logisim-course",
     "crates/logisim-sim",
     "crates/logisim-file",
     "crates/logisim-ui",
@@ -18,6 +19,7 @@ publish = false
 
 [workspace.dependencies]
 logisim-core = { path = "crates/logisim-core" }
+logisim-course = { path = "crates/logisim-course" }
 logisim-sim = { path = "crates/logisim-sim" }
 logisim-file = { path = "crates/logisim-file" }
 logisim-ui = { path = "crates/logisim-ui" }

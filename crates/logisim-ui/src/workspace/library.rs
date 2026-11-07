@@ -87,7 +87,7 @@ pub(super) fn groups() -> &'static [ToolGroup] {
             },
             ToolGroup {
                 key: "Course components",
-                tools: vec![Kind::RegisterFile, Kind::RiscVProbe],
+                tools: logisim_course::TOOLS.to_vec(),
             },
         ]
     })

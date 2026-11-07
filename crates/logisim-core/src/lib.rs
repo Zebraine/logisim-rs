@@ -1,4 +1,7 @@
-//! Editable circuit geometry. No GUI, file format or signal evaluation dependencies.
+//! Circuit geometry and signal values. No GUI, file format or simulation runtime dependencies.
+
+mod signal;
+pub use signal::{Bit, Value};
 
 mod appearance;
 mod external;

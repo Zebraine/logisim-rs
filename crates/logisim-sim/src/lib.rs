@@ -41,10 +41,10 @@ mod transistors;
 mod ttl;
 mod value;
 
+pub use logisim_core::{Bit, Value};
 use logisim_core::{Circuit, Id, Point};
 use network::Network;
 use std::collections::BTreeMap;
-pub use value::{Bit, Value};
 
 const PROPAGATION_LIMIT: usize = 1024;
 

@@ -11,9 +11,7 @@ pub(crate) fn identify(descriptor: &str, name: &str) -> Option<Kind> {
     if path.is_empty() || path.contains('#') {
         return None;
     }
-    [Kind::RegisterFile, Kind::RiscVProbe]
-        .into_iter()
-        .find(|k| k.external_identity() == Some((entry, name)))
+    logisim_course::identify(entry, name)
 }
 pub(crate) fn read(
     c: &mut Component,

@@ -1221,10 +1221,18 @@ name = "logisim-core"
 version = "0.1.0"
 
 [[package]]
+name = "logisim-course"
+version = "0.1.0"
+dependencies = [
+ "logisim-core",
+]
+
+[[package]]
 name = "logisim-file"
 version = "0.1.0"
 dependencies = [
  "logisim-core",
+ "logisim-course",
  "roxmltree 0.20.0",
 ]
 
@@ -1244,6 +1252,7 @@ name = "logisim-sim"
 version = "0.1.0"
 dependencies = [
  "logisim-core",
+ "logisim-course",
 ]
 
 [[package]]
@@ -1252,6 +1261,7 @@ version = "0.1.0"
 dependencies = [
  "egui",
  "logisim-core",
+ "logisim-course",
 ]
 
 [[package]]

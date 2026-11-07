@@ -20,10 +20,15 @@ Rust＋egui 数字逻辑电路工具，以 Logisim-ITA v2.16.2.2 的实际运行
 ```text
 apps/logisim-desktop/    应用入口与组装（logisim-rs）
 crates/logisim-core/     电路领域模型
+crates/logisim-course/   独立课程元件行为包（RegisterFile、RISC-V Probe）
 crates/logisim-sim/      无界面仿真及元件行为
 crates/logisim-file/     .circ 导入、导出与诊断
 crates/logisim-ui/       egui 编辑器与画布
 ```
+
+`logisim-course` 只依赖 `core`，可独立构建和测试；提供寄存器文件状态机、指令探针解码
+和工具注册列表。仿真调度、文件格式与界面适配分别留在 `sim`、`file`、`ui`。
+这是静态 Rust 元件包；固定 `Kind` 和端口合同仍在 `core`，尚不支持运行时加载任意元件代码。
 
 各 crate 保持稳定的公开入口，内部按职责扩展：
 

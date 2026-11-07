@@ -1,6 +1,6 @@
 [package]
 name = "logisim-core"
-description = "Circuit domain model boundary; M0 scaffold"
+description = "Circuit geometry, project identities and four-state signal values"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
