@@ -392,6 +392,7 @@ const MESSAGES: &[(&str, &str)] = &[
         "错误信号：驱动冲突 / 未定义输入",
     ),
     ("Even Parity", "偶校验门"),
+    ("Exactly one", "恰好一个为 1"),
     ("Exit", "退出"),
     (
         "Expanded hierarchy exceeds 65536 items.",
@@ -584,6 +585,7 @@ const MESSAGES: &[(&str, &str)] = &[
     ("OR Gate", "或门"),
     ("Octal", "八进制"),
     ("Odd Parity", "奇校验门"),
+    ("Odd parity", "奇数个为 1"),
     ("Off color", "熄灭颜色"),
     ("Old behavior", "旧行为"),
     ("On color", "点亮颜色"),
@@ -976,6 +978,7 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Write word", "写入单字"),
     ("XNOR Gate", "同或门"),
     ("XOR Gate", "异或门"),
+    ("XOR mode", "异或模式"),
     (
         "Your choice applies now. Retry to save it for the next launch.",
         "当前语言已生效。请重试保存，以便下次启动时继续使用。",

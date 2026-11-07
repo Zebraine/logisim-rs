@@ -11,6 +11,7 @@ pub use project::{CircuitDefinition, Interface, InterfacePort, MAX_CIRCUITS, Pro
 
 mod arithmetic;
 mod bus;
+mod gates;
 mod latches;
 mod parity;
 mod pins;
@@ -18,6 +19,7 @@ mod transistors;
 mod ttl;
 pub use arithmetic::{Arithmetic, ArithmeticOptions, BitSearch, Shift};
 pub use bus::{BusControl, Pull};
+pub use gates::GateOptions;
 pub use latches::{Latch, LatchEnable, LatchRole};
 pub use parity::{Parity, ParityOptions, ParityOutput};
 pub use pins::{PinOptions, PinPull};
@@ -368,6 +370,7 @@ pub struct Component {
     pub font_size: u8,
     pub color: [u8; 3],
     pub gate_size: GateSize,
+    pub gate_options: GateOptions,
     pub text_horizontal: HorizontalAlign,
     pub text_vertical: VerticalAlign,
     pub constant: u32,
@@ -443,6 +446,7 @@ impl Component {
                 [51, 65, 85]
             },
             gate_size: GateSize::Narrow,
+            gate_options: GateOptions::default(),
             text_horizontal: HorizontalAlign::Left,
             text_vertical: VerticalAlign::Top,
             constant: 1,
@@ -567,7 +571,15 @@ impl Component {
                     _ => index * GRID,
                 }
             };
-            ports.push(Point::new(-self.gate_depth(), y));
+            let y = if matches!(self.facing, Facing::South | Facing::West) {
+                -y
+            } else {
+                y
+            };
+            ports.push(Point::new(
+                -self.gate_depth() - if self.gate_negated(i) { 10 } else { 0 },
+                y,
+            ));
         }
         ports
     }
@@ -779,6 +791,8 @@ impl Circuit {
                 || matches!(old.kind, Kind::DotMatrix | Kind::Joystick)
                 || old.kind.is_transistor()
                 || matches!(old.kind, Kind::Parity(_) | Kind::Latch(_) | Kind::Ttl(_))
+                || (matches!(old.kind, Kind::Gate(_))
+                    && old.gate_options.negated != replacement.gate_options.negated)
                 || (old.kind.is_controlled()
                     && (old.bus.control_left != replacement.bus.control_left
                         || old.gate_size != replacement.gate_size))

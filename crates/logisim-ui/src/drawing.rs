@@ -214,6 +214,11 @@ pub(crate) fn bounds(c: &Component) -> Rect {
     ] {
         rect.extend_with(local(c, p).to_pos2());
     }
+    if matches!(c.kind, Kind::Gate(_)) {
+        for p in c.ports() {
+            rect.extend_with(pos(p));
+        }
+    }
     rect
 }
 pub(crate) fn wire_distance(w: Wire, point: Vec2) -> f32 {
@@ -483,7 +488,7 @@ pub(crate) fn component(
                     }
                 }
             }
-            for port in c.local_ports().into_iter().skip(1) {
+            for (index, port) in c.local_ports().into_iter().skip(1).enumerate() {
                 let input_x = if matches!(gate, Gate::Or | Gate::Nor | Gate::Xor | Gate::Xnor) {
                     -52.0 + 10.0 * (std::f32::consts::FRAC_PI_2 * port.y as f32 / h).cos()
                 } else {
@@ -496,6 +501,14 @@ pub(crate) fn component(
                     ],
                     stroke,
                 );
+                if c.gate_negated(index as u8) {
+                    p.circle(
+                        at((port.x + 5) as f32 / scale_x, port.y as f32),
+                        4.5 * canvas.camera.zoom,
+                        Color32::WHITE,
+                        stroke,
+                    );
+                }
             }
             if gate.inverted() {
                 p.circle_stroke(at(-5.0, 0.0), 5.0 * scale_x * canvas.camera.zoom, stroke);

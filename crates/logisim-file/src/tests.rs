@@ -251,13 +251,18 @@ fn measured_gate_matrix_has_exact_ports_and_rotations() {
                 c.inputs = n;
                 for facing in Facing::ALL {
                     c.facing = facing;
-                    assert_eq!(
-                        c.ports()[1..],
-                        expected
-                            .iter()
-                            .map(|y| facing.transform(Point::new(-depth, *y)))
-                            .collect::<Vec<_>>()
-                    );
+                    let mut positions: Vec<_> = expected
+                        .iter()
+                        .map(|y| facing.transform(Point::new(-depth, *y)))
+                        .collect();
+                    positions.sort_by_key(|p| {
+                        if matches!(facing, Facing::East | Facing::West) {
+                            p.y
+                        } else {
+                            p.x
+                        }
+                    });
+                    assert_eq!(c.ports()[1..], positions);
                 }
             }
         }

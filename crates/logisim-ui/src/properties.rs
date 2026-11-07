@@ -322,6 +322,32 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
         let r = ui.add(egui::DragValue::new(&mut c.inputs).range(2..=8));
         active |= r.has_focus() || r.dragged();
         ui.end_row();
+        if matches!(gate, Gate::Xor | Gate::Xnor) {
+            ui.label(tr("XOR mode"));
+            egui::ComboBox::from_id_salt("gate_xor_mode")
+                .selected_text(tr(if c.gate_options.xor_odd {
+                    "Odd parity"
+                } else {
+                    "Exactly one"
+                }))
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut c.gate_options.xor_odd, false, tr("Exactly one"));
+                    ui.selectable_value(&mut c.gate_options.xor_odd, true, tr("Odd parity"));
+                });
+            ui.end_row();
+        }
+        for i in 0..c.input_count() {
+            ui.label(tf!("Invert input {}", i + 1));
+            let mut inverted = c.gate_negated(i);
+            if ui
+                .push_id(("gate_inversion", i), |ui| ui.checkbox(&mut inverted, ""))
+                .inner
+                .changed()
+            {
+                c.gate_options.negated ^= 1 << i;
+            }
+            ui.end_row();
+        }
     }
     if let Kind::Gate(gate) = c.kind
         && gate != Gate::Buffer

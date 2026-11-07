@@ -2210,3 +2210,61 @@ fn pin_pull_label_and_tristate_properties_edit_in_both_languages() {
         );
     }
 }
+
+#[test]
+fn ordinary_gate_xor_mode_and_input_inversion_edit_with_undo_in_both_languages() {
+    for language in Language::ALL {
+        let ctx = Context::default();
+        configure(&ctx);
+        let mut app = Workspace::default();
+        app.set_language(language);
+        let t = |s| i18n::with_language(language, || i18n::tr(s).to_owned());
+        app.editor
+            .set_tool(Tool::Place(Kind::Gate(logisim_core::Gate::Xor)));
+        app.editor.place(Point::new(300, 300));
+        let c = &app.circuit().components[0];
+        let id = c.id;
+        let port = c.ports()[1];
+        app.editor.circuit.add_wire(port, port + Point::new(-40, 0));
+        let geometry = |c: &logisim_core::Circuit| {
+            c.wires
+                .iter()
+                .flat_map(|w| (w.a.x.min(w.b.x)..=w.a.x.max(w.b.x)).map(move |x| (x, w.a.y)))
+                .collect::<std::collections::BTreeSet<_>>()
+        };
+        let wires = geometry(app.circuit());
+        click(&ctx, &mut app, &t("Exactly one"));
+        click(&ctx, &mut app, &t("Odd parity"));
+        assert!(app.circuit().component(id).unwrap().gate_options.xor_odd);
+        let labels = frame(&ctx, &mut app, vec![]);
+        let row_label = i18n::with_language(language, || tf!("Invert input {}", 1));
+        let row = labels.iter().find(|(s, _)| *s == row_label).unwrap().1;
+        let checkbox = labels
+            .iter()
+            .find(|(s, r)| s.is_empty() && (r.center().y - row.center().y).abs() < 1.0)
+            .unwrap()
+            .1;
+        let pos = Pos2::new(checkbox.left() - 10.0, row.center().y);
+        for pressed in [true, false] {
+            frame(
+                &ctx,
+                &mut app,
+                vec![
+                    Event::PointerMoved(pos),
+                    Event::PointerButton {
+                        pos,
+                        button: PointerButton::Primary,
+                        pressed,
+                        modifiers: Modifiers::NONE,
+                    },
+                ],
+            );
+        }
+        assert!(app.circuit().component(id).unwrap().gate_negated(0));
+        assert_eq!(geometry(app.circuit()), wires);
+        app.editor.undo();
+        assert!(!app.circuit().component(id).unwrap().gate_negated(0));
+        app.editor.redo();
+        assert!(app.circuit().component(id).unwrap().gate_negated(0));
+    }
+}

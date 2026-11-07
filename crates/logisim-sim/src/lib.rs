@@ -1,4 +1,5 @@
 //! Bounded signal propagation and sequential state, independent of the GUI.
+mod gates;
 mod hierarchy;
 pub use hierarchy::ProjectSimulator;
 mod arithmetic;
@@ -338,10 +339,12 @@ impl Simulator {
                     }
                     Kind::Gate(gate) => {
                         let inputs: Vec<_> = (1..=usize::from(c.input_count()))
-                            .filter(|i| gate.unary() || self.network.connected((c.id, *i)))
-                            .map(|i| self.port_value(c.id, i).expect("compiled gate port"))
+                            .map(|i| {
+                                (gate.unary() || self.network.connected((c.id, i)))
+                                    .then(|| self.port_value(c.id, i).expect("compiled gate port"))
+                            })
                             .collect();
-                        value::evaluate(gate, c.bits, &inputs)
+                        gates::evaluate(c, &inputs)
                     }
                     Kind::ControlledBuffer | Kind::ControlledInverter => bus::evaluate(
                         c,
@@ -706,7 +709,10 @@ fn electrically_equal(a: &Circuit, b: &Circuit) -> bool {
                 .iter()
                 .map(|p| (p.pin, p.bits, p.output))
                 .collect::<Vec<_>>(),
-            (c.kind == Kind::Pin).then_some((c.output, c.pin)),
+            (
+                (c.kind == Kind::Pin).then_some((c.output, c.pin)),
+                matches!(c.kind, Kind::Gate(_)).then_some(c.gate_options),
+            ),
             (c.kind == Kind::Constant).then_some(c.constant),
             (c.kind == Kind::Splitter).then_some(c.splitter.clone()),
             (c.kind == Kind::BitExtender).then_some((c.input_bits, c.extension)),

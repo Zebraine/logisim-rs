@@ -209,6 +209,7 @@ pub fn serialize(document: &Document) -> Result<String> {
             crate::ttl::write(&mut out, c)?;
             crate::latches::write(&mut out, c)?;
             crate::parity::write(&mut out, c)?;
+            crate::gates::write(&mut out, c)?;
             crate::bus::write(&mut out, c)?;
             crate::transistors::write(&mut out, c)?;
             crate::sequential::write(&mut out, c)?;

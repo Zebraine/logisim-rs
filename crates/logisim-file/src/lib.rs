@@ -5,6 +5,7 @@ mod arithmetic;
 mod bus;
 mod diagnostics;
 mod external;
+mod gates;
 mod hex;
 mod io;
 mod latches;

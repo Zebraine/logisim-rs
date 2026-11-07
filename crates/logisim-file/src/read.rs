@@ -529,6 +529,8 @@ fn component(
                     "facing" | "width" | "label" | "labelfont" | "labelcolor"
                 ) || (key == "size" && g != Gate::Buffer)
                     || (key == "inputs" && !g.unary())
+                    || (!g.unary() && crate::gates::index(key).is_some())
+                    || (key == "xor" && matches!(g, Gate::Xor | Gate::Xnor))
             }
         };
         if !allowed {
@@ -634,6 +636,7 @@ fn component(
             _ => return Err(Error("Unsupported gate size".into())),
         };
     }
+    crate::gates::read(&mut c, &a)?;
     c.label = value(
         &a,
         if kind == Kind::Text { "text" } else { "label" },
