@@ -75,7 +75,6 @@ impl Editor {
             self.selection.clear();
             self.set_tool(Tool::Select);
             self.simulation.view = Default::default();
-            self.simulation.register_editor = Default::default();
             self.simulation.plugin_arguments.clear();
         }
     }
@@ -94,7 +93,6 @@ impl Editor {
             self.selection.clear();
             self.set_tool(Tool::Select);
             self.simulation.view = Default::default();
-            self.simulation.register_editor = Default::default();
             self.simulation.plugin_arguments.clear();
         }
     }
@@ -122,7 +120,6 @@ impl Editor {
         self.selection.clear();
         self.set_tool(Tool::Select);
         self.simulation.view = Default::default();
-        self.simulation.register_editor = Default::default();
         self.simulation.plugin_arguments.clear();
     }
     pub fn edit_project(&mut self, command: CircuitCommand, name: String) -> Result<(), String> {

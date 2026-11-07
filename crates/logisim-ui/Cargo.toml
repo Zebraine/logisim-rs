@@ -10,7 +10,6 @@ publish.workspace = true
 [dependencies]
 egui.workspace = true
 logisim-core.workspace = true
-logisim-course.workspace = true
 
 [dev-dependencies]
 # Match desktop text metrics when this crate's input tests run on their own.

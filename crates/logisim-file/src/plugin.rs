@@ -48,21 +48,99 @@ pub(crate) fn write(out: &mut String, c: &Component) -> Result<()> {
     out.push_str("    </comp>\n");
     Ok(())
 }
-pub(crate) fn declaration(document: &crate::Document, out: &mut String) {
-    if document
-        .circuits
-        .iter()
-        .any(|d| d.circuit.components.iter().any(|c| c.kind == Kind::Plugin))
+pub(crate) fn declaration(document: &crate::Document, out: &mut String) -> Result<()> {
+    if !document.plugin_sources.is_empty()
+        || document
+            .circuits
+            .iter()
+            .any(|d| d.circuit.components.iter().any(|c| c.kind == Kind::Plugin))
     {
         *out = out.replace("source=\"2.16.2.2.jar\"", "source=\"logisim-rs-plugin-v1\"");
-        out.push_str("  <!-- Plugin components require logisim-rs and matching Wasm modules. -->\n  <lib desc=\"logisim-rs#plugin-v1\" name=\"rs-plugin-v1\"/>\n");
+        out.push_str("  <!-- Plugin components require logisim-rs and matching Wasm modules. -->\n  <lib desc=\"logisim-rs#plugin-v1\" name=\"rs-plugin-v1\">\n");
+        if !document.plugin_sources.is_empty() {
+            let text = serde_json::to_string(&document.plugin_sources)
+                .map_err(|e| Error(e.to_string()))?;
+            if text.len() > api::MAX_MESSAGE {
+                return Err(Error("Plugin sources exceed message limit.".into()));
+            }
+            attribute(out, "sources", text)?;
+        }
+        out.push_str("  </lib>\n");
     }
+    Ok(())
+}
+pub(crate) fn sources(
+    root: roxmltree::Node<'_, '_>,
+) -> Result<Vec<logisim_core::plugin::PluginSource>> {
+    let mut sources = vec![];
+    for lib in root
+        .children()
+        .filter(|n| n.has_tag_name("lib") && n.attribute("desc") == Some(DESCRIPTOR))
+    {
+        let attrs = attributes(lib)?;
+        if attrs.keys().any(|k| k != "sources") {
+            return Err(Error("Unsupported plugin library metadata.".into()));
+        }
+        if let Some(text) = attrs.get("sources") {
+            if text.len() > api::MAX_MESSAGE {
+                return Err(Error("Plugin sources exceed message limit.".into()));
+            }
+            sources.extend(
+                serde_json::from_str::<Vec<logisim_core::plugin::PluginSource>>(text)
+                    .map_err(|e| Error(e.to_string()))?,
+            );
+        }
+        if sources.len() > 64 {
+            return Err(Error("Too many plugin sources.".into()));
+        }
+    }
+    Ok(sources)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use logisim_core::{Point, Project};
+    #[test]
+    fn plugin_sources_roundtrip_and_reject_invalid_metadata() {
+        let source = logisim_core::plugin::PluginSource {
+            plugin: "org.example.tools".into(),
+            version: "1.0".into(),
+            path: "../插件/a & b.wasm".into(),
+            fallback: "/opt/plugins/a & b.wasm".into(),
+        };
+        let mut p = Project::default();
+        p.plugin_sources.push(source.clone());
+        let xml = crate::serialize(&p).unwrap();
+        let imported = crate::parse(&xml).unwrap();
+        assert!(imported.warnings.is_empty());
+        assert_eq!(imported.document.plugin_sources, vec![source.clone()]);
+        assert_eq!(crate::serialize(&imported.document).unwrap(), xml);
+        for broken in [
+            xml.replace("&quot;fallback&quot;", "&quot;unknown&quot;"),
+            xml.replace("org.example.tools", "invalid plugin identity"),
+            xml.replace("name=\"sources\"", "name=\"unknown\""),
+        ] {
+            assert_ne!(xml, broken);
+            assert!(crate::parse(&broken).is_err());
+        }
+        p.plugin_sources.push(source.clone());
+        assert!(crate::serialize(&p).is_err());
+        p.plugin_sources = (0..64)
+            .map(|i| logisim_core::plugin::PluginSource {
+                plugin: format!("plugin-{i}"),
+                path: "p".repeat(4096),
+                fallback: "f".repeat(4096),
+                ..source.clone()
+            })
+            .collect();
+        assert!(
+            crate::serialize(&p)
+                .unwrap_err()
+                .0
+                .contains("message limit")
+        );
+    }
     #[test]
     fn plugin_snapshot_roundtrip_and_invalid_schema_protection() {
         let definition = api::Component {

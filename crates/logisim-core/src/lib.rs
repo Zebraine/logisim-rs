@@ -5,7 +5,6 @@ mod signal;
 pub use signal::{Bit, Value};
 
 mod appearance;
-mod external;
 pub use appearance::{
     Appearance, Artwork, ArtworkFont, Geometry, MAX_SHAPES, Paint, Rgb, TextAnchor,
 };

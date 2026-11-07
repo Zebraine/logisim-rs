@@ -101,6 +101,7 @@ pub fn parse(xml: &str) -> Result<Import> {
         return Err(Error("Invalid number of circuits.".into()));
     }
     let mut document = Document::single(attr(circuits[0], "name")?, Circuit::default());
+    document.plugin_sources = crate::plugin::sources(root)?;
     for node in &circuits[1..] {
         document.add(attr(*node, "name")?.into()).map_err(Error)?;
     }

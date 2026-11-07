@@ -4,14 +4,9 @@ use crate::{
     xml::{attribute, escape},
 };
 use logisim_core::{Component, Gate, HorizontalAlign, Kind, Radix, SplitAppearance, VerticalAlign};
-use std::{collections::BTreeMap, fmt::Write};
+use std::fmt::Write;
 
-pub(crate) fn write(
-    out: &mut String,
-    c: &Component,
-    document: &Document,
-    external_libraries: &BTreeMap<String, usize>,
-) -> Result<()> {
+pub(crate) fn write(out: &mut String, c: &Component, document: &Document) -> Result<()> {
     if !valid_point(c.position)
         || !(1..=32).contains(&c.bits)
         || !(2..=if matches!(c.kind, Kind::Parity(_)) {
@@ -26,10 +21,6 @@ pub(crate) fn write(
         || (c.kind != Kind::Button && c.label_center)
     {
         return Err(Error(format!("Invalid {} attributes.", c.kind.name())));
-    }
-    if c.kind.is_external() {
-        crate::external::write(out, c, external_libraries[&c.external_library])?;
-        return Ok(());
     }
     if c.kind == Kind::Plugin {
         return crate::plugin::write(out, c);

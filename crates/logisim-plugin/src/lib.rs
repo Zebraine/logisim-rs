@@ -15,6 +15,7 @@ fn error(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
 
+#[derive(Clone)]
 pub struct Plugin {
     module: Module,
     manifest: Manifest,
@@ -42,6 +43,10 @@ impl Plugin {
         &self.manifest
     }
     pub fn instantiate(&self, component: &Component) -> Result<Instance> {
+        self.check_component(component)?;
+        Instance::new(&self.module)
+    }
+    pub fn check_component(&self, component: &Component) -> Result<()> {
         component.validate()?;
         if component.plugin != self.manifest.id
             || component.version != self.manifest.version
@@ -49,7 +54,7 @@ impl Plugin {
         {
             return Err("Plugin version or definition differs from the saved component.".into());
         }
-        Instance::new(&self.module)
+        Ok(())
     }
 }
 pub struct Instance {
@@ -135,10 +140,11 @@ impl Instance {
 #[derive(Clone, Default)]
 pub struct Registry {
     entries: Arc<BTreeMap<(String, String), Arc<Plugin>>>,
+    failures: Arc<BTreeMap<(String, String), String>>,
 }
 impl Registry {
     pub fn same(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.entries, &other.entries)
+        Arc::ptr_eq(&self.entries, &other.entries) && Arc::ptr_eq(&self.failures, &other.failures)
     }
     /// Preserve a running VM only when its exact loaded module is still registered.
     pub fn same_plugin(&self, other: &Self, component: &Component) -> bool {
@@ -150,12 +156,21 @@ impl Registry {
     }
     pub fn load(&mut self, bytes: &[u8]) -> Result<()> {
         let plugin = Plugin::load(bytes)?;
+        self.insert(plugin)
+    }
+    pub fn insert(&mut self, plugin: Plugin) -> Result<()> {
         let key = (plugin.manifest.id.clone(), plugin.manifest.version.clone());
         if self.entries.contains_key(&key) {
             return Err("This plugin version is already loaded.".into());
         }
+        Arc::make_mut(&mut self.failures).remove(&key);
         Arc::make_mut(&mut self.entries).insert(key, Arc::new(plugin));
         Ok(())
+    }
+    pub fn unavailable(&mut self, plugin: String, version: String, message: String) {
+        let key = (plugin, version);
+        Arc::make_mut(&mut self.entries).remove(&key);
+        Arc::make_mut(&mut self.failures).insert(key, message);
     }
     pub fn manifests(&self) -> impl Iterator<Item = &Manifest> {
         self.entries.values().map(|p| p.manifest())
@@ -164,6 +179,12 @@ impl Registry {
         self.entries
             .get(&(component.plugin.clone(), component.version.clone()))
             .ok_or_else(|| {
+                if let Some(message) = self
+                    .failures
+                    .get(&(component.plugin.clone(), component.version.clone()))
+                {
+                    return message.clone();
+                }
                 format!(
                     "Plugin not loaded: {} {}",
                     component.plugin, component.version

@@ -198,6 +198,20 @@ fn generic_plugin_palette_properties_actions_and_strings_in_both_languages() {
                 }
             )
         );
+        let before = app.project().clone();
+        let sources = vec![logisim_core::plugin::PluginSource {
+            plugin: manifest.id.clone(),
+            version: manifest.version.clone(),
+            path: "/plugins/repaired.wasm".into(),
+            fallback: String::new(),
+        }];
+        app.set_plugin_sources(sources.clone());
+        assert_eq!(app.project().plugin_sources, sources);
+        assert_eq!(app.project().circuits, before.circuits);
+        app.editor.undo();
+        assert_eq!(app.project(), &before);
+        app.editor.redo();
+        assert_eq!(app.project().plugin_sources, sources);
     }
 }
 
@@ -2106,177 +2120,6 @@ fn memory_import_button_history_template_and_stale_target_are_safe() {
         assert_eq!(app.editor.template.memory.contents.get(0), 0x34);
         app.replace_project(before);
         assert!(!app.memory_import_is_current(&target));
-    }
-}
-
-#[test]
-fn course_components_library_trigger_undo_and_runtime_edit_in_both_languages() {
-    for language in Language::ALL {
-        let ctx = Context::default();
-        configure(&ctx);
-        let mut app = Workspace::default();
-        app.set_language(language);
-        let t = |s| i18n::with_language(language, || i18n::tr(s).to_owned());
-        frame(
-            &ctx,
-            &mut app,
-            vec![
-                Event::PointerMoved(Pos2::new(150.0, 350.0)),
-                Event::MouseWheel {
-                    unit: egui::MouseWheelUnit::Point,
-                    delta: egui::vec2(0.0, -180.0),
-                    phase: egui::TouchPhase::Move,
-                    modifiers: Modifiers::NONE,
-                    source: egui::MouseWheelSource::Unknown,
-                },
-            ],
-        );
-        click(&ctx, &mut app, &t("Course components"));
-        frame(
-            &ctx,
-            &mut app,
-            vec![
-                Event::PointerMoved(Pos2::new(150.0, 350.0)),
-                Event::MouseWheel {
-                    unit: egui::MouseWheelUnit::Point,
-                    delta: egui::vec2(0.0, -180.0),
-                    phase: egui::TouchPhase::Move,
-                    modifiers: Modifiers::NONE,
-                    source: egui::MouseWheelSource::Unknown,
-                },
-            ],
-        );
-        click(&ctx, &mut app, &t("Register File"));
-        assert_eq!(app.editor.tool, Tool::Place(Kind::RegisterFile));
-        let labels = frame(&ctx, &mut app, vec![]);
-        assert!(has(&labels, &t("Trigger")));
-        for s in ["Facing", "Data bits", "Label"] {
-            assert!(!has(&labels, &t(s)), "{s}");
-        }
-        app.editor.place(Point::new(300, 200));
-        app.editor.set_tool(Tool::Select);
-        let id = app.circuit().components[0].id;
-        app.editor.selection.insert(id);
-        app.editor
-            .circuit
-            .add_wire(Point::new(300, 150), Point::new(400, 150));
-        let before = app.circuit().clone();
-        click(&ctx, &mut app, &t("Rising edge"));
-        click(&ctx, &mut app, &t("Low level"));
-        assert_eq!(
-            app.circuit().component(id).unwrap().sequential.trigger,
-            logisim_core::Trigger::Low
-        );
-        assert_eq!(app.circuit().wires, before.wires);
-        app.editor.undo();
-        assert_eq!(app.circuit(), &before);
-        app.editor.redo();
-        let document = app.circuit().clone();
-        app.editor.simulation.view.register_files.insert(
-            id,
-            (0..32)
-                .map(|_| SignalView {
-                    text: "00000000".into(),
-                    binary: "0".repeat(32),
-                    tone: SignalTone::Bus,
-                })
-                .collect(),
-        );
-        click(&ctx, &mut app, &t("Register contents"));
-        let labels = frame(&ctx, &mut app, vec![]);
-        assert!(has(
-            &labels,
-            &t("Runtime values only; reset clears registers. Register 0 is read-only.")
-        ));
-        // Use the real address and value fields; disabled register zero cannot emit a write.
-        click(&ctx, &mut app, &t("Apply"));
-        assert!(
-            !app.take_simulation_actions()
-                .iter()
-                .any(|a| matches!(a, SimulationAction::SetRegisterFileWord { .. }))
-        );
-        click(&ctx, &mut app, "0");
-        frame(
-            &ctx,
-            &mut app,
-            vec![
-                Event::Key {
-                    key: Key::A,
-                    physical_key: None,
-                    pressed: true,
-                    repeat: false,
-                    modifiers: Modifiers::COMMAND,
-                },
-                Event::Text("1".into()),
-                Event::Key {
-                    key: Key::Enter,
-                    physical_key: None,
-                    pressed: true,
-                    repeat: false,
-                    modifiers: Modifiers::NONE,
-                },
-            ],
-        );
-        let labels = frame(&ctx, &mut app, vec![]);
-        let fields: Vec<_> = labels
-            .iter()
-            .filter(|(text, _)| text == "00000000")
-            .collect();
-        let pos = fields
-            .iter()
-            .filter(|(_, r)| r.center().x < 300.0)
-            .max_by(|a, b| a.1.center().y.total_cmp(&b.1.center().y))
-            .expect("hex editor")
-            .1
-            .center();
-        for pressed in [true, false] {
-            frame(
-                &ctx,
-                &mut app,
-                vec![
-                    Event::PointerMoved(pos),
-                    Event::PointerButton {
-                        pos,
-                        button: PointerButton::Primary,
-                        pressed,
-                        modifiers: Modifiers::NONE,
-                    },
-                ],
-            );
-        }
-        frame(
-            &ctx,
-            &mut app,
-            vec![
-                Event::Key {
-                    key: Key::A,
-                    physical_key: None,
-                    pressed: true,
-                    repeat: false,
-                    modifiers: Modifiers::COMMAND,
-                },
-                Event::Text("deadbeef".into()),
-            ],
-        );
-        click(&ctx, &mut app, &t("Apply"));
-        assert!(
-            app.take_simulation_actions()
-                .contains(&SimulationAction::SetRegisterFileWord {
-                    id,
-                    address: 1,
-                    value: 0xdeadbeef
-                })
-        );
-        assert_eq!(app.circuit(), &document);
-        app.editor.set_tool(Tool::Place(Kind::RiscVProbe));
-        let labels = frame(&ctx, &mut app, vec![]);
-        for s in ["Facing", "Data bits", "Label", "Trigger"] {
-            assert!(!has(&labels, &t(s)), "{s}");
-        }
-        assert_eq!(
-            app.editor.template.external_library,
-            Kind::RiscVProbe.default_external_library()
-        );
     }
 }
 

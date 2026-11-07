@@ -276,9 +276,7 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
     }
     if !matches!(
         c.kind,
-        Kind::RegisterFile
-            | Kind::RiscVProbe
-            | Kind::Text
+        Kind::Text
             | Kind::Button
             | Kind::DipSwitch
             | Kind::Led
@@ -332,7 +330,6 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
         active |= r.has_focus() || r.dragged();
         ui.end_row();
     }
-    crate::external::fields(ui, c);
     crate::ttl::fields(ui, c);
     crate::latches::fields(ui, c);
     crate::bus::fields(ui, c);

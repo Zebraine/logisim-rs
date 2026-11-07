@@ -32,7 +32,8 @@ impl Storage {
         let path = destination(path)?;
         let bytes = read(&path)?;
         let text = std::str::from_utf8(&bytes).map_err(|e| format!("File is not UTF-8: {e}"))?;
-        let import = logisim_file::parse(text).map_err(|e| e.to_string())?;
+        let mut import = logisim_file::parse(text).map_err(|e| e.to_string())?;
+        crate::plugins::absolutize(&mut import.document, &crate::plugins::base(Some(&path)));
         self.baseline = import.document.clone();
         self.protected = (!import.warnings.is_empty()).then(|| path.clone());
         self.path = Some(path);
@@ -49,7 +50,13 @@ impl Storage {
             SaveMode::Current => None,
             SaveMode::Selected(expected) => expected,
         };
-        let text = logisim_file::serialize(project).map_err(|e| e.to_string())?;
+        let mut portable = project.clone();
+        crate::plugins::rebase(
+            &mut portable,
+            &crate::plugins::base(self.path.as_deref()),
+            &crate::plugins::base(Some(&path)),
+        );
+        let text = logisim_file::serialize(&portable).map_err(|e| e.to_string())?;
         atomic_write(&path, text.as_bytes(), expected)?;
         self.path = Some(path);
         self.disk = text.into_bytes();

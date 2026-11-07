@@ -16,8 +16,13 @@ serde_json.workspace = true
 logisim-plugin = { workspace = true, optional = true }
 logisim-sim = { workspace = true, optional = true }
 logisim-file = { workspace = true, optional = true }
+roxmltree = { version = "=0.20.0", optional = true }
 [features]
-host-check = ["dep:logisim-plugin", "dep:logisim-sim", "dep:logisim-file"]
+host-check = ["dep:logisim-plugin", "dep:logisim-sim", "dep:logisim-file", "dep:roxmltree"]
+[[bin]]
+name = "course-plugin-convert"
+path = "src/bin/convert.rs"
+required-features = ["host-check"]
 [[bin]]
 name = "course-plugin-check"
 path = "src/bin/check.rs"

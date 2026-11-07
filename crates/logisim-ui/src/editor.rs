@@ -840,8 +840,7 @@ impl Editor {
         {
             let world = canvas.world(pointer);
             for c in self.circuit.components.iter().filter(|c| {
-                c.kind.is_external()
-                    || c.kind == Kind::Plugin
+                c.kind == Kind::Plugin
                     || c.kind.is_io()
                     || c.kind.is_controlled()
                     || c.kind.is_transistor()
@@ -863,8 +862,6 @@ impl Editor {
                                     c.plugin.as_ref().expect("plugin definition").tool.ports[index]
                                         .label
                                         .clone()
-                                } else if c.kind.is_external() {
-                                    tr(c.external_port_label(index)).to_owned()
                                 } else if matches!(c.kind, Kind::Plexer(_)) {
                                     crate::plexers::port_label(c, c.plexer_terminals()[index].role)
                                 } else if matches!(c.kind, Kind::Ttl(_)) {

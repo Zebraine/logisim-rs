@@ -83,10 +83,6 @@ pub(crate) fn bounds(c: &Component) -> Rect {
         }
         return Rect::from_center_size(pos(c.position), vec2(20.0, 20.0));
     }
-    if c.kind.is_external() {
-        let [min, max] = c.external_body();
-        return Rect::from_min_max(pos(c.position + min), pos(c.position + max));
-    }
     if c.kind == Kind::PullResistor || c.kind.is_controlled() || c.kind.is_transistor() {
         let (depth, half_height) = if c.kind == Kind::PullResistor {
             (46, 7)
@@ -369,9 +365,6 @@ pub(crate) fn component(
     };
     match c.kind {
         Kind::Plugin => crate::plugins::draw(p, canvas, c, simulation, ghost),
-        Kind::RegisterFile | Kind::RiscVProbe => {
-            crate::external::draw(p, canvas, c, color, simulation)
-        }
         Kind::Ttl(_) => crate::ttl::draw(p, canvas, c, color),
         Kind::Transistor | Kind::TransmissionGate => crate::transistors::draw(p, canvas, c, color),
         Kind::ControlledBuffer | Kind::ControlledInverter | Kind::PullResistor => {

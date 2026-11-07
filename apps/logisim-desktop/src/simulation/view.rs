@@ -34,10 +34,6 @@ fn present(circuit: &Circuit, sim: &Simulator) -> SimulationView {
         if c.kind == Kind::Clock {
             view.clocks.insert(c.id);
         }
-        if let Some(words) = sim.register_file(c.id) {
-            view.register_files
-                .insert(c.id, words.iter().map(|v| signal(*v, false)).collect());
-        }
         if let Some(contents) = sim.memory_contents(c.id) {
             view.memories.insert(c.id, contents.clone());
         }

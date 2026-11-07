@@ -30,7 +30,6 @@ mod plugins;
 mod random;
 #[cfg(test)]
 mod random_tests;
-mod register_file;
 mod sequential;
 #[cfg(test)]
 mod sequential_extra_tests;
@@ -74,7 +73,6 @@ pub struct Simulator {
     display_ticks: u64,
     storage: BTreeMap<Id, sequential::State>,
     memories: BTreeMap<Id, memory::State>,
-    register_files: BTreeMap<Id, register_file::State>,
     drives: BTreeMap<network::Port, Value>,
     pending: BTreeMap<network::Port, Value>,
     values: Vec<Value>,
@@ -96,7 +94,6 @@ impl Default for Simulator {
             display_ticks: 0,
             storage: BTreeMap::new(),
             memories: BTreeMap::new(),
-            register_files: BTreeMap::new(),
             drives: BTreeMap::new(),
             pending: BTreeMap::new(),
             values: vec![],

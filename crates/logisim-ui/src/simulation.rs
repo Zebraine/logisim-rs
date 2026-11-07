@@ -102,7 +102,6 @@ pub struct SimulationView {
     /// Row-major cells: None is an unknown/error signal.
     pub matrices: BTreeMap<Id, Vec<Option<bool>>>,
     pub storage: BTreeMap<Id, SignalView>,
-    pub register_files: BTreeMap<Id, Vec<SignalView>>,
     pub memories: BTreeMap<Id, logisim_core::MemoryContents>,
     pub wires: BTreeMap<Id, SignalView>,
     pub ports: BTreeMap<(Id, usize), SignalView>,
@@ -115,11 +114,6 @@ pub enum SimulationAction {
         id: Id,
         action: String,
         argument: String,
-    },
-    SetRegisterFileWord {
-        id: Id,
-        address: u8,
-        value: u32,
     },
     PressButton {
         id: Id,
@@ -167,7 +161,6 @@ pub enum SimulationAction {
 #[derive(Default)]
 pub(crate) struct SimulationUi {
     pub plugin_arguments: BTreeMap<(Id, String), String>,
-    pub register_editor: crate::external::RegisterEditor,
     pub view: SimulationView,
     pub actions: Vec<SimulationAction>,
     pub focus_value: bool,
@@ -384,10 +377,6 @@ impl SimulationUi {
     pub fn component(&mut self, ui: &mut Ui, c: &Component) {
         if c.kind == logisim_core::Kind::Plugin {
             crate::plugins::runtime(ui, self, c);
-            return;
-        }
-        if c.kind.is_external() {
-            crate::external::runtime(ui, self, c);
             return;
         }
         match c.kind {

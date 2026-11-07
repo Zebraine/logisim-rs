@@ -31,6 +31,15 @@ impl Project {
             number += 1;
         }
         let mut project = self.clone();
+        for source in &library.plugin_sources {
+            if !project
+                .plugin_sources
+                .iter()
+                .any(|s| s.plugin == source.plugin && s.version == source.version)
+            {
+                project.plugin_sources.push(source.clone());
+            }
+        }
         let mut mapping = BTreeMap::new();
         let mut circuits = Vec::new();
         for source in &library.circuits {

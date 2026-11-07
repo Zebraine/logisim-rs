@@ -26,8 +26,6 @@ pub enum Kind {
     FlipFlop(FlipFlop),
     Latch(Latch),
     Register,
-    RegisterFile,
-    RiscVProbe,
     Counter,
     ShiftRegister,
     Random,
@@ -55,8 +53,6 @@ impl Kind {
         !matches!(
             self,
             Self::Plugin
-                | Self::RegisterFile
-                | Self::RiscVProbe
                 | Self::Text
                 | Self::Keyboard
                 | Self::Tty
@@ -132,8 +128,6 @@ impl Kind {
             Self::Clock => "Clock",
             Self::FlipFlop(ff) => ff.name(),
             Self::Register => "Register",
-            Self::RegisterFile => "Register File",
-            Self::RiscVProbe => "RiscV Probe",
             Self::Counter => "Counter",
             Self::ShiftRegister => "Shift Register",
             Self::Random => "Random Generator",

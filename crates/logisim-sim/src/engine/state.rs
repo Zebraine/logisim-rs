@@ -1,6 +1,6 @@
 //! Topology synchronization, retained instance state and electrical invalidation.
 use crate::network::Network;
-use crate::{Simulator, Value, io, memory, network, pins, register_file, sequential, terminal};
+use crate::{Simulator, Value, io, memory, network, pins, sequential, terminal};
 use logisim_core::{Circuit, Kind, Point};
 use std::collections::BTreeMap;
 
@@ -71,12 +71,6 @@ impl Simulator {
                 (c.id, state)
             })
             .collect();
-        self.register_files = circuit
-            .components
-            .iter()
-            .filter(|c| c.kind == Kind::RegisterFile)
-            .map(|c| (c.id, self.register_files.remove(&c.id).unwrap_or_default()))
-            .collect();
         let held = self
             .drives
             .iter()
@@ -131,13 +125,6 @@ impl Simulator {
             .filter(|c| c.kind == Kind::Ram)
             .map(|c| (c.id, memory::State::new(c)))
             .collect();
-        self.register_files = self
-            .circuit
-            .components
-            .iter()
-            .filter(|c| c.kind == Kind::RegisterFile)
-            .map(|c| (c.id, register_file::State::default()))
-            .collect();
         self.initialize(BTreeMap::new());
     }
     pub(crate) fn initialize(&mut self, held: BTreeMap<network::Port, Value>) {
@@ -179,7 +166,7 @@ fn electrically_equal(a: &Circuit, b: &Circuit) -> bool {
             (c.kind == Kind::Constant).then_some(c.constant),
             (c.kind == Kind::Splitter).then_some(c.splitter.clone()),
             (c.kind == Kind::BitExtender).then_some((c.input_bits, c.extension)),
-            (c.kind.is_sequential() || c.kind == Kind::RegisterFile).then_some(c.sequential),
+            c.kind.is_sequential().then_some(c.sequential),
             (
                 (c.kind.is_controlled() || c.kind == Kind::PullResistor).then_some(c.bus),
                 c.kind.is_transistor().then_some(c.transistor),

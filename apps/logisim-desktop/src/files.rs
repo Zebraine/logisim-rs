@@ -3,6 +3,8 @@ mod dialog;
 #[cfg(test)]
 mod memory_tests;
 #[cfg(test)]
+mod plugin_tests;
+#[cfg(test)]
 mod tests;
 use dialog::{Dialog, Response};
 
@@ -62,6 +64,37 @@ impl Files {
             body: error,
         });
     }
+    fn import_warnings(&mut self, warnings: Vec<String>) {
+        if !warnings.is_empty() {
+            self.dialog = Some(Dialog::Message {
+                title: "Imported supported content only".into(),
+                body: tf!(
+                    "The original file is protected. Use Save As to write the supported project subset to a different file.\n\n{}",
+                    warnings.join("\n")
+                ),
+            });
+        }
+    }
+    fn resolve_plugins(
+        &mut self,
+        workspace: &mut Workspace,
+        sim: &mut Simulator,
+        warnings: Vec<String>,
+    ) {
+        let resolution = crate::plugins::Resolution::new(
+            workspace.project(),
+            crate::plugins::base(self.storage.path.as_deref()),
+            warnings,
+        );
+        self.plugins = resolution.registry();
+        workspace.set_plugin_catalogue(self.plugins.manifests().cloned().collect());
+        sim.set_plugins(self.plugins.clone());
+        if resolution.missing() {
+            self.dialog = Some(Dialog::Plugins(Box::new(resolution)));
+        } else {
+            self.import_warnings(resolution.warnings);
+        }
+    }
     pub fn load(&mut self, path: &Path, workspace: &mut Workspace, sim: &mut Simulator) {
         match self.storage.load(path) {
             Ok((circuit, warnings)) => {
@@ -74,15 +107,7 @@ impl Files {
                     .to_path_buf();
                 workspace.replace_project(circuit);
                 *sim = Simulator::default();
-                if !warnings.is_empty() {
-                    self.dialog = Some(Dialog::Message {
-                        title: "Imported supported content only".into(),
-                        body: tf!(
-                            "The original file is protected. Use Save As to write the supported project subset to a different file.\n\n{}",
-                            warnings.join("\n")
-                        ),
-                    });
-                }
+                self.resolve_plugins(workspace, sim, warnings);
             }
             Err(e) => self.error(format!("{}\n\n{}", path.display(), tr(&e))),
         }
@@ -134,6 +159,8 @@ impl Files {
     ) {
         match action {
             FileAction::New => {
+                self.plugins = Default::default();
+                workspace.set_plugin_catalogue(vec![]);
                 self.storage = Storage::new();
                 workspace.replace_project(Default::default());
                 *sim = Simulator::default();
@@ -205,9 +232,50 @@ impl Files {
     ) {
         if matches!(response, Response::Cancel) {
             self.after_save = None;
+            match dialog {
+                Dialog::PluginPicker { resolution, .. } => {
+                    self.dialog = Some(Dialog::Plugins(resolution))
+                }
+                Dialog::Plugins(resolution) => self.import_warnings(resolution.warnings),
+                _ => {}
+            }
             return;
         }
         match (dialog, response) {
+            (Dialog::Plugins(mut resolution), Response::ConfirmPlugins) => {
+                for i in 0..resolution.rows.len() {
+                    resolution.check(i);
+                }
+                let sources = resolution.sources(&workspace.project().plugin_sources);
+                workspace.set_plugin_sources(sources);
+                self.plugins = resolution.registry();
+                workspace.set_plugin_catalogue(self.plugins.manifests().cloned().collect());
+                sim.set_plugins(self.plugins.clone());
+                self.import_warnings(resolution.warnings);
+            }
+            (Dialog::Plugins(mut resolution), Response::CheckPlugin(index)) => {
+                resolution.check(index);
+                self.dialog = Some(Dialog::Plugins(resolution));
+            }
+            (Dialog::Plugins(resolution), Response::BrowsePlugin(index)) => {
+                self.dialog = Some(Dialog::PluginPicker {
+                    picker: Picker::new(Mode::Plugin, resolution.base.clone(), ""),
+                    resolution,
+                    index,
+                });
+            }
+            (
+                Dialog::PluginPicker {
+                    mut resolution,
+                    index,
+                    ..
+                },
+                Response::Pick(path),
+            ) => {
+                resolution.rows[index].location = path.to_string_lossy().into_owned();
+                resolution.check(index);
+                self.dialog = Some(Dialog::Plugins(resolution));
+            }
             (Dialog::Unsaved(action), Response::Save) => {
                 self.after_save = Some(action);
                 self.execute(FileAction::Save, ctx, workspace, sim);
@@ -230,9 +298,40 @@ impl Files {
             }
             (Dialog::Picker(picker), Response::Pick(path)) => {
                 if picker.mode == Mode::Plugin {
-                    match storage::read_file(&path, "Choose a regular .wasm file.")
-                        .and_then(|bytes| self.plugins.load(&bytes))
-                    {
+                    match storage::read_file(&path, "Choose a regular .wasm file.").and_then(
+                        |bytes| {
+                            let plugin = logisim_plugin::Plugin::load(&bytes)?;
+                            let manifest = plugin.manifest();
+                            for c in workspace
+                                .project()
+                                .circuits
+                                .iter()
+                                .flat_map(|d| &d.circuit.components)
+                                .filter_map(|c| c.plugin.as_ref())
+                                .filter(|c| {
+                                    c.plugin == manifest.id && c.version == manifest.version
+                                })
+                            {
+                                plugin.check_component(c)?;
+                            }
+                            let path = path.canonicalize().map_err(|e| e.to_string())?;
+                            let source = crate::plugins::located(
+                                &manifest.id,
+                                &manifest.version,
+                                &path,
+                                &crate::plugins::base(self.storage.path.as_deref()),
+                            );
+                            let mut project = workspace.project().clone();
+                            project.plugin_sources.retain(|s| {
+                                s.plugin != source.plugin || s.version != source.version
+                            });
+                            project.plugin_sources.push(source);
+                            project.validate()?;
+                            self.plugins.insert(plugin)?;
+                            workspace.set_plugin_sources(project.plugin_sources);
+                            Ok(())
+                        },
+                    ) {
                         Ok(()) => {
                             workspace
                                 .set_plugin_catalogue(self.plugins.manifests().cloned().collect());
@@ -247,6 +346,7 @@ impl Files {
                     match crate::library_import::load(&path, workspace.project()) {
                         Ok(imported) => {
                             workspace.apply_library_import(imported);
+                            self.resolve_plugins(workspace, sim, vec![]);
                             if let Some(parent) = path.parent() {
                                 self.directory = parent.to_path_buf();
                             }

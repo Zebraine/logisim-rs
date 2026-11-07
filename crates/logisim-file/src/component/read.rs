@@ -23,9 +23,6 @@ pub(crate) fn read(
         return Ok((crate::plugin::read(n)?, vec![]));
     }
     let kind = match (lib, name) {
-        (lib, name) if crate::external::identify(lib, name).is_some() => {
-            crate::external::identify(lib, name).unwrap()
-        }
         ("", name) if n.attribute("lib").is_none() && names.contains_key(name) => {
             Kind::Subcircuit(names[name])
         }
@@ -101,13 +98,9 @@ pub(crate) fn read(
     };
     let mut c = Component::new(kind, point(attr(n, "loc")?)?);
     let a = attributes(n)?;
-    if kind.is_external() {
-        crate::external::read(&mut c, lib, &a)?;
-        return Ok((c, vec![]));
-    }
     for key in a.keys() {
         let allowed = match kind {
-            Kind::Plugin | Kind::RegisterFile | Kind::RiscVProbe => false,
+            Kind::Plugin => false,
             Kind::Ttl(_) => crate::ttl::allowed(key),
             Kind::Parity(_) => crate::parity::allowed(key),
             Kind::Latch(_) => crate::latches::allowed(key),

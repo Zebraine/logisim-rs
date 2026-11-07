@@ -6,7 +6,7 @@ pub(super) struct ToolGroup {
     pub tools: Vec<Kind>,
 }
 pub(super) fn groups() -> &'static [ToolGroup] {
-    static GROUPS: std::sync::OnceLock<[ToolGroup; 9]> = std::sync::OnceLock::new();
+    static GROUPS: std::sync::OnceLock<[ToolGroup; 8]> = std::sync::OnceLock::new();
     GROUPS.get_or_init(|| {
         [
             ToolGroup {
@@ -84,10 +84,6 @@ pub(super) fn groups() -> &'static [ToolGroup] {
             ToolGroup {
                 key: "Base",
                 tools: vec![Kind::Text],
-            },
-            ToolGroup {
-                key: "Course components",
-                tools: logisim_course::TOOLS.to_vec(),
             },
         ]
     })

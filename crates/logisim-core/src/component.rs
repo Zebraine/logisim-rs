@@ -29,7 +29,6 @@ pub struct Component {
     /// Derived interface; rebuilt from the project definition, never independently serialized.
     pub interface: Interface,
     /// Inert .circ library descriptor, never a runtime dependency.
-    pub external_library: String,
     pub id: Id,
     /// Gate output / single terminal, or text anchor. Imported positions stay exact.
     pub position: Point,
@@ -72,7 +71,6 @@ impl Component {
         Self {
             plugin: None,
             interface: Interface::default(),
-            external_library: kind.default_external_library().into(),
             id: 0,
             position,
             kind,
@@ -83,7 +81,6 @@ impl Component {
                 _ => Facing::East,
             },
             bits: match kind {
-                Kind::RegisterFile | Kind::RiscVProbe => 32,
                 Kind::Splitter | Kind::HexDisplay | Kind::Joystick => 4,
                 Kind::BitExtender => 16,
                 Kind::Keyboard | Kind::Tty => 7,

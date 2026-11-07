@@ -9,7 +9,6 @@ publish.workspace = true
 
 [dependencies]
 logisim-core.workspace = true
-logisim-course.workspace = true
 logisim-plugin.workspace = true
 
 [lints]

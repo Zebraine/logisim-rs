@@ -196,9 +196,6 @@ impl Component {
                 .and_then(|p| p.tool.ports.get(index))
                 .is_some_and(|p| p.output);
         }
-        if self.kind == Kind::RegisterFile {
-            return index < 2;
-        }
         if matches!(self.kind, Kind::Ttl(_)) {
             return self.ttl_output(index);
         }

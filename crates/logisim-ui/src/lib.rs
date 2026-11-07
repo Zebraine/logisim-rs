@@ -17,13 +17,11 @@ mod drawing;
 mod editor;
 #[cfg(test)]
 mod editor_tests;
-mod external;
 pub mod i18n;
 #[cfg(test)]
 mod i18n_tests;
 mod icons;
 mod io;
-mod riscv;
 mod terminal;
 pub use terminal::TtyView;
 mod settings;

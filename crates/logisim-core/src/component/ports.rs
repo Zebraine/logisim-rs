@@ -22,9 +22,6 @@ impl Component {
                     .collect()
             });
         }
-        if self.kind.is_external() {
-            return self.external_ports();
-        }
         if matches!(self.kind, Kind::Ttl(_)) {
             return self
                 .ttl_pins()

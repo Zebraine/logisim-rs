@@ -9,7 +9,6 @@ publish.workspace = true
 
 [dependencies]
 logisim-core.workspace = true
-logisim-course.workspace = true
 serde_json.workspace = true
 roxmltree = "=0.20.0"
 

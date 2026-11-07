@@ -13,6 +13,15 @@ use logisim_core::{
 };
 
 impl Workspace {
+    /// Dependency edits are part of the document and participate in Undo.
+    pub fn set_plugin_sources(&mut self, sources: Vec<logisim_core::plugin::PluginSource>) {
+        self.finish_edit();
+        if self.editor.project.plugin_sources != sources {
+            let before = self.editor.snapshot();
+            self.editor.project.plugin_sources = sources;
+            self.editor.record(before);
+        }
+    }
     pub fn set_plugin_catalogue(&mut self, manifests: Vec<Manifest>) {
         self.plugins = manifests;
     }

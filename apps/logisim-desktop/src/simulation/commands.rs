@@ -12,9 +12,6 @@ pub fn apply_project(
             action,
             argument,
         } => sim.plugin_action(path, id, action, argument),
-        SimulationAction::SetRegisterFileWord { id, address, value } => {
-            sim.set_register_file_word(path, id, address, value)
-        }
         SimulationAction::PressButton { id } => sim.set_button(path, id, true),
         SimulationAction::SetJoystick { id, offset } => sim.set_joystick(path, id, offset),
         SimulationAction::ReleaseJoysticks => sim.release_joysticks(),

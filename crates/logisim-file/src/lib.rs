@@ -8,7 +8,6 @@ mod bus;
 mod compatibility_tests;
 mod component;
 mod diagnostics;
-mod external;
 mod fonts;
 mod gates;
 mod hex;

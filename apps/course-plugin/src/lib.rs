@@ -1,5 +1,7 @@
 //! Example dynamic library: geometry, ports, editable properties, actions and behavior.
 mod graphics;
+#[cfg(feature = "host-check")]
+pub mod migrate;
 #[cfg(test)]
 mod tests;
 use logisim_core::{Bit, Trigger, Value};

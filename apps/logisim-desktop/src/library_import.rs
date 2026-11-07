@@ -9,7 +9,9 @@ pub(crate) fn load(path: &Path, destination: &Project) -> Result<LibraryImport, 
     let bytes = crate::storage::read(path)?;
     let text =
         std::str::from_utf8(&bytes).map_err(|e| format!("{}: {e}", tr("File is not UTF-8")))?;
-    let source = logisim_file::parse(text).map_err(|e| e.to_string())?;
+    let mut source = logisim_file::parse(text).map_err(|e| e.to_string())?;
+    let absolute = path.canonicalize().map_err(|e| e.to_string())?;
+    crate::plugins::absolutize(&mut source.document, &crate::plugins::base(Some(&absolute)));
     if !source.warnings.is_empty() {
         return Err(tf!(
             "Library import cancelled: unsupported content would be omitted.\n\n{}",

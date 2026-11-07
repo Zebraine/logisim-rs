@@ -154,13 +154,16 @@ impl CircuitDefinition {
 }
 #[derive(Clone, Debug)]
 pub struct Project {
+    pub plugin_sources: Vec<crate::plugin::PluginSource>,
     pub circuits: Vec<CircuitDefinition>,
     pub main: Id,
     next_id: Id,
 }
 impl PartialEq for Project {
     fn eq(&self, other: &Self) -> bool {
-        self.main == other.main && self.circuits == other.circuits
+        self.main == other.main
+            && self.circuits == other.circuits
+            && self.plugin_sources == other.plugin_sources
     }
 }
 impl Eq for Project {}
@@ -177,6 +180,7 @@ impl Project {
 
     pub fn single(name: impl Into<String>, circuit: Circuit) -> Self {
         Self {
+            plugin_sources: vec![],
             circuits: vec![CircuitDefinition {
                 id: 1,
                 name: name.into(),
@@ -282,6 +286,16 @@ impl Project {
         true
     }
     pub fn validate(&self) -> Result<(), String> {
+        if self.plugin_sources.len() > 64 {
+            return Err("Too many plugin sources.".into());
+        }
+        let mut plugins = BTreeSet::new();
+        for source in &self.plugin_sources {
+            source.validate()?;
+            if !plugins.insert((&source.plugin, &source.version)) {
+                return Err("Duplicate plugin source.".into());
+            }
+        }
         if self.circuits.is_empty()
             || self.circuits.len() > MAX_CIRCUITS
             || self.circuit(self.main).is_none()
@@ -307,11 +321,15 @@ impl Project {
             }
             for component in &c.circuit.components {
                 if component.kind == Kind::Plugin {
-                    component
+                    let definition = component
                         .plugin
                         .as_ref()
-                        .ok_or("Missing plugin definition.")?
-                        .validate()?;
+                        .ok_or("Missing plugin definition.")?;
+                    definition.validate()?;
+                    plugins.insert((&definition.plugin, &definition.version));
+                    if plugins.len() > 64 {
+                        return Err("Too many plugin sources.".into());
+                    }
                     if component.facing != Facing::East {
                         return Err("Plugin ABI v1 components must face East.".into());
                     }
