@@ -527,3 +527,31 @@ fn normalization_preserves_connected_junction_signals_and_insulated_crossings() 
     );
     assert!(s.diagnostics().is_empty());
 }
+
+#[test]
+fn west_centered_splitter_combines_31_bit_zero_and_comparison_without_mismatch() {
+    use logisim_core::{Facing, SplitAppearance};
+    let mut c = Circuit::default();
+    let mut split = Component::new(Kind::Splitter, Point::new(450, 910));
+    split.bits = 32;
+    split.facing = Facing::West;
+    split.splitter.fanout = 2;
+    split.splitter.appearance = SplitAppearance::Center;
+    split.splitter.mapping.fill(Some(0));
+    split.splitter.mapping[0] = Some(1);
+    let id = c.add_component(split);
+    let mut high = Component::new(Kind::Constant, Point::new(420, 900));
+    high.bits = 31;
+    high.constant = 0;
+    c.add_component(high);
+    c.add_wire(Point::new(420, 900), Point::new(430, 900));
+    let mut low = Component::new(Kind::Constant, Point::new(320, 910));
+    low.constant = 1;
+    c.add_component(low);
+    c.add_wire(Point::new(320, 910), Point::new(430, 910));
+    let mut sim = Simulator::default();
+    sim.synchronize(&c);
+    sim.advance(64);
+    assert!(sim.diagnostics().is_empty());
+    assert_eq!(sim.port_value(id, 0), Some(Value::known(32, 1)));
+}

@@ -550,6 +550,18 @@ impl Component {
             if matches!(self.facing, Facing::West | Facing::North) {
                 ports[1..].reverse();
             }
+            // Even centered layouts keep their extra branch on the world top/left side.
+            // Rotating an asymmetric East layout alone shifts West/South by one grid cell.
+            if matches!(
+                self.splitter.appearance,
+                SplitAppearance::Center | SplitAppearance::Legacy
+            ) && self.splitter.fanout.is_multiple_of(2)
+                && matches!(self.facing, Facing::West | Facing::South)
+            {
+                for port in &mut ports[1..] {
+                    port.y += 10;
+                }
+            }
             return ports;
         }
         if self.kind == Kind::BitExtender {

@@ -301,6 +301,35 @@ mod tests {
         }
     }
     #[test]
+    fn centered_even_and_odd_splitters_match_observed_world_coordinates() {
+        for appearance in [SplitAppearance::Center, SplitAppearance::Legacy] {
+            for n in [2, 3, 4, 5] {
+                for facing in Facing::ALL {
+                    let mut c = Component::new(Kind::Splitter, Point::new(100, 100));
+                    c.facing = facing;
+                    c.splitter.fanout = n;
+                    c.splitter.appearance = appearance;
+                    let ports = c.ports();
+                    for branch in 0..i32::from(n) {
+                        let vertical = 10 * (branch - i32::from(n) / 2);
+                        let horizontal = 10 * (i32::from(n) - 1 - branch - i32::from(n) / 2);
+                        let expected = match facing {
+                            Facing::East => Point::new(120, 100 + vertical),
+                            Facing::West => Point::new(80, 100 + vertical),
+                            Facing::South => Point::new(100 + horizontal, 120),
+                            Facing::North => Point::new(100 + horizontal, 80),
+                        };
+                        assert_eq!(
+                            ports[branch as usize + 1],
+                            expected,
+                            "{appearance:?} {n} {facing:?} {branch}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+    #[test]
     fn editing_splitter_layout_reroutes_surviving_branch_connections() {
         let mut d = Circuit::default();
         let c = Component::new(Kind::Splitter, Point::ZERO);
