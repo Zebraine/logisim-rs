@@ -175,6 +175,12 @@ impl Component {
             }),
             Kind::Latch(_) => (index < self.latch_terminals().len()).then_some(1),
             Kind::Clock | Kind::FlipFlop(_) => Some(1),
+            Kind::PlaRom => match index {
+                0 => Some(self.pla.dimensions().2),
+                1 => Some(self.pla.dimensions().0),
+                2 => Some(1),
+                _ => None,
+            },
             Kind::Rom | Kind::Ram => self.memory_terminals().get(index).map(|p| p.bits),
             Kind::ShiftRegister if index == 3 => Some(2),
             Kind::Register | Kind::Counter | Kind::ShiftRegister if index >= 2 => Some(1),
@@ -223,6 +229,7 @@ impl Component {
                 | Kind::Counter
                 | Kind::ShiftRegister
                 | Kind::Rom
+                | Kind::PlaRom
                 | Kind::Ram
         ) || (self.kind == Kind::Pin && !self.output)
     }

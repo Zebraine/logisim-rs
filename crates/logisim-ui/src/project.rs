@@ -186,6 +186,7 @@ impl Workspace {
         project.refresh_interfaces(false);
         let id = project.main;
         self.editor = Editor::default();
+        self.pla_editor = crate::pla::PlaEditor::default();
         self.editor.active = id;
         self.editor.root = id;
         self.editor.circuit = project.main_circuit().circuit.clone();

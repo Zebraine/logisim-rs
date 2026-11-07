@@ -156,6 +156,14 @@ fn component_editor(ui: &mut Ui, editor: &mut Editor, mut c: Component, placing:
     {
         editor.memory_target = Some((placing, c.id));
     }
+    if c.kind == Kind::PlaRom {
+        if ui.button(tr("Edit programming table…")).clicked() {
+            editor.pla_target = Some((placing, c.id));
+        }
+        ui.weak(tr(
+            "Resizing preserves the upper-left connections; removed cells are discarded.",
+        ));
+    }
     let original = c.clone();
     let mut active = false;
     if c.kind.has_label() {
@@ -246,6 +254,7 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
             | Kind::Keyboard
             | Kind::Tty
             | Kind::Rom
+            | Kind::PlaRom
             | Kind::Ram
             | Kind::Probe
             | Kind::PullResistor
@@ -294,6 +303,7 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
     active |= crate::parity::fields(ui, c);
     active |= crate::sequential::fields(ui, c);
     active |= crate::memory::fields(ui, c);
+    active |= crate::pla::fields(ui, c);
     active |= crate::io::fields(ui, c);
     active |= crate::plexers::fields(ui, c);
     active |= crate::arithmetic::fields(ui, c);

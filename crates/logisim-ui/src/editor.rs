@@ -85,6 +85,7 @@ pub(crate) struct Editor {
     pub tool: Tool,
     pub template: Component,
     pub memory_target: Option<(bool, Id)>,
+    pub pla_target: Option<(bool, Id)>,
     pub focus_text: bool,
     pub simulation: SimulationUi,
     undo: Vec<Edit>,
@@ -111,6 +112,7 @@ impl Default for Editor {
             tool: Tool::Select,
             template: Component::new(Kind::Gate(Gate::And), Point::ZERO),
             memory_target: None,
+            pla_target: None,
             focus_text: false,
             simulation: SimulationUi::default(),
             undo: vec![],
@@ -834,6 +836,7 @@ impl Editor {
                     || c.kind.is_transistor()
                     || c.kind == Kind::PullResistor
                     || c.kind.is_memory()
+                    || c.kind == Kind::PlaRom
                     || c.kind.is_sequential()
                     || matches!(
                         c.kind,
@@ -859,6 +862,8 @@ impl Editor {
                                     tr(crate::io::port_label(c, index)).to_owned()
                                 } else if matches!(c.kind, Kind::Latch(_)) {
                                     tr(crate::latches::port_label(c, index)).to_owned()
+                                } else if c.kind == Kind::PlaRom {
+                                    tr(crate::pla::port_label(index)).to_owned()
                                 } else if c.kind.is_memory() {
                                     tr(crate::memory::port_label(c, index)).to_owned()
                                 } else {

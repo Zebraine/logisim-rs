@@ -121,7 +121,7 @@ Ctrl+Shift+S，Ctrl+Q 退出。文件选择框可浏览目录或输入完整路�
 保存失败不会清除修改状态，检测到文件被外部修改时要求另存为。
 
 当前互通范围：多电路项目、主电路选择、默认或已支持自定义外观的子电路实例，以及各电路中的八种门、1–32 位两态输入/输出 Pin、正交导线、文字、普通 Tunnel
-及 Controlled Buffer、Controlled Inverter、上述基础布线、六种 Plexers 与九种算术元件、Clock、D/T/JK/SR Flip-Flop、Register、Counter、Universal Register、ROM、RAM、Button、Switch、DipSwitch、Slider、LED、RGBLed、DotMatrix、7-Segment Display 和 Hex Digit Display；
+及 Controlled Buffer、Controlled Inverter、上述基础布线、六种 Plexers 与九种算术元件、Clock、D/T/JK/SR Flip-Flop、Register、Counter、Universal Register、ROM、RAM、PlaRom、Button、Switch、DipSwitch、Slider、LED、RGBLed、DotMatrix、7-Segment Display 和 Hex Digit Display；
 包括门尺寸、2–8 个输入、方向、标签、字号、颜色和文字对齐。导入保留实际坐标及连接端口。
 多行文字数据可往返，但参考程序与本程序的排版不同；字体使用本程序的默认字体，
 不承诺字体族、字形覆盖或样式一致，隧道采用固定文字色。
@@ -245,6 +245,14 @@ LED 点阵支持 1–32 行、1–32 列、按列/按行/行列选择三种输�
 按列模式最低位在底部，按行模式最低位在右侧；行列选择模式的列数据最低位在左侧，
 行选择最低位在底部。X/E 显示红色，未选中行熄灭。修改输入形式或尺寸保留原导线坐标。
 余辉按仿真 Tick 计数，支持 Ctrl+T 单次推进及自动 Tick；实例状态独立，复位清空且不写入文件。
+
+## PLA ROM
+
+Memory 库的 PLA ROM 支持 1–32 个输入、AND 项和输出，以及高/低电平片选。
+选中后点击“编辑编程表”：输入单元在不连接、原值、反值间切换，输出单元切换连接；
+列按高位到低位排列。应用（Ctrl+Enter）或取消（Esc），清空后需应用才生效；支持撤销重做。
+尺寸变化保留左上重叠连接，移除的单元不再恢复，导线坐标保持不变。
+编程表随 `.circ` 保存，支持 Logisim-ITA 的 `PlaRom` 读写；空 AND 项或无连接输出为 E。
 
 ## ROM 与 RAM
 

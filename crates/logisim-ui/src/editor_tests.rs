@@ -1656,3 +1656,26 @@ fn keyboard_focus_does_not_survive_modal_window_tool_or_context_changes() {
         assert!(app.take_simulation_actions().is_empty());
     }
 }
+
+#[test]
+fn pla_modal_blocks_canvas_and_file_shortcuts_and_escape_cancels() {
+    let (ctx, mut app) = setup();
+    app.editor.set_tool(Tool::Place(Kind::PlaRom));
+    app.editor.place(Point::new(300, 200));
+    app.editor.set_tool(Tool::Select);
+    let id = app.circuit().components[0].id;
+    app.editor.selection.insert(id);
+    let original = app.circuit().clone();
+    app.editor.pla_target = Some((false, id));
+    frame(&ctx, &mut app, vec![], Modifiers::NONE);
+    key(&ctx, &mut app, Key::Delete, Modifiers::NONE);
+    key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
+    key(&ctx, &mut app, Key::S, Modifiers::COMMAND);
+    key(&ctx, &mut app, Key::O, Modifiers::COMMAND);
+    assert_eq!(app.circuit(), &original);
+    assert!(app.take_file_actions().is_empty());
+    assert!(app.editor.pla_target.is_some());
+    key(&ctx, &mut app, Key::Escape, Modifiers::NONE);
+    assert!(app.editor.pla_target.is_none());
+    assert_eq!(app.circuit(), &original);
+}

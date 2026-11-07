@@ -29,6 +29,7 @@ mod properties;
 use project::{CircuitCommand, NameDialog};
 mod arithmetic;
 mod memory;
+mod pla;
 mod plexers;
 mod sequential;
 mod simulation;
@@ -69,6 +70,7 @@ pub fn configure(ctx: &egui::Context) {
 #[derive(Default)]
 pub struct Workspace {
     memory_editor: memory::MemoryEditor,
+    pla_editor: pla::PlaEditor,
     language: Language,
     settings_open: bool,
     settings_error: Option<String>,
@@ -120,6 +122,7 @@ impl Workspace {
             self.editor.appearance_mode,
         );
         let modal = self.editor.memory_target.is_some()
+            || self.editor.pla_target.is_some()
             || self.settings_open
             || self.name_dialog.is_some()
             || self.remove_dialog
@@ -140,6 +143,7 @@ impl Workspace {
             self.project_dialogs(ui.ctx());
             self.settings(ui.ctx());
             self.memory_editor.show(ui.ctx(), &mut self.editor);
+            self.pla_editor.show(ui.ctx(), &mut self.editor);
         }
         if let Some(id) = self.editor.open_instance.take() {
             self.editor.enter_instance(id);
@@ -658,6 +662,7 @@ impl Workspace {
                                             self.library_tool(ui, Kind::Counter);
                                             self.library_tool(ui, Kind::ShiftRegister);
                                             self.library_tool(ui, Kind::Rom);
+                                            self.library_tool(ui, Kind::PlaRom);
                                             self.library_tool(ui, Kind::Ram);
                                         }
                                         "Input/Output" => {

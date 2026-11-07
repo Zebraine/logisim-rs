@@ -366,6 +366,7 @@ fn component(
         ("#I/O", "RGBLed") => Kind::RgbLed,
         ("#I/O", "DotMatrix") => Kind::DotMatrix,
         ("#Memory", "ROM") => Kind::Rom,
+        ("#Memory", "PlaRom") => Kind::PlaRom,
         ("#Memory", "RAM") => Kind::Ram,
         ("#Memory", "Universal Register") => Kind::ShiftRegister,
         ("#Memory", "D Latch") => Kind::Latch(logisim_core::Latch::D),
@@ -412,6 +413,7 @@ fn component(
             }
             Kind::Plexer(p) => crate::plexers::allowed(p, key),
             Kind::Rom | Kind::Ram => crate::memory::allowed(kind, key),
+            Kind::PlaRom => crate::pla::allowed(key),
             Kind::Button
             | Kind::Switch
             | Kind::DipSwitch
@@ -506,6 +508,7 @@ fn component(
     crate::transistors::read(&mut c, &a)?;
     crate::sequential::read(&mut c, &a)?;
     crate::memory::read(&mut c, &a)?;
+    crate::pla::read(&mut c, &a)?;
     crate::io::read(&mut c, &a)?;
     crate::plexers::read(&mut c, &a)?;
     crate::arithmetic::read(&mut c, &a)?;
@@ -539,7 +542,7 @@ fn component(
     }
     if matches!(kind, Kind::Parity(_)) {
         crate::parity::read(&mut c, &a)?;
-    } else {
+    } else if kind != Kind::PlaRom {
         c.inputs = number(&a, "inputs", 2, 2..=8)?;
     }
     c.output = boolean(&a, "output", false)?;

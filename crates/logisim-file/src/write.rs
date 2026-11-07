@@ -108,6 +108,7 @@ pub fn serialize(document: &Document) -> Result<String> {
                 | Kind::Counter
                 | Kind::ShiftRegister
                 | Kind::Rom
+                | Kind::PlaRom
                 | Kind::Ram => 3,
                 _ => 0,
             };
@@ -134,6 +135,8 @@ pub fn serialize(document: &Document) -> Result<String> {
                         a.file_name()
                     } else if let Kind::Plexer(p) = c.kind {
                         p.file_name()
+                    } else if c.kind == Kind::PlaRom {
+                        "PlaRom"
                     } else if c.kind == Kind::RgbLed {
                         "RGBLed"
                     } else if c.kind == Kind::DotMatrix {
@@ -174,6 +177,7 @@ pub fn serialize(document: &Document) -> Result<String> {
                     | Kind::DotMatrix
                     | Kind::HexDisplay
                     | Kind::Rom
+                    | Kind::PlaRom
                     | Kind::Ram
                     | Kind::Plexer(
                         logisim_core::Plexer::Decoder
@@ -189,6 +193,7 @@ pub fn serialize(document: &Document) -> Result<String> {
             crate::transistors::write(&mut out, c)?;
             crate::sequential::write(&mut out, c)?;
             crate::memory::write(&mut out, c)?;
+            crate::pla::write(&mut out, c)?;
             crate::io::write(&mut out, c)?;
             crate::plexers::write(&mut out, c)?;
             crate::arithmetic::write(&mut out, c)?;

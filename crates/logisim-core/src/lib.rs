@@ -30,6 +30,8 @@ mod joystick;
 mod terminal;
 pub use io::{Io, MatrixInput};
 pub use terminal::TerminalOptions;
+mod pla;
+pub use pla::{Pla, PlaInput};
 mod memory;
 pub use memory::{Memory, MemoryContents, MemoryInterface, MemoryRole, MemoryTerminal};
 
@@ -194,6 +196,7 @@ pub enum Kind {
     RgbLed,
     DotMatrix,
     Rom,
+    PlaRom,
     Ram,
     Plexer(Plexer),
     Arithmetic(Arithmetic),
@@ -248,6 +251,7 @@ impl Kind {
                 | Self::Counter
                 | Self::ShiftRegister
                 | Self::Rom
+                | Self::PlaRom
                 | Self::Ram
                 | Self::Arithmetic(_)
         )
@@ -277,6 +281,7 @@ impl Kind {
                 | Self::Counter
                 | Self::ShiftRegister
                 | Self::Rom
+                | Self::PlaRom
                 | Self::Ram
         )
     }
@@ -318,6 +323,7 @@ impl Kind {
             Self::RgbLed => "RGB LED",
             Self::DotMatrix => "LED Matrix",
             Self::Rom => "ROM",
+            Self::PlaRom => "PLA ROM",
             Self::Ram => "RAM",
             Self::Plexer(p) => p.name(),
             Self::Arithmetic(a) => a.name(),
@@ -353,6 +359,7 @@ pub struct Component {
     pub plexing: Plexing,
     pub arithmetic: ArithmeticOptions,
     pub memory: Memory,
+    pub pla: Pla,
     pub io: Io,
     pub terminal: TerminalOptions,
     pub bus: BusControl,
@@ -396,8 +403,12 @@ impl Component {
             } else {
                 String::new()
             },
-            font_size: if kind == Kind::Joystick { 12 } else { 14 },
-            color: if matches!(kind, Kind::Tunnel | Kind::Joystick) {
+            font_size: if matches!(kind, Kind::Joystick | Kind::PlaRom) {
+                12
+            } else {
+                14
+            },
+            color: if matches!(kind, Kind::Tunnel | Kind::Joystick | Kind::PlaRom) {
                 [0, 0, 0]
             } else {
                 [51, 65, 85]
@@ -418,6 +429,7 @@ impl Component {
             sequential: Sequential::default(),
             arithmetic: ArithmeticOptions::default(),
             memory: Memory::default(),
+            pla: Pla::default(),
             io: Io::for_kind(kind),
             terminal: TerminalOptions::default(),
             bus: BusControl::default(),
@@ -443,6 +455,9 @@ impl Component {
         }
     }
     pub fn local_ports(&self) -> Vec<Point> {
+        if self.kind == Kind::PlaRom {
+            return vec![Point::new(60, 0), Point::ZERO, Point::new(30, 30)];
+        }
         if matches!(self.kind, Kind::Parity(_)) {
             return self.parity_ports();
         }
@@ -719,7 +734,8 @@ impl Circuit {
         let before = old.ports();
         let after = replacement.ports();
         let pairs: Vec<_> = if old.kind == replacement.kind
-            && (old.kind.is_memory()
+            && (old.kind == Kind::PlaRom
+                || old.kind.is_memory()
                 || matches!(old.kind, Kind::DotMatrix | Kind::Joystick)
                 || old.kind.is_transistor()
                 || matches!(old.kind, Kind::Parity(_) | Kind::Latch(_))

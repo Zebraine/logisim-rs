@@ -7,6 +7,7 @@ mod io;
 mod latches;
 mod memory;
 mod parity;
+mod pla;
 mod plexers;
 mod read;
 mod sequential;

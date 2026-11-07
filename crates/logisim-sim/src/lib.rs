@@ -18,6 +18,7 @@ mod memory;
 mod memory_tests;
 mod network;
 mod parity;
+mod pla;
 #[cfg(test)]
 mod plexer_tests;
 mod plexers;
@@ -330,6 +331,13 @@ impl Simulator {
                             .expect("compiled transistor control")
                             .bit(0),
                         self.port_value(c.id, 3).map_or(Bit::Unknown, |v| v.bit(0)),
+                    ),
+                    Kind::PlaRom => pla::evaluate(
+                        &c.pla,
+                        self.port_value(c.id, 1).expect("compiled PLA input"),
+                        self.port_value(c.id, 2)
+                            .expect("compiled PLA select")
+                            .bit(0),
                     ),
                     Kind::Constant => Value::known(c.bits, c.constant),
                     Kind::Power => Value::filled(c.bits, Bit::One),
@@ -668,6 +676,7 @@ fn electrically_equal(a: &Circuit, b: &Circuit) -> bool {
                 matches!(c.kind, Kind::Plexer(_)).then_some(c.plexing),
                 matches!(c.kind, Kind::Arithmetic(_)).then_some(c.arithmetic),
                 c.kind.is_memory().then_some(c.memory.clone()),
+                (c.kind == Kind::PlaRom).then_some(c.pla.clone()),
                 c.kind.is_terminal().then_some(c.terminal),
                 (c.kind == Kind::Slider).then_some(c.io.slider_value),
                 (c.kind == Kind::RgbLed).then_some(c.io.rgb_multibit),

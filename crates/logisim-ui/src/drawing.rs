@@ -93,6 +93,12 @@ pub(crate) fn bounds(c: &Component) -> Rect {
             pos(c.position + c.facing.transform(max)),
         );
     }
+    if c.kind == Kind::PlaRom {
+        return Rect::from_min_max(
+            pos(c.position + Point::new(0, -30)),
+            pos(c.position + Point::new(60, 30)),
+        );
+    }
     if c.kind.is_memory() {
         return Rect::from_min_max(
             pos(c.position + Point::new(-140, -40)),
@@ -348,6 +354,7 @@ pub(crate) fn component(
         | Kind::DotMatrix
         | Kind::HexDisplay => crate::io::draw(p, canvas, c, color, simulation),
         Kind::Rom | Kind::Ram => crate::memory::draw(p, canvas, c, color, simulation),
+        Kind::PlaRom => crate::pla::draw(p, canvas, c, color),
         Kind::Plexer(_) => crate::plexers::draw(p, canvas, c, color),
         Kind::Arithmetic(_) => crate::arithmetic::draw(p, canvas, c, color),
         Kind::Latch(_) => crate::latches::draw(p, canvas, c, color, simulation),
@@ -669,7 +676,7 @@ pub(crate) fn component(
             );
         }
     }
-    if !matches!(c.kind, Kind::Text | Kind::Tunnel) && !c.label.is_empty() {
+    if !matches!(c.kind, Kind::Text | Kind::Tunnel | Kind::PlaRom) && !c.label.is_empty() {
         let r = bounds(c);
         let (anchor, align) = if matches!(
             c.kind,

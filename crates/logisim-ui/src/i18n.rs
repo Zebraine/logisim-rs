@@ -106,6 +106,7 @@ const MESSAGES: &[(&str, &str)] = &[
         "采用 Cleanroom 方式独立实现的数字电路工作台。",
     ),
     ("AND Gate", "与门"),
+    ("AND terms", "AND 项数"),
     ("ASCII (7-bit)", "ASCII（7 位）"),
     ("About logisim-rs", "关于 logisim-rs"),
     ("Above / below", "上方 / 下方"),
@@ -270,6 +271,10 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Column data", "列数据"),
     ("Columns", "按列"),
     (
+        "Columns run from high bit to low bit. Empty terms or outputs evaluate to E.",
+        "列从高位排到低位。空项或无连接的输出为 E。",
+    ),
+    (
         "Combinational and sequential simulation is available. Open and save the supported .circ components.",
         "支持组合与时序逻辑仿真，以及已实现元件的 .circ 读写。",
     ),
@@ -352,6 +357,7 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Edit Circuit Layout", "编辑电路布局"),
     ("Edit appearance", "编辑外观"),
     ("Edit contents…", "编辑内容…"),
+    ("Edit programming table…", "编辑编程表…"),
     ("Ellipse", "椭圆"),
     ("Enable", "使能"),
     ("Enable (0 holds outputs)", "使能（0 时保持输出）"),
@@ -438,6 +444,10 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Input {}", "输入 {}"),
     ("Input {} (inverted)", "输入 {}（取反）"),
     ("Input/Output", "输入 / 输出"),
+    (
+        "Input: — disconnected, 1 direct, 0 inverted. Click to cycle. Output: ● connected.",
+        "输入：— 不连接，1 原值，0 反值。点击切换。输出：● 已连接。",
+    ),
     ("Inputs", "输入数量"),
     (
         "Inputs have pending changes. Step or Run to propagate.",
@@ -567,6 +577,8 @@ const MESSAGES: &[(&str, &str)] = &[
         "P: Poke · click a 1-bit input to toggle.",
         "P：交互 · 点击单比特输入切换电平。",
     ),
+    ("PLA ROM", "PLA ROM"),
+    ("PLA programming table", "PLA 编程表"),
     ("Package design", "封装设计"),
     ("Paste · Ctrl+V", "粘贴 · Ctrl+V"),
     (
@@ -684,6 +696,10 @@ const MESSAGES: &[(&str, &str)] = &[
         "Reset inputs, storage and clocks · Ctrl+R",
         "重置输入、存储状态和时钟 · Ctrl+R",
     ),
+    (
+        "Resizing preserves the upper-left connections; removed cells are discarded.",
+        "调整尺寸保留左上区域的连接，移除的单元会被丢弃。",
+    ),
     ("Result", "结果"),
     ("Retry", "重试"),
     ("Return to Parent · Alt+Left", "返回父电路 · Alt+Left"),
@@ -775,6 +791,9 @@ const MESSAGES: &[(&str, &str)] = &[
     ("T Flip-Flop", "T 触发器"),
     ("TTL", "TTL"),
     ("TTY", "TTY 字符终端"),
+    ("Term", "项"),
+    ("Term {} · input bit {}", "第 {} 项 · 输入位 {}"),
+    ("Term {} · output bit {}", "第 {} 项 · 输出位 {}"),
     ("Text", "文字"),
     ("Text color", "文字颜色"),
     ("Text · T", "文字 · T"),
@@ -893,6 +912,10 @@ const MESSAGES: &[(&str, &str)] = &[
     ("{} bit: {}", "{} 位：{}"),
     ("{} clock ticks · {} ticks/s", "时钟已步进 {} 次 · {} 步/秒"),
     ("{} components · {} wires", "{} 个元件 · {} 条导线"),
+    (
+        "{} inputs · {} AND terms · {} outputs",
+        "{} 个输入 · {} 个 AND 项 · {} 个输出",
+    ),
     (
         "{} interface pins · edit Pin components in the circuit definition",
         "{} 个接口引脚 · 可在电路定义中编辑引脚元件",
