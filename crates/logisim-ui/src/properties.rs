@@ -250,6 +250,7 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
             | Kind::Subcircuit(_)
             | Kind::Clock
             | Kind::FlipFlop(_)
+            | Kind::Latch(_)
             | Kind::Plexer(
                 logisim_core::Plexer::Decoder
                     | logisim_core::Plexer::PriorityEncoder
@@ -279,6 +280,7 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
         active |= r.has_focus() || r.dragged();
         ui.end_row();
     }
+    crate::latches::fields(ui, c);
     crate::bus::fields(ui, c);
     crate::transistors::fields(ui, c);
     active |= wiring_fields(ui, c);

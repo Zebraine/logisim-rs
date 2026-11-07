@@ -101,6 +101,7 @@ pub fn serialize(document: &Document) -> Result<String> {
                 Kind::Text => 2,
                 Kind::Register
                 | Kind::FlipFlop(_)
+                | Kind::Latch(_)
                 | Kind::Counter
                 | Kind::ShiftRegister
                 | Kind::Rom
@@ -157,6 +158,7 @@ pub fn serialize(document: &Document) -> Result<String> {
                     | Kind::Subcircuit(_)
                     | Kind::Clock
                     | Kind::FlipFlop(_)
+                    | Kind::Latch(_)
                     | Kind::ShiftRegister
                     | Kind::Button
                     | Kind::DipSwitch
@@ -175,6 +177,7 @@ pub fn serialize(document: &Document) -> Result<String> {
             ) {
                 attribute(&mut out, "width", c.bits)?;
             }
+            crate::latches::write(&mut out, c)?;
             crate::parity::write(&mut out, c)?;
             crate::bus::write(&mut out, c)?;
             crate::transistors::write(&mut out, c)?;

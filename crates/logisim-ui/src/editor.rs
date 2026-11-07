@@ -686,11 +686,9 @@ impl Editor {
                                 self.simulation
                                     .actions
                                     .push(SimulationAction::PokeClock { id });
-                            } else if self
-                                .circuit
-                                .component(id)
-                                .is_some_and(|c| matches!(c.kind, Kind::FlipFlop(_)))
-                            {
+                            } else if self.circuit.component(id).is_some_and(|c| {
+                                matches!(c.kind, Kind::FlipFlop(_) | Kind::Latch(_))
+                            }) {
                                 self.simulation
                                     .actions
                                     .push(SimulationAction::ToggleStored { id });
@@ -803,6 +801,8 @@ impl Editor {
                                     tr(crate::bus::port_label(c, index)).to_owned()
                                 } else if c.kind.is_io() {
                                     tr(crate::io::port_label(c, index)).to_owned()
+                                } else if matches!(c.kind, Kind::Latch(_)) {
+                                    tr(crate::latches::port_label(c, index)).to_owned()
                                 } else if c.kind.is_memory() {
                                     tr(crate::memory::port_label(c, index)).to_owned()
                                 } else {

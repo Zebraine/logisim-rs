@@ -4,6 +4,7 @@ mod appearance;
 mod arithmetic;
 mod bus;
 mod io;
+mod latches;
 mod memory;
 mod parity;
 mod plexers;

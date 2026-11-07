@@ -7,6 +7,7 @@ mod artwork;
 mod bus;
 mod canvas;
 mod document;
+mod latches;
 mod parity;
 mod transistors;
 pub use document::{DocumentView, FileAction};
@@ -641,6 +642,7 @@ impl Workspace {
                                     for p in logisim_core::Plexer::ALL { self.library_tool(ui, Kind::Plexer(p)); }
                                 }
                                 "Memory" => {
+                                            for latch in logisim_core::Latch::ALL { self.library_tool(ui, Kind::Latch(latch)); }
                                             for ff in logisim_core::FlipFlop::ALL { self.library_tool(ui, Kind::FlipFlop(ff)); }
                                             self.library_tool(ui, Kind::Register);
                                             self.library_tool(ui, Kind::Counter);

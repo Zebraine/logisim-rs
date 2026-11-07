@@ -365,6 +365,8 @@ fn component(
         ("#Memory", "ROM") => Kind::Rom,
         ("#Memory", "RAM") => Kind::Ram,
         ("#Memory", "Universal Register") => Kind::ShiftRegister,
+        ("#Memory", "D Latch") => Kind::Latch(logisim_core::Latch::D),
+        ("#Memory", "S-R Latch") => Kind::Latch(logisim_core::Latch::Sr),
         ("#Memory", name) => Kind::FlipFlop(
             logisim_core::FlipFlop::ALL
                 .into_iter()
@@ -400,6 +402,7 @@ fn component(
     for key in a.keys() {
         let allowed = match kind {
             Kind::Parity(_) => crate::parity::allowed(key),
+            Kind::Latch(_) => crate::latches::allowed(key),
             Kind::Transistor | Kind::TransmissionGate => crate::transistors::allowed(kind, key),
             Kind::ControlledBuffer | Kind::ControlledInverter | Kind::PullResistor => {
                 crate::bus::allowed(kind, key)
@@ -492,6 +495,7 @@ fn component(
         },
         1..=32,
     )?;
+    crate::latches::read(&mut c, &a)?;
     crate::bus::read(&mut c, &a)?;
     crate::transistors::read(&mut c, &a)?;
     crate::sequential::read(&mut c, &a)?;

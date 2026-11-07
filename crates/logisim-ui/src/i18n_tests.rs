@@ -62,6 +62,103 @@ fn click(ctx: &Context, app: &mut Workspace, text: &str) {
 fn has(labels: &[(String, Rect)], expected: &str) -> bool {
     labels.iter().any(|(text, _)| text == expected)
 }
+
+#[test]
+fn latch_library_modes_layout_controls_and_undo_work_in_both_languages() {
+    use logisim_core::{ControlPosition, Latch, LatchEnable};
+    for language in Language::ALL {
+        let ctx = Context::default();
+        configure(&ctx);
+        let mut app = Workspace::default();
+        app.set_language(language);
+        let t = |s| i18n::with_language(language, || i18n::tr(s).to_owned());
+        click(&ctx, &mut app, &t("Memory"));
+        click(&ctx, &mut app, &t("D Latch"));
+        assert_eq!(app.editor.tool, Tool::Place(Kind::Latch(Latch::D)));
+        let labels = frame(&ctx, &mut app, vec![]);
+        assert!(!has(&labels, &t("Facing")));
+        assert!(!has(&labels, &t("Data bits")));
+        click(&ctx, &mut app, &t("High level"));
+        let labels = frame(&ctx, &mut app, vec![]);
+        assert!(!has(&labels, &t("Without enable")));
+        assert!(!has(&labels, &t("Rising edge")));
+        click(&ctx, &mut app, &t("Low level"));
+        assert_eq!(app.editor.template.latch_enable, LatchEnable::Low);
+        click(&ctx, &mut app, &t("S-R Latch"));
+        app.editor.place(Point::new(300, 200));
+        app.editor.set_tool(Tool::Select);
+        let id = app.circuit().components[0].id;
+        app.editor.selection.insert(id);
+        app.editor
+            .circuit
+            .add_wire(Point::new(100, 200), Point::new(240, 200));
+        let before = app.circuit().clone();
+        click(&ctx, &mut app, &t("High level"));
+        click(&ctx, &mut app, &t("Without enable"));
+        assert!(!app.circuit().component(id).unwrap().latch_has_enable());
+        assert_eq!(app.circuit().wires, before.wires);
+        app.editor.undo();
+        assert_eq!(app.circuit(), &before);
+        app.editor.redo();
+        assert!(!app.circuit().component(id).unwrap().latch_has_enable());
+        for (label, expected) in [
+            ("New layout", false),
+            ("New layout", true),
+            ("Active-low preset / clear", true),
+        ] {
+            for _ in 0..3 {
+                frame(&ctx, &mut app, vec![]);
+            }
+            let labels = frame(&ctx, &mut app, vec![]);
+            let row = labels.iter().find(|(s, _)| s == &t(label)).unwrap().1;
+            let checkbox = labels
+                .iter()
+                .find(|(s, r)| s.is_empty() && (r.center().y - row.center().y).abs() < 1.0)
+                .unwrap()
+                .1;
+            let pos = Pos2::new(checkbox.left() - 10.0, row.center().y);
+            for pressed in [true, false] {
+                frame(
+                    &ctx,
+                    &mut app,
+                    vec![
+                        Event::PointerMoved(pos),
+                        Event::PointerButton {
+                            pos,
+                            button: PointerButton::Primary,
+                            pressed,
+                            modifiers: Modifiers::NONE,
+                        },
+                    ],
+                );
+            }
+            let c = app.circuit().component(id).unwrap();
+            if label == "New layout" {
+                assert_eq!(c.sequential.new_layout, expected);
+                assert_eq!(
+                    c.sequential.controls,
+                    if expected {
+                        ControlPosition::BelowAbove
+                    } else {
+                        ControlPosition::Legacy
+                    }
+                );
+                if !expected {
+                    // The old layout still allows all three control positions.
+                    click(&ctx, &mut app, &t("Legacy"));
+                    click(&ctx, &mut app, &t("Below / above"));
+                    assert_eq!(
+                        app.circuit().component(id).unwrap().sequential.controls,
+                        ControlPosition::BelowAbove
+                    );
+                }
+            } else {
+                assert_eq!(c.sequential.negate_controls, expected);
+            }
+            assert_eq!(app.circuit().wires, before.wires);
+        }
+    }
+}
 #[test]
 fn settings_click_switches_languages_without_touching_document_history_or_simulation() {
     let ctx = Context::default();
@@ -188,6 +285,20 @@ fn sequential_library_properties_and_controls_work_in_both_languages() {
         app.set_language(language);
         let translated = |text| i18n::with_language(language, || i18n::tr(text).to_owned());
         click(&ctx, &mut app, &translated("Memory"));
+        frame(
+            &ctx,
+            &mut app,
+            vec![
+                Event::PointerMoved(Pos2::new(170.0, 360.0)),
+                Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: egui::vec2(0.0, -150.0),
+                    phase: egui::TouchPhase::Move,
+                    source: egui::MouseWheelSource::Unknown,
+                    modifiers: Modifiers::NONE,
+                },
+            ],
+        );
         click(&ctx, &mut app, &translated("J-K Flip-Flop"));
         assert_eq!(
             app.editor.tool,

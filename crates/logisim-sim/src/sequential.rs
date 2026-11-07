@@ -130,6 +130,9 @@ impl State {
         if c.kind == Kind::Clock {
             return self.value;
         }
+        if matches!(c.kind, Kind::Latch(_)) {
+            return crate::latches::evaluate(&mut self.value, c, ports);
+        }
         let clock = ports[2].bit(0);
         let triggered = match c.sequential.trigger {
             Trigger::Rising => self.clock == Bit::Zero && clock == Bit::One,

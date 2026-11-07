@@ -169,6 +169,7 @@ impl Component {
             } else {
                 self.bits.clamp(1, 32)
             }),
+            Kind::Latch(_) => (index < self.latch_terminals().len()).then_some(1),
             Kind::Clock | Kind::FlipFlop(_) => Some(1),
             Kind::Rom | Kind::Ram => self.memory_terminals().get(index).map(|p| p.bits),
             Kind::ShiftRegister if index == 3 => Some(2),
@@ -212,6 +213,7 @@ impl Component {
                 | Kind::BitExtender
                 | Kind::Clock
                 | Kind::FlipFlop(_)
+                | Kind::Latch(_)
                 | Kind::Register
                 | Kind::Counter
                 | Kind::ShiftRegister

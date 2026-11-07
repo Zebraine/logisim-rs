@@ -327,8 +327,10 @@ impl SimulationUi {
         if let Some(state) = self.view.storage.get(&c.id) {
             ui.colored_label(state.tone.color(), tf!("Stored value: {}", state.text))
                 .on_hover_text(&state.binary);
-            if matches!(c.kind, logisim_core::Kind::FlipFlop(_))
-                && ui.button(tr("Toggle stored bit")).clicked()
+            if matches!(
+                c.kind,
+                logisim_core::Kind::FlipFlop(_) | logisim_core::Kind::Latch(_)
+            ) && ui.button(tr("Toggle stored bit")).clicked()
             {
                 self.actions
                     .push(SimulationAction::ToggleStored { id: c.id });

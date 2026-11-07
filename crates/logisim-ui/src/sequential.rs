@@ -79,7 +79,7 @@ pub(crate) fn fields(ui: &mut Ui, c: &mut Component) -> bool {
             ui.end_row();
         }
     }
-    if c.kind.is_storage() {
+    if c.kind.is_storage() && !matches!(c.kind, Kind::Latch(_)) {
         ui.label(tr("Trigger"));
         egui::ComboBox::from_id_salt("storage_trigger")
             .selected_text(tr(s.trigger.name()))

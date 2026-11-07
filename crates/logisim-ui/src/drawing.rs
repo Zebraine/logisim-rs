@@ -347,6 +347,7 @@ pub(crate) fn component(
         Kind::Rom | Kind::Ram => crate::memory::draw(p, canvas, c, color, simulation),
         Kind::Plexer(_) => crate::plexers::draw(p, canvas, c, color),
         Kind::Arithmetic(_) => crate::arithmetic::draw(p, canvas, c, color),
+        Kind::Latch(_) => crate::latches::draw(p, canvas, c, color, simulation),
         Kind::Clock | Kind::FlipFlop(_) | Kind::Register | Kind::Counter | Kind::ShiftRegister => {
             crate::sequential::draw(p, canvas, c, color, simulation)
         }

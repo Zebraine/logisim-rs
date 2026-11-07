@@ -749,6 +749,43 @@ fn sequential_placement_poke_and_tick_shortcuts_preserve_edit_history() {
 }
 
 #[test]
+fn latch_canvas_placement_fixed_orientation_poke_and_undo_use_real_input() {
+    let (ctx, mut app) = setup();
+    let mut ids = vec![];
+    for (kind, point) in [
+        (logisim_core::Latch::D, Point::new(300, 200)),
+        (logisim_core::Latch::Sr, Point::new(500, 200)),
+    ] {
+        app.editor.set_tool(Tool::Place(Kind::Latch(kind)));
+        for _ in 0..2 {
+            frame(&ctx, &mut app, vec![], Modifiers::NONE);
+        }
+        key(&ctx, &mut app, Key::R, Modifiers::NONE);
+        assert_eq!(app.editor.template.facing, logisim_core::Facing::East);
+        let at = app.canvas.screen(point);
+        click(&ctx, &mut app, at);
+        ids.push(app.circuit().components.last().unwrap().id);
+    }
+    let before = app.circuit().clone();
+    key(&ctx, &mut app, Key::P, Modifiers::NONE);
+    for point in [Point::new(270, 220), Point::new(470, 220)] {
+        let at = app.canvas.screen(point);
+        click(&ctx, &mut app, at);
+    }
+    assert_eq!(
+        app.take_simulation_actions(),
+        vec![
+            SimulationAction::ToggleStored { id: ids[0] },
+            SimulationAction::ToggleStored { id: ids[1] }
+        ]
+    );
+    assert_eq!(app.circuit(), &before);
+    key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
+    assert_eq!(app.circuit().components.len(), 1);
+    assert!(app.circuit().component(ids[1]).is_none());
+}
+
+#[test]
 fn drawn_extensions_merge_with_selection_undo_redo_and_cancelled_moves() {
     let (ctx, mut app) = setup();
     app.editor.set_tool(Tool::Wire);

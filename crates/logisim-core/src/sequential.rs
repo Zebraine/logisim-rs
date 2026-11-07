@@ -110,7 +110,11 @@ impl Kind {
     pub fn is_storage(self) -> bool {
         matches!(
             self,
-            Self::FlipFlop(_) | Self::Register | Self::Counter | Self::ShiftRegister
+            Self::FlipFlop(_)
+                | Self::Latch(_)
+                | Self::Register
+                | Self::Counter
+                | Self::ShiftRegister
         )
     }
     pub fn is_sequential(self) -> bool {
@@ -121,6 +125,9 @@ impl Component {
     /// FF: Q, /Q, CLK, data(s), PRE, CLR. Register: Q, D, CLK, EN, CS, PRE, CLR.
     pub fn sequential_ports(&self) -> Option<Vec<Point>> {
         let points = match self.kind {
+            Kind::Latch(_) => {
+                return Some(self.latch_terminals().into_iter().map(|(_, p)| p).collect());
+            }
             // Q, D, CLK, Load, Count/Reverse, Carry, PRE, CLR, optional EN.
             Kind::Counter => {
                 let mut p = vec![
@@ -202,7 +209,7 @@ impl Component {
             return self.interface.ports.get(index).is_some_and(|p| p.output);
         }
         (index == 0 && self.drives_output())
-            || (matches!(self.kind, Kind::FlipFlop(_)) && index == 1)
+            || (matches!(self.kind, Kind::FlipFlop(_) | Kind::Latch(_)) && index == 1)
             || (self.kind == Kind::Counter && index == 5)
     }
 }

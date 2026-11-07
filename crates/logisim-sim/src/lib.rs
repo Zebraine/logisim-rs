@@ -7,6 +7,7 @@ mod arithmetic_tests;
 mod bus;
 mod displays;
 mod io;
+mod latches;
 mod memory;
 #[cfg(test)]
 mod memory_tests;
@@ -449,7 +450,7 @@ impl Simulator {
                 let carry = self.storage[&c.id].carry(&c, &ports);
                 self.drive_port((c.id, 5), carry);
             }
-            if matches!(c.kind, Kind::FlipFlop(_)) {
+            if matches!(c.kind, Kind::FlipFlop(_) | Kind::Latch(_)) {
                 self.drive_port((c.id, 1), Value::known(1, output.number().unwrap_or(0) ^ 1));
             }
         }
@@ -513,7 +514,7 @@ impl Simulator {
         if self
             .circuit
             .component(id)
-            .is_some_and(|c| matches!(c.kind, Kind::FlipFlop(_)))
+            .is_some_and(|c| matches!(c.kind, Kind::FlipFlop(_) | Kind::Latch(_)))
         {
             self.storage.get_mut(&id).unwrap().toggle();
             // Apply asserted asynchronous controls and output scheduling through the same path.
@@ -636,6 +637,7 @@ fn electrically_equal(a: &Circuit, b: &Circuit) -> bool {
                 (c.kind.is_controlled() || c.kind == Kind::PullResistor).then_some(c.bus),
                 c.kind.is_transistor().then_some(c.transistor),
                 matches!(c.kind, Kind::Parity(_)).then_some((c.inputs, c.parity)),
+                matches!(c.kind, Kind::Latch(_)).then_some(c.latch_enable),
                 matches!(c.kind, Kind::Plexer(_)).then_some(c.plexing),
                 matches!(c.kind, Kind::Arithmetic(_)).then_some(c.arithmetic),
                 c.kind.is_memory().then_some(c.memory.clone()),

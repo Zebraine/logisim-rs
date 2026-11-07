@@ -10,10 +10,12 @@ pub use project::{CircuitDefinition, Interface, InterfacePort, MAX_CIRCUITS, Pro
 
 mod arithmetic;
 mod bus;
+mod latches;
 mod parity;
 mod transistors;
 pub use arithmetic::{Arithmetic, ArithmeticOptions, BitSearch, Shift};
 pub use bus::{BusControl, Pull};
+pub use latches::{Latch, LatchEnable, LatchRole};
 pub use parity::{Parity, ParityOptions, ParityOutput};
 pub use transistors::{TransistorOptions, TransistorType};
 
@@ -172,6 +174,7 @@ pub enum Kind {
     BitExtender,
     Clock,
     FlipFlop(FlipFlop),
+    Latch(Latch),
     Register,
     Counter,
     ShiftRegister,
@@ -231,6 +234,7 @@ impl Kind {
                 | Self::HexDisplay
                 | Self::DotMatrix
                 | Self::BitExtender
+                | Self::Latch(_)
                 | Self::FlipFlop(_)
                 | Self::Register
                 | Self::Counter
@@ -259,6 +263,7 @@ impl Kind {
                 | Self::Probe
                 | Self::Subcircuit(_)
                 | Self::Clock
+                | Self::Latch(_)
                 | Self::FlipFlop(_)
                 | Self::Register
                 | Self::Counter
@@ -271,6 +276,7 @@ impl Kind {
         match self {
             Self::Subcircuit(_) => "Subcircuit",
             Self::Gate(g) => g.name(),
+            Self::Latch(l) => l.name(),
             Self::Parity(p) => p.name(),
             Self::ControlledBuffer => "Controlled Buffer",
             Self::ControlledInverter => "Controlled Inverter",
@@ -340,6 +346,7 @@ pub struct Component {
     pub bus: BusControl,
     pub transistor: TransistorOptions,
     pub parity: ParityOptions,
+    pub latch_enable: LatchEnable,
 }
 impl Component {
     pub fn new(kind: Kind, position: Point) -> Self {
@@ -402,6 +409,7 @@ impl Component {
             bus: BusControl::default(),
             transistor: TransistorOptions::default(),
             parity: ParityOptions::default(),
+            latch_enable: LatchEnable::default(),
             plexing: Plexing {
                 select_bits: if kind == Kind::Plexer(Plexer::PriorityEncoder) {
                     3
@@ -700,7 +708,7 @@ impl Circuit {
             && (old.kind.is_memory()
                 || old.kind == Kind::DotMatrix
                 || old.kind.is_transistor()
-                || matches!(old.kind, Kind::Parity(_))
+                || matches!(old.kind, Kind::Parity(_) | Kind::Latch(_))
                 || (old.kind.is_controlled()
                     && (old.bus.control_left != replacement.bus.control_left
                         || old.gate_size != replacement.gate_size))

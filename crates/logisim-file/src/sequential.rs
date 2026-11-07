@@ -29,7 +29,7 @@ pub(crate) fn read(c: &mut Component, attrs: &BTreeMap<String, String>) -> Resul
         c.bits = crate::read::number(attrs, "length", 8, 1..=32)?;
     }
     let s = &mut c.sequential;
-    if c.kind.is_storage() {
+    if c.kind.is_storage() && !matches!(c.kind, Kind::Latch(_)) {
         s.trigger = match get("trigger", "rising") {
             "rising" => Trigger::Rising,
             "falling" => Trigger::Falling,
@@ -104,7 +104,7 @@ pub(crate) fn read(c: &mut Component, attrs: &BTreeMap<String, String>) -> Resul
 pub(crate) fn write(out: &mut String, c: &Component) -> Result<()> {
     use crate::write::attribute as a;
     let s = c.sequential;
-    if c.kind.is_storage() {
+    if c.kind.is_storage() && !matches!(c.kind, Kind::Latch(_)) {
         if c.facing != logisim_core::Facing::East
             || (matches!(c.kind, Kind::FlipFlop(_)) && c.bits != 1)
         {
