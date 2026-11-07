@@ -64,6 +64,63 @@ fn has(labels: &[(String, Rect)], expected: &str) -> bool {
 }
 
 #[test]
+fn joystick_library_properties_and_rotation_undo_in_both_languages() {
+    for language in Language::ALL {
+        let ctx = Context::default();
+        configure(&ctx);
+        let mut app = Workspace::default();
+        app.set_language(language);
+        let t = |s| i18n::with_language(language, || i18n::tr(s).to_owned());
+        click(&ctx, &mut app, &t("Input/Output"));
+        frame(
+            &ctx,
+            &mut app,
+            vec![
+                Event::PointerMoved(Pos2::new(150.0, 350.0)),
+                Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: egui::vec2(0.0, -200.0),
+                    phase: egui::TouchPhase::Move,
+                    modifiers: Modifiers::NONE,
+                    source: egui::MouseWheelSource::Unknown,
+                },
+            ],
+        );
+        click(&ctx, &mut app, &t("Joystick"));
+        assert_eq!(app.editor.tool, Tool::Place(Kind::Joystick));
+        let labels = frame(&ctx, &mut app, vec![]);
+        for s in ["Data bits", "Facing", "Stick color", "Label color"] {
+            assert!(has(&labels, &t(s)), "{s}");
+        }
+        for s in ["Label", "Label location", "Font size", "Off color"] {
+            assert!(!has(&labels, &t(s)), "{s}");
+        }
+        app.editor.place(Point::new(300, 200));
+        app.editor.set_tool(Tool::Select);
+        let id = app.circuit().components[0].id;
+        app.editor.selection.insert(id);
+        app.editor
+            .circuit
+            .add_wire(Point::new(300, 210), Point::new(400, 210));
+        let before = app.circuit().clone();
+        click(&ctx, &mut app, &t("East"));
+        click(&ctx, &mut app, &t("North"));
+        assert_eq!(
+            app.circuit().component(id).unwrap().facing,
+            logisim_core::Facing::North
+        );
+        assert_eq!(app.circuit().wires, before.wires);
+        app.editor.undo();
+        assert_eq!(app.circuit(), &before);
+        app.editor.redo();
+        assert_eq!(
+            app.circuit().component(id).unwrap().facing,
+            logisim_core::Facing::North
+        );
+    }
+}
+
+#[test]
 fn latch_library_modes_layout_controls_and_undo_work_in_both_languages() {
     use logisim_core::{ControlPosition, Latch, LatchEnable};
     for language in Language::ALL {

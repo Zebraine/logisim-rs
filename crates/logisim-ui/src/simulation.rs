@@ -1,7 +1,7 @@
 //! Presentation and commands only; the desktop host owns the simulation service.
 use crate::{i18n::tr, tf};
 use egui::{Color32, Key, Modifiers, Ui};
-use logisim_core::{Component, Id};
+use logisim_core::{Component, Id, Point};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -66,6 +66,7 @@ pub struct SimulationView {
     pub tick_hz: u32,
     pub clocks: BTreeSet<Id>,
     pub buttons: BTreeMap<Id, bool>,
+    pub joysticks: BTreeMap<Id, Point>,
     pub indicators: BTreeMap<Id, [bool; 8]>,
     pub rgb: BTreeMap<Id, [u8; 3]>,
     /// Row-major cells: None is an unknown/error signal.
@@ -83,6 +84,11 @@ pub enum SimulationAction {
         id: Id,
     },
     ReleaseButtons,
+    SetJoystick {
+        id: Id,
+        offset: Point,
+    },
+    ReleaseJoysticks,
     ToggleEnabled,
     Step,
     Reset,
@@ -117,16 +123,37 @@ pub(crate) struct SimulationUi {
     pub focus_value: bool,
     draft: Option<(Id, u32, String)>,
     held_button: Option<Id>,
+    held_joystick: Option<(Id, Point)>,
 }
 impl SimulationUi {
     pub fn press_button(&mut self, id: Id) {
         if self.held_button != Some(id) {
-            self.release_button();
+            self.release_momentary();
             self.held_button = Some(id);
             self.actions.push(SimulationAction::PressButton { id });
         }
     }
-    pub fn release_button(&mut self) {
+    pub fn press_joystick(&mut self, id: Id) {
+        self.release_momentary();
+        self.held_joystick = Some((id, Point::ZERO));
+    }
+    pub fn held_joystick(&self) -> Option<Id> {
+        self.held_joystick.map(|(id, _)| id)
+    }
+    pub fn move_joystick(&mut self, offset: Point) {
+        if let Some((id, current)) = &mut self.held_joystick {
+            let offset = Point::new(offset.x.clamp(-14, 14), offset.y.clamp(-14, 14));
+            if *current != offset {
+                *current = offset;
+                self.actions
+                    .push(SimulationAction::SetJoystick { id: *id, offset });
+            }
+        }
+    }
+    pub fn release_momentary(&mut self) {
+        if self.held_joystick.take().is_some() {
+            self.actions.push(SimulationAction::ReleaseJoysticks);
+        }
         if self.held_button.take().is_some() {
             self.actions.push(SimulationAction::ReleaseButtons);
         }
@@ -308,6 +335,10 @@ impl SimulationUi {
             }
             logisim_core::Kind::DipSwitch => {
                 ui.weak(tr("Poke: click each switch to toggle its output."));
+            }
+            logisim_core::Kind::Joystick => {
+                ui.label(tr("Drag to move; release to center."));
+                return;
             }
             logisim_core::Kind::Slider => {
                 ui.weak(tr(

@@ -2,6 +2,9 @@ use crate::{Error, Result};
 use logisim_core::{Component, Facing, Kind, MatrixInput, Radix};
 use std::collections::BTreeMap;
 pub(crate) fn allowed(kind: Kind, key: &str) -> bool {
+    if kind == Kind::Joystick {
+        return matches!(key, "facing" | "bits" | "color" | "labelcolor");
+    }
     (kind != Kind::RgbLed && key == "color")
         || (kind == Kind::RgbLed && key == "multibit")
         || (kind == Kind::DotMatrix
@@ -45,9 +48,19 @@ pub(crate) fn read(c: &mut Component, a: &BTreeMap<String, String>) -> Result<()
     }
     c.bits = match c.kind {
         Kind::Switch | Kind::Slider => c.bits,
+        Kind::Joystick => crate::read::number(a, "bits", 4, 2..=5)?,
         Kind::HexDisplay => 4,
         _ => 1,
     };
+    if c.kind == Kind::Joystick
+        && let Some(text) = a.get("labelcolor")
+    {
+        if text.len() != 7 {
+            return Err(Error("Invalid joystick label color".into()));
+        }
+        let [r, g, b, _] = rgba(text)?;
+        c.color = [r, g, b];
+    }
     if c.kind == Kind::RgbLed {
         c.io.rgb_multibit = match a.get("multibit").map(String::as_str) {
             None | Some("false") => false,
@@ -134,6 +147,7 @@ pub(crate) fn write(out: &mut String, c: &Component) -> Result<()> {
     }
     if (match c.kind {
         Kind::Switch | Kind::Slider => !(1..=32).contains(&c.bits),
+        Kind::Joystick => !(2..=5).contains(&c.bits),
         Kind::HexDisplay => c.bits != 4,
         _ => c.bits != 1,
     }) || (!c.kind.rotatable() && c.facing != Facing::East)
@@ -141,6 +155,11 @@ pub(crate) fn write(out: &mut String, c: &Component) -> Result<()> {
         return Err(Error("Invalid I/O width or orientation".into()));
     }
     use crate::write::attribute as a;
+    if c.kind == Kind::Joystick {
+        a(out, "bits", c.bits)?;
+        let [r, g, b] = c.color;
+        a(out, "labelcolor", format!("#{r:02x}{g:02x}{b:02x}"))?;
+    }
     if c.kind == Kind::DipSwitch {
         if !(1..=32).contains(&c.io.switch_count) {
             return Err(Error("Invalid switch count".into()));
@@ -221,6 +240,70 @@ mod tests {
         format!(
             r##"<project source="2.16.2.2.jar" version="1.0"><lib name="io" desc="#I/O"/><main name="main"/><circuit name="main"><comp lib="io" name="{kind}" loc="(200,100)">{attrs}</comp></circuit></project>"##
         )
+    }
+    #[test]
+    fn joystick_native_attributes_colors_ports_and_roundtrip() {
+        let imported = parse(&xml("Joystick", "")).unwrap();
+        assert!(imported.warnings.is_empty());
+        let c = &imported.document.main_circuit().circuit.components[0];
+        assert_eq!(c.bits, 4);
+        assert_eq!(c.io.on_color, [255, 0, 0, 255]);
+        assert_eq!(c.color, [0; 3]);
+        for facing in Facing::ALL {
+            for bits in 2..=5 {
+                let source = xml(
+                    "Joystick",
+                    &format!(
+                        r##"<a name="facing" val="{}"/><a name="bits" val="{bits}"/><a name="color" val="#12345680"/><a name="labelcolor" val="#234567"/>"##,
+                        facing.name().to_ascii_lowercase()
+                    ),
+                );
+                let imported = parse(&source).unwrap();
+                assert!(imported.warnings.is_empty(), "{:?}", imported.warnings);
+                let c = &imported.document.main_circuit().circuit.components[0];
+                assert_eq!((c.bits, c.facing), (bits, facing));
+                assert_eq!(c.io.on_color, [18, 52, 86, 128]);
+                assert_eq!(c.color, [35, 69, 103]);
+                let saved = serialize(&imported.document).unwrap();
+                assert!(!saved.contains("name=\"width\""));
+                assert!(!saved.contains("name=\"label\""));
+                assert!(!saved.contains("name=\"value\""));
+                let again = parse(&saved).unwrap();
+                assert!(again.warnings.is_empty());
+                assert_eq!(
+                    again.document.main_circuit().circuit,
+                    imported.document.main_circuit().circuit
+                );
+            }
+        }
+    }
+    #[test]
+    fn unknown_joystick_modes_are_reported_and_invalid_width_cannot_be_saved() {
+        for attrs in [
+            r#"<a name="bits" val="1"/>"#,
+            r#"<a name="bits" val="6"/>"#,
+            r#"<a name="width" val="4"/>"#,
+            r#"<a name="label" val="unimplemented"/>"#,
+            r#"<a name="value" val="0"/>"#,
+            r##"<a name="color" val="#12345"/>"##,
+            r##"<a name="labelcolor" val="#23456780"/>"##,
+        ] {
+            let imported = parse(&xml("Joystick", attrs)).unwrap();
+            assert!(!imported.warnings.is_empty(), "{attrs}");
+            assert!(
+                imported
+                    .document
+                    .main_circuit()
+                    .circuit
+                    .components
+                    .is_empty()
+            );
+        }
+        for bits in [0, 1, 6, 32] {
+            let mut c = Component::new(Kind::Joystick, Point::ZERO);
+            c.bits = bits;
+            assert!(write(&mut String::new(), &c).is_err());
+        }
     }
     #[test]
     fn io_defaults_colors_transparency_and_attributes_roundtrip() {

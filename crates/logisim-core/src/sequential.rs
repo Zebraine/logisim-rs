@@ -184,6 +184,9 @@ impl Component {
         Some(points.into_iter().map(|(x, y)| Point::new(x, y)).collect())
     }
     pub fn drives_port(&self, index: usize) -> bool {
+        if self.kind == Kind::Joystick {
+            return index < 2;
+        }
         if self.kind == Kind::DipSwitch {
             return index < usize::from(self.io.switch_count.clamp(1, 32));
         }

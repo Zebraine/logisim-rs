@@ -7,6 +7,7 @@ mod arithmetic_tests;
 mod bus;
 mod displays;
 mod io;
+mod joystick;
 mod latches;
 mod memory;
 #[cfg(test)]
@@ -26,7 +27,7 @@ mod tests;
 mod transistors;
 mod value;
 
-use logisim_core::{Circuit, Extension, Id, Kind};
+use logisim_core::{Circuit, Extension, Id, Kind, Point};
 use network::Network;
 use std::collections::BTreeMap;
 pub use value::{Bit, Value};
@@ -50,6 +51,7 @@ pub struct Simulator {
     circuit: Circuit,
     network: Network,
     inputs: BTreeMap<Id, Value>,
+    joysticks: BTreeMap<Id, Point>,
     matrices: BTreeMap<Id, displays::MatrixState>,
     display_ticks: u64,
     storage: BTreeMap<Id, sequential::State>,
@@ -68,6 +70,7 @@ impl Default for Simulator {
             circuit: Circuit::default(),
             network: Network::default(),
             inputs: BTreeMap::new(),
+            joysticks: BTreeMap::new(),
             matrices: BTreeMap::new(),
             display_ticks: 0,
             storage: BTreeMap::new(),
@@ -114,6 +117,12 @@ impl Simulator {
                 };
                 (c.id, value)
             })
+            .collect();
+        self.joysticks = circuit
+            .components
+            .iter()
+            .filter(|c| c.kind == Kind::Joystick)
+            .map(|c| (c.id, self.joysticks.get(&c.id).copied().unwrap_or_default()))
             .collect();
         self.storage = circuit
             .components
@@ -213,6 +222,9 @@ impl Simulator {
     }
     pub fn reset(&mut self) {
         self.reset_displays();
+        for offset in self.joysticks.values_mut() {
+            *offset = Point::ZERO;
+        }
         for input in self.inputs.values_mut() {
             *input = Value::known(input.width(), 0);
         }

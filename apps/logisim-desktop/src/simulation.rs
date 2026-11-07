@@ -10,6 +10,8 @@ pub fn apply(sim: &mut Simulator, action: SimulationAction) {
     match action {
         SimulationAction::PressButton { id } => sim.set_button(id, true),
         SimulationAction::ReleaseButtons => sim.release_buttons(),
+        SimulationAction::SetJoystick { id, offset } => sim.set_joystick(id, offset),
+        SimulationAction::ReleaseJoysticks => sim.release_joysticks(),
         SimulationAction::ToggleEnabled => sim.set_enabled(!sim.enabled()),
         SimulationAction::Step if !sim.enabled() => {
             sim.step();
@@ -82,6 +84,9 @@ pub fn present(circuit: &Circuit, sim: &Simulator) -> SimulationView {
                     .collect(),
             );
         }
+        if let Some(offset) = sim.joystick(c.id) {
+            view.joysticks.insert(c.id, offset);
+        }
         if let Some(lights) = sim.indicator(c.id) {
             view.indicators.insert(c.id, lights);
         }
@@ -146,6 +151,8 @@ pub fn apply_project(
 ) {
     match action {
         SimulationAction::PressButton { id } => sim.set_button(path, id, true),
+        SimulationAction::SetJoystick { id, offset } => sim.set_joystick(path, id, offset),
+        SimulationAction::ReleaseJoysticks => sim.release_joysticks(),
         SimulationAction::ReleaseButtons => sim.release_buttons(),
         SimulationAction::ToggleEnabled => sim.set_enabled(!sim.enabled()),
         SimulationAction::Step if !sim.enabled() => {

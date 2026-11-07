@@ -275,6 +275,21 @@ impl ProjectSimulator {
             state.sim.set_button(id, pressed);
         }
     }
+    pub fn set_joystick(&mut self, path: &[Id], id: Id, offset: logisim_core::Point) {
+        if let Some(state) = self.states.get_mut(path) {
+            state.sim.set_joystick(id, offset);
+        }
+    }
+    pub fn release_joysticks(&mut self) {
+        for state in self.states.values_mut() {
+            state.sim.release_joysticks();
+        }
+        for root in self.cached_roots.values_mut() {
+            for state in root.states.values_mut() {
+                state.sim.release_joysticks();
+            }
+        }
+    }
     pub fn release_buttons(&mut self) {
         for state in self.states.values_mut() {
             state.sim.release_buttons();

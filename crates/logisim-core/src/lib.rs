@@ -26,6 +26,7 @@ mod sequential;
 pub use sequential::{ControlPosition, CounterOverflow, FlipFlop, Sequential, Trigger};
 
 mod io;
+mod joystick;
 pub use io::{Io, MatrixInput};
 mod memory;
 pub use memory::{Memory, MemoryContents, MemoryInterface, MemoryRole, MemoryTerminal};
@@ -182,6 +183,7 @@ pub enum Kind {
     Switch,
     DipSwitch,
     Slider,
+    Joystick,
     Led,
     SevenSegment,
     HexDisplay,
@@ -301,6 +303,7 @@ impl Kind {
             Self::Switch => "Switch",
             Self::DipSwitch => "Dip Switch",
             Self::Slider => "Slider",
+            Self::Joystick => "Joystick",
             Self::Led => "LED",
             Self::SevenSegment => "7-Segment Display",
             Self::HexDisplay => "Hex Digit Display",
@@ -362,7 +365,7 @@ impl Component {
                 _ => Facing::East,
             },
             bits: match kind {
-                Kind::Splitter | Kind::HexDisplay => 4,
+                Kind::Splitter | Kind::HexDisplay | Kind::Joystick => 4,
                 Kind::BitExtender => 16,
                 Kind::Slider
                 | Kind::Register
@@ -383,8 +386,8 @@ impl Component {
             } else {
                 String::new()
             },
-            font_size: 14,
-            color: if kind == Kind::Tunnel {
+            font_size: if kind == Kind::Joystick { 12 } else { 14 },
+            color: if matches!(kind, Kind::Tunnel | Kind::Joystick) {
                 [0, 0, 0]
             } else {
                 [51, 65, 85]
@@ -706,7 +709,7 @@ impl Circuit {
         let after = replacement.ports();
         let pairs: Vec<_> = if old.kind == replacement.kind
             && (old.kind.is_memory()
-                || old.kind == Kind::DotMatrix
+                || matches!(old.kind, Kind::DotMatrix | Kind::Joystick)
                 || old.kind.is_transistor()
                 || matches!(old.kind, Kind::Parity(_) | Kind::Latch(_))
                 || (old.kind.is_controlled()

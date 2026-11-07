@@ -125,8 +125,12 @@ impl Workspace {
         if modal || !ui.is_enabled() || ui.input(|i| !i.focused) {
             self.editor.cancel_slider();
         }
-        if modal || !ui.is_enabled() || ui.input(|i| !i.focused || !i.pointer.primary_down()) {
-            self.editor.simulation.release_button();
+        if modal
+            || self.editor.appearance_mode
+            || !ui.is_enabled()
+            || ui.input(|i| !i.focused || !i.pointer.primary_down())
+        {
+            self.editor.simulation.release_momentary();
         }
         ui.add_enabled_ui(!modal, |ui| self.show_inner(ui));
         if ui.is_enabled() {
@@ -145,7 +149,7 @@ impl Workspace {
                 self.editor.appearance_mode,
             )
         {
-            self.editor.simulation.release_button();
+            self.editor.simulation.release_momentary();
             self.appearance.reset_context();
             self.canvas.reset();
             self.fit_pending = true;
@@ -651,7 +655,7 @@ impl Workspace {
                                             self.library_tool(ui, Kind::Ram);
                                         }
                                         "Input/Output" => {
-                                            for kind in [Kind::Button, Kind::Switch, Kind::DipSwitch, Kind::Slider, Kind::Led, Kind::RgbLed, Kind::SevenSegment, Kind::HexDisplay, Kind::DotMatrix] {
+                                            for kind in [Kind::Button, Kind::Switch, Kind::DipSwitch, Kind::Slider, Kind::Joystick, Kind::Led, Kind::RgbLed, Kind::SevenSegment, Kind::HexDisplay, Kind::DotMatrix] {
                                                 self.library_tool(ui, kind);
                                             }
                                         }

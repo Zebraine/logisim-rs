@@ -91,6 +91,96 @@ fn drag(ctx: &Context, app: &mut Workspace, a: Pos2, b: Pos2) {
     button(ctx, app, b, false);
 }
 #[test]
+fn joystick_drag_captures_both_world_axes_without_document_edits() {
+    for facing in logisim_core::Facing::ALL {
+        for zoom in [0.75, 2.0] {
+            let (ctx, mut app) = setup();
+            let mut c = Component::new(Kind::Joystick, Point::new(200, 200));
+            c.facing = facing;
+            let center = c.joystick_center();
+            let mut circuit = logisim_core::Circuit::default();
+            let id = circuit.add_component(c);
+            app.replace_circuit(circuit);
+            app.editor.set_tool(Tool::Poke);
+            frame(&ctx, &mut app, vec![], Modifiers::NONE);
+            app.canvas.camera.zoom = zoom;
+            let before = app.project().clone();
+            let start = app.canvas.screen(center + Point::new(10, -5));
+            button(&ctx, &mut app, start, true);
+            assert_eq!(
+                app.take_simulation_actions(),
+                vec![SimulationAction::SetJoystick {
+                    id,
+                    offset: Point::new(10, -5)
+                }]
+            );
+            let outside = app.canvas.screen(center + Point::new(100, 100));
+            frame(
+                &ctx,
+                &mut app,
+                vec![Event::PointerMoved(outside)],
+                Modifiers::NONE,
+            );
+            assert_eq!(
+                app.take_simulation_actions(),
+                vec![SimulationAction::SetJoystick {
+                    id,
+                    offset: Point::new(14, 14)
+                }]
+            );
+            frame(&ctx, &mut app, vec![], Modifiers::NONE);
+            assert!(app.take_simulation_actions().is_empty());
+            button(&ctx, &mut app, Pos2::new(100.0, 750.0), false);
+            assert_eq!(
+                app.take_simulation_actions(),
+                vec![SimulationAction::ReleaseJoysticks]
+            );
+            assert_eq!(app.project(), &before);
+            assert!(!app.editor.can_undo());
+        }
+    }
+}
+#[test]
+fn joystick_releases_on_focus_modal_escape_tool_and_instance_changes() {
+    for cause in 0..5 {
+        let (ctx, mut app) = setup();
+        let c = Component::new(Kind::Joystick, Point::new(200, 200));
+        let center = c.joystick_center();
+        let mut circuit = logisim_core::Circuit::default();
+        circuit.add_component(c);
+        app.replace_circuit(circuit);
+        app.editor.set_tool(Tool::Poke);
+        frame(&ctx, &mut app, vec![], Modifiers::NONE);
+        let pos = app.canvas.screen(center + Point::new(10, 0));
+        button(&ctx, &mut app, pos, true);
+        assert_eq!(app.take_simulation_actions().len(), 1);
+        match cause {
+            0 => frame(
+                &ctx,
+                &mut app,
+                vec![Event::WindowFocused(false)],
+                Modifiers::NONE,
+            ),
+            1 => {
+                app.settings_open = true;
+                frame(&ctx, &mut app, vec![], Modifiers::NONE);
+            }
+            2 => key(&ctx, &mut app, Key::Escape, Modifiers::NONE),
+            3 => app.editor.set_tool(Tool::Select),
+            _ => {
+                app.editor.appearance_mode = true;
+                frame(&ctx, &mut app, vec![], Modifiers::NONE);
+            }
+        }
+        assert_eq!(
+            app.take_simulation_actions(),
+            vec![SimulationAction::ReleaseJoysticks],
+            "cause {cause}"
+        );
+        assert!(!app.editor.can_undo());
+    }
+}
+#[test]
 fn place_connect_move_and_undo_through_canvas_input() {
     let (ctx, mut app) = setup();
     app.editor.set_tool(Tool::Place(Kind::Gate(Gate::And)));

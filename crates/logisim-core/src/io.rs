@@ -61,6 +61,9 @@ impl Io {
         ) {
             io.on_color = [255; 4];
         }
+        if kind == Kind::Joystick {
+            io.on_color = [255, 0, 0, 255];
+        }
         if kind == Kind::DotMatrix {
             io.on_color = [0, 255, 0, 255];
         }
@@ -78,6 +81,7 @@ impl Kind {
                 | Self::Switch
                 | Self::DipSwitch
                 | Self::Slider
+                | Self::Joystick
                 | Self::Led
                 | Self::SevenSegment
                 | Self::HexDisplay
@@ -101,6 +105,11 @@ impl Component {
         ((u64::from(self.slider_max()) * u64::from(percent) + 50) / 100) as u32
     }
     pub fn io_body(&self) -> [Point; 2] {
+        if self.kind == Kind::Joystick {
+            let center = self.joystick_center() - self.position;
+            return [center - Point::new(15, 15), center + Point::new(15, 15)]
+                .map(|p| self.facing.inverse().transform(p));
+        }
         // DIP ordering and slider orientation are anchored in world axes, not a rotated body.
         if matches!(self.kind, Kind::DipSwitch | Kind::Slider) {
             let n = i32::from(self.io.switch_count.clamp(1, 32)) * 20;
@@ -136,6 +145,16 @@ impl Component {
     }
     pub fn io_ports(&self) -> Vec<Point> {
         match self.kind {
+            Kind::Joystick => vec![
+                Point::ZERO,
+                self.facing.inverse().transform(
+                    if matches!(self.facing, Facing::East | Facing::West) {
+                        Point::new(0, 10)
+                    } else {
+                        Point::new(-10, 0)
+                    },
+                ),
+            ],
             Kind::RgbLed => (-1..=1)
                 .map(|i| {
                     self.facing.inverse().transform(

@@ -135,6 +135,7 @@ impl Component {
             Kind::Parity(_) => {
                 (index <= usize::from(self.input_count())).then_some(self.bits.clamp(1, 32))
             }
+            Kind::Joystick => (index < 2).then_some(self.bits.clamp(2, 5)),
             Kind::Button | Kind::DipSwitch | Kind::Led | Kind::SevenSegment => Some(1),
             Kind::HexDisplay => Some(if index == 0 { 4 } else { 1 }),
             Kind::RgbLed => (index < 3).then_some(if self.io.rgb_multibit { 8 } else { 1 }),
@@ -207,6 +208,7 @@ impl Component {
                 | Kind::Switch
                 | Kind::DipSwitch
                 | Kind::Slider
+                | Kind::Joystick
                 | Kind::Constant
                 | Kind::Power
                 | Kind::Ground

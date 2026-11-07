@@ -28,6 +28,19 @@ impl Simulator {
                     Kind::DipSwitch => (0..c.io.switch_count.clamp(1, 32))
                         .map(|i| ((c.id, usize::from(i)), Value::known(1, (state >> i) & 1)))
                         .collect(),
+                    Kind::Joystick => {
+                        let offset = self.joystick(c.id).unwrap_or_default();
+                        [offset.x, offset.y]
+                            .into_iter()
+                            .enumerate()
+                            .map(|(i, d)| {
+                                (
+                                    (c.id, i),
+                                    Value::known(c.bits, crate::joystick::axis_value(c.bits, d)),
+                                )
+                            })
+                            .collect()
+                    }
                     Kind::Slider => vec![(
                         (c.id, 0),
                         Value::known(c.bits, c.io.slider_value.min(c.slider_max())),

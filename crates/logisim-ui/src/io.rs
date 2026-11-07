@@ -3,6 +3,13 @@ use egui::{Color32, Painter, Rect, Stroke, StrokeKind, Ui};
 use logisim_core::{Component, Facing, Kind, MatrixInput, Point, Radix};
 pub(crate) fn port_label(c: &Component, index: usize) -> &'static str {
     match c.kind {
+        Kind::Joystick => {
+            if index == 0 {
+                "X"
+            } else {
+                "Y"
+            }
+        }
         Kind::Button | Kind::DipSwitch | Kind::Slider => "Output",
         Kind::Switch => {
             if index == 0 {
@@ -130,7 +137,14 @@ pub(crate) fn fields(ui: &mut Ui, c: &mut Component) -> bool {
             });
         ui.end_row();
     }
-    ui.label(tr(if c.kind == Kind::Button {
+    if c.kind == Kind::Joystick {
+        ui.label(tr("Label color"));
+        ui.color_edit_button_srgb(&mut c.color);
+        ui.end_row();
+    }
+    ui.label(tr(if c.kind == Kind::Joystick {
+        "Stick color"
+    } else if c.kind == Kind::Button {
         "Button color"
     } else if matches!(c.kind, Kind::Switch | Kind::DipSwitch | Kind::Slider) {
         "Body color"
@@ -218,6 +232,24 @@ pub(crate) fn draw(
         .and_then(|s| s.inputs.get(&c.id))
         .map_or(0, |v| v.value);
     match c.kind {
+        Kind::Joystick => {
+            let center = canvas.screen(c.joystick_center());
+            let offset = simulation
+                .and_then(|s| s.joysticks.get(&c.id))
+                .copied()
+                .unwrap_or_default();
+            let knob = canvas.screen(c.joystick_center() + offset);
+            p.rect(body, 4.0 * z, Color32::WHITE, stroke, StrokeKind::Inside);
+            p.rect_stroke(
+                body.shrink(3.0 * z),
+                2.0 * z,
+                Stroke::new(z, ink.gamma_multiply(0.4)),
+                StrokeKind::Inside,
+            );
+            p.circle_filled(center, 2.0 * z, ink);
+            p.line_segment([center, knob], Stroke::new(2.0 * z, ink));
+            p.circle(knob, 4.0 * z, color(c.io.on_color), stroke);
+        }
         Kind::RgbLed => {
             for (i, point) in c.io_ports().into_iter().enumerate() {
                 p.line_segment(

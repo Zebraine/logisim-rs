@@ -264,7 +264,12 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
         } else {
             tr("Data bits")
         });
-        let r = ui.add(egui::DragValue::new(&mut c.bits).range(1..=32));
+        let range = if c.kind == Kind::Joystick {
+            2..=5
+        } else {
+            1..=32
+        };
+        let r = ui.add(egui::DragValue::new(&mut c.bits).range(range));
         if r.changed() && c.kind == Kind::Slider {
             c.io.slider_value = c.io.slider_value.min(c.slider_max());
         }

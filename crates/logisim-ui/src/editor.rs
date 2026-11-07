@@ -271,7 +271,7 @@ impl Editor {
         self.wire_start = None;
     }
     pub fn set_tool(&mut self, tool: Tool) {
-        self.simulation.release_button();
+        self.simulation.release_momentary();
         self.cancel_gesture();
         self.commit_properties();
         self.tool = tool;
@@ -479,7 +479,7 @@ impl Editor {
         let pointer = ui.input(|i| i.pointer.interact_pos());
         let tolerance = 7.0 / canvas.camera.zoom;
         if space {
-            self.simulation.release_button();
+            self.simulation.release_momentary();
         }
         if ui.is_enabled() && !space && !ui.ctx().any_popup_open() {
             if self.tool == Tool::Poke
@@ -495,6 +495,32 @@ impl Editor {
                 self.selection.clear();
                 self.selection.insert(id);
                 self.simulation.press_button(id);
+            }
+            if self.tool == Tool::Poke
+                && response.hovered()
+                && ui.input(|i| i.focused && i.pointer.primary_pressed())
+                && let Some(pos) = pointer
+                && let Some(id) = self.hit(canvas.world(pos), tolerance)
+                && self.circuit.component(id).is_some_and(|c| {
+                    c.kind == Kind::Joystick
+                        && crate::drawing::bounds(c).contains(canvas.world(pos).to_pos2())
+                })
+            {
+                self.selection.clear();
+                self.selection.insert(id);
+                self.simulation.press_joystick(id);
+            }
+            if ui.input(|i| i.focused && i.pointer.primary_down())
+                && let Some(id) = self.simulation.held_joystick()
+                && let Some(c) = self.circuit.component(id)
+                && let Some(pos) = pointer
+            {
+                let world = canvas.world(pos);
+                let center = c.joystick_center();
+                self.simulation.move_joystick(Point::new(
+                    (world.x - center.x as f32).round() as i32,
+                    (world.y - center.y as f32).round() as i32,
+                ));
             }
             if response.drag_started_by(PointerButton::Primary) {
                 self.commit_properties();
@@ -1003,6 +1029,7 @@ impl Editor {
         self.simulation.shortcuts(ui, &self.selection);
         let consume = |key, modifiers| ui.input_mut(|i| i.consume_key(modifiers, key));
         if consume(Key::Escape, Modifiers::NONE) {
+            self.simulation.release_momentary();
             self.cancel_gesture();
             self.tool = Tool::Select;
             return;
