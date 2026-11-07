@@ -17,6 +17,17 @@ crates/logisim-file/     .circ 导入、导出与诊断
 crates/logisim-ui/       egui 编辑器与画布
 ```
 
+各 crate 保持稳定的公开入口，内部按职责扩展：
+
+- `core`：`geometry`、`component` 与 `circuit`；元件连接映射和导线编辑分开。
+- `file`：项目装配、`component` 编解码、`attributes` 标量校验与 `xml` 原语。
+- `sim`：`engine` 的状态同步、命令、调度和查询，以及 `hierarchy` 实例管理。
+- `ui`：`workspace` 各区域与工具目录，`fonts` 共享文字排版；元件绘制和属性仍按族组织。
+- 桌面宿主：`simulation` 命令/视图适配，`files` 工作流与弹窗，`storage` 磁盘事务。
+
+新增元件沿现有族模块扩展；专有默认值、端口规则和四态行为留在对应层，
+共享流程不放宽兼容边界。详细重构设计和运行证据仅保存在本地资料中。
+
 ## 运行与检查
 
 ```sh
