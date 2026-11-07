@@ -383,6 +383,8 @@ fn component(
         ("#Gates", "Controlled Buffer") => Kind::ControlledBuffer,
         ("#Gates", "Controlled Inverter") => Kind::ControlledInverter,
         ("#Wiring", "Pull Resistor") => Kind::PullResistor,
+        ("#Wiring", "Transistor") => Kind::Transistor,
+        ("#Wiring", "Transmission Gate") => Kind::TransmissionGate,
         ("#Gates", name) => Kind::Gate(
             Gate::ALL
                 .into_iter()
@@ -395,6 +397,7 @@ fn component(
     let a = attributes(n)?;
     for key in a.keys() {
         let allowed = match kind {
+            Kind::Transistor | Kind::TransmissionGate => crate::transistors::allowed(kind, key),
             Kind::ControlledBuffer | Kind::ControlledInverter | Kind::PullResistor => {
                 crate::bus::allowed(kind, key)
             }
@@ -487,6 +490,7 @@ fn component(
         1..=32,
     )?;
     crate::bus::read(&mut c, &a)?;
+    crate::transistors::read(&mut c, &a)?;
     crate::sequential::read(&mut c, &a)?;
     crate::memory::read(&mut c, &a)?;
     crate::io::read(&mut c, &a)?;

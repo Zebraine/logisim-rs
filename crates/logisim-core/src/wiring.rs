@@ -170,6 +170,8 @@ impl Component {
             Kind::Rom | Kind::Ram => self.memory_terminals().get(index).map(|p| p.bits),
             Kind::ShiftRegister if index == 3 => Some(2),
             Kind::Register | Kind::Counter | Kind::ShiftRegister if index >= 2 => Some(1),
+            Kind::Transistor | Kind::TransmissionGate => (index < self.transistor_ports().len())
+                .then_some(if index < 2 { self.bits.clamp(1, 32) } else { 1 }),
             Kind::Probe | Kind::PullResistor => None,
             Kind::ControlledBuffer | Kind::ControlledInverter => {
                 (index < 3).then_some(if index == 2 {
@@ -194,6 +196,8 @@ impl Component {
             Kind::Gate(_)
                 | Kind::ControlledBuffer
                 | Kind::ControlledInverter
+                | Kind::Transistor
+                | Kind::TransmissionGate
                 | Kind::Button
                 | Kind::Switch
                 | Kind::DipSwitch

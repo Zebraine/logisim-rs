@@ -168,6 +168,7 @@ pub fn serialize(document: &Document) -> Result<String> {
                 attribute(&mut out, "width", c.bits)?;
             }
             crate::bus::write(&mut out, c)?;
+            crate::transistors::write(&mut out, c)?;
             crate::sequential::write(&mut out, c)?;
             crate::memory::write(&mut out, c)?;
             crate::io::write(&mut out, c)?;

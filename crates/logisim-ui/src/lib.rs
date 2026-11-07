@@ -7,6 +7,7 @@ mod artwork;
 mod bus;
 mod canvas;
 mod document;
+mod transistors;
 pub use document::{DocumentView, FileAction};
 mod drawing;
 mod editor;
@@ -622,17 +623,12 @@ impl Workspace {
                                                 Kind::Constant,
                                                 Kind::Power,
                                                 Kind::Ground,
+                                                Kind::Transistor,
+                                                Kind::TransmissionGate,
                                                 Kind::BitExtender,
                                             ] {
                                                 self.library_tool(ui, kind);
                                             }
-                                            disabled_actions(
-                                                ui,
-                                                &[
-                                                    "Transistor",
-                                                    "Transmission Gate",
-                                                ],
-                                            );
                                         }
                                         "Arithmetic" => {
                                     for a in logisim_core::Arithmetic::ALL { self.library_tool(ui, Kind::Arithmetic(a)); }

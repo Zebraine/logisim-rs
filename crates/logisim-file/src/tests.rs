@@ -91,12 +91,12 @@ fn full_supported_roundtrip_preserves_attributes_ports_and_wires() {
 }
 #[test]
 fn unsupported_content_is_reported_without_becoming_a_supported_component() {
-    let body = r#"<comp lib="w" name="Transistor" loc="(0,0)"/><comp lib="g" name="AND Gate" loc="(100,0)"><a name="negated-unknown" val="true"/></comp><comp lib="w" name="Pin" loc="(10,0)"/><comp name="sub" loc="(20,0)"/><comp lib="g" name="OR Gate" loc="(100,100)"/>"#;
+    let body = r#"<comp lib="w" name="Unknown Wiring Component" loc="(0,0)"/><comp lib="g" name="AND Gate" loc="(100,0)"><a name="negated-unknown" val="true"/></comp><comp lib="w" name="Pin" loc="(10,0)"/><comp name="sub" loc="(20,0)"/><comp lib="g" name="OR Gate" loc="(100,100)"/>"#;
     let imported = parse(&xml(body)).unwrap();
     assert_eq!(imported.warnings.len(), 5);
     assert_eq!(imported.document.main_circuit().circuit.components.len(), 1);
     let saved = serialize(&imported.document).unwrap();
-    assert!(!saved.contains("Transistor"));
+    assert!(!saved.contains("Unknown Wiring Component"));
     assert!(!saved.contains("negated-unknown"));
 }
 

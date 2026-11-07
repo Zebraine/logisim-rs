@@ -280,6 +280,7 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
         ui.end_row();
     }
     crate::bus::fields(ui, c);
+    crate::transistors::fields(ui, c);
     active |= wiring_fields(ui, c);
     active |= crate::sequential::fields(ui, c);
     active |= crate::memory::fields(ui, c);

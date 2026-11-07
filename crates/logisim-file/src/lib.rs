@@ -10,6 +10,7 @@ mod read;
 mod sequential;
 #[cfg(test)]
 mod tests;
+mod transistors;
 mod write;
 
 pub use logisim_core::Project as Document;

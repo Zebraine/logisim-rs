@@ -1307,3 +1307,60 @@ fn bus_components_place_rotate_connect_move_and_undo_through_canvas() {
     key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
     assert_eq!(app.circuit().components.len(), 3);
 }
+
+#[test]
+fn transistors_place_wire_move_rotate_duplicate_and_undo_through_canvas() {
+    let (ctx, mut app) = setup();
+    for (i, kind) in [Kind::Transistor, Kind::TransmissionGate]
+        .into_iter()
+        .enumerate()
+    {
+        app.editor.set_tool(Tool::Place(kind));
+        let at = app.canvas.screen(Point::new(200 + i as i32 * 220, 200));
+        click(&ctx, &mut app, at);
+    }
+    key(&ctx, &mut app, Key::Escape, Modifiers::NONE);
+    assert_eq!(app.circuit().components.len(), 2);
+    let gate = app.circuit().components[1].id;
+    app.editor.set_tool(Tool::Wire);
+    let a = app.canvas.screen(Point::new(200, 200));
+    let b = app.canvas.screen(Point::new(380, 200));
+    click(&ctx, &mut app, a);
+    click(&ctx, &mut app, b);
+    assert!(!app.circuit().wires.is_empty());
+    app.editor.set_tool(Tool::Select);
+    let body = app.canvas.screen(Point::new(400, 200));
+    click(&ctx, &mut app, body);
+    let wires = app.circuit().wires.clone();
+    key(&ctx, &mut app, Key::R, Modifiers::NONE);
+    assert_ne!(
+        app.circuit().component(gate).unwrap().facing,
+        logisim_core::Facing::East
+    );
+    assert_eq!(app.circuit().wires, wires);
+    key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
+    assert_eq!(
+        app.circuit().component(gate).unwrap().facing,
+        logisim_core::Facing::East
+    );
+    drag(&ctx, &mut app, body, body + vec2(0.0, 80.0));
+    assert_eq!(
+        app.circuit().component(gate).unwrap().position,
+        Point::new(420, 280)
+    );
+    assert!(
+        app.circuit()
+            .wires
+            .iter()
+            .any(|w| w.a == Point::new(380, 280) || w.b == Point::new(380, 280))
+    );
+    key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
+    assert_eq!(
+        app.circuit().component(gate).unwrap().position,
+        Point::new(420, 200)
+    );
+    key(&ctx, &mut app, Key::D, Modifiers::COMMAND);
+    assert_eq!(app.circuit().components.len(), 3);
+    key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
+    assert_eq!(app.circuit().components.len(), 2);
+}

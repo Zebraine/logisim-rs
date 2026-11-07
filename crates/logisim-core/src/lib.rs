@@ -10,8 +10,10 @@ pub use project::{CircuitDefinition, Interface, InterfacePort, MAX_CIRCUITS, Pro
 
 mod arithmetic;
 mod bus;
+mod transistors;
 pub use arithmetic::{Arithmetic, ArithmeticOptions, BitSearch, Shift};
 pub use bus::{BusControl, Pull};
+pub use transistors::{TransistorOptions, TransistorType};
 
 mod plexers;
 pub use plexers::{Plexer, PlexerRole, PlexerTerminal, Plexing};
@@ -154,6 +156,8 @@ pub enum Kind {
     ControlledBuffer,
     ControlledInverter,
     PullResistor,
+    Transistor,
+    TransmissionGate,
     Pin,
     Tunnel,
     Text,
@@ -266,6 +270,8 @@ impl Kind {
             Self::ControlledBuffer => "Controlled Buffer",
             Self::ControlledInverter => "Controlled Inverter",
             Self::PullResistor => "Pull Resistor",
+            Self::Transistor => "Transistor",
+            Self::TransmissionGate => "Transmission Gate",
             Self::Pin => "Pin",
             Self::Tunnel => "Tunnel",
             Self::Text => "Text",
@@ -327,6 +333,7 @@ pub struct Component {
     pub memory: Memory,
     pub io: Io,
     pub bus: BusControl,
+    pub transistor: TransistorOptions,
 }
 impl Component {
     pub fn new(kind: Kind, position: Point) -> Self {
@@ -387,6 +394,7 @@ impl Component {
             memory: Memory::default(),
             io: Io::for_kind(kind),
             bus: BusControl::default(),
+            transistor: TransistorOptions::default(),
             plexing: Plexing {
                 select_bits: if kind == Kind::Plexer(Plexer::PriorityEncoder) {
                     3
@@ -405,6 +413,9 @@ impl Component {
         }
     }
     pub fn local_ports(&self) -> Vec<Point> {
+        if self.kind.is_transistor() {
+            return self.transistor_ports();
+        }
         if self.kind.is_controlled() {
             return self.controlled_ports();
         }
@@ -677,6 +688,7 @@ impl Circuit {
         let pairs: Vec<_> = if old.kind == replacement.kind
             && (old.kind.is_memory()
                 || old.kind == Kind::DotMatrix
+                || old.kind.is_transistor()
                 || (old.kind.is_controlled()
                     && (old.bus.control_left != replacement.bus.control_left
                         || old.gate_size != replacement.gate_size))

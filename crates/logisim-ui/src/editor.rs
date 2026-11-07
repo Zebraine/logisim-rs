@@ -777,6 +777,7 @@ impl Editor {
             for c in self.circuit.components.iter().filter(|c| {
                 c.kind.is_io()
                     || c.kind.is_controlled()
+                    || c.kind.is_transistor()
                     || c.kind == Kind::PullResistor
                     || c.kind.is_memory()
                     || c.kind.is_sequential()
@@ -791,6 +792,8 @@ impl Editor {
                                     crate::plexers::port_label(c, c.plexer_terminals()[index].role)
                                 } else if matches!(c.kind, Kind::Arithmetic(_)) {
                                     crate::arithmetic::port_label(c, index)
+                                } else if c.kind.is_transistor() {
+                                    tr(crate::transistors::port_label(c, index)).to_owned()
                                 } else if c.kind.is_controlled() || c.kind == Kind::PullResistor {
                                     tr(crate::bus::port_label(c, index)).to_owned()
                                 } else if c.kind.is_io() {

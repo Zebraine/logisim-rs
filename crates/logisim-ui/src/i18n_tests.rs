@@ -1185,3 +1185,100 @@ fn bus_control_properties_use_translated_widgets_and_keep_wires_with_undo() {
         assert_eq!(app.editor.tool, Tool::Place(Kind::ControlledBuffer));
     }
 }
+
+#[test]
+fn transistor_properties_and_library_tools_work_in_both_languages() {
+    use logisim_core::{Circuit, TransistorType};
+    for language in Language::ALL {
+        let ctx = Context::default();
+        configure(&ctx);
+        let mut app = Workspace::default();
+        app.set_language(language);
+        let translated = |s: &str| i18n::with_language(language, || i18n::tr(s).to_owned());
+        let mut circuit = Circuit::default();
+        let transistor =
+            circuit.add_component(Component::new(Kind::Transistor, Point::new(300, 300)));
+        let transmission =
+            circuit.add_component(Component::new(Kind::TransmissionGate, Point::new(500, 300)));
+        let port = circuit.component(transistor).unwrap().ports()[2];
+        circuit.add_wire(port, port + Point::new(0, -80));
+        circuit.normalize_wires();
+        app.replace_circuit(circuit);
+        app.editor.selection.insert(transistor);
+        for _ in 0..3 {
+            frame(&ctx, &mut app, vec![]);
+        }
+        let wires = app.circuit().wires.clone();
+        let labels = frame(&ctx, &mut app, vec![]);
+        assert!(has(&labels, &translated("Transistor type")));
+        assert!(has(&labels, &translated("Gate location")));
+        assert!(has(&labels, &translated("Data bits")));
+        assert!(!has(&labels, &translated("Label")));
+        click(&ctx, &mut app, &translated("P-Type"));
+        click(&ctx, &mut app, &translated("N-Type"));
+        assert_eq!(
+            app.circuit()
+                .component(transistor)
+                .unwrap()
+                .transistor
+                .transistor_type,
+            TransistorType::N
+        );
+        click(&ctx, &mut app, &translated("Top/Left"));
+        click(&ctx, &mut app, &translated("Bottom/Right"));
+        assert!(
+            app.circuit()
+                .component(transistor)
+                .unwrap()
+                .transistor
+                .gate_bottom_right
+        );
+        assert_eq!(app.circuit().wires, wires);
+        app.editor.undo();
+        assert!(
+            !app.circuit()
+                .component(transistor)
+                .unwrap()
+                .transistor
+                .gate_bottom_right
+        );
+        app.editor.redo();
+        app.editor.selection.clear();
+        app.editor.selection.insert(transmission);
+        for _ in 0..3 {
+            frame(&ctx, &mut app, vec![]);
+        }
+        let labels = frame(&ctx, &mut app, vec![]);
+        assert!(!has(&labels, &translated("Transistor type")));
+        assert!(has(&labels, &translated("Gate location")));
+        click(&ctx, &mut app, &translated("Top/Left"));
+        click(&ctx, &mut app, &translated("Bottom/Right"));
+        assert!(
+            app.circuit()
+                .component(transmission)
+                .unwrap()
+                .transistor
+                .gate_bottom_right
+        );
+        assert_eq!(app.circuit().wires, wires);
+        click(&ctx, &mut app, &translated("Wiring"));
+        frame(
+            &ctx,
+            &mut app,
+            vec![
+                Event::PointerMoved(Pos2::new(170.0, 360.0)),
+                Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: egui::vec2(0.0, -180.0),
+                    phase: egui::TouchPhase::Move,
+                    source: egui::MouseWheelSource::Unknown,
+                    modifiers: Modifiers::NONE,
+                },
+            ],
+        );
+        click(&ctx, &mut app, &translated("Transistor"));
+        assert_eq!(app.editor.tool, Tool::Place(Kind::Transistor));
+        click(&ctx, &mut app, &translated("Transmission Gate"));
+        assert_eq!(app.editor.tool, Tool::Place(Kind::TransmissionGate));
+    }
+}

@@ -21,6 +21,7 @@ mod sequential_extra_tests;
 mod sequential_tests;
 #[cfg(test)]
 mod tests;
+mod transistors;
 mod value;
 
 use logisim_core::{Circuit, Extension, Id, Kind};
@@ -283,6 +284,14 @@ impl Simulator {
                         self.port_value(c.id, 2)
                             .expect("compiled enable port")
                             .bit(0),
+                    ),
+                    Kind::Transistor | Kind::TransmissionGate => transistors::evaluate(
+                        c,
+                        self.port_value(c.id, 1).expect("compiled transistor data"),
+                        self.port_value(c.id, 2)
+                            .expect("compiled transistor control")
+                            .bit(0),
+                        self.port_value(c.id, 3).map_or(Bit::Unknown, |v| v.bit(0)),
                     ),
                     Kind::Constant => Value::known(c.bits, c.constant),
                     Kind::Power => Value::filled(c.bits, Bit::One),
@@ -614,6 +623,7 @@ fn electrically_equal(a: &Circuit, b: &Circuit) -> bool {
             c.kind.is_sequential().then_some(c.sequential),
             (
                 (c.kind.is_controlled() || c.kind == Kind::PullResistor).then_some(c.bus),
+                c.kind.is_transistor().then_some(c.transistor),
                 matches!(c.kind, Kind::Plexer(_)).then_some(c.plexing),
                 matches!(c.kind, Kind::Arithmetic(_)).then_some(c.arithmetic),
                 c.kind.is_memory().then_some(c.memory.clone()),

@@ -52,7 +52,7 @@ Linux 构建另需 `pkg-config` 与 Fontconfig 开发包（Debian/Ubuntu：`libf
 
 - 可放置 NOT、Buffer、AND、OR、NAND、NOR、XOR、XNOR、Pin、文字和 Tunnel。
 - Gates 库另提供 1–32 位受控缓冲器、受控反相器，可设置控制端位置和反转使能极性。
-- Wiring 库新增 Constant、Power、Ground、Probe、Splitter、Bit Extender 和 Pull Resistor，支持属性编辑、复制、撤销及文件往返。
+- Wiring 库提供 Constant、Power、Ground、Probe、Splitter、Bit Extender、Pull Resistor、Transistor 和 Transmission Gate。晶体管可选 P/N 型，两者支持 1–32 位、四个朝向和栅极位置编辑；修改朝向或栅极位置保留导线，移动后的端口需重连。
 - Plexers 库提供多路选择器、解复用器、译码器和优先编码器，支持 1–5 位选择信号（2–32 路）、四个朝向及端口提示；选择器/解复用器的数据位宽为 1–32。
   另有位选择器和七段译码器，支持分组取数与总线/分立输入编辑。
 - Input/Output 库提供按钮、开关、拨码开关、滑块、LED、RGB LED、LED 点阵、七段数码管和十六进制显示器，支持颜色、透明度及对应属性编辑。

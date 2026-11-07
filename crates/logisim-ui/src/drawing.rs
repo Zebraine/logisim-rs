@@ -73,9 +73,11 @@ fn probe_width(c: &Component) -> f32 {
     }
 }
 pub(crate) fn bounds(c: &Component) -> Rect {
-    if c.kind == Kind::PullResistor || c.kind.is_controlled() {
+    if c.kind == Kind::PullResistor || c.kind.is_controlled() || c.kind.is_transistor() {
         let (depth, half_height) = if c.kind == Kind::PullResistor {
             (46, 7)
+        } else if c.kind.is_transistor() {
+            (40, 21)
         } else {
             (c.gate_width(), 11)
         };
@@ -312,6 +314,7 @@ pub(crate) fn component(
         );
     };
     match c.kind {
+        Kind::Transistor | Kind::TransmissionGate => crate::transistors::draw(p, canvas, c, color),
         Kind::ControlledBuffer | Kind::ControlledInverter | Kind::PullResistor => {
             crate::bus::draw(p, canvas, c, color)
         }
