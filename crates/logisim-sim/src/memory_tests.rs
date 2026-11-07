@@ -195,3 +195,80 @@ fn hierarchical_ram_contents_are_per_instance_while_rom_edits_are_document_data(
         0
     );
 }
+
+#[test]
+fn replacing_ram_image_updates_output_as_one_change_and_respects_pause_and_reset() {
+    let (circuit, id, pins) = fixture(MemoryInterface::Separate);
+    let mut sim = Simulator::default();
+    sim.synchronize(&circuit);
+    settle(&mut sim);
+    drive(&mut sim, &pins, MemoryRole::Address, Value::known(24, 0));
+    drive(&mut sim, &pins, MemoryRole::Store, Value::known(1, 0));
+    sim.fill_memory(id, 0, 1 << 24, 0xaa);
+    settle(&mut sim);
+    sim.set_enabled(false);
+    let mut contents = logisim_core::MemoryContents::default();
+    contents.set(0, 0x8000_0001);
+    contents.fill(4, 1 << 24, 0xff);
+    assert!(sim.replace_memory(id, contents));
+    assert_eq!(sim.memory_contents(id).unwrap().get(1), 0);
+    assert_eq!(sim.memory_contents(id).unwrap().get(0xff_ffff), 0xff);
+    assert_eq!(sim.port_value(id, 0).unwrap().number(), Some(0xaa));
+    sim.set_enabled(true);
+    settle(&mut sim);
+    assert_eq!(sim.port_value(id, 0).unwrap().number(), Some(0x8000_0001));
+    assert!(!sim.replace_memory(u64::MAX, Default::default()));
+    sim.reset();
+    settle(&mut sim);
+    assert_eq!(sim.memory_contents(id).unwrap().get(0), 0);
+}
+
+#[test]
+fn importing_ram_into_one_instance_preserves_its_sibling_and_document() {
+    let mut project = Project::default();
+    let root = project.main;
+    let cell = project.add("cell".into()).unwrap();
+    let mut c = Component::new(Kind::Ram, Point::new(200, 100));
+    c.bits = 8;
+    c.memory.address_bits = 4;
+    let ram = project.circuit_mut(cell).unwrap().circuit.add_component(c);
+    let mut ids = vec![];
+    for x in [100, 300] {
+        let c = project.instance(cell, Point::new(x, 300)).unwrap();
+        ids.push(project.circuit_mut(root).unwrap().circuit.add_component(c));
+    }
+    let before = project.clone();
+    let mut sim = ProjectSimulator::default();
+    sim.synchronize(&project, root);
+    sim.advance(128);
+    sim.fill_memory(&[ids[0]], ram, 0, 16, 0xaa);
+    sim.fill_memory(&[ids[1]], ram, 0, 16, 0x55);
+    let mut contents = logisim_core::MemoryContents::default();
+    contents.set(0, 0x1234);
+    contents.set(16, 0xff);
+    assert!(sim.replace_memory(&[ids[0]], ram, contents));
+    sim.advance(128);
+    let data = sim.view(&[ids[0]]).unwrap().memory_contents(ram).unwrap();
+    assert_eq!(data.get(0), 0x34);
+    assert_eq!(data.get(1), 0);
+    assert_eq!(data.get(16), 0);
+    assert_eq!(
+        sim.view(&[ids[1]])
+            .unwrap()
+            .memory_contents(ram)
+            .unwrap()
+            .get(0),
+        0x55
+    );
+    assert_eq!(project, before);
+    assert!(!sim.replace_memory(&[u64::MAX], ram, Default::default()));
+    sim.synchronize(&project, root);
+    assert_eq!(
+        sim.view(&[ids[0]])
+            .unwrap()
+            .memory_contents(ram)
+            .unwrap()
+            .get(0),
+        0x34
+    );
+}

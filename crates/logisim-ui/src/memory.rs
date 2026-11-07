@@ -2,7 +2,73 @@ use crate::{
     SimulationAction, canvas::Canvas, editor::Editor, i18n::tr, simulation::SimulationView, tf,
 };
 use egui::{Align2, Color32, FontId, Painter, Rect, Stroke, StrokeKind, Ui};
-use logisim_core::{Component, Id, Kind, MemoryInterface, MemoryRole, Point};
+use logisim_core::{Component, Id, Kind, MemoryContents, MemoryInterface, MemoryRole, Point};
+
+/// Captures the component and instance being edited while the host opens a file.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MemoryImportTarget {
+    circuit: Id,
+    root: Id,
+    path: Vec<Id>,
+    placing: bool,
+    component: Component,
+}
+impl MemoryImportTarget {
+    pub fn component(&self) -> &Component {
+        &self.component
+    }
+    pub fn path(&self) -> &[Id] {
+        &self.path
+    }
+}
+impl crate::Workspace {
+    pub fn memory_import_target(&self) -> Option<MemoryImportTarget> {
+        let (placing, id) = self.editor.memory_target?;
+        let c = if placing {
+            &self.editor.template
+        } else {
+            self.circuit().component(id)?
+        };
+        if c.id != id || !c.kind.is_memory() || (placing && c.kind == Kind::Ram) {
+            return None;
+        }
+        Some(MemoryImportTarget {
+            circuit: self.editor.active,
+            root: self.editor.root,
+            path: self.editor.path.clone(),
+            placing,
+            component: c.clone(),
+        })
+    }
+    pub fn memory_import_is_current(&self, target: &MemoryImportTarget) -> bool {
+        self.memory_import_target().as_ref() == Some(target)
+    }
+    /// Apply ROM document data or refresh the editor after the host has loaded RAM.
+    /// RAM data belongs to the simulator and never enters document history.
+    pub fn complete_memory_import(
+        &mut self,
+        target: &MemoryImportTarget,
+        mut contents: MemoryContents,
+    ) -> bool {
+        if !self.memory_import_is_current(target) {
+            return false;
+        }
+        if target.component.kind == Kind::Rom {
+            contents.resize(target.component.memory.address_bits, target.component.bits);
+            let mut c = target.component.clone();
+            c.memory.contents = contents;
+            if target.placing {
+                self.editor.template = c;
+            } else {
+                self.editor.update_property(c);
+                self.editor.commit_properties();
+                self.editor.sync_project();
+            }
+        }
+        self.memory_editor.value.clear();
+        true
+    }
+}
 
 pub(crate) fn port_label(c: &Component, index: usize) -> &'static str {
     match c.memory_terminals()[index].role {
@@ -181,7 +247,12 @@ pub(crate) struct MemoryEditor {
     page: u32,
 }
 impl MemoryEditor {
-    pub fn show(&mut self, ctx: &egui::Context, editor: &mut Editor) {
+    pub fn show(
+        &mut self,
+        ctx: &egui::Context,
+        editor: &mut Editor,
+        files: &mut Vec<crate::FileAction>,
+    ) {
         let Some((placing, id)) = editor.memory_target else {
             self.context = None;
             return;
@@ -230,6 +301,10 @@ impl MemoryEditor {
             if !c.label.is_empty() {ui.label(&c.label);}
             ui.weak(tr(if c.kind==Kind::Rom {"ROM contents are saved with the circuit. Edits support Undo."} else {"RAM contents belong to this simulation instance. Reset clears them; circuit files do not save them."}));
             ui.label(tf!("{} words · {} bits per word",capacity,c.bits));
+            ui.horizontal(|ui| {
+                if ui.button(tr("Import .hex…")).clicked() { files.push(crate::FileAction::ImportMemory); }
+                ui.weak(tr("Replaces all words; missing addresses become zero."));
+            });
             ui.separator();
             ui.horizontal(|ui| {
                 ui.label(tr("Address (hex)"));

@@ -5,9 +5,9 @@ use crate::{
 use logisim_core::{Circuit, Component, Gate, Kind, Point, Project};
 use logisim_file::Document;
 use std::{fs, path::PathBuf};
-struct Temp(PathBuf);
+pub(crate) struct Temp(pub(crate) PathBuf);
 impl Temp {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let path = std::env::temp_dir().join(format!(
             "logisim-rs-test-{}-{}-{}",
@@ -21,7 +21,7 @@ impl Temp {
         fs::create_dir(&path).unwrap();
         Self(path)
     }
-    fn path(&self, name: &str) -> PathBuf {
+    pub(crate) fn path(&self, name: &str) -> PathBuf {
         self.0.join(name)
     }
 }

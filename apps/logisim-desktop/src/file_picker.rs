@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 pub(crate) enum Mode {
     Open,
     Save,
+    Memory,
 }
 pub(crate) struct Picker {
     pub mode: Mode,
@@ -43,9 +44,13 @@ impl Picker {
                     let path = entry.path();
                     let dir = path.is_dir();
                     if dir
-                        || path
-                            .extension()
-                            .is_some_and(|s| s.eq_ignore_ascii_case("circ"))
+                        || path.extension().is_some_and(|s| {
+                            s.eq_ignore_ascii_case(if self.mode == Mode::Memory {
+                                "hex"
+                            } else {
+                                "circ"
+                            })
+                        })
                     {
                         self.entries.push((path, dir));
                     }
@@ -59,20 +64,22 @@ impl Picker {
     fn enter(&mut self, path: &Path) {
         self.directory = path.to_path_buf();
         self.refresh();
-        if self.mode == Mode::Open {
+        if self.mode != Mode::Save {
             self.path.clear();
         }
     }
     pub fn show(&mut self, ui: &mut egui::Ui) -> Choice {
         ui.set_min_width(520.0);
-        ui.heading(if self.mode == Mode::Open {
-            tr("Open circuit")
-        } else {
-            tr("Save circuit as")
+        ui.heading(match self.mode {
+            Mode::Open => tr("Open circuit"),
+            Mode::Save => tr("Save circuit as"),
+            Mode::Memory => tr("Import memory image"),
         });
-        ui.label(tr(
-            "Logisim-ITA compatible .circ · supported components only",
-        ));
+        ui.label(tr(if self.mode == Mode::Memory {
+            "Logisim .hex · v2.0 raw · replaces all words"
+        } else {
+            "Logisim-ITA compatible .circ · supported components only"
+        }));
         ui.horizontal(|ui| {
             if ui.button(tr("Up")).clicked()
                 && let Some(parent) = self.directory.parent().map(Path::to_path_buf)
@@ -129,7 +136,7 @@ impl Picker {
         let mut cancel = false;
         ui.horizontal(|ui| {
             submit |= ui
-                .button(if self.mode == Mode::Open {
+                .button(if self.mode != Mode::Save {
                     tr("Open")
                 } else {
                     tr("Save")

@@ -1894,3 +1894,79 @@ fn ttl_library_properties_power_internal_view_and_undo_in_both_languages() {
         assert!(pin.contains('3'));
     }
 }
+
+#[test]
+fn memory_import_button_history_template_and_stale_target_are_safe() {
+    for language in Language::ALL {
+        let ctx = Context::default();
+        configure(&ctx);
+        let mut app = Workspace::default();
+        app.set_language(language);
+        let t = |s: &str| i18n::with_language(language, || i18n::tr(s).to_owned());
+        let mut circuit = logisim_core::Circuit::default();
+        let mut component = Component::new(Kind::Rom, Point::new(200, 100));
+        component.memory.contents.fill(0, 256, 0xaa);
+        let rom = circuit.add_component(component);
+        let ram = circuit.add_component(Component::new(Kind::Ram, Point::new(400, 100)));
+        app.replace_circuit(circuit);
+        app.editor.selection.insert(rom);
+        click(&ctx, &mut app, &t("Edit contents…"));
+        let before = app.project().clone();
+        click(&ctx, &mut app, &t("Import .hex…"));
+        assert_eq!(app.take_file_actions(), [crate::FileAction::ImportMemory]);
+        let target = app.memory_import_target().unwrap();
+        assert_eq!(
+            app.project(),
+            &before,
+            "Opening the picker must not edit memory"
+        );
+        let mut contents = logisim_core::MemoryContents::default();
+        contents.set(0, 0x1234);
+        contents.set(1, 0xff);
+        assert!(app.complete_memory_import(&target, contents.clone()));
+        assert_eq!(
+            app.circuit().component(rom).unwrap().memory.contents.get(0),
+            0x34
+        );
+        assert_eq!(
+            app.circuit().component(rom).unwrap().memory.contents.get(2),
+            0
+        );
+        assert!(
+            !app.complete_memory_import(&target, Default::default()),
+            "Old requests cannot overwrite later edits"
+        );
+        click(&ctx, &mut app, &t("Close"));
+        app.editor.undo();
+        assert_eq!(app.project(), &before);
+        app.editor.redo();
+        assert_eq!(
+            app.circuit().component(rom).unwrap().memory.contents.get(1),
+            0xff
+        );
+
+        app.editor.selection.clear();
+        app.editor.selection.insert(ram);
+        click(&ctx, &mut app, &t("Edit contents…"));
+        click(&ctx, &mut app, &t("Import .hex…"));
+        assert_eq!(app.take_file_actions(), [crate::FileAction::ImportMemory]);
+        let target = app.memory_import_target().unwrap();
+        let before = app.project().clone();
+        assert!(app.complete_memory_import(&target, contents.clone()));
+        assert_eq!(app.project(), &before, "RAM image is runtime data");
+        app.editor.path.push(999);
+        assert!(!app.memory_import_is_current(&target));
+        app.editor.path.clear();
+        click(&ctx, &mut app, &t("Close"));
+        assert!(!app.complete_memory_import(&target, contents.clone()));
+
+        app.editor.set_tool(crate::editor::Tool::Place(Kind::Rom));
+        app.editor.memory_target = Some((true, app.editor.template.id));
+        let target = app.memory_import_target().unwrap();
+        assert!(app.complete_memory_import(&target, contents));
+        assert_eq!(app.project(), &before);
+        assert_eq!(app.editor.template.memory.contents.get(0), 0x34);
+        app.replace_project(before);
+        assert!(!app.memory_import_is_current(&target));
+    }
+}

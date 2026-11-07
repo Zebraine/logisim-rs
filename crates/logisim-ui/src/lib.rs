@@ -30,6 +30,7 @@ mod properties;
 use project::{CircuitCommand, NameDialog};
 mod arithmetic;
 mod memory;
+pub use memory::MemoryImportTarget;
 mod pla;
 mod plexers;
 mod sequential;
@@ -143,7 +144,8 @@ impl Workspace {
         if ui.is_enabled() {
             self.project_dialogs(ui.ctx());
             self.settings(ui.ctx());
-            self.memory_editor.show(ui.ctx(), &mut self.editor);
+            self.memory_editor
+                .show(ui.ctx(), &mut self.editor, &mut self.file_actions);
             self.pla_editor.show(ui.ctx(), &mut self.editor);
         }
         if let Some(id) = self.editor.open_instance.take() {

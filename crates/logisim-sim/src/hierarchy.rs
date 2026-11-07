@@ -320,6 +320,21 @@ impl ProjectSimulator {
             state.sim.clear_memory(id);
         }
     }
+    pub fn replace_memory(
+        &mut self,
+        path: &[Id],
+        id: Id,
+        contents: logisim_core::MemoryContents,
+    ) -> bool {
+        let replaced = self
+            .states
+            .get_mut(path)
+            .is_some_and(|state| state.sim.replace_memory(id, contents));
+        if replaced {
+            self.unsettled = 0;
+        }
+        replaced
+    }
     pub fn poke_clock(&mut self, path: &[Id], id: Id) {
         if let Some(state) = self.states.get_mut(path) {
             state.sim.poke_clock(id);

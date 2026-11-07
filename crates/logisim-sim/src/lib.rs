@@ -466,6 +466,21 @@ impl Simulator {
         self.unsettled_steps = 0;
         self.schedule_components(false);
     }
+    /// Replace a RAM image atomically, then schedule one propagation pass.
+    pub fn replace_memory(&mut self, id: Id, mut contents: logisim_core::MemoryContents) -> bool {
+        let Some(c) = self.circuit.component(id) else {
+            return false;
+        };
+        let Some(state) = self.memories.get_mut(&id) else {
+            return false;
+        };
+        contents.resize(c.memory.address_bits, c.bits);
+        state.contents = contents;
+        self.limited = false;
+        self.unsettled_steps = 0;
+        self.schedule_components(false);
+        true
+    }
     fn schedule_storage(&mut self) {
         let samples: Vec<_> = self
             .circuit

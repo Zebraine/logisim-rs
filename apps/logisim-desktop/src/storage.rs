@@ -59,12 +59,15 @@ impl Storage {
     }
 }
 pub(crate) fn read(path: &Path) -> Result<Vec<u8>> {
+    read_file(path, "Choose a regular .circ file.")
+}
+pub(crate) fn read_file(path: &Path, regular_file_message: &str) -> Result<Vec<u8>> {
     if !fs::metadata(path).map_err(|e| e.to_string())?.is_file() {
-        return Err("Choose a regular .circ file.".into());
+        return Err(regular_file_message.into());
     }
     let file = fs::File::open(path).map_err(|e| e.to_string())?;
     if !file.metadata().map_err(|e| e.to_string())?.is_file() {
-        return Err("Choose a regular .circ file.".into());
+        return Err(regular_file_message.into());
     }
     let mut bytes = vec![];
     file.take(MAX_BYTES as u64 + 1)

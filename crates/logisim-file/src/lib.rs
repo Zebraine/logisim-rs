@@ -3,6 +3,7 @@
 mod appearance;
 mod arithmetic;
 mod bus;
+mod hex;
 mod io;
 mod latches;
 mod memory;
@@ -18,6 +19,7 @@ mod transistors;
 mod ttl;
 mod write;
 
+pub use hex::{HexError, parse_hex};
 pub use logisim_core::Project as Document;
 pub use read::parse;
 pub use write::serialize;

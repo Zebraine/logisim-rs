@@ -241,6 +241,7 @@ const MESSAGES: &[(&str, &str)] = &[
         "请输入非空且不重复的电路名称。",
     ),
     ("Choose a regular .circ file.", "请选择普通 .circ 文件。"),
+    ("Choose a regular .hex file.", "请选择普通 .hex 文件。"),
     ("Circuit layout", "电路布局"),
     ("Circuit name", "电路名称"),
     ("Circuit operation unavailable", "无法执行电路操作"),
@@ -438,6 +439,8 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Highest-order 1", "最高位的 1"),
     ("Hold to press", "按住按钮"),
     ("Horizontal", "水平对齐"),
+    ("Import .hex…", "导入 .hex…"),
+    ("Import memory image", "导入存储器映像"),
     ("Imported supported content only", "仅导入已支持的内容"),
     ("Include Vcc/Gnd pins", "显示 Vcc/GND 引脚"),
     ("Include enable", "显示使能端口"),
@@ -488,6 +491,18 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Less than", "小于"),
     ("Light persistence (ticks)", "余辉（Tick 数）"),
     ("Line", "线段"),
+    (
+        "Line {}: expected a nonnegative decimal repeat count.",
+        "第 {} 行：重复次数须为非负十进制整数。",
+    ),
+    (
+        "Line {}: invalid hexadecimal word.",
+        "第 {} 行：十六进制数据无效。",
+    ),
+    (
+        "Line {}: the image exceeds this memory's address capacity.",
+        "第 {} 行：映像超出此存储器的地址容量。",
+    ),
     ("Load Library…", "加载元件库…"),
     ("Load next value", "加载下一值"),
     (
@@ -501,6 +516,10 @@ const MESSAGES: &[(&str, &str)] = &[
     ),
     ("Logical left", "逻辑左移"),
     ("Logical right", "逻辑右移"),
+    (
+        "Logisim .hex · v2.0 raw · replaces all words",
+        "Logisim .hex · v2.0 raw · 覆盖全部内容",
+    ),
     (
         "Logisim-ITA compatible .circ · supported components only",
         "兼容 Logisim-ITA 的 .circ · 仅限已支持元件",
@@ -703,6 +722,10 @@ const MESSAGES: &[(&str, &str)] = &[
         "Replace the artwork with a labeled package. You can undo this change.",
         "用带标签的封装替换外观，可以撤销。",
     ),
+    (
+        "Replaces all words; missing addresses become zero.",
+        "覆盖全部内容，未提供的地址补零。",
+    ),
     ("Reset", "重置"),
     ("Reset Simulation · Ctrl+R", "重置仿真 · Ctrl+R"),
     ("Reset canvas", "重置画布"),
@@ -815,6 +838,10 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Text color", "文字颜色"),
     ("Text · T", "文字 · T"),
     (
+        "The RAM simulation instance is no longer available.",
+        "目标 RAM 仿真实例已不可用。",
+    ),
+    (
         "The anchor sets the placement origin and the artwork's original facing.",
         "锚点决定放置原点与外观的原始朝向。",
     ),
@@ -825,6 +852,18 @@ const MESSAGES: &[(&str, &str)] = &[
     (
         "The highlight follows the connected net, including matching tunnel labels.",
         "高亮显示整个相连网络，包括同名隧道。",
+    ),
+    (
+        "The memory dimensions are not supported.",
+        "不支持此存储器的地址或数据位宽。",
+    ),
+    (
+        "The memory image is not valid UTF-8 text.",
+        "存储器映像不是有效的 UTF-8 文本。",
+    ),
+    (
+        "The memory target changed. Open its contents editor and try again.",
+        "目标存储器已改变，请重新打开其内容编辑器后重试。",
     ),
     (
         "The original file is protected. Use Save As to write the supported project subset to a different file.\n\n{}",
@@ -874,6 +913,10 @@ const MESSAGES: &[(&str, &str)] = &[
     ),
     ("Unsigned", "无符号"),
     ("Unsigned decimal", "无符号十进制"),
+    (
+        "Unsupported memory image format. Expected v2.0 raw on the first line.",
+        "不支持此存储器映像格式，首行应为 v2.0 raw。",
+    ),
     ("Untitled", "未命名"),
     ("Up", "上级目录"),
     ("Upper-left segment (f)", "左上段（f）"),
