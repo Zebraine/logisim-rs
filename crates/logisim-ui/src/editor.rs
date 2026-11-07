@@ -271,6 +271,7 @@ impl Editor {
         self.wire_start = None;
     }
     pub fn set_tool(&mut self, tool: Tool) {
+        self.simulation.keyboard_focus = None;
         self.simulation.release_momentary();
         self.cancel_gesture();
         self.commit_properties();
@@ -469,10 +470,30 @@ impl Editor {
             && !ui.ctx().any_popup_open()
             && (response.has_focus()
                 || (response.hovered() && !ui.ctx().egui_wants_keyboard_input()));
-        if keyboard {
-            self.shortcuts(ui);
+        if !keyboard
+            || self.tool != Tool::Poke
+            || ui.input(|i| !i.focused)
+            || self.simulation.keyboard_focus.is_some_and(|id| {
+                !self
+                    .circuit
+                    .component(id)
+                    .is_some_and(|c| c.kind == Kind::Keyboard)
+            })
+        {
+            self.simulation.keyboard_focus = None;
         }
-        let space = ui.input(|i| i.key_down(Key::Space));
+        if keyboard {
+            if let Some(id) = self.simulation.keyboard_focus {
+                self.simulation.shortcuts(ui, &BTreeSet::new());
+                if !crate::terminal::input(ui, id, &mut self.simulation.actions) {
+                    self.simulation.keyboard_focus = None;
+                }
+            } else {
+                self.shortcuts(ui);
+            }
+        }
+        let space =
+            self.simulation.keyboard_focus.is_none() && ui.input(|i| i.key_down(Key::Space));
         if space {
             self.cancel_gesture();
         }
@@ -705,9 +726,18 @@ impl Editor {
                 let snap = self.snap(world, tolerance);
                 match self.tool {
                     Tool::Poke => {
+                        self.simulation.keyboard_focus = None;
                         self.selection.clear();
                         if let Some(id) = self.hit(world, tolerance) {
                             self.selection.insert(id);
+                            if self
+                                .circuit
+                                .component(id)
+                                .is_some_and(|c| c.kind == Kind::Keyboard)
+                            {
+                                self.simulation.keyboard_focus = Some(id);
+                                response.request_focus();
+                            }
                             if self.simulation.view.clocks.contains(&id) {
                                 self.simulation
                                     .actions
@@ -944,6 +974,7 @@ impl Editor {
             self.publish_clipboard = false;
         }
         let painter = ui.painter_at(canvas.rect);
+        self.simulation.view.keyboard_focus = self.simulation.keyboard_focus;
         drawing::circuit(
             &painter,
             canvas,

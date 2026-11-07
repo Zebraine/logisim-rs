@@ -2,6 +2,9 @@ use crate::{Error, Result};
 use logisim_core::{Component, Facing, Kind, MatrixInput, Radix};
 use std::collections::BTreeMap;
 pub(crate) fn allowed(kind: Kind, key: &str) -> bool {
+    if kind.is_terminal() {
+        return crate::terminal::allowed(kind, key);
+    }
     if kind == Kind::Joystick {
         return matches!(key, "facing" | "bits" | "color" | "labelcolor");
     }
@@ -29,7 +32,7 @@ pub(crate) fn allowed(kind: Kind, key: &str) -> bool {
             "facing" | "label" | "labelloc" | "labelfont" | "labelcolor"
         ))
 }
-fn rgba(text: &str) -> Result<[u8; 4]> {
+pub(crate) fn rgba(text: &str) -> Result<[u8; 4]> {
     let hex = text
         .strip_prefix('#')
         .ok_or_else(|| Error("Invalid I/O color".into()))?;
@@ -45,6 +48,9 @@ fn rgba(text: &str) -> Result<[u8; 4]> {
 pub(crate) fn read(c: &mut Component, a: &BTreeMap<String, String>) -> Result<()> {
     if !c.kind.is_io() {
         return Ok(());
+    }
+    if c.kind.is_terminal() {
+        return crate::terminal::read(c, a);
     }
     c.bits = match c.kind {
         Kind::Switch | Kind::Slider => c.bits,
@@ -133,7 +139,7 @@ pub(crate) fn read(c: &mut Component, a: &BTreeMap<String, String>) -> Result<()
     };
     Ok(())
 }
-fn color_text(color: [u8; 4]) -> String {
+pub(crate) fn color_text(color: [u8; 4]) -> String {
     let [r, g, b, a] = color;
     if a == 255 {
         format!("#{r:02x}{g:02x}{b:02x}")
@@ -144,6 +150,9 @@ fn color_text(color: [u8; 4]) -> String {
 pub(crate) fn write(out: &mut String, c: &Component) -> Result<()> {
     if !c.kind.is_io() {
         return Ok(());
+    }
+    if c.kind.is_terminal() {
+        return crate::terminal::write(out, c);
     }
     if (match c.kind {
         Kind::Switch | Kind::Slider => !(1..=32).contains(&c.bits),

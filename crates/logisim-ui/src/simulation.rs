@@ -67,6 +67,9 @@ pub struct SimulationView {
     pub clocks: BTreeSet<Id>,
     pub buttons: BTreeMap<Id, bool>,
     pub joysticks: BTreeMap<Id, Point>,
+    pub keyboards: BTreeMap<Id, Vec<u16>>,
+    pub ttys: BTreeMap<Id, crate::TtyView>,
+    pub keyboard_focus: Option<Id>,
     pub indicators: BTreeMap<Id, [bool; 8]>,
     pub rgb: BTreeMap<Id, [u8; 3]>,
     /// Row-major cells: None is an unknown/error signal.
@@ -89,6 +92,10 @@ pub enum SimulationAction {
         offset: Point,
     },
     ReleaseJoysticks,
+    TypeCharacter {
+        id: Id,
+        value: u16,
+    },
     ToggleEnabled,
     Step,
     Reset,
@@ -121,6 +128,7 @@ pub(crate) struct SimulationUi {
     pub view: SimulationView,
     pub actions: Vec<SimulationAction>,
     pub focus_value: bool,
+    pub keyboard_focus: Option<Id>,
     draft: Option<(Id, u32, String)>,
     held_button: Option<Id>,
     held_joystick: Option<(Id, Point)>,
@@ -330,6 +338,12 @@ impl SimulationUi {
     }
     pub fn component(&mut self, ui: &mut Ui, c: &Component) {
         match c.kind {
+            logisim_core::Kind::Keyboard => {
+                ui.weak(tr(
+                    "Poke: click to type. Enter sends a newline; Esc stops typing.",
+                ));
+                return;
+            }
             logisim_core::Kind::Switch => {
                 ui.weak(tr("Poke: click to open or close the switch."));
             }

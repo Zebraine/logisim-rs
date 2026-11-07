@@ -27,7 +27,9 @@ pub use sequential::{ControlPosition, CounterOverflow, FlipFlop, Sequential, Tri
 
 mod io;
 mod joystick;
+mod terminal;
 pub use io::{Io, MatrixInput};
+pub use terminal::TerminalOptions;
 mod memory;
 pub use memory::{Memory, MemoryContents, MemoryInterface, MemoryRole, MemoryTerminal};
 
@@ -184,6 +186,8 @@ pub enum Kind {
     DipSwitch,
     Slider,
     Joystick,
+    Keyboard,
+    Tty,
     Led,
     SevenSegment,
     HexDisplay,
@@ -232,6 +236,8 @@ impl Kind {
         !matches!(
             self,
             Self::Text
+                | Self::Keyboard
+                | Self::Tty
                 | Self::SevenSegment
                 | Self::HexDisplay
                 | Self::DotMatrix
@@ -304,6 +310,8 @@ impl Kind {
             Self::DipSwitch => "Dip Switch",
             Self::Slider => "Slider",
             Self::Joystick => "Joystick",
+            Self::Keyboard => "Keyboard",
+            Self::Tty => "TTY",
             Self::Led => "LED",
             Self::SevenSegment => "7-Segment Display",
             Self::HexDisplay => "Hex Digit Display",
@@ -346,6 +354,7 @@ pub struct Component {
     pub arithmetic: ArithmeticOptions,
     pub memory: Memory,
     pub io: Io,
+    pub terminal: TerminalOptions,
     pub bus: BusControl,
     pub transistor: TransistorOptions,
     pub parity: ParityOptions,
@@ -367,6 +376,7 @@ impl Component {
             bits: match kind {
                 Kind::Splitter | Kind::HexDisplay | Kind::Joystick => 4,
                 Kind::BitExtender => 16,
+                Kind::Keyboard | Kind::Tty => 7,
                 Kind::Slider
                 | Kind::Register
                 | Kind::Counter
@@ -409,6 +419,7 @@ impl Component {
             arithmetic: ArithmeticOptions::default(),
             memory: Memory::default(),
             io: Io::for_kind(kind),
+            terminal: TerminalOptions::default(),
             bus: BusControl::default(),
             transistor: TransistorOptions::default(),
             parity: ParityOptions::default(),

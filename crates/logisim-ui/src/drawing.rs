@@ -340,6 +340,8 @@ pub(crate) fn component(
         | Kind::DipSwitch
         | Kind::Slider
         | Kind::Joystick
+        | Kind::Keyboard
+        | Kind::Tty
         | Kind::Led
         | Kind::SevenSegment
         | Kind::RgbLed

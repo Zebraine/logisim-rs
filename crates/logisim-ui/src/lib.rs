@@ -20,6 +20,8 @@ pub mod i18n;
 mod i18n_tests;
 mod icons;
 mod io;
+mod terminal;
+pub use terminal::TtyView;
 mod settings;
 pub use i18n::Language;
 mod project;
@@ -124,6 +126,7 @@ impl Workspace {
             || self.editor.project_error.is_some();
         if modal || !ui.is_enabled() || ui.input(|i| !i.focused) {
             self.editor.cancel_slider();
+            self.editor.simulation.keyboard_focus = None;
         }
         if modal
             || self.editor.appearance_mode
@@ -150,6 +153,7 @@ impl Workspace {
             )
         {
             self.editor.simulation.release_momentary();
+            self.editor.simulation.keyboard_focus = None;
             self.appearance.reset_context();
             self.canvas.reset();
             self.fit_pending = true;
@@ -262,6 +266,8 @@ impl Workspace {
                     }
                     self.fit_pending = false;
                 }
+                self.canvas.typing = self.editor.simulation.keyboard_focus.is_some()
+                    && self.editor.tool == Tool::Poke;
                 let response = self.canvas.show(ui);
                 if self.editor.appearance_mode {
                     self.appearance
@@ -655,7 +661,7 @@ impl Workspace {
                                             self.library_tool(ui, Kind::Ram);
                                         }
                                         "Input/Output" => {
-                                            for kind in [Kind::Button, Kind::Switch, Kind::DipSwitch, Kind::Slider, Kind::Joystick, Kind::Led, Kind::RgbLed, Kind::SevenSegment, Kind::HexDisplay, Kind::DotMatrix] {
+                                            for kind in [Kind::Button, Kind::Switch, Kind::DipSwitch, Kind::Slider, Kind::Joystick, Kind::Keyboard, Kind::Tty, Kind::Led, Kind::RgbLed, Kind::SevenSegment, Kind::HexDisplay, Kind::DotMatrix] {
                                                 self.library_tool(ui, kind);
                                             }
                                         }

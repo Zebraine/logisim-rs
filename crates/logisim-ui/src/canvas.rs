@@ -44,6 +44,7 @@ impl Camera {
 pub(crate) struct Canvas {
     pub camera: Camera,
     pub show_grid: bool,
+    pub typing: bool,
     pub rect: Rect,
 }
 
@@ -52,6 +53,7 @@ impl Default for Canvas {
         Self {
             camera: Camera::default(),
             show_grid: true,
+            typing: false,
             rect: Rect::NOTHING,
         }
     }
@@ -97,7 +99,7 @@ impl Canvas {
             self.reset();
         }
 
-        let space = ui.input(|i| i.key_down(egui::Key::Space));
+        let space = !self.typing && ui.input(|i| i.key_down(egui::Key::Space));
         let dragging = response.dragged_by(PointerButton::Middle)
             || (space && response.dragged_by(PointerButton::Primary));
         if ui.is_enabled() && dragging {

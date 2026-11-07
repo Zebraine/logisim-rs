@@ -8,6 +8,10 @@ mod bus;
 mod displays;
 mod io;
 mod joystick;
+mod terminal;
+#[cfg(test)]
+mod terminal_tests;
+pub use terminal::TtyScreen;
 mod latches;
 mod memory;
 #[cfg(test)]
@@ -52,6 +56,7 @@ pub struct Simulator {
     network: Network,
     inputs: BTreeMap<Id, Value>,
     joysticks: BTreeMap<Id, Point>,
+    terminals: BTreeMap<Id, terminal::State>,
     matrices: BTreeMap<Id, displays::MatrixState>,
     display_ticks: u64,
     storage: BTreeMap<Id, sequential::State>,
@@ -71,6 +76,7 @@ impl Default for Simulator {
             network: Network::default(),
             inputs: BTreeMap::new(),
             joysticks: BTreeMap::new(),
+            terminals: BTreeMap::new(),
             matrices: BTreeMap::new(),
             display_ticks: 0,
             storage: BTreeMap::new(),
@@ -92,6 +98,7 @@ impl Simulator {
             return false;
         }
         self.synchronize_displays(circuit);
+        self.synchronize_terminals(circuit);
         if electrically_equal(&self.circuit, circuit) {
             self.circuit = circuit.clone();
             self.update_displays();
@@ -222,6 +229,13 @@ impl Simulator {
     }
     pub fn reset(&mut self) {
         self.reset_displays();
+        self.terminals = self
+            .circuit
+            .components
+            .iter()
+            .filter(|c| c.kind.is_terminal())
+            .map(|c| (c.id, terminal::State::new(c)))
+            .collect();
         for offset in self.joysticks.values_mut() {
             *offset = Point::ZERO;
         }
@@ -379,6 +393,7 @@ impl Simulator {
         self.schedule_storage();
         self.update_displays();
         self.schedule_memories();
+        self.schedule_terminals();
     }
     fn schedule_memories(&mut self) {
         let samples: Vec<_> = self
@@ -653,6 +668,7 @@ fn electrically_equal(a: &Circuit, b: &Circuit) -> bool {
                 matches!(c.kind, Kind::Plexer(_)).then_some(c.plexing),
                 matches!(c.kind, Kind::Arithmetic(_)).then_some(c.arithmetic),
                 c.kind.is_memory().then_some(c.memory.clone()),
+                c.kind.is_terminal().then_some(c.terminal),
                 (c.kind == Kind::Slider).then_some(c.io.slider_value),
                 (c.kind == Kind::RgbLed).then_some(c.io.rgb_multibit),
                 (c.kind == Kind::DotMatrix).then_some((

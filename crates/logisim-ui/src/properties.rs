@@ -243,6 +243,8 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
             | Kind::RgbLed
             | Kind::DotMatrix
             | Kind::HexDisplay
+            | Kind::Keyboard
+            | Kind::Tty
             | Kind::Rom
             | Kind::Ram
             | Kind::Probe

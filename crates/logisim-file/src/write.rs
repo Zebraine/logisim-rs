@@ -90,6 +90,8 @@ pub fn serialize(document: &Document) -> Result<String> {
                 | Kind::DipSwitch
                 | Kind::Slider
                 | Kind::Joystick
+                | Kind::Keyboard
+                | Kind::Tty
                 | Kind::Led
                 | Kind::SevenSegment
                 | Kind::RgbLed
@@ -164,6 +166,8 @@ pub fn serialize(document: &Document) -> Result<String> {
                     | Kind::Button
                     | Kind::DipSwitch
                     | Kind::Joystick
+                    | Kind::Keyboard
+                    | Kind::Tty
                     | Kind::Led
                     | Kind::SevenSegment
                     | Kind::RgbLed

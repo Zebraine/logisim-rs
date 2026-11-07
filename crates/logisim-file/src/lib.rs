@@ -10,6 +10,7 @@ mod parity;
 mod plexers;
 mod read;
 mod sequential;
+mod terminal;
 #[cfg(test)]
 mod tests;
 mod transistors;

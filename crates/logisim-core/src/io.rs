@@ -64,6 +64,10 @@ impl Io {
         if kind == Kind::Joystick {
             io.on_color = [255, 0, 0, 255];
         }
+        if kind == Kind::Tty {
+            io.on_color = [0, 0, 0, 255];
+            io.background = [0, 0, 0, 64];
+        }
         if kind == Kind::DotMatrix {
             io.on_color = [0, 255, 0, 255];
         }
@@ -82,6 +86,8 @@ impl Kind {
                 | Self::DipSwitch
                 | Self::Slider
                 | Self::Joystick
+                | Self::Keyboard
+                | Self::Tty
                 | Self::Led
                 | Self::SevenSegment
                 | Self::HexDisplay
@@ -126,6 +132,11 @@ impl Component {
             return [a, b].map(|(x, y)| self.facing.inverse().transform(Point::new(x, y)));
         }
         match self.kind {
+            Kind::Keyboard => [Point::new(0, -15), Point::new(145, 10)],
+            Kind::Tty => [
+                Point::new(0, -15 * i32::from(self.terminal.rows.clamp(1, 48))),
+                Point::new(7 * (i32::from(self.terminal.columns.clamp(1, 120)) + 3), 10),
+            ],
             Kind::RgbLed => [Point::new(-30, -10), Point::new(0, 10)],
             Kind::DotMatrix => {
                 let cols = i32::from(self.io.matrix_columns.clamp(1, 32));
@@ -145,6 +156,19 @@ impl Component {
     }
     pub fn io_ports(&self) -> Vec<Point> {
         match self.kind {
+            Kind::Keyboard => vec![
+                Point::new(140, 10),
+                Point::new(130, 10),
+                Point::ZERO,
+                Point::new(10, 10),
+                Point::new(20, 10),
+            ],
+            Kind::Tty => vec![
+                Point::new(0, -10),
+                Point::ZERO,
+                Point::new(10, 10),
+                Point::new(20, 10),
+            ],
             Kind::Joystick => vec![
                 Point::ZERO,
                 self.facing.inverse().transform(

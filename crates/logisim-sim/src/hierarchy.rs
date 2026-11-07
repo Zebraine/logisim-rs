@@ -275,6 +275,11 @@ impl ProjectSimulator {
             state.sim.set_button(id, pressed);
         }
     }
+    pub fn type_character(&mut self, path: &[Id], id: Id, value: u16) {
+        if let Some(state) = self.states.get_mut(path) {
+            state.sim.type_character(id, value);
+        }
+    }
     pub fn set_joystick(&mut self, path: &[Id], id: Id, offset: logisim_core::Point) {
         if let Some(state) = self.states.get_mut(path) {
             state.sim.set_joystick(id, offset);

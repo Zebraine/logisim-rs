@@ -3,6 +3,14 @@ use egui::{Color32, Painter, Rect, Stroke, StrokeKind, Ui};
 use logisim_core::{Component, Facing, Kind, MatrixInput, Point, Radix};
 pub(crate) fn port_label(c: &Component, index: usize) -> &'static str {
     match c.kind {
+        Kind::Keyboard => [
+            "Character",
+            "Character available",
+            "Clock",
+            "Read enable",
+            "Clear",
+        ][index],
+        Kind::Tty => ["Character", "Clock", "Write enable", "Clear"][index],
         Kind::Joystick => {
             if index == 0 {
                 "X"
@@ -55,6 +63,9 @@ pub(crate) fn fields(ui: &mut Ui, c: &mut Component) -> bool {
     let mut active = false;
     if !c.kind.is_io() {
         return false;
+    }
+    if c.kind.is_terminal() {
+        return crate::terminal::fields(ui, c);
     }
     if c.kind == Kind::RgbLed {
         ui.label(tr("8-bit color channels"));
@@ -232,6 +243,7 @@ pub(crate) fn draw(
         .and_then(|s| s.inputs.get(&c.id))
         .map_or(0, |v| v.value);
     match c.kind {
+        Kind::Keyboard | Kind::Tty => crate::terminal::draw(p, canvas, c, ink, simulation),
         Kind::Joystick => {
             let center = canvas.screen(c.joystick_center());
             let offset = simulation

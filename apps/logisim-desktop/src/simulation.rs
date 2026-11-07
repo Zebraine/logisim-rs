@@ -12,6 +12,7 @@ pub fn apply(sim: &mut Simulator, action: SimulationAction) {
         SimulationAction::ReleaseButtons => sim.release_buttons(),
         SimulationAction::SetJoystick { id, offset } => sim.set_joystick(id, offset),
         SimulationAction::ReleaseJoysticks => sim.release_joysticks(),
+        SimulationAction::TypeCharacter { id, value } => sim.type_character(id, value),
         SimulationAction::ToggleEnabled => sim.set_enabled(!sim.enabled()),
         SimulationAction::Step if !sim.enabled() => {
             sim.step();
@@ -84,6 +85,19 @@ pub fn present(circuit: &Circuit, sim: &Simulator) -> SimulationView {
                     .collect(),
             );
         }
+        if let Some(buffer) = sim.keyboard_buffer(c.id) {
+            view.keyboards.insert(c.id, buffer);
+        }
+        if let Some(screen) = sim.tty(c.id) {
+            view.ttys.insert(
+                c.id,
+                logisim_ui::TtyView {
+                    lines: screen.lines.clone(),
+                    row: screen.row,
+                    column: screen.column,
+                },
+            );
+        }
         if let Some(offset) = sim.joystick(c.id) {
             view.joysticks.insert(c.id, offset);
         }
@@ -153,6 +167,7 @@ pub fn apply_project(
         SimulationAction::PressButton { id } => sim.set_button(path, id, true),
         SimulationAction::SetJoystick { id, offset } => sim.set_joystick(path, id, offset),
         SimulationAction::ReleaseJoysticks => sim.release_joysticks(),
+        SimulationAction::TypeCharacter { id, value } => sim.type_character(path, id, value),
         SimulationAction::ReleaseButtons => sim.release_buttons(),
         SimulationAction::ToggleEnabled => sim.set_enabled(!sim.enabled()),
         SimulationAction::Step if !sim.enabled() => {

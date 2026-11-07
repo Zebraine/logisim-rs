@@ -135,6 +135,9 @@ impl Component {
             Kind::Parity(_) => {
                 (index <= usize::from(self.input_count())).then_some(self.bits.clamp(1, 32))
             }
+            Kind::Keyboard | Kind::Tty => {
+                (index < self.io_ports().len()).then_some(if index == 0 { self.bits } else { 1 })
+            }
             Kind::Joystick => (index < 2).then_some(self.bits.clamp(2, 5)),
             Kind::Button | Kind::DipSwitch | Kind::Led | Kind::SevenSegment => Some(1),
             Kind::HexDisplay => Some(if index == 0 { 4 } else { 1 }),

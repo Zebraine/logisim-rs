@@ -358,6 +358,8 @@ fn component(
         ("#I/O", "DipSwitch") => Kind::DipSwitch,
         ("#I/O", "Slider") => Kind::Slider,
         ("#I/O", "Joystick") => Kind::Joystick,
+        ("#I/O", "Keyboard") => Kind::Keyboard,
+        ("#I/O", "TTY") => Kind::Tty,
         ("#I/O", "LED") => Kind::Led,
         ("#I/O", "7-Segment Display") => Kind::SevenSegment,
         ("#I/O", "Hex Digit Display") => Kind::HexDisplay,
@@ -415,6 +417,8 @@ fn component(
             | Kind::DipSwitch
             | Kind::Slider
             | Kind::Joystick
+            | Kind::Keyboard
+            | Kind::Tty
             | Kind::Led
             | Kind::SevenSegment
             | Kind::RgbLed
