@@ -956,7 +956,10 @@ fn plexers_place_connect_rotate_and_undo_using_canvas_events() {
         for _ in 0..2 {
             frame(&ctx, &mut app, vec![], Modifiers::NONE);
         }
-        let at = app.canvas.screen(Point::new(200 + i as i32 * 130, 200));
+        let at = app.canvas.screen(Point::new(
+            200 + (i % 3) as i32 * 180,
+            200 + (i / 3) as i32 * 200,
+        ));
         click(&ctx, &mut app, at);
         assert_eq!(
             app.circuit().components.last().unwrap().kind,

@@ -715,7 +715,7 @@ impl Editor {
                             ui.label(tf!(
                                 "{} · {} bit(s)",
                                 if matches!(c.kind, Kind::Plexer(_)) {
-                                    crate::plexers::port_label(c.plexer_terminals()[index].role)
+                                    crate::plexers::port_label(c, c.plexer_terminals()[index].role)
                                 } else if matches!(c.kind, Kind::Arithmetic(_)) {
                                     crate::arithmetic::port_label(c, index)
                                 } else {

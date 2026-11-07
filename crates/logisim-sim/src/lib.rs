@@ -102,9 +102,24 @@ impl Simulator {
                 (c.id, state)
             })
             .collect();
+        let held = self
+            .drives
+            .iter()
+            .filter(|((id, index), _)| {
+                *index < 7
+                    && circuit.component(*id).is_some_and(|c| {
+                        c.kind == Kind::Plexer(logisim_core::Plexer::DisplayDecoder)
+                            && self
+                                .circuit
+                                .component(*id)
+                                .is_some_and(|old| old.kind == c.kind)
+                    })
+            })
+            .map(|(p, v)| (*p, *v))
+            .collect();
         self.circuit = circuit.clone();
         self.network = Network::compile(circuit);
-        self.initialize();
+        self.initialize(held);
         true
     }
     pub fn enabled(&self) -> bool {
@@ -160,25 +175,20 @@ impl Simulator {
             .filter(|c| c.kind.is_sequential())
             .map(|c| (c.id, sequential::State::new(c)))
             .collect();
-        self.initialize();
+        self.initialize(BTreeMap::new());
     }
-    fn initialize(&mut self) {
-        self.drives.clear();
+    fn initialize(&mut self, held: BTreeMap<network::Port, Value>) {
+        self.drives = held;
         self.pending = self
             .inputs
             .iter()
             .map(|(id, value)| ((*id, 0), *value))
             .collect();
-        self.values = self
-            .network
-            .nets
-            .iter()
-            .map(|net| Value::filled(net.width, Bit::Unknown))
-            .collect();
+        self.values = self.network.resolve(&self.drives);
         self.steps = 0;
         self.unsettled_steps = 0;
         self.limited = false;
-        self.schedule_components();
+        self.schedule_components(true);
     }
     fn schedule(&mut self, id: Id, value: Value) {
         self.drive_port((id, 0), value);
@@ -196,7 +206,7 @@ impl Simulator {
             self.schedule(id, value);
         }
     }
-    fn schedule_components(&mut self) {
+    fn schedule_components(&mut self, initializing: bool) {
         let outputs: Vec<_> = self
             .circuit
             .components
@@ -245,6 +255,12 @@ impl Simulator {
             .components
             .iter()
             .filter(|c| matches!(c.kind, Kind::Plexer(_) | Kind::Arithmetic(_)))
+            // Restore held outputs before sampling freshly compiled inputs.
+            .filter(|c| {
+                !(initializing
+                    && c.kind == Kind::Plexer(logisim_core::Plexer::DisplayDecoder)
+                    && self.drives.contains_key(&(c.id, 0)))
+            })
             .flat_map(|c| {
                 let ports: Vec<_> = (0..c.ports().len())
                     .map(|i| self.port_value(c.id, i).expect("compiled component port"))
@@ -363,7 +379,7 @@ impl Simulator {
         self.drives.extend(std::mem::take(&mut self.pending));
         self.values = self.network.resolve(&self.drives);
         self.steps = self.steps.saturating_add(1);
-        self.schedule_components();
+        self.schedule_components(false);
         if self.pending.is_empty() {
             self.unsettled_steps = 0;
         } else {

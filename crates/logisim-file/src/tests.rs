@@ -596,7 +596,12 @@ fn plexers_runtime_defaults_and_roundtrip_preserve_terminal_roles_and_policies()
             .enable
     );
     let mut document = Document::default();
-    for kind in Plexer::ALL {
+    for kind in [
+        Plexer::Multiplexer,
+        Plexer::Demultiplexer,
+        Plexer::Decoder,
+        Plexer::PriorityEncoder,
+    ] {
         for select in 1..=5 {
             for facing in Facing::ALL {
                 for altered in [false, true] {
@@ -825,5 +830,75 @@ fn bit_arithmetic_runtime_names_input_counts_and_search_modes_roundtrip() {
             .arithmetic
             .bit_inputs = n;
         assert!(serialize(&document).is_err());
+    }
+}
+
+#[test]
+fn extra_plexers_runtime_defaults_and_all_properties_roundtrip() {
+    use logisim_core::Plexer;
+    let wrap = |body: &str| xml(body).replace("<main", r##"<lib name="p" desc="#Plexers"/><main"##);
+    let defaults=parse(&wrap(r#"<comp lib="p" name="BitSelector" loc="(100,100)"/><comp lib="p" name="DisplayDecoder" loc="(200,100)"/>"#)).unwrap();
+    assert!(defaults.warnings.is_empty());
+    let cs = &defaults.document.main_circuit().circuit.components;
+    assert_eq!(cs[0].bits, 8);
+    assert_eq!(cs[0].plexing.group_bits, 1);
+    assert!(cs[1].plexing.multibit);
+    let mut doc = Document::default();
+    for facing in Facing::ALL {
+        for multibit in [true, false] {
+            let mut c = Component::new(Kind::Plexer(Plexer::DisplayDecoder), Point::new(200, 200));
+            c.facing = facing;
+            c.plexing.multibit = multibit;
+            doc.main_circuit_mut().circuit.add_component(c);
+        }
+        for bits in [1, 3, 8, 32] {
+            for group in [1, 3, 7, 32] {
+                for top in [false, true] {
+                    let mut c =
+                        Component::new(Kind::Plexer(Plexer::BitSelector), Point::new(400, 200));
+                    c.facing = facing;
+                    c.bits = bits;
+                    c.plexing.group_bits = group;
+                    c.plexing.top_right = top;
+                    doc.main_circuit_mut().circuit.add_component(c);
+                }
+            }
+        }
+    }
+    let encoded = serialize(&doc).unwrap();
+    assert!(encoded.contains("name=\"BitSelector\""));
+    assert!(encoded.contains("name=\"DisplayDecoder\""));
+    let restored = parse(&encoded).unwrap();
+    assert!(restored.warnings.is_empty());
+    assert_eq!(
+        doc.main_circuit().circuit,
+        restored.document.main_circuit().circuit
+    );
+    for (kind, attrs) in [
+        ("BitSelector", r#"<a name="group" val="0"/>"#),
+        ("BitSelector", r#"<a name="group" val="33"/>"#),
+        ("BitSelector", r#"<a name="enable" val="false"/>"#),
+        ("BitSelector", r#"<a name="select" val="3"/>"#),
+        ("DisplayDecoder", r#"<a name="width" val="4"/>"#),
+        ("DisplayDecoder", r#"<a name="multibit" val="unknown"/>"#),
+        ("DisplayDecoder", r#"<a name="disabled" val="0"/>"#),
+    ] {
+        let i = parse(&wrap(&format!(
+            r#"<comp lib="p" name="{kind}" loc="(0,0)">{attrs}</comp>"#
+        )))
+        .unwrap();
+        assert_eq!(i.warnings.len(), 1);
+        assert!(i.document.main_circuit().circuit.components.is_empty());
+    }
+    for group in [0, 33] {
+        let c = doc
+            .main_circuit_mut()
+            .circuit
+            .components
+            .iter_mut()
+            .find(|c| c.kind == Kind::Plexer(Plexer::BitSelector))
+            .unwrap();
+        c.plexing.group_bits = group;
+        assert!(serialize(&doc).is_err());
     }
 }

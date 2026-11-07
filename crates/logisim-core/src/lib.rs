@@ -282,7 +282,7 @@ impl Component {
             bits: match kind {
                 Kind::Splitter => 4,
                 Kind::BitExtender => 16,
-                Kind::Register | Kind::Arithmetic(_) => 8,
+                Kind::Register | Kind::Arithmetic(_) | Kind::Plexer(Plexer::BitSelector) => 8,
                 _ => 1,
             },
             inputs: 2,
@@ -593,11 +593,13 @@ impl Circuit {
         }
         let before = old.ports();
         let after = replacement.ports();
-        let pairs: Vec<_> = if old.kind == Kind::Arithmetic(Arithmetic::BitAdder)
-            && old.kind == replacement.kind
-            && old.bit_adder_inputs() != replacement.bit_adder_inputs()
+        let pairs: Vec<_> = if old.kind == replacement.kind
+            && ((old.kind == Kind::Arithmetic(Arithmetic::BitAdder)
+                && old.bit_adder_inputs() != replacement.bit_adder_inputs())
+                || (old.kind == Kind::Plexer(Plexer::DisplayDecoder)
+                    && old.plexing.multibit != replacement.plexing.multibit))
         {
-            // Observed count edits keep wire geometry; only a simultaneous move translates it.
+            // Observed input layout edits keep wire geometry; a simultaneous move translates it.
             let delta = replacement.position - old.position;
             before.iter().map(|p| (*p, *p + delta)).collect()
         } else if matches!(old.kind, Kind::Subcircuit(_)) && old.kind == replacement.kind {

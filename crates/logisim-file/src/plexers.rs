@@ -2,6 +2,12 @@ use crate::{Error, Result};
 use logisim_core::{Component, Kind, Plexer};
 use std::collections::BTreeMap;
 pub(crate) fn allowed(kind: Plexer, key: &str) -> bool {
+    if kind == Plexer::BitSelector {
+        return matches!(key, "facing" | "selloc" | "width" | "group");
+    }
+    if kind == Plexer::DisplayDecoder {
+        return matches!(key, "facing" | "multibit");
+    }
     matches!(key, "facing" | "select" | "disabled")
         || match kind {
             Plexer::PriorityEncoder => key == "noInputState",
@@ -28,6 +34,19 @@ pub(crate) fn read(c: &mut Component, attrs: &BTreeMap<String, String>) -> Resul
         Some(v) => Err(Error(format!("Unsupported {key}: {v}"))),
     };
     let p = &mut c.plexing;
+    if kind == Plexer::DisplayDecoder {
+        p.multibit = boolean("multibit", "true")?;
+        return Ok(());
+    }
+    if kind == Plexer::BitSelector {
+        p.group_bits = crate::read::number(attrs, "group", 1, 1..=32)?;
+        p.top_right = match attrs.get("selloc").map(String::as_str) {
+            None => false,
+            Some("tr") => true,
+            Some(v) => return Err(Error(format!("Unsupported select location: {v}"))),
+        };
+        return Ok(());
+    }
     p.select_bits = get(
         "select",
         if kind == Plexer::PriorityEncoder {
@@ -62,6 +81,23 @@ pub(crate) fn write(out: &mut String, c: &Component) -> Result<()> {
         return Ok(());
     };
     let p = c.plexing;
+    if kind == Plexer::DisplayDecoder {
+        if c.bits != 1 {
+            return Err(Error("Display Decoder has fixed terminal widths".into()));
+        }
+        a(out, "multibit", p.multibit)?;
+        return Ok(());
+    }
+    if kind == Plexer::BitSelector {
+        if !(1..=32).contains(&p.group_bits) {
+            return Err(Error("Bit Selector output bits must be 1–32".into()));
+        }
+        a(out, "group", p.group_bits)?;
+        if p.top_right {
+            a(out, "selloc", "tr")?;
+        }
+        return Ok(());
+    }
     if !(1..=5).contains(&p.select_bits) || (!kind.has_data_bits() && c.bits != 1) {
         return Err(Error("Invalid plexer bit widths".into()));
     }

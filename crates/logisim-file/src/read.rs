@@ -347,7 +347,7 @@ fn component(
         ("#Plexers", name) => Kind::Plexer(
             logisim_core::Plexer::ALL
                 .into_iter()
-                .find(|p| p.name() == name)
+                .find(|p| p.file_name() == name)
                 .ok_or_else(|| Error(format!("Unsupported plexer: {name}")))?,
         ),
         ("#Wiring", "Clock") => Kind::Clock,
@@ -439,7 +439,10 @@ fn component(
     c.bits = number(
         &a,
         "width",
-        if matches!(kind, Kind::Register | Kind::Arithmetic(_)) {
+        if matches!(
+            kind,
+            Kind::Register | Kind::Arithmetic(_) | Kind::Plexer(logisim_core::Plexer::BitSelector)
+        ) {
             8
         } else {
             1

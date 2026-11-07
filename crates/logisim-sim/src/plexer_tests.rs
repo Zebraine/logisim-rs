@@ -164,7 +164,12 @@ fn priority_encoder_cascade_ignores_undefined_data_and_has_distinct_disabled_and
 }
 #[test]
 fn selectors_cover_every_input_and_output_on_all_orientations_and_bus_widths() {
-    for kind in Plexer::ALL {
+    for kind in [
+        Plexer::Multiplexer,
+        Plexer::Demultiplexer,
+        Plexer::Decoder,
+        Plexer::PriorityEncoder,
+    ] {
         for bits in 1..=5 {
             for facing in Facing::ALL {
                 let mut c = Component::new(Kind::Plexer(kind), Point::ZERO);
@@ -193,6 +198,7 @@ fn selectors_cover_every_input_and_output_on_all_orientations_and_bus_widths() {
                         Plexer::Decoder => {
                             drive(&mut s, &inputs, Select, Value::known(bits, i.into()))
                         }
+                        Plexer::BitSelector | Plexer::DisplayDecoder => unreachable!(),
                         Plexer::PriorityEncoder => {
                             drive(&mut s, &inputs, Input(i), Value::known(1, 1))
                         }
@@ -203,6 +209,7 @@ fn selectors_cover_every_input_and_output_on_all_orientations_and_bus_widths() {
                         Plexer::Demultiplexer => (Output(i), Value::known(32, 0xdeadbeef)),
                         Plexer::Decoder => (Output(i), Value::known(1, 1)),
                         Plexer::PriorityEncoder => (Output(0), Value::known(bits, i.into())),
+                        Plexer::BitSelector | Plexer::DisplayDecoder => unreachable!(),
                     };
                     assert_eq!(output(&s, id, role), want);
                 }
@@ -280,3 +287,6 @@ fn mixed_selector_error_dominates_unknown_and_selected_data_preserves_unknown_or
         }
     }
 }
+
+#[path = "plexer_extra_tests.rs"]
+mod extra;

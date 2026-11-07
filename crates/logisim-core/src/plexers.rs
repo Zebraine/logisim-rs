@@ -7,13 +7,17 @@ pub enum Plexer {
     Demultiplexer,
     Decoder,
     PriorityEncoder,
+    BitSelector,
+    DisplayDecoder,
 }
 impl Plexer {
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 6] = [
         Self::Multiplexer,
         Self::Demultiplexer,
         Self::Decoder,
         Self::PriorityEncoder,
+        Self::BitSelector,
+        Self::DisplayDecoder,
     ];
     pub fn name(self) -> &'static str {
         match self {
@@ -21,10 +25,22 @@ impl Plexer {
             Self::Demultiplexer => "Demultiplexer",
             Self::Decoder => "Decoder",
             Self::PriorityEncoder => "Priority Encoder",
+            Self::BitSelector => "Bit Selector",
+            Self::DisplayDecoder => "7-Segment Display Decoder",
         }
     }
     pub fn has_data_bits(self) -> bool {
-        matches!(self, Self::Multiplexer | Self::Demultiplexer)
+        matches!(
+            self,
+            Self::Multiplexer | Self::Demultiplexer | Self::BitSelector
+        )
+    }
+    pub fn file_name(self) -> &'static str {
+        match self {
+            Self::BitSelector => "BitSelector",
+            Self::DisplayDecoder => "DisplayDecoder",
+            _ => self.name(),
+        }
     }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -35,6 +51,8 @@ pub struct Plexing {
     pub disabled_zero: bool,
     pub three_state: bool,
     pub no_input_zero: bool,
+    pub group_bits: u8,
+    pub multibit: bool,
 }
 impl Default for Plexing {
     fn default() -> Self {
@@ -45,6 +63,8 @@ impl Default for Plexing {
             disabled_zero: false,
             three_state: false,
             no_input_zero: false,
+            group_bits: 1,
+            multibit: true,
         }
     }
 }
@@ -56,6 +76,9 @@ pub enum PlexerRole {
     Enable,
     Group,
     EnableOut,
+    LampTest,
+    Blanking,
+    ZeroBlanking,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PlexerTerminal {
@@ -65,6 +88,13 @@ pub struct PlexerTerminal {
     pub output: bool,
 }
 impl Component {
+    pub fn bit_selector_select_bits(&self) -> u8 {
+        let groups = self
+            .bits
+            .clamp(1, 32)
+            .div_ceil(self.plexing.group_bits.clamp(1, 32));
+        (8 - (groups - 1).leading_zeros() as u8).max(1)
+    }
     pub fn plexer_count(&self) -> u8 {
         1 << self.plexing.select_bits.clamp(1, 5)
     }
@@ -105,6 +135,32 @@ impl Component {
             })
         };
         match kind {
+            Plexer::BitSelector => {
+                add(Output(0), 0, 0, self.plexing.group_bits.clamp(1, 32));
+                add(Input(0), -30, 0, bits);
+                add(
+                    Select,
+                    -10,
+                    self.plexer_side() * 10,
+                    self.bit_selector_select_bits(),
+                );
+            }
+            Plexer::DisplayDecoder => {
+                for i in 0..7 {
+                    add(Output(i), 0, -30 + i32::from(i) * 10, 1);
+                }
+                if self.plexing.multibit {
+                    add(Input(0), -40, 0, 4);
+                } else {
+                    for i in 0..4 {
+                        add(Input(i), -40, -30 + i32::from(i) * 20, 1);
+                    }
+                }
+                add(Enable, -20, -40, 1);
+                add(LampTest, -30, 40, 1);
+                add(Blanking, -20, 40, 1);
+                add(ZeroBlanking, -10, 40, 1);
+            }
             Plexer::Multiplexer | Plexer::Demultiplexer => {
                 let mux = kind == Plexer::Multiplexer;
                 let sign = if mux { -1 } else { 1 };
@@ -174,6 +230,8 @@ impl Component {
         let depth = if n == 2 { 30 } else { 40 };
         let inset = if n == 2 { 10 } else { 20 };
         let points = match kind {
+            Plexer::BitSelector => vec![(-30, -15), (-30, 15), (0, 5), (0, -5)],
+            Plexer::DisplayDecoder => vec![(-40, -40), (-40, 40), (0, 40), (0, -40)],
             Plexer::Multiplexer => vec![(-depth, -h), (-depth, h), (0, h - inset), (0, inset - h)],
             Plexer::Demultiplexer => vec![(0, inset - h), (0, h - inset), (depth, h), (depth, -h)],
             Plexer::Decoder => {
@@ -287,5 +345,138 @@ mod tests {
                 .any(|w| w.a == new_select || w.b == new_select)
         );
         assert!(!circuit.wires.iter().any(|w| w.a == en || w.b == en));
+    }
+}
+
+#[cfg(test)]
+mod extra_tests {
+    use super::*;
+    use crate::Circuit;
+    #[test]
+    fn selector_group_widths_and_screen_sides_match_runtime_connections() {
+        let mut c = Component::new(Kind::Plexer(Plexer::BitSelector), Point::ZERO);
+        assert_eq!(c.bits, 8);
+        for (width, group, select) in [
+            (1, 1, 1),
+            (8, 1, 3),
+            (8, 3, 2),
+            (5, 3, 1),
+            (8, 32, 1),
+            (32, 1, 5),
+            (32, 7, 3),
+            (32, 32, 1),
+        ] {
+            c.bits = width;
+            c.plexing.group_bits = group;
+            assert_eq!(c.bit_selector_select_bits(), select);
+            assert_eq!(c.port_width(0), Some(group));
+            assert_eq!(c.port_width(1), Some(width));
+            assert_eq!(c.port_width(2), Some(select));
+            for (facing, data, bottom, top) in [
+                (Facing::East, (-30, 0), (-10, 10), (-10, -10)),
+                (Facing::South, (0, -30), (-10, -10), (10, -10)),
+                (Facing::West, (30, 0), (10, 10), (10, -10)),
+                (Facing::North, (0, 30), (-10, 10), (10, 10)),
+            ] {
+                c.facing = facing;
+                for (tr, s) in [(false, bottom), (true, top)] {
+                    c.plexing.top_right = tr;
+                    assert_eq!(
+                        c.ports(),
+                        vec![
+                            Point::ZERO,
+                            Point::new(data.0, data.1),
+                            Point::new(s.0, s.1)
+                        ]
+                    );
+                }
+            }
+        }
+    }
+    #[test]
+    fn display_screen_order_and_input_format_edits_keep_original_wires() {
+        use PlexerRole::*;
+        let mut c = Component::new(Kind::Plexer(Plexer::DisplayDecoder), Point::ZERO);
+        for (facing, first, data, en, lt, bi, rbi) in [
+            (
+                Facing::East,
+                (0, -30),
+                (-40, 0),
+                (-20, -40),
+                (-30, 40),
+                (-20, 40),
+                (-10, 40),
+            ),
+            (
+                Facing::South,
+                (-30, 0),
+                (0, -40),
+                (-40, -20),
+                (40, -30),
+                (40, -20),
+                (40, -10),
+            ),
+            (
+                Facing::West,
+                (0, -30),
+                (40, 0),
+                (20, -40),
+                (30, 40),
+                (20, 40),
+                (10, 40),
+            ),
+            (
+                Facing::North,
+                (-30, 0),
+                (0, 40),
+                (-40, 20),
+                (40, 30),
+                (40, 20),
+                (40, 10),
+            ),
+        ] {
+            c.facing = facing;
+            for (role, want) in [
+                (Output(0), first),
+                (Input(0), data),
+                (Enable, en),
+                (LampTest, lt),
+                (Blanking, bi),
+                (ZeroBlanking, rbi),
+            ] {
+                let p = c
+                    .plexer_terminals()
+                    .into_iter()
+                    .find(|p| p.role == role)
+                    .unwrap();
+                assert_eq!(facing.transform(p.offset), Point::new(want.0, want.1));
+                assert_eq!(p.bits, if role == Input(0) { 4 } else { 1 });
+            }
+            c.plexing.multibit = false;
+            let ps = c.ports();
+            assert_eq!(ps.len(), 15);
+            for i in 0..4 {
+                assert_eq!(c.port_width(7 + i), Some(1));
+            }
+            let first_input = match facing {
+                Facing::East => Point::new(-40, -30),
+                Facing::West => Point::new(40, -30),
+                Facing::South => Point::new(-30, -40),
+                Facing::North => Point::new(-30, 40),
+            };
+            assert_eq!(ps[7], first_input);
+            c.plexing.multibit = true;
+        }
+        c.facing = Facing::East;
+        c.position = Point::new(200, 200);
+        let mut circuit = Circuit::default();
+        let id = circuit.add_component(c);
+        circuit.add_wire(Point::new(100, 200), Point::new(160, 200));
+        circuit.add_wire(Point::new(180, 100), Point::new(180, 160));
+        let wires = circuit.wires.clone();
+        let mut changed = circuit.component(id).unwrap().clone();
+        changed.plexing.multibit = false;
+        circuit.replace_component(changed);
+        assert_eq!(circuit.wires, wires);
     }
 }

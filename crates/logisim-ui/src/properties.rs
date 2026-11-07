@@ -234,7 +234,11 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
             | Kind::Subcircuit(_)
             | Kind::Clock
             | Kind::FlipFlop(_)
-            | Kind::Plexer(logisim_core::Plexer::Decoder | logisim_core::Plexer::PriorityEncoder)
+            | Kind::Plexer(
+                logisim_core::Plexer::Decoder
+                    | logisim_core::Plexer::PriorityEncoder
+                    | logisim_core::Plexer::DisplayDecoder
+            )
     ) {
         ui.label(if c.kind == Kind::BitExtender {
             tr("Output bits")

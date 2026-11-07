@@ -106,6 +106,8 @@ pub fn serialize(document: &Document) -> Result<String> {
                     c.position.y,
                     if let Kind::Arithmetic(a) = c.kind {
                         a.file_name()
+                    } else if let Kind::Plexer(p) = c.kind {
+                        p.file_name()
                     } else {
                         c.kind.name()
                     }
@@ -125,7 +127,9 @@ pub fn serialize(document: &Document) -> Result<String> {
                     | Kind::Clock
                     | Kind::FlipFlop(_)
                     | Kind::Plexer(
-                        logisim_core::Plexer::Decoder | logisim_core::Plexer::PriorityEncoder
+                        logisim_core::Plexer::Decoder
+                            | logisim_core::Plexer::PriorityEncoder
+                            | logisim_core::Plexer::DisplayDecoder
                     )
             ) {
                 attribute(&mut out, "width", c.bits)?;

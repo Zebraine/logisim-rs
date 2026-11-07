@@ -92,6 +92,7 @@ const MESSAGES: &[(&str, &str)] = &[
         "0 / 1: set selected input. Multi-bit values use hexadecimal.",
         "0 / 1：设置选中输入。多位输入使用十六进制。",
     ),
+    ("7-Segment Display Decoder", "七段译码器"),
     (
         "A circuit cannot contain itself, directly or indirectly.",
         "电路不能直接或间接包含自身。",
@@ -137,9 +138,11 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Bit Adder", "位加法器"),
     ("Bit Extender", "位扩展器"),
     ("Bit Finder", "位查找器"),
+    ("Bit Selector", "位选择器"),
     ("Bit count", "高电平位总数"),
     ("Bit index", "位索引"),
     ("Bit {}", "第 {} 位"),
+    ("Blanking (BI, active low)", "消隐（BI，低电平有效）"),
     ("Body width ", "主体宽度 "),
     ("Bold", "粗体"),
     ("Borrow in", "借位输入"),
@@ -149,6 +152,7 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Branch {}", "分支 {}"),
     ("Bring to Front", "置于顶层"),
     ("Buffer", "缓冲器"),
+    ("Bus input", "总线输入"),
     ("Cancel", "取消"),
     (
         "Cannot remove the last circuit or a circuit that is still used by an instance.",
@@ -169,6 +173,10 @@ const MESSAGES: &[(&str, &str)] = &[
     (
         "Changing the input count keeps wire positions; reconnect moved inputs.",
         "修改输入数量会保留导线位置，请重新连接移动后的输入端口。",
+    ),
+    (
+        "Changing the input format keeps wire positions; reconnect data inputs.",
+        "切换输入形式会保留导线位置，请重新连接数据输入端口。",
     ),
     (
         "Chinese characters require a system CJK font (for example Noto Sans CJK SC).",
@@ -288,6 +296,7 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Edit appearance", "编辑外观"),
     ("Ellipse", "椭圆"),
     ("Enable", "使能"),
+    ("Enable (0 holds outputs)", "使能（0 时保持输出）"),
     (
         "Enable / pause simulation · Ctrl+E",
         "启用 / 暂停仿真 · Ctrl+E",
@@ -335,6 +344,7 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Greater than", "大于"),
     ("Grid", "网格"),
     ("Ground", "接地"),
+    ("Group index", "分组索引"),
     ("Group signal", "有效输入指示"),
     ("Help", "帮助"),
     ("Hexadecimal", "十六进制"),
@@ -371,6 +381,7 @@ const MESSAGES: &[(&str, &str)] = &[
     ("J-K Flip-Flop", "JK 触发器"),
     ("Label", "标签"),
     ("Label location", "标签位置"),
+    ("Lamp test (LT, active low)", "灯测试（LT，低电平有效）"),
     ("Language", "语言"),
     (
         "Language changes apply immediately and are saved for the next launch.",
@@ -550,6 +561,7 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Save circuit as", "电路另存为"),
     ("Save · Ctrl+S", "保存 · Ctrl+S"),
     ("Search type", "查找类型"),
+    ("Segment {}", "段 {}"),
     ("Select", "选择"),
     ("Select All · Ctrl+A", "全选 · Ctrl+A"),
     (
@@ -687,6 +699,10 @@ const MESSAGES: &[(&str, &str)] = &[
         "当前语言已生效。请重试保存，以便下次启动时继续使用。",
     ),
     ("Zero", "补零"),
+    (
+        "Zero blanking (RBI, active low)",
+        "零值消隐（RBI，低电平有效）",
+    ),
     ("Zero output", "零"),
     ("Zoom in", "放大"),
     ("Zoom out", "缩小"),
