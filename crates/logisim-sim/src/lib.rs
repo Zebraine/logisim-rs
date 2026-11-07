@@ -11,6 +11,7 @@ mod memory;
 #[cfg(test)]
 mod memory_tests;
 mod network;
+mod parity;
 #[cfg(test)]
 mod plexer_tests;
 mod plexers;
@@ -271,6 +272,16 @@ impl Simulator {
             .iter()
             .filter_map(|c| {
                 let output = match c.kind {
+                    Kind::Parity(_) => {
+                        let inputs: Vec<_> = (1..=usize::from(c.input_count()))
+                            .map(|i| {
+                                self.network.connected((c.id, i)).then(|| {
+                                    self.port_value(c.id, i).expect("compiled parity port")
+                                })
+                            })
+                            .collect();
+                        parity::evaluate(c, &inputs)
+                    }
                     Kind::Gate(gate) => {
                         let inputs: Vec<_> = (1..=usize::from(c.input_count()))
                             .filter(|i| gate.unary() || self.network.connected((c.id, *i)))
@@ -624,6 +635,7 @@ fn electrically_equal(a: &Circuit, b: &Circuit) -> bool {
             (
                 (c.kind.is_controlled() || c.kind == Kind::PullResistor).then_some(c.bus),
                 c.kind.is_transistor().then_some(c.transistor),
+                matches!(c.kind, Kind::Parity(_)).then_some((c.inputs, c.parity)),
                 matches!(c.kind, Kind::Plexer(_)).then_some(c.plexing),
                 matches!(c.kind, Kind::Arithmetic(_)).then_some(c.arithmetic),
                 c.kind.is_memory().then_some(c.memory.clone()),

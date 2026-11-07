@@ -781,7 +781,10 @@ impl Editor {
                     || c.kind == Kind::PullResistor
                     || c.kind.is_memory()
                     || c.kind.is_sequential()
-                    || matches!(c.kind, Kind::Plexer(_) | Kind::Arithmetic(_))
+                    || matches!(
+                        c.kind,
+                        Kind::Plexer(_) | Kind::Arithmetic(_) | Kind::Parity(_)
+                    )
             }) {
                 for (index, point) in c.ports().iter().enumerate() {
                     if (drawing::pos(*point).to_vec2() - world).length() <= tolerance {
@@ -792,6 +795,8 @@ impl Editor {
                                     crate::plexers::port_label(c, c.plexer_terminals()[index].role)
                                 } else if matches!(c.kind, Kind::Arithmetic(_)) {
                                     crate::arithmetic::port_label(c, index)
+                                } else if matches!(c.kind, Kind::Parity(_)) {
+                                    crate::parity::port_label(c, index)
                                 } else if c.kind.is_transistor() {
                                     tr(crate::transistors::port_label(c, index)).to_owned()
                                 } else if c.kind.is_controlled() || c.kind == Kind::PullResistor {

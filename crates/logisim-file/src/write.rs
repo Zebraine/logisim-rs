@@ -71,7 +71,12 @@ pub fn serialize(document: &Document) -> Result<String> {
         for c in &circuit.components {
             if !valid_point(c.position)
                 || !(1..=32).contains(&c.bits)
-                || !(2..=8).contains(&c.inputs)
+                || !(2..=if matches!(c.kind, Kind::Parity(_)) {
+                    32
+                } else {
+                    8
+                })
+                    .contains(&c.inputs)
                 || c.font_size == 0
                 || c.label.len() > 65_536
             {
@@ -89,7 +94,10 @@ pub fn serialize(document: &Document) -> Result<String> {
                 | Kind::RgbLed
                 | Kind::DotMatrix
                 | Kind::HexDisplay => 6,
-                Kind::Gate(_) | Kind::ControlledBuffer | Kind::ControlledInverter => 1,
+                Kind::Gate(_)
+                | Kind::Parity(_)
+                | Kind::ControlledBuffer
+                | Kind::ControlledInverter => 1,
                 Kind::Text => 2,
                 Kind::Register
                 | Kind::FlipFlop(_)
@@ -167,6 +175,7 @@ pub fn serialize(document: &Document) -> Result<String> {
             ) {
                 attribute(&mut out, "width", c.bits)?;
             }
+            crate::parity::write(&mut out, c)?;
             crate::bus::write(&mut out, c)?;
             crate::transistors::write(&mut out, c)?;
             crate::sequential::write(&mut out, c)?;

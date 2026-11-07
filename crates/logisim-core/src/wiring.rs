@@ -132,6 +132,9 @@ impl Component {
             return self.interface.ports.get(index).map(|p| p.bits);
         }
         match self.kind {
+            Kind::Parity(_) => {
+                (index <= usize::from(self.input_count())).then_some(self.bits.clamp(1, 32))
+            }
             Kind::Button | Kind::DipSwitch | Kind::Led | Kind::SevenSegment => Some(1),
             Kind::HexDisplay => Some(if index == 0 { 4 } else { 1 }),
             Kind::RgbLed => (index < 3).then_some(if self.io.rgb_multibit { 8 } else { 1 }),
@@ -194,6 +197,7 @@ impl Component {
         matches!(
             self.kind,
             Kind::Gate(_)
+                | Kind::Parity(_)
                 | Kind::ControlledBuffer
                 | Kind::ControlledInverter
                 | Kind::Transistor

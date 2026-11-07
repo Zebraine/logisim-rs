@@ -134,6 +134,23 @@ pub(crate) fn bounds(c: &Component) -> Rect {
         return rect;
     }
 
+    if matches!(c.kind, Kind::Parity(_)) {
+        let mut rect = Rect::NOTHING;
+        let w = c.gate_width();
+        let h = c.parity_half_height();
+        for point in [
+            Point::new(-w, -h),
+            Point::new(0, -h),
+            Point::new(-w, h),
+            Point::new(0, h),
+        ]
+        .into_iter()
+        .chain(c.local_ports())
+        {
+            rect.extend_with(local(c, pos(point).to_vec2()).to_pos2());
+        }
+        return rect;
+    }
     if c.kind == Kind::Splitter {
         let mut rect = Rect::from_min_max(pos(c.position), pos(c.position));
         for point in c.ports() {
@@ -386,6 +403,7 @@ pub(crate) fn component(
                 );
             }
         }
+        Kind::Parity(_) => crate::parity::draw(p, canvas, c, color),
         Kind::Gate(gate) => {
             let h = half_height(c);
             match gate {

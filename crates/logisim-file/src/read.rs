@@ -385,6 +385,8 @@ fn component(
         ("#Wiring", "Pull Resistor") => Kind::PullResistor,
         ("#Wiring", "Transistor") => Kind::Transistor,
         ("#Wiring", "Transmission Gate") => Kind::TransmissionGate,
+        ("#Gates", "Odd Parity") => Kind::Parity(logisim_core::Parity::Odd),
+        ("#Gates", "Even Parity") => Kind::Parity(logisim_core::Parity::Even),
         ("#Gates", name) => Kind::Gate(
             Gate::ALL
                 .into_iter()
@@ -397,6 +399,7 @@ fn component(
     let a = attributes(n)?;
     for key in a.keys() {
         let allowed = match kind {
+            Kind::Parity(_) => crate::parity::allowed(key),
             Kind::Transistor | Kind::TransmissionGate => crate::transistors::allowed(kind, key),
             Kind::ControlledBuffer | Kind::ControlledInverter | Kind::PullResistor => {
                 crate::bus::allowed(kind, key)
@@ -524,7 +527,11 @@ fn component(
     if !kind.has_label() {
         return Ok((c, vec![]));
     }
-    c.inputs = number(&a, "inputs", 2, 2..=8)?;
+    if matches!(kind, Kind::Parity(_)) {
+        crate::parity::read(&mut c, &a)?;
+    } else {
+        c.inputs = number(&a, "inputs", 2, 2..=8)?;
+    }
     c.output = boolean(&a, "output", false)?;
     if kind == Kind::Pin && !c.output && boolean(&a, "tristate", true)? {
         return Err(Error(

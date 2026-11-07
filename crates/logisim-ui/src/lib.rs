@@ -7,6 +7,7 @@ mod artwork;
 mod bus;
 mod canvas;
 mod document;
+mod parity;
 mod transistors;
 pub use document::{DocumentView, FileAction};
 mod drawing;
@@ -608,6 +609,9 @@ impl Workspace {
                                         "Gates" => {
                                             for gate in Gate::ALL {
                                                 self.library_tool(ui, Kind::Gate(gate));
+                                            }
+                                            for parity in logisim_core::Parity::ALL {
+                                                self.library_tool(ui, Kind::Parity(parity));
                                             }
                                             self.library_tool(ui, Kind::ControlledBuffer);
                                             self.library_tool(ui, Kind::ControlledInverter);

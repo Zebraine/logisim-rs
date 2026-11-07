@@ -5,6 +5,7 @@ mod arithmetic;
 mod bus;
 mod io;
 mod memory;
+mod parity;
 mod plexers;
 mod read;
 mod sequential;

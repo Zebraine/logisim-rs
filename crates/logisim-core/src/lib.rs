@@ -10,9 +10,11 @@ pub use project::{CircuitDefinition, Interface, InterfacePort, MAX_CIRCUITS, Pro
 
 mod arithmetic;
 mod bus;
+mod parity;
 mod transistors;
 pub use arithmetic::{Arithmetic, ArithmeticOptions, BitSearch, Shift};
 pub use bus::{BusControl, Pull};
+pub use parity::{Parity, ParityOptions, ParityOutput};
 pub use transistors::{TransistorOptions, TransistorType};
 
 mod plexers;
@@ -153,6 +155,7 @@ impl Gate {
 pub enum Kind {
     Subcircuit(Id),
     Gate(Gate),
+    Parity(Parity),
     ControlledBuffer,
     ControlledInverter,
     PullResistor,
@@ -250,6 +253,7 @@ impl Kind {
                 | Self::RgbLed
                 | Self::Pin
                 | Self::Gate(_)
+                | Self::Parity(_)
                 | Self::ControlledBuffer
                 | Self::ControlledInverter
                 | Self::Probe
@@ -267,6 +271,7 @@ impl Kind {
         match self {
             Self::Subcircuit(_) => "Subcircuit",
             Self::Gate(g) => g.name(),
+            Self::Parity(p) => p.name(),
             Self::ControlledBuffer => "Controlled Buffer",
             Self::ControlledInverter => "Controlled Inverter",
             Self::PullResistor => "Pull Resistor",
@@ -334,6 +339,7 @@ pub struct Component {
     pub io: Io,
     pub bus: BusControl,
     pub transistor: TransistorOptions,
+    pub parity: ParityOptions,
 }
 impl Component {
     pub fn new(kind: Kind, position: Point) -> Self {
@@ -395,6 +401,7 @@ impl Component {
             io: Io::for_kind(kind),
             bus: BusControl::default(),
             transistor: TransistorOptions::default(),
+            parity: ParityOptions::default(),
             plexing: Plexing {
                 select_bits: if kind == Kind::Plexer(Plexer::PriorityEncoder) {
                     3
@@ -409,10 +416,14 @@ impl Component {
         match self.kind {
             Kind::Gate(g) if g.unary() => 1,
             Kind::Gate(_) => self.inputs.clamp(2, 8),
+            Kind::Parity(_) => self.inputs.clamp(2, 32),
             _ => 0,
         }
     }
     pub fn local_ports(&self) -> Vec<Point> {
+        if matches!(self.kind, Kind::Parity(_)) {
+            return self.parity_ports();
+        }
         if self.kind.is_transistor() {
             return self.transistor_ports();
         }
@@ -493,7 +504,7 @@ impl Component {
                     20
                 }
             }
-            Kind::Gate(_) => match self.gate_size {
+            Kind::Gate(_) | Kind::Parity(_) => match self.gate_size {
                 GateSize::Narrow => 30,
                 GateSize::Medium => 50,
                 GateSize::Wide => 70,
@@ -689,6 +700,7 @@ impl Circuit {
             && (old.kind.is_memory()
                 || old.kind == Kind::DotMatrix
                 || old.kind.is_transistor()
+                || matches!(old.kind, Kind::Parity(_))
                 || (old.kind.is_controlled()
                     && (old.bus.control_left != replacement.bus.control_left
                         || old.gate_size != replacement.gate_size))
