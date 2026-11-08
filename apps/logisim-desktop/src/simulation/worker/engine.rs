@@ -28,10 +28,14 @@ impl Engine {
                     .context
                     .as_ref()
                     .is_none_or(|old| !old.plugins.same(&context.plugins));
+                let mode_changed = self
+                    .context
+                    .as_ref()
+                    .is_none_or(|old| old.mode != context.mode);
                 self.sim.set_plugins(context.plugins.clone());
                 let electrical_changed = self.sim.synchronize(&context.project, context.root);
-                if electrical_changed || plugins_changed {
-                    self.propagation = Propagation::default();
+                if electrical_changed || plugins_changed || mode_changed {
+                    self.propagation = Propagation::for_mode(context.mode);
                     self.clocks.suspend();
                 }
                 self.context = Some(context);
@@ -53,7 +57,7 @@ impl Engine {
                     return;
                 }
                 if matches!(action, SimulationAction::Reset) {
-                    self.propagation = Propagation::default();
+                    self.propagation = Propagation::for_mode(context.mode);
                 }
                 self.clocks.action(&action);
                 apply_project(&mut self.sim, &context.path, action);

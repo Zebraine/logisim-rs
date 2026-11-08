@@ -106,6 +106,7 @@ fn runtime_fault_stays_visible_without_event_fallback_and_module_replacement_rec
         project: Arc::new(project),
         path: vec![],
         language: Language::English,
+        mode: SimulationMode::default(),
         plugins,
     };
     let mut engine = Engine::default();

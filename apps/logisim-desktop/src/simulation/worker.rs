@@ -7,7 +7,7 @@ mod tests;
 use super::Host;
 use logisim_core::{Id, MemoryContents, Project};
 use logisim_plugin::Registry;
-use logisim_ui::{Language, SimulationAction, SimulationView, Workspace};
+use logisim_ui::{Language, SimulationAction, SimulationMode, SimulationView, Workspace};
 use std::{
     collections::{BTreeSet, VecDeque},
     sync::{Arc, Condvar, Mutex},
@@ -25,6 +25,7 @@ struct Context {
     circuit: Id,
     path: Vec<Id>,
     language: Language,
+    mode: SimulationMode,
     plugins: Registry,
 }
 enum Command {
@@ -110,15 +111,15 @@ impl Worker {
         }
         let previous = self.context.as_ref();
         let same_project = previous.is_some_and(|c| *c.project == *workspace.project());
-        if same_project
+        let same_view = same_project
             && previous.is_some_and(|c| {
                 c.root == workspace.simulation_root()
                     && c.circuit == workspace.active_circuit()
                     && c.path == workspace.simulation_path()
                     && c.language == workspace.language()
                     && c.plugins.same(&self.plugins)
-            })
-        {
+            });
+        if same_view && previous.is_some_and(|c| c.mode == workspace.simulation_mode()) {
             return;
         }
         self.revision += 1;
@@ -133,22 +134,25 @@ impl Worker {
             circuit: workspace.active_circuit(),
             path: workspace.simulation_path().to_vec(),
             language: workspace.language(),
+            mode: workspace.simulation_mode(),
             plugins: self.plugins.clone(),
         };
-        self.ready_memories.clear();
-        // IDs can be reused by a new document/root: never paint previous values
-        // on the newly selected circuit while its first snapshot is in flight.
-        let previous_view = std::mem::take(workspace.simulation_mut());
-        workspace.set_simulation(SimulationView {
-            enabled: previous_view.enabled,
-            automatic_ticks: previous_view.automatic_ticks,
-            tick_hz: if previous_view.tick_hz == 0 {
-                logisim_ui::DEFAULT_TICK_HZ
-            } else {
-                previous_view.tick_hz
-            },
-            ..Default::default()
-        });
+        if !same_view {
+            self.ready_memories.clear();
+            // IDs can be reused by a new document/root: never paint previous values
+            // on the newly selected circuit while its first snapshot is in flight.
+            let previous_view = std::mem::take(workspace.simulation_mut());
+            workspace.set_simulation(SimulationView {
+                enabled: previous_view.enabled,
+                automatic_ticks: previous_view.automatic_ticks,
+                tick_hz: if previous_view.tick_hz == 0 {
+                    logisim_ui::DEFAULT_TICK_HZ
+                } else {
+                    previous_view.tick_hz
+                },
+                ..Default::default()
+            });
+        }
         self.shared.send(Command::Configure(context.clone()));
         self.context = Some(context);
     }

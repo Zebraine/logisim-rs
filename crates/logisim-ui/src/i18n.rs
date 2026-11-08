@@ -198,6 +198,10 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Center", "居中"),
     ("Centered", "居中"),
     (
+        "Changes apply without resetting the circuit and are saved for the next launch. Manual propagation steps always use events.",
+        "切换不会复位电路，并会记住设置。手动传播单步始终使用事件传播。",
+    ),
+    (
         "Changes update every instance. Wires keep their positions; reconnect moved ports in the circuit layout.",
         "修改会更新所有实例。导线保留原位置；端口移动后请在电路布局中重新接线。",
     ),
@@ -420,6 +424,7 @@ const MESSAGES: &[(&str, &str)] = &[
         "错误信号：驱动冲突 / 未定义输入",
     ),
     ("Even Parity", "偶校验门"),
+    ("Event propagation", "事件传播"),
     ("Exactly one", "恰好一个为 1"),
     ("Exit", "退出"),
     (
@@ -887,6 +892,7 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Simplified mode", "简化模式"),
     ("Simulate", "仿真"),
     ("Simulation issues ({})", "仿真问题（{}）"),
+    ("Simulation mode", "仿真模式"),
     (
         "Simulation worker stopped. Restart the application.",
         "仿真工作线程已停止，请重新启动应用。",
@@ -897,6 +903,11 @@ const MESSAGES: &[(&str, &str)] = &[
     ("South", "南"),
     ("Splitter", "分线器"),
     ("Square", "方形"),
+    ("Stable state", "稳定态"),
+    (
+        "Stable state settles combinational logic before sampling state. Unsupported circuits use event propagation.",
+        "稳定态先收敛组合逻辑，再采样状态；不支持的电路使用事件传播。",
+    ),
     ("Start", "起点"),
     ("Start: {}, {}", "起点：{}, {}"),
     ("Stay at value", "保持边界值"),
@@ -1003,6 +1014,7 @@ const MESSAGES: &[(&str, &str)] = &[
         "Unknown or invalid language preference.",
         "语言配置未知或无效。",
     ),
+    ("Unknown or invalid settings.", "未知或无效的设置。"),
     ("Unsigned", "无符号"),
     ("Unsigned decimal", "无符号十进制"),
     (

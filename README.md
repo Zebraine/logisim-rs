@@ -68,11 +68,12 @@ crates/logisim-ui/       egui 编辑器与画布
 读出缓存随相关输入、内容编辑和写入变化更新，内容仍按实例隔离。
 报告包含实际表达式执行量、状态采样量、RAM 读出量与 Wasm 调用量。运行期缓存随电气编辑失效，
 复位或逐批调试后重新写入内部值；插件故障报告实例路径/元件，输出 E，复位后重建 VM。
-桌面后台自动运行优先采用稳定态采样；整个层级预检不支持时使用事件传播。
+桌面后台默认采用稳定态采样；整个层级预检不支持时使用事件传播。
+通过 **File → Settings → Simulation mode**（文件 → 设置 → 仿真模式）选择稳定态或事件传播。
 `ProjectSimulator::prepare_compiled()` 只预检，`step_compiled()` 推进一个可让出线程的批次，
 跨批次保留收敛预算。状态闭包未完成时仍报告待传播，禁止提前进入下一时钟沿。
 运行期插件故障暂停并显示错误，不转入事件传播掩盖故障；复位或修复依赖后可恢复。
-暂停后的手动传播单步及 `step` / `advance` 保留事件语义，运行恢复时重新使用稳定态计划。
+暂停后的手动传播单步及 `step` / `advance` 保留事件语义，运行恢复时按所选模式调度。
 
 ## 运行与检查
 
@@ -133,7 +134,7 @@ Linux 构建另需 `pkg-config` 与 Fontconfig 开发包（Debian/Ubuntu：`libf
 拖动分隔线可调整侧栏宽度和上下比例。滚轮缩放，中键或空格＋左键拖动平移；
 左下可输入缩放比例、开关网格，Home 按钮或 Ctrl+0 复位。画布右键也可复位。
 
-## 语言设置
+## 用户设置
 
 首次启动使用英语。通过 **File → Settings → Language**（文件 → 设置 → 语言）
 选择 English 或简体中文，立即生效，重启后保留。菜单、工具与属性、外观编辑、
@@ -142,9 +143,11 @@ Linux 构建另需 `pkg-config` 与 Fontconfig 开发包（Debian/Ubuntu：`libf
 
 中文使用系统字体，不随程序打包字体资源；推荐安装 Noto Sans CJK SC。
 缺少中文字体时设置窗口会给出英文提示。Windows/macOS 的系统字体支持已启用，尚未实窗验证。
-语言偏好保存在用户配置目录的 `logisim-rs/preferences`：Linux 使用 `$XDG_CONFIG_HOME`
+语言与仿真模式偏好保存在用户配置目录的 `logisim-rs/preferences`：Linux 使用 `$XDG_CONFIG_HOME`
 或 `~/.config`，Windows 使用 `%APPDATA%`，macOS 使用 `~/Library/Application Support`。
 保存失败时当前选择仍生效，可在设置窗口重试，不影响电路保存。
+仿真模式默认稳定态；切换保留寄存器、RAM、插件状态、暂停状态与时钟计数，不修改电路或撤销历史。
+原有只含语言的设置文件继续有效，缺少模式时使用稳定态。
 
 ## 课程插件与旧电路迁移
 

@@ -9,6 +9,12 @@ pub(super) enum Propagation {
     Compiled,
 }
 impl Propagation {
+    pub(super) fn for_mode(mode: logisim_ui::SimulationMode) -> Self {
+        match mode {
+            logisim_ui::SimulationMode::Stable => Self::Unselected,
+            logisim_ui::SimulationMode::Event => Self::Event,
+        }
+    }
     pub(super) fn step(&mut self, sim: &mut ProjectSimulator) -> bool {
         if *self == Self::Unselected {
             *self = if sim.prepare_compiled().is_ok() {

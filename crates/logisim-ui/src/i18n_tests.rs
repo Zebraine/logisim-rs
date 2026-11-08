@@ -2433,3 +2433,50 @@ fn tick_frequency_presets_custom_validation_cancel_and_modal_shortcuts_in_both_l
         assert!(!app.editor.can_undo());
     }
 }
+
+#[test]
+fn simulation_mode_settings_are_localized_and_separate_from_document_and_runtime_state() {
+    for language in Language::ALL {
+        let ctx = Context::default();
+        configure(&ctx);
+        let mut app = Workspace {
+            settings_open: true,
+            ..Default::default()
+        };
+        app.set_language(language);
+        app.simulation_mut().ticks = 17;
+        app.simulation_mut().pending = 2;
+        let document = app.project().clone();
+        let t = |key| i18n::with_language(language, || i18n::tr(key).to_owned());
+        for mode in [
+            SimulationMode::Event,
+            SimulationMode::Stable,
+            SimulationMode::Event,
+        ] {
+            let old = i18n::with_language(language, || app.simulation_mode().name().to_owned());
+            let new = i18n::with_language(language, || mode.name().to_owned());
+            click(&ctx, &mut app, &old);
+            click(&ctx, &mut app, &new);
+            assert_eq!(app.simulation_mode(), mode);
+            assert_eq!(app.project(), &document);
+            assert!(!app.editor.can_undo());
+            assert_eq!(app.simulation_mut().ticks, 17);
+            assert_eq!(app.simulation_mut().pending, 2);
+            assert!(app.take_file_actions().is_empty());
+            assert!(app.take_simulation_actions().is_empty());
+        }
+        let small = Context::default();
+        configure(&small);
+        let size = egui::vec2(720.0, 480.0);
+        let mut labels = vec![];
+        for _ in 0..3 {
+            labels = frame_at_size(&small, &mut app, vec![], size);
+        }
+        for text in [t("Simulation mode"), t("Event propagation")] {
+            let rect = labels.iter().find(|(label, _)| label == &text).unwrap().1;
+            assert!(rect.min.x >= 0.0 && rect.max.x <= size.x && rect.max.y <= size.y);
+        }
+        app.replace_project(document);
+        assert_eq!(app.simulation_mode(), SimulationMode::Event);
+    }
+}

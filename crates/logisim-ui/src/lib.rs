@@ -26,6 +26,7 @@ mod terminal;
 pub use terminal::TtyView;
 mod settings;
 pub use i18n::Language;
+pub use settings::SimulationMode;
 mod libraries;
 mod plugins;
 mod project;
@@ -78,6 +79,7 @@ pub struct Workspace {
     memory_editor: memory::MemoryEditor,
     pla_editor: pla::PlaEditor,
     language: Language,
+    simulation_mode: SimulationMode,
     settings_open: bool,
     settings_error: Option<String>,
     retry_settings: bool,

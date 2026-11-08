@@ -181,6 +181,7 @@ fn configure_coalescing_never_crosses_an_action_barrier() {
         circuit: 1,
         path: vec![],
         language: Language::English,
+        mode: SimulationMode::default(),
         plugins: Registry::default(),
     };
     shared.send(Command::Configure(context(1)));
@@ -270,4 +271,43 @@ fn final_settled_snapshot_arrives_without_automatic_ticks_or_further_input() {
     });
     assert_eq!(workspace.simulation_mut().ticks, 0);
     assert!(!workspace.simulation_mut().automatic_ticks);
+}
+
+#[test]
+fn mode_changes_version_commands_without_clearing_the_current_view_or_memory_target() {
+    let (mut workspace, _, ram) = workspace();
+    let mut worker = Worker::new(|| {});
+    worker.synchronize(&mut workspace, true);
+    wait(&mut worker, &mut workspace, |v| {
+        v.memories.contains_key(&ram)
+    });
+    worker.action(SimulationAction::FillMemory {
+        id: ram,
+        start: 0,
+        end: 1,
+        value: 0x42,
+    });
+    wait(&mut worker, &mut workspace, |v| {
+        v.memories[&ram].get(0) == 0x42
+    });
+    let old = worker.revision;
+    workspace.set_simulation_mode(SimulationMode::Event);
+    worker.synchronize(&mut workspace, true);
+    assert_eq!(worker.revision, old + 1);
+    assert_eq!(worker.context.as_ref().unwrap().mode, SimulationMode::Event);
+    assert_eq!(workspace.simulation_mut().memories[&ram].get(0), 0x42);
+    assert!(worker.ready_memories.contains(&ram));
+    worker
+        .shared
+        .send(Command::Action(old, SimulationAction::ToggleEnabled));
+    worker.action(SimulationAction::FillMemory {
+        id: ram,
+        start: 0,
+        end: 1,
+        value: 0x43,
+    });
+    wait(&mut worker, &mut workspace, |v| {
+        v.memories[&ram].get(0) == 0x43
+    });
+    assert!(workspace.simulation_mut().enabled);
 }
