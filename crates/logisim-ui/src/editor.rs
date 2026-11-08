@@ -96,6 +96,7 @@ pub(crate) struct Editor {
     gesture: Option<Gesture>,
     wire_start: Option<Point>,
     property_before: Option<Snapshot>,
+    drawing_cache: drawing::CircuitCache,
 }
 impl Default for Editor {
     fn default() -> Self {
@@ -123,6 +124,7 @@ impl Default for Editor {
             gesture: None,
             wire_start: None,
             property_before: None,
+            drawing_cache: drawing::CircuitCache::default(),
         }
     }
 }
@@ -1002,6 +1004,7 @@ impl Editor {
             &self.circuit,
             &self.selection,
             &self.simulation.view,
+            &mut self.drawing_cache,
         );
         if let Some(Gesture::Box { start, current, .. }) = &self.gesture {
             let rect = Rect::from_two_pos(

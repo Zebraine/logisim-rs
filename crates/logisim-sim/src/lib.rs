@@ -43,6 +43,15 @@ mod ttl;
 mod value;
 
 pub use logisim_core::{Bit, Value};
+
+/// A borrowed, instance-local resolved net. Membership is valid only for this read.
+/// On width mismatch, ports must use `Simulator::port_value` for their declared width.
+pub struct SignalNet<'a> {
+    pub value: Value,
+    pub width_mismatch: bool,
+    pub wires: &'a [logisim_core::Id],
+    pub ports: &'a [(logisim_core::Id, usize)],
+}
 use logisim_core::{Circuit, Id, Point};
 use network::Network;
 use std::collections::BTreeMap;

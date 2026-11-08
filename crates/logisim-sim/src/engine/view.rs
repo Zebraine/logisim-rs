@@ -3,6 +3,20 @@ use crate::{Bit, Diagnostic, Problem, Simulator, Value};
 use logisim_core::Id;
 
 impl Simulator {
+    /// Visit each resolved net once without exposing persistent network indices.
+    pub fn signal_nets(&self) -> impl Iterator<Item = crate::SignalNet<'_>> {
+        self.network
+            .nets
+            .iter()
+            .zip(&self.values)
+            .map(|(net, &value)| crate::SignalNet {
+                value,
+                width_mismatch: net.mismatch,
+                wires: &net.wires,
+                ports: &net.ports,
+            })
+    }
+
     pub fn memory_contents(&self, id: Id) -> Option<&logisim_core::MemoryContents> {
         self.memories.get(&id).map(|s| &s.contents)
     }

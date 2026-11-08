@@ -180,3 +180,109 @@ fn host_commands_and_presentation_keep_input_and_net_values_distinct_while_pause
     assert_eq!(sim.input(id).unwrap().number(), Some(0));
     assert_eq!(circuit.component(id).unwrap().position, Point::ZERO);
 }
+
+#[test]
+fn net_presentation_shares_data_but_preserves_probe_radix_and_mismatched_port_widths() {
+    use std::sync::Arc;
+    let mut p = Project::default();
+    let c = &mut p.main_circuit_mut().circuit;
+    let mut pin = Component::new(Kind::Pin, Point::ZERO);
+    pin.bits = 8;
+    let input = c.add_component(pin);
+    let wire = c.add_wire(Point::ZERO, Point::new(100, 0)).unwrap();
+    let mut tunnel = Component::new(Kind::Tunnel, Point::new(100, 0));
+    tunnel.bits = 8;
+    tunnel.label = "bus".into();
+    let a = c.add_component(tunnel.clone());
+    tunnel.position = Point::new(300, 0);
+    let b = c.add_component(tunnel);
+    let mut probe = Component::new(Kind::Probe, Point::new(300, 0));
+    probe.radix = Radix::Unsigned;
+    let probe = c.add_component(probe);
+    let mut sim = ProjectSimulator::default();
+    sim.synchronize(&p, p.main);
+    sim.set_input(input, 171);
+    sim.advance(64);
+    let first = present_project(&p.main_circuit().circuit, &sim, &[]);
+    let signal = &first.wires[&wire];
+    assert_eq!(signal.text, "AB");
+    assert!(Arc::ptr_eq(signal, &first.ports[&(a, 0)]));
+    assert!(Arc::ptr_eq(signal, &first.ports[&(b, 0)]));
+    assert!(Arc::ptr_eq(signal, &first.ports[&(input, 0)]));
+    assert_eq!(first.ports[&(probe, 0)].text, "171");
+    assert_eq!(first.ports[&(probe, 0)].binary, "10101011");
+    sim.set_input(input, 52);
+    sim.advance(64);
+    let second = present_project(&p.main_circuit().circuit, &sim, &[]);
+    assert_eq!(first.wires[&wire].text, "AB", "snapshots remain immutable");
+    assert_eq!(second.wires[&wire].text, "34");
+    p.main_circuit_mut()
+        .circuit
+        .components
+        .iter_mut()
+        .find(|c| c.id == b)
+        .unwrap()
+        .bits = 4;
+    sim.synchronize(&p, p.main);
+    sim.advance(64);
+    let mismatch = present_project(&p.main_circuit().circuit, &sim, &[]);
+    assert_eq!(mismatch.ports[&(b, 0)].binary, "XXXX");
+    assert_eq!(mismatch.ports[&(a, 0)].binary, "XXXXXXXX");
+    assert_eq!(mismatch.wires[&wire].tone, SignalTone::WidthMismatch);
+    assert_eq!(mismatch.ports[&(b, 0)].tone, SignalTone::WidthMismatch);
+    assert!(Arc::ptr_eq(
+        &mismatch.ports[&(a, 0)],
+        &mismatch.ports[&(input, 0)]
+    ));
+    p.main_circuit_mut()
+        .circuit
+        .components
+        .iter_mut()
+        .find(|c| c.id == b)
+        .unwrap()
+        .label = "other".into();
+    sim.synchronize(&p, p.main);
+    sim.advance(64);
+    let detached = present_project(&p.main_circuit().circuit, &sim, &[]);
+    assert_eq!(detached.ports[&(a, 0)].text, "34");
+    assert_eq!(detached.ports[&(b, 0)].tone, SignalTone::Unknown);
+    assert!(!Arc::ptr_eq(
+        &detached.ports[&(a, 0)],
+        &detached.ports[&(b, 0)]
+    ));
+}
+
+#[test]
+fn shared_net_presentation_is_scoped_to_each_hierarchical_instance() {
+    let mut p = Project::default();
+    let cell = p.add("Cell".into()).unwrap();
+    let c = &mut p.circuit_mut(cell).unwrap().circuit;
+    let source = c.add_component(Component::new(Kind::Button, Point::ZERO));
+    let mut tunnel = Component::new(Kind::Tunnel, Point::ZERO);
+    tunnel.label = "local".into();
+    let a = c.add_component(tunnel.clone());
+    tunnel.position = Point::new(100, 0);
+    let b = c.add_component(tunnel);
+    let instance = p.instance(cell, Point::new(100, 100)).unwrap();
+    let one = p.main_circuit_mut().circuit.add_component(instance.clone());
+    let two = p.main_circuit_mut().circuit.add_component(instance);
+    let mut sim = ProjectSimulator::default();
+    sim.synchronize(&p, p.main);
+    sim.set_button(&[one], source, true);
+    sim.advance(64);
+    let c = &p.circuit(cell).unwrap().circuit;
+    let first = present_project(c, &sim, &[one]);
+    let second = present_project(c, &sim, &[two]);
+    assert_eq!(first.ports[&(a, 0)].text, "1");
+    assert_eq!(second.ports[&(a, 0)].text, "0");
+    for view in [&first, &second] {
+        assert!(std::sync::Arc::ptr_eq(
+            &view.ports[&(a, 0)],
+            &view.ports[&(b, 0)]
+        ));
+    }
+    assert!(!std::sync::Arc::ptr_eq(
+        &first.ports[&(a, 0)],
+        &second.ports[&(a, 0)]
+    ));
+}

@@ -26,6 +26,9 @@ impl Language {
     }
 }
 thread_local! { static LANGUAGE: Cell<Language> = const { Cell::new(Language::English) }; }
+pub(crate) fn current_language() -> Language {
+    LANGUAGE.get()
+}
 /// A rendering scope, restored even on unwind. Separate windows/threads cannot leak languages.
 /// Hosts should also scope their own file dialogs and simulation presentation.
 pub fn with_language<R>(language: Language, render: impl FnOnce() -> R) -> R {
