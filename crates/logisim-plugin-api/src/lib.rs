@@ -45,6 +45,7 @@
 //! alone does not require changing the saved component version or Tool snapshot.
 //! ABI 3 adds [`StateTransition`] results for stable sampling. ABI 2 modules only
 //! receive the original StableSample request and use conservative cache invalidation.
+pub mod frame;
 mod stable;
 mod validate;
 use serde::{Deserialize, Serialize};

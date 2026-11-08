@@ -92,6 +92,15 @@ ABI v3 的 `StableTransition` 同时声明输出/图形是否可能变化、相�
 `settle_compiled` 已使用此接口，按声明输入与显式状态变化缓存调用；模块、属性、动作、
 复位与事件步进会使相关缓存失效。桌面自动时钟与后台传播使用同一调度策略，显示仍通过独立快照更新。
 
+ABI v3 另支持可选的线性内存传输 v1，用于稳定态输出与状态采样。SDK 使用
+`export_plugin!(handle, stable = handle_stable_frame)` 导出协商入口；处理函数接收
+`&StableConfig`、`frame::Operation`、`&[Signal]`、`&[u8]`，返回 `Result<frame::Output, String>`。
+属性只在 VM 初始化时传递，热路径采用 `zerocopy` 校验的固定小端结构、偏移和长度；
+宿主直接写入输入区，插件借用状态，宿主直接读取返回区。仍保留必要的信号/状态和显示快照复制，
+不共享宿主指针或 Rust 容器布局。布局与边界规则见 `logisim_plugin_api::frame` 的 Rust 文档。
+没有该扩展或版本不支持时继续用 JSON；识别到的扩展若格式、范围或执行错误则报告故障，不能静默回退。
+Describe、能力查询、复位、动作与事件传播仍使用 JSON，新旧插件及旧宿主可继续互通。
+
 通过 **Project → Load Wasm Plugin… / 项目 → 加载 Wasm 插件…** 选择 `.wasm`，
 从左侧插件分组放置元件。选中元件可编辑插件声明的属性、查看信号并执行插件动作。
 当前 ABI 支持矩形、椭圆、线段和文字，固定端口/位宽与朝向；属性支持布尔、整数和枚举。

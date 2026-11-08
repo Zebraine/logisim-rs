@@ -4,12 +4,13 @@ mod graphics;
 pub mod migrate;
 mod register_state;
 mod stable;
+pub use stable::frame as handle_stable_frame;
 #[cfg(test)]
 mod tests;
 use logisim_core::Value;
 use logisim_course::RegisterFile;
 use logisim_plugin_api::*;
-logisim_plugin_sdk::export_plugin!(handle);
+logisim_plugin_sdk::export_plugin!(handle, stable = handle_stable_frame);
 
 pub fn handle(request: Request) -> Response {
     match request {

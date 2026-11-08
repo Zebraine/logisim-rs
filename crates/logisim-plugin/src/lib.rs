@@ -1,4 +1,5 @@
 //! Sandboxed module loading. No filesystem access or implicit plugin discovery.
+mod frame;
 mod stable;
 #[cfg(test)]
 mod tests;
@@ -63,6 +64,7 @@ impl Plugin {
     }
 }
 pub struct Instance {
+    frame: Option<frame::FrameApi>,
     abi: u32,
     store: Store<StoreLimits>,
     memory: Memory,
@@ -92,7 +94,9 @@ impl Instance {
         if !supports_abi(abi) {
             return Err("Unsupported plugin ABI version.".into());
         }
+        let frame = frame::FrameApi::load(&instance, &mut store, abi)?;
         Ok(Self {
+            frame,
             abi,
             memory: instance
                 .get_memory(&store, "memory")
