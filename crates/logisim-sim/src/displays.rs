@@ -40,17 +40,18 @@ impl Simulator {
             state.until.fill(0);
         }
     }
-    pub(crate) fn update_displays(&mut self) {
+    pub(crate) fn update_displays(&mut self, changed: Option<&crate::work::WorkSet>) {
         let samples: Vec<_> = self
-            .circuit
-            .components
+            .plan
+            .matrices
             .iter()
-            .filter(|c| c.kind == Kind::DotMatrix)
-            .map(|c| {
+            .filter(|entry| entry.affected(changed))
+            .map(|entry| {
+                let c = &self.circuit.components[entry.component];
                 (
                     c.id,
                     c.io.matrix_persistence,
-                    matrix(c, &self.display_ports(c)),
+                    matrix(c, &entry.sample(&self.values)),
                 )
             })
             .collect();

@@ -3,7 +3,7 @@
 mod tests;
 mod wires;
 
-use crate::{Appearance, CircuitLabel, Component, Id, Kind, Point, Wire};
+use crate::{Appearance, CircuitLabel, Component, Id, Kind, Point, Wire, WireIndex};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -182,6 +182,7 @@ impl Circuit {
         }
     }
     pub fn junctions(&self) -> Vec<Point> {
+        let index = WireIndex::new(&self.wires);
         let ports: BTreeSet<_> = self.components.iter().flat_map(Component::ports).collect();
         let points: BTreeSet<_> = self
             .wires
@@ -192,12 +193,10 @@ impl Circuit {
         points
             .into_iter()
             .filter(|p| {
-                let branches: usize = self
-                    .wires
-                    .iter()
-                    .filter(|w| w.contains(*p))
-                    .map(|w| if w.a == *p || w.b == *p { 1 } else { 2 })
-                    .sum();
+                let mut branches = 0;
+                index.visit(*p, |_, w| {
+                    branches += if w.a == *p || w.b == *p { 1 } else { 2 };
+                });
                 branches + usize::from(ports.contains(p)) >= 3
             })
             .collect()

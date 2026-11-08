@@ -1,5 +1,11 @@
-use logisim_core::{Circuit, Id, Kind};
+use logisim_core::{Circuit, Id, Kind, WireIndex};
 use std::collections::{BTreeMap, BTreeSet};
+mod dependencies;
+mod resolution;
+pub(crate) use resolution::Resolution;
+
+#[cfg(test)]
+mod topology_tests;
 
 pub(crate) type Port = (Id, usize);
 
@@ -8,8 +14,12 @@ pub(crate) struct Network {
     pub nets: Vec<Net>,
     pub ports: BTreeMap<Port, usize>,
     pub wires: BTreeMap<Id, usize>,
-    bit_drivers: Vec<Vec<(Port, u8)>>,
+    drivers: Vec<Port>,
+    bit_drivers: Vec<Vec<(usize, u8)>>,
     bit_pulls: Vec<crate::Bit>,
+    driver_indices: BTreeMap<Port, usize>,
+    driver_bits: Vec<Vec<usize>>,
+    bit_nets: Vec<Vec<usize>>,
 }
 #[derive(Default)]
 pub(crate) struct Net {
@@ -17,7 +27,7 @@ pub(crate) struct Net {
     pub wires: Vec<Id>,
     pub width: u8,
     pub mismatch: bool,
-    pub drivers: Vec<Port>,
+    drivers: Vec<usize>,
     bits: Vec<usize>,
     pulls: Vec<crate::Bit>,
 }
@@ -35,25 +45,26 @@ impl Network {
             .collect();
         let offset = circuit.wires.len();
         let mut groups = Groups((0..offset + ports.len()).collect());
-        for (a, wire) in circuit.wires.iter().enumerate() {
-            for (b, other) in circuit.wires[..a].iter().enumerate() {
-                if wire.touches(*other) {
-                    groups.join(a, b);
-                }
+        let index = WireIndex::new(&circuit.wires);
+        let mut positions = BTreeMap::new();
+        // Query each connection coordinate once. Repeated endpoints and co-located
+        // ports reuse its representative, without materializing pairwise wire edges.
+        let mut attach = |point, node, groups: &mut Groups| {
+            if let Some(previous) = positions.insert(point, node) {
+                groups.join(node, previous);
+            } else {
+                index.visit(point, |wire, _| groups.join(node, wire));
+            }
+        };
+        for (i, wire) in circuit.wires.iter().enumerate() {
+            for point in [wire.a, wire.b] {
+                attach(point, i, &mut groups);
             }
         }
-        let mut positions = BTreeMap::new();
         let mut tunnels = BTreeMap::new();
         for (i, (c, _, point)) in ports.iter().enumerate() {
             let node = offset + i;
-            for (j, wire) in circuit.wires.iter().enumerate() {
-                if wire.contains(*point) {
-                    groups.join(node, j);
-                }
-            }
-            if let Some(previous) = positions.insert(*point, node) {
-                groups.join(node, previous);
-            }
+            attach(*point, node, &mut groups);
             if c.kind == Kind::Tunnel
                 && !c.label.is_empty()
                 && let Some(previous) = tunnels.insert(&c.label, node)
@@ -88,7 +99,8 @@ impl Network {
                         .push(crate::bus::pull_bit(c.bus.pull));
                 }
                 if c.drives_port(index) {
-                    network.nets[net].drivers.push((c.id, index));
+                    network.nets[net].drivers.push(network.drivers.len());
+                    network.drivers.push((c.id, index));
                 }
             }
         }
@@ -97,6 +109,7 @@ impl Network {
             net.mismatch = widths.len() > 1;
         }
         network.connect_bits(circuit);
+        network.index_dependencies();
         network
     }
     fn connect_bits(&mut self, circuit: &Circuit) {
@@ -144,8 +157,13 @@ impl Network {
             }
         }
     }
+    // Full-resolution oracle retained for differential tests.
+    #[cfg(test)]
     pub fn resolve(&self, drives: &BTreeMap<Port, crate::Value>) -> Vec<crate::Value> {
         use crate::{Bit, Value};
+        // Resolve each bus driver once. Splitter aliases and individual bits share
+        // its compiled index, avoiding a map lookup for every driven bit.
+        let values: Vec<_> = self.drivers.iter().map(|id| drives.get(id)).collect();
         let bits: Vec<_> = self
             .bit_drivers
             .iter()
@@ -153,7 +171,7 @@ impl Network {
             .map(|(drivers, pull)| {
                 let driven = drivers
                     .iter()
-                    .filter_map(|(id, bit)| drives.get(id).map(|v| v.bit(*bit)))
+                    .filter_map(|(index, bit)| values[*index].map(|v| v.bit(*bit)))
                     .fold(Bit::Unknown, merge);
                 if driven == Bit::Unknown {
                     *pull
@@ -196,11 +214,61 @@ impl Groups {
     }
 }
 
-fn merge(a: crate::Bit, b: crate::Bit) -> crate::Bit {
+pub(crate) fn merge(a: crate::Bit, b: crate::Bit) -> crate::Bit {
     use crate::Bit;
     match (a, b) {
         (Bit::Unknown, b) | (b, Bit::Unknown) => b,
         (a, b) if a == b => a,
         _ => Bit::Error,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Bit, Value};
+    use logisim_core::{Component, Point, Pull};
+
+    #[test]
+    fn bus_drivers_resolve_each_bit_and_release_without_stale_values() {
+        use Bit::{Error as E, One as H, Unknown as X, Zero as L};
+        let states = [L, H, X, E];
+        // Two strong drivers with a weak pull-up, including conflicts and release.
+        let expected = [[L, E, L, E], [E, H, H, E], [L, H, H, E], [E, E, E, E]];
+        for width in [1, 8, 32] {
+            let mut circuit = Circuit::default();
+            let mut pin = Component::new(Kind::Pin, Point::ZERO);
+            pin.bits = width;
+            let a = (circuit.add_component(pin.clone()), 0);
+            let b = (circuit.add_component(pin), 0);
+            let mut pull = Component::new(Kind::PullResistor, Point::ZERO);
+            pull.bus.pull = Pull::One;
+            circuit.add_component(pull);
+            let network = Network::compile(&circuit);
+            let net = network.ports[&a];
+            let mut drives = BTreeMap::new();
+            for i in 0..4 {
+                for j in 0..4 {
+                    // Mixed states within a bus detect incorrect reuse of a bit.
+                    let left =
+                        Value::from_bits((0..width).map(|bit| states[(i + usize::from(bit)) % 4]));
+                    let right =
+                        Value::from_bits((0..width).map(|bit| states[(j + usize::from(bit)) % 4]));
+                    drives.insert(a, left);
+                    drives.insert(b, right);
+                    let want = Value::from_bits((0..width).map(|bit| {
+                        expected[(i + usize::from(bit)) % 4][(j + usize::from(bit)) % 4]
+                    }));
+                    assert_eq!(network.resolve(&drives)[net], want);
+                    drives.remove(&a);
+                    let want = Value::from_bits(
+                        (0..width).map(|bit| expected[2][(j + usize::from(bit)) % 4]),
+                    );
+                    assert_eq!(network.resolve(&drives)[net], want);
+                    drives.clear();
+                    assert_eq!(network.resolve(&drives)[net], Value::filled(width, H));
+                }
+            }
+        }
     }
 }

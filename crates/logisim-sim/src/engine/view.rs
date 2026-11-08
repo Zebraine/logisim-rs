@@ -3,6 +3,20 @@ use crate::{Bit, Diagnostic, Problem, Simulator, Value};
 use logisim_core::Id;
 
 impl Simulator {
+    /// Visit each resolved net once without exposing persistent network indices.
+    pub fn signal_nets(&self) -> impl Iterator<Item = crate::SignalNet<'_>> {
+        self.network
+            .nets
+            .iter()
+            .zip(&self.values)
+            .map(|(net, &value)| crate::SignalNet {
+                value,
+                width_mismatch: net.mismatch,
+                wires: &net.wires,
+                ports: &net.ports,
+            })
+    }
+
     pub fn memory_contents(&self, id: Id) -> Option<&logisim_core::MemoryContents> {
         self.memories.get(&id).map(|s| &s.contents)
     }
@@ -31,14 +45,22 @@ impl Simulator {
             .get(&(id, index))
             .is_some_and(|i| self.network.nets[*i].mismatch)
     }
+    /// Last committed component drive, before merging other drivers or weak pulls.
+    /// Pending drives are not exposed; undriven/non-output ports return None.
+    /// Use this snapshot for expression boundary inputs, not `port_value`.
+    pub fn drive_value(&self, id: Id, index: usize) -> Option<Value> {
+        self.drives.get(&(id, index)).copied()
+    }
     pub fn port_value(&self, id: Id, index: usize) -> Option<Value> {
         let net = *self.network.ports.get(&(id, index))?;
-        let width = self
-            .circuit
-            .component(id)?
-            .port_width(index)
-            .unwrap_or(self.network.nets[net].width);
         Some(if self.network.nets[net].mismatch {
+            // Only mismatched nets need the individual port's declared width.
+            // Normal reads use the resolved bus directly, without scanning the circuit.
+            let width = self
+                .circuit
+                .component(id)?
+                .port_width(index)
+                .unwrap_or(self.network.nets[net].width);
             Value::filled(width, Bit::Unknown)
         } else {
             self.values[net]

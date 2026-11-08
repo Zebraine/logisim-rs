@@ -26,7 +26,7 @@ impl Simulator {
             .component(id)
             .is_some_and(|c| matches!(c.kind, Kind::Switch | Kind::DipSwitch))
         {
-            self.schedule_controls();
+            self.schedule_controls(None);
         } else {
             self.schedule(id, value);
         }
@@ -59,18 +59,20 @@ impl Simulator {
             return;
         };
         state.contents.fill(start, end, value & mask);
+        self.invalidate_stable_values();
         self.limited = false;
         self.progress.restart();
-        self.schedule_components(false);
+        self.schedule_components(false, None);
     }
     pub fn clear_memory(&mut self, id: Id) {
         let Some(state) = self.memories.get_mut(&id) else {
             return;
         };
         state.contents.clear();
+        self.invalidate_stable_values();
         self.limited = false;
         self.progress.restart();
-        self.schedule_components(false);
+        self.schedule_components(false, None);
     }
     /// Replace a RAM image atomically, then schedule one propagation pass.
     pub fn replace_memory(&mut self, id: Id, mut contents: logisim_core::MemoryContents) -> bool {
@@ -82,16 +84,15 @@ impl Simulator {
         };
         contents.resize(c.memory.address_bits, c.bits);
         state.contents = contents;
+        self.invalidate_stable_values();
         self.limited = false;
         self.progress.restart();
-        self.schedule_components(false);
+        self.schedule_components(false, None);
         true
     }
     /// Tick controls are useful for clock sources and for display persistence.
     pub fn has_clocks(&self) -> bool {
-        self.circuit.components.iter().any(|c| {
-            c.kind == Kind::Clock || (c.kind == Kind::DotMatrix && c.io.matrix_persistence > 0)
-        })
+        self.plan.has_clocks
     }
     /// Queue a tick only on a settled network, so separate edges cannot collapse into one batch.
     pub fn tick(&mut self) -> bool {
@@ -103,19 +104,16 @@ impl Simulator {
     }
     pub(crate) fn tick_clocks(&mut self) {
         self.display_ticks = self.display_ticks.saturating_add(1);
-        self.update_displays();
-        let clocks: Vec<_> = self
-            .circuit
-            .components
-            .iter()
-            .filter(|c| c.kind == Kind::Clock)
-            .cloned()
-            .collect();
-        for c in clocks {
+        self.update_displays(None);
+        let mut outputs = Vec::with_capacity(self.plan.clocks.len());
+        for index in &self.plan.clocks {
+            let c = &self.circuit.components[*index];
             let state = self.storage.get_mut(&c.id).unwrap();
-            state.tick(&c);
-            let value = state.value;
-            self.drive_port((c.id, 0), value);
+            state.tick(c);
+            outputs.push((c.id, state.value));
+        }
+        for (id, value) in outputs {
+            self.drive_port((id, 0), value);
         }
     }
     pub fn poke_clock(&mut self, id: Id) {
@@ -140,7 +138,7 @@ impl Simulator {
         {
             self.storage.get_mut(&id).unwrap().toggle();
             // Apply asserted asynchronous controls and output scheduling through the same path.
-            self.schedule_storage();
+            self.schedule_storage(None);
             self.limited = false;
             self.progress.restart();
         }

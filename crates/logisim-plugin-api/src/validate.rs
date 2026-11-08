@@ -64,12 +64,11 @@ impl Property {
 }
 impl Tool {
     pub fn validate_evaluation(&self, request: &Evaluation) -> Result {
-        self.validate_properties(&request.properties)?;
-        require(
-            request.tool == self.id
-                && request.inputs.len() == self.ports.len()
-                && request.state.len() <= MAX_STATE,
-            "Invalid plugin evaluation request.",
+        self.validate_request(
+            &request.tool,
+            &request.properties,
+            &request.inputs,
+            &request.state,
         )?;
         if let Event::Action { id, argument } = &request.event {
             require(
@@ -81,7 +80,21 @@ impl Tool {
                 "Invalid plugin action.",
             )?;
         }
-        for (v, p) in request.inputs.iter().zip(&self.ports) {
+        Ok(())
+    }
+    pub(crate) fn validate_request(
+        &self,
+        tool: &str,
+        properties: &Properties,
+        inputs: &[Signal],
+        state: &[u8],
+    ) -> Result {
+        self.validate_properties(properties)?;
+        require(
+            tool == self.id && inputs.len() == self.ports.len() && state.len() <= MAX_STATE,
+            "Invalid plugin evaluation request.",
+        )?;
+        for (v, p) in inputs.iter().zip(&self.ports) {
             v.validate()?;
             require(v.width == p.width, "Invalid plugin input width.")?;
         }
@@ -154,17 +167,24 @@ impl Tool {
     }
     pub fn validate_update(&self, update: &Update) -> Result {
         require(
-            update.state.len() <= MAX_STATE && update.outputs.len() == self.ports.len(),
+            update.state.len() <= MAX_STATE,
             "Invalid plugin output/state size.",
         )?;
-        for (port, value) in self.ports.iter().zip(&update.outputs) {
+        self.validate_outputs(&update.outputs, &update.graphics)
+    }
+    pub(crate) fn validate_outputs(&self, outputs: &[Signal], graphics: &[Shape]) -> Result {
+        require(
+            outputs.len() == self.ports.len(),
+            "Invalid plugin output/state size.",
+        )?;
+        for (port, value) in self.ports.iter().zip(outputs) {
             value.validate()?;
             require(
                 port.width == value.width,
                 "Plugin output width does not match its port.",
             )?;
         }
-        validate_graphics(&update.graphics)
+        validate_graphics(graphics)
     }
 }
 impl Component {
@@ -179,7 +199,7 @@ impl Component {
 }
 impl Manifest {
     pub fn validate(&self) -> Result {
-        require(self.abi == ABI_VERSION, "Unsupported plugin ABI version.")?;
+        require(supports_abi(self.abi), "Unsupported plugin ABI version.")?;
         require(
             id(&self.id)
                 && id(&self.version)

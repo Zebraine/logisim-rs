@@ -9,18 +9,20 @@ pub(crate) fn control_bits(c: &Component) -> Option<u8> {
     }
 }
 impl Simulator {
-    pub(crate) fn schedule_controls(&mut self) {
+    pub(crate) fn schedule_controls(&mut self, changed: Option<&crate::work::WorkSet>) {
         let outputs: Vec<_> = self
-            .circuit
-            .components
+            .plan
+            .controls
             .iter()
-            .flat_map(|c| {
+            .filter(|entry| entry.affected(changed))
+            .flat_map(|entry| {
+                let c = &self.circuit.components[entry.component];
                 let state = self.inputs.get(&c.id).and_then(|v| v.number()).unwrap_or(0);
                 match c.kind {
                     Kind::Switch => vec![(
                         (c.id, 0),
                         if state != 0 {
-                            self.port_value(c.id, 1).expect("compiled switch input")
+                            entry.port(1, &self.values)
                         } else {
                             Value::filled(c.bits, Bit::Unknown)
                         },
@@ -77,13 +79,13 @@ impl Simulator {
     /// Segment order: middle, upper-left, top, upper-right, lower-left, bottom, lower-right, dot.
     pub fn indicator(&self, id: Id) -> Option<[bool; 8]> {
         let c = self.circuit.component(id)?;
+        if !matches!(c.kind, Kind::Led | Kind::SevenSegment | Kind::HexDisplay) {
+            return None;
+        }
         let ports = (0..c.ports().len())
             .map(|i| self.port_value(id, i))
             .collect::<Option<Vec<_>>>()?;
-        match c.kind {
-            Kind::Led | Kind::SevenSegment | Kind::HexDisplay => Some(evaluate(c, &ports)),
-            _ => None,
-        }
+        Some(evaluate(c, &ports))
     }
 }
 fn evaluate(c: &Component, ports: &[crate::Value]) -> [bool; 8] {

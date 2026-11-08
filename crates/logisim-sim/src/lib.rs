@@ -1,8 +1,12 @@
 //! Bounded signal propagation and sequential state, independent of the GUI.
+pub mod combinational;
 mod engine;
+mod execution;
 mod gates;
 mod hierarchy;
 mod progress;
+pub mod stable;
+mod work;
 pub use hierarchy::ProjectSimulator;
 mod arithmetic;
 #[cfg(test)]
@@ -42,6 +46,15 @@ mod ttl;
 mod value;
 
 pub use logisim_core::{Bit, Value};
+
+/// A borrowed, instance-local resolved net. Membership is valid only for this read.
+/// On width mismatch, ports must use `Simulator::port_value` for their declared width.
+pub struct SignalNet<'a> {
+    pub value: Value,
+    pub width_mismatch: bool,
+    pub wires: &'a [logisim_core::Id],
+    pub ports: &'a [(logisim_core::Id, usize)],
+}
 use logisim_core::{Circuit, Id, Point};
 use network::Network;
 use std::collections::BTreeMap;
@@ -66,6 +79,11 @@ pub struct Simulator {
     plugin_states: BTreeMap<Id, plugins::State>,
     circuit: Circuit,
     network: Network,
+    resolution: network::Resolution,
+    changed_nets: work::WorkSet,
+    initial_batch: bool,
+    plan: execution::Plan,
+    stable_plan: Option<Result<stable::Plan, stable::Failure>>,
     inputs: BTreeMap<Id, Value>,
     joysticks: BTreeMap<Id, Point>,
     terminals: BTreeMap<Id, terminal::State>,
@@ -87,6 +105,11 @@ impl Default for Simulator {
             plugin_states: BTreeMap::new(),
             circuit: Circuit::default(),
             network: Network::default(),
+            resolution: network::Resolution::default(),
+            changed_nets: work::WorkSet::default(),
+            initial_batch: false,
+            plan: execution::Plan::default(),
+            stable_plan: None,
             inputs: BTreeMap::new(),
             joysticks: BTreeMap::new(),
             terminals: BTreeMap::new(),

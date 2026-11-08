@@ -1,6 +1,6 @@
-//! Version 1 plugin wire contract. All messages are UTF-8 JSON, enum tags snake_case.
+//! Versioned plugin wire contract. All messages are UTF-8 JSON, enum tags snake_case.
 //!
-//! A Wasm32 module exports `memory`, `logisim_abi: () -> i32` (returns 1),
+//! A Wasm32 module exports `memory`, `logisim_abi: () -> i32` (returns its ABI version),
 //! `logisim_buffer: (i32) -> i32`, and `logisim_call: (i32) -> i64`.
 //! The host allocates an initialized request buffer, writes exactly the requested bytes,
 //! then calls with that length. The returned integer packs response length in the high
@@ -38,11 +38,25 @@
 //! at most 10,000 table entries, 10,000,000 Wasm fuel units per call (including buffer
 //! allocation), 256 KiB UTF-8 messages, and 64 KiB opaque state. Metadata constraints
 //! are enforced by `Manifest::validate` and `Tool::validate_evaluation/validate_update`.
+//!
+//! ABI 2 adds opt-in stable-state requests; ABI 1 retains only Describe/Evaluate.
+//! See [`StableContract`]. The manifest ABI must equal the exported ABI. Existing
+//! component schemas and event behavior are unchanged; an additive execution capability
+//! alone does not require changing the saved component version or Tool snapshot.
+//! ABI 3 adds [`StateTransition`] results for stable sampling. ABI 2 modules only
+//! receive the original StableSample request and use conservative cache invalidation.
+mod stable;
 mod validate;
 use serde::{Deserialize, Serialize};
+pub use stable::*;
 use std::collections::BTreeMap;
 
-pub const ABI_VERSION: u32 = 1;
+pub const ABI_VERSION: u32 = 3;
+pub const STABLE_ABI_VERSION: u32 = 2;
+pub const LEGACY_ABI_VERSION: u32 = 1;
+pub fn supports_abi(abi: u32) -> bool {
+    matches!(abi, LEGACY_ABI_VERSION | STABLE_ABI_VERSION | ABI_VERSION)
+}
 pub const MAX_MESSAGE: usize = 256 * 1024;
 pub const MAX_STATE: usize = 64 * 1024;
 pub type Properties = BTreeMap<String, String>;
@@ -175,6 +189,10 @@ pub struct Update {
 pub enum Request {
     Describe,
     Evaluate(Evaluation),
+    StableContract(StableConfig),
+    StableOutputs(StableEvaluation),
+    StableSample(StableEvaluation),
+    StableTransition(StableEvaluation),
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(
@@ -186,6 +204,10 @@ pub enum Request {
 pub enum Response {
     Manifest(Manifest),
     Update(Update),
+    StableContract(Option<StableContract>),
+    StableOutputs(StableOutputs),
+    StableState(Vec<u8>),
+    StableTransition(StateTransition),
     Error(String),
 }
 

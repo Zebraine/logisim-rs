@@ -120,7 +120,7 @@ impl Simulator {
         s.buffer.push_back(value);
         self.limited = false;
         self.progress.restart();
-        self.schedule_terminals();
+        self.schedule_terminals(None);
     }
     pub(crate) fn synchronize_terminals(&mut self, circuit: &Circuit) {
         self.terminals = circuit
@@ -140,16 +140,17 @@ impl Simulator {
             })
             .collect();
     }
-    pub(crate) fn schedule_terminals(&mut self) {
+    pub(crate) fn schedule_terminals(&mut self, changed: Option<&crate::work::WorkSet>) {
         // Sample all input nets before changing any runtime state or queuing outputs.
         let samples: Vec<_> = self
-            .circuit
-            .components
+            .plan
+            .terminals
             .iter()
-            .filter(|c| c.kind.is_terminal())
-            .map(|c| {
+            .filter(|entry| entry.affected(changed))
+            .map(|entry| {
+                let c = &self.circuit.components[entry.component];
                 let clock_index = if c.kind == Kind::Keyboard { 2 } else { 1 };
-                let read = |i| self.port_value(c.id, i).expect("compiled terminal port");
+                let read = |i| entry.port(i, &self.values);
                 (
                     c.id,
                     c.bits,

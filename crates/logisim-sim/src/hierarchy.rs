@@ -1,5 +1,6 @@
 //! Isolated circuit instances linked by directional, four-state interface signals.
 mod control;
+mod stable;
 #[cfg(test)]
 mod tests;
 use crate::{Diagnostic, Problem, Simulator, Value};
@@ -36,6 +37,8 @@ pub struct ProjectSimulator {
     progress: crate::progress::Propagation,
     limited: bool,
     error: Option<String>,
+    stable_checked: Option<Result<(), crate::stable::Error>>,
+    stable_active: bool,
 }
 impl Default for ProjectSimulator {
     fn default() -> Self {
@@ -51,6 +54,8 @@ impl Default for ProjectSimulator {
             progress: crate::progress::Propagation::default(),
             limited: false,
             error: None,
+            stable_checked: None,
+            stable_active: false,
         }
     }
 }
@@ -70,7 +75,9 @@ impl ProjectSimulator {
         if self.plugins.same(&plugins) {
             return;
         }
+        self.resume_event();
         self.plugins = plugins;
+        self.stable_checked = None;
         for instance in self.states.values_mut().chain(
             self.cached_roots
                 .values_mut()
@@ -93,6 +100,9 @@ impl ProjectSimulator {
             return false;
         }
         let same_root = self.root == root;
+        if !same_root {
+            self.resume_event();
+        }
         let mut old = if same_root {
             std::mem::take(&mut self.states)
         } else {
@@ -173,6 +183,8 @@ impl ProjectSimulator {
         match compiled {
             Ok(changed) => {
                 if changed {
+                    self.stable_checked = None;
+                    self.resume_event();
                     self.progress.reset();
                     self.limited = false;
                 }
@@ -180,6 +192,8 @@ impl ProjectSimulator {
                 changed
             }
             Err(e) => {
+                self.stable_checked = None;
+                self.stable_active = false;
                 self.states.clear();
                 self.bridges.clear();
                 self.error = Some(e);
@@ -234,6 +248,9 @@ impl ProjectSimulator {
         self.progress.steps()
     }
     pub fn pending_count(&self) -> usize {
+        self.pending_drives() + usize::from(self.stable_active)
+    }
+    fn pending_drives(&self) -> usize {
         self.states.values().map(|s| s.sim.pending_count()).sum()
     }
     pub fn set_enabled(&mut self, enabled: bool) {
@@ -250,6 +267,7 @@ impl ProjectSimulator {
         if self.limited || self.error.is_some() {
             return false;
         }
+        self.resume_event();
         let mut advanced = false;
         for state in self.states.values_mut() {
             advanced |= state.sim.step();
@@ -274,6 +292,7 @@ impl ProjectSimulator {
         }
     }
     pub fn reset(&mut self) {
+        self.stable_active = false;
         self.cached_roots.clear();
         self.ticks = 0;
         for state in self.states.values_mut() {

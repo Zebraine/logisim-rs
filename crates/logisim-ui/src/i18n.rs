@@ -26,6 +26,9 @@ impl Language {
     }
 }
 thread_local! { static LANGUAGE: Cell<Language> = const { Cell::new(Language::English) }; }
+pub(crate) fn current_language() -> Language {
+    LANGUAGE.get()
+}
 /// A rendering scope, restored even on unwind. Separate windows/threads cannot leak languages.
 /// Hosts should also scope their own file dialogs and simulation presentation.
 pub fn with_language<R>(language: Language, render: impl FnOnce() -> R) -> R {
@@ -884,6 +887,10 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Simplified mode", "简化模式"),
     ("Simulate", "仿真"),
     ("Simulation issues ({})", "仿真问题（{}）"),
+    (
+        "Simulation worker stopped. Restart the application.",
+        "仿真工作线程已停止，请重新启动应用。",
+    ),
     ("Size ", "字号 "),
     ("Slider", "滑块"),
     ("Snap", "网格吸附"),

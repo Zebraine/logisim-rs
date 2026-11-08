@@ -15,7 +15,9 @@ impl Simulator {
         self.synchronize_plugins(circuit);
         if electrically_equal(&self.circuit, circuit) {
             self.circuit = circuit.clone();
-            self.update_displays();
+            // Text insertion/removal can shift indices without changing any nets.
+            self.plan = crate::execution::Plan::compile(circuit, &self.network);
+            self.update_displays(None);
             return false;
         }
         self.inputs = circuit
@@ -88,10 +90,16 @@ impl Simulator {
             .collect();
         self.circuit = circuit.clone();
         self.network = Network::compile(circuit);
+        self.plan = crate::execution::Plan::compile(circuit, &self.network);
+        self.stable_plan = None;
         self.initialize(held);
         true
     }
     pub fn reset(&mut self) {
+        // Plugin phase VMs (including faulted ones) cannot survive an explicit reset.
+        if !self.plugin_states.is_empty() {
+            self.stable_plan = None;
+        }
         self.plugin_states.clear();
         self.synchronize_plugins(&self.circuit.clone());
         self.reset_displays();
@@ -128,6 +136,7 @@ impl Simulator {
         self.initialize(BTreeMap::new());
     }
     pub(crate) fn initialize(&mut self, held: BTreeMap<network::Port, Value>) {
+        self.invalidate_stable_values();
         self.drives = held;
         self.pending = self
             .inputs
@@ -139,10 +148,14 @@ impl Simulator {
             })
             .map(|(id, value)| ((*id, 0), *value))
             .collect();
-        self.values = self.network.resolve(&self.drives);
+        self.resolution = network::Resolution::new(&self.network, &self.drives);
+        self.values = self.resolution.values(&self.network);
+        self.changed_nets = crate::work::WorkSet::new(self.network.nets.len());
+        // Held decoder outputs are restored before their first ordinary sample.
+        self.initial_batch = true;
         self.progress.reset();
         self.limited = false;
-        self.schedule_components(true);
+        self.schedule_components(true, None);
     }
 }
 

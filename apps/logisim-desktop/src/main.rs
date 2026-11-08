@@ -29,10 +29,13 @@ fn main() -> eframe::Result {
             let mut app = DesktopApp {
                 workspace,
                 preferences,
-                simulator: Default::default(),
-                clocks: Default::default(),
+                simulator: simulation::worker::Worker::new({
+                    let ctx = cc.egui_ctx.clone();
+                    move || ctx.request_repaint()
+                }),
                 rates: Default::default(),
                 files: Default::default(),
+                window_title: String::new(),
             };
             if let Some(path) = std::env::args_os().nth(1) {
                 logisim_ui::i18n::with_language(app.workspace.language(), || {
@@ -51,10 +54,10 @@ fn main() -> eframe::Result {
 struct DesktopApp {
     preferences: preferences::Preferences,
     workspace: logisim_ui::Workspace,
-    simulator: logisim_sim::ProjectSimulator,
-    clocks: clocks::Clocks,
+    simulator: simulation::worker::Worker,
     rates: runtime_rates::RuntimeRates,
     files: files::Files,
+    window_title: String,
 }
 
 impl eframe::App for DesktopApp {
@@ -64,37 +67,16 @@ impl eframe::App for DesktopApp {
 }
 impl DesktopApp {
     fn show(&mut self, ui: &mut eframe::egui::Ui) {
-        self.simulator.set_plugins(self.files.plugins.clone());
-        self.simulator
-            .synchronize(self.workspace.project(), self.workspace.simulation_root());
-        let ticks_before_poll = self.simulator.ticks();
-        if self.files.busy() {
-            self.clocks.suspend();
-        } else if let Some(delay) = self
-            .clocks
-            .poll(std::time::Instant::now(), &mut self.simulator)
-        {
-            ui.ctx().request_repaint_after(delay);
-        }
+        use simulation::Host;
         self.rates
-            .record_ticks(self.simulator.ticks().saturating_sub(ticks_before_poll));
-        if !self.files.busy() {
-            self.simulator.advance(64);
-        }
-        let mut simulation_view = simulation::present_project(
-            self.workspace.circuit(),
-            &self.simulator,
-            self.workspace.simulation_path(),
-        );
-        self.clocks.present(&mut simulation_view);
+            .record_ticks(self.simulator.receive(&mut self.workspace));
         self.rates.present(
             std::time::Instant::now(),
             ui.ctx().cumulative_frame_nr(),
-            &mut simulation_view,
+            self.workspace.simulation_mut(),
         );
         ui.ctx()
             .request_repaint_after(runtime_rates::REFRESH_INTERVAL);
-        self.workspace.set_simulation(simulation_view);
         if ui.input(|i| i.viewport().close_requested()) && !self.files.allow_close {
             ui.ctx()
                 .send_viewport_cmd(eframe::egui::ViewportCommand::CancelClose);
@@ -116,36 +98,27 @@ impl DesktopApp {
             .show(ui.ctx(), &mut self.workspace, &mut self.simulator);
         self.preferences.synchronize(&mut self.workspace);
         let view = self.files.present(&self.workspace);
-        ui.ctx()
-            .send_viewport_cmd(eframe::egui::ViewportCommand::Title(format!(
-                "Logisim rs — {} · {}{}{}",
-                view.circuit_name,
-                view.display_title(),
-                if view.dirty { " *" } else { "" },
-                if view.partial {
-                    logisim_ui::i18n::tr(" (partial)")
-                } else {
-                    ""
-                }
-            )));
-        let edited = self
-            .simulator
-            .synchronize(self.workspace.project(), self.workspace.simulation_root());
-        let actions = self.workspace.take_simulation_actions();
-        let acted = !actions.is_empty();
-        for action in actions {
-            self.clocks.action(&action);
-            let ticks_before_action = self.simulator.ticks();
-            simulation::apply_project(
-                &mut self.simulator,
-                self.workspace.simulation_path(),
-                action,
-            );
-            self.rates
-                .record_ticks(self.simulator.ticks().saturating_sub(ticks_before_action));
+        let title = format!(
+            "Logisim rs — {} · {}{}{}",
+            view.circuit_name,
+            view.display_title(),
+            if view.dirty { " *" } else { "" },
+            if view.partial {
+                logisim_ui::i18n::tr(" (partial)")
+            } else {
+                ""
+            }
+        );
+        if self.window_title != title {
+            ui.ctx()
+                .send_viewport_cmd(eframe::egui::ViewportCommand::Title(title.clone()));
+            self.window_title = title;
         }
-        if edited || acted || (self.simulator.enabled() && self.simulator.pending_count() > 0) {
-            ui.ctx().request_repaint();
+        self.simulator.set_plugins(self.files.plugins.clone());
+        self.simulator
+            .synchronize(&mut self.workspace, self.files.busy());
+        for action in self.workspace.take_simulation_actions() {
+            self.simulator.action(action);
         }
     }
 }

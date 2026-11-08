@@ -108,8 +108,8 @@ pub struct SimulationView {
     pub matrices: BTreeMap<Id, Vec<Option<bool>>>,
     pub storage: BTreeMap<Id, SignalView>,
     pub memories: BTreeMap<Id, logisim_core::MemoryContents>,
-    pub wires: BTreeMap<Id, SignalView>,
-    pub ports: BTreeMap<(Id, usize), SignalView>,
+    pub wires: BTreeMap<Id, std::sync::Arc<SignalView>>,
+    pub ports: BTreeMap<(Id, usize), std::sync::Arc<SignalView>>,
     pub inputs: BTreeMap<Id, InputValue>,
     pub issues: Vec<SimulationIssue>,
 }

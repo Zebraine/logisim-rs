@@ -11,5 +11,9 @@ publish.workspace = true
 logisim-core.workspace = true
 logisim-plugin.workspace = true
 
+[dev-dependencies]
+serde_json.workspace = true
+wat = "=1.245.1"
+
 [lints]
 workspace = true

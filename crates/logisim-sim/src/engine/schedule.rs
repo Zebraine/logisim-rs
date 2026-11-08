@@ -35,67 +35,54 @@ impl Simulator {
             self.pending.insert(port, value);
         }
     }
-    pub(crate) fn schedule_components(&mut self, initializing: bool) {
+    pub(crate) fn schedule_components(
+        &mut self,
+        initializing: bool,
+        changed: Option<&crate::work::WorkSet>,
+    ) {
         let outputs: Vec<_> = self
-            .circuit
-            .components
+            .plan
+            .single
             .iter()
-            .filter_map(|c| {
+            .filter(|entry| entry.affected(changed))
+            .map(|entry| {
+                let c = &self.circuit.components[entry.component];
+                let read = |index| entry.port(index, &self.values);
                 let output = match c.kind {
                     Kind::Parity(_) => {
                         let inputs: Vec<_> = (1..=usize::from(c.input_count()))
-                            .map(|i| {
-                                self.network.connected((c.id, i)).then(|| {
-                                    self.port_value(c.id, i).expect("compiled parity port")
-                                })
-                            })
+                            .map(|i| entry.connected(i).then(|| read(i)))
                             .collect();
                         parity::evaluate(c, &inputs)
                     }
                     Kind::Gate(gate) => {
                         let inputs: Vec<_> = (1..=usize::from(c.input_count()))
-                            .map(|i| {
-                                (gate.unary() || self.network.connected((c.id, i)))
-                                    .then(|| self.port_value(c.id, i).expect("compiled gate port"))
-                            })
+                            .map(|i| (gate.unary() || entry.connected(i)).then(|| read(i)))
                             .collect();
                         gates::evaluate(c, &inputs)
                     }
-                    Kind::ControlledBuffer | Kind::ControlledInverter => bus::evaluate(
-                        c,
-                        self.port_value(c.id, 1).expect("compiled data port"),
-                        self.port_value(c.id, 2)
-                            .expect("compiled enable port")
-                            .bit(0),
-                    ),
+                    Kind::ControlledBuffer | Kind::ControlledInverter => {
+                        bus::evaluate(c, read(1), read(2).bit(0))
+                    }
                     Kind::Transistor | Kind::TransmissionGate => transistors::evaluate(
                         c,
-                        self.port_value(c.id, 1).expect("compiled transistor data"),
-                        self.port_value(c.id, 2)
-                            .expect("compiled transistor control")
-                            .bit(0),
-                        self.port_value(c.id, 3).map_or(Bit::Unknown, |v| v.bit(0)),
+                        read(1),
+                        read(2).bit(0),
+                        entry
+                            .optional_port(3, &self.values)
+                            .map_or(Bit::Unknown, |v| v.bit(0)),
                     ),
-                    Kind::PlaRom => pla::evaluate(
-                        &c.pla,
-                        self.port_value(c.id, 1).expect("compiled PLA input"),
-                        self.port_value(c.id, 2)
-                            .expect("compiled PLA select")
-                            .bit(0),
-                    ),
+                    Kind::PlaRom => pla::evaluate(&c.pla, read(1), read(2).bit(0)),
                     Kind::Constant => Value::known(c.bits, c.constant),
                     Kind::Power => Value::filled(c.bits, Bit::One),
                     Kind::Ground => Value::known(c.bits, 0),
                     Kind::BitExtender => {
-                        let input = self.port_value(c.id, 1).expect("compiled extender input");
+                        let input = read(1);
                         let extra = match c.extension {
                             Extension::Zero => Bit::Zero,
                             Extension::One => Bit::One,
                             Extension::Sign => input.bit(input.width() - 1),
-                            Extension::Input => self
-                                .port_value(c.id, 2)
-                                .expect("compiled extension input")
-                                .bit(0),
+                            Extension::Input => read(2).bit(0),
                         };
                         Value::from_bits((0..c.bits.clamp(1, 32)).map(|i| {
                             if i < input.width() {
@@ -105,29 +92,29 @@ impl Simulator {
                             }
                         }))
                     }
-                    _ => return None,
+                    _ => unreachable!("compiled single-output component"),
                 };
-                Some((c.id, output))
+                (c.id, output)
             })
             .collect();
         for (id, value) in outputs {
             self.schedule(id, value);
         }
         let multiple_outputs: Vec<_> = self
-            .circuit
-            .components
+            .plan
+            .multiple
             .iter()
-            .filter(|c| matches!(c.kind, Kind::Plexer(_) | Kind::Arithmetic(_) | Kind::Ttl(_)))
+            .filter(|entry| entry.affected(changed))
             // Restore held outputs before sampling freshly compiled inputs.
-            .filter(|c| {
+            .filter(|entry| {
+                let c = &self.circuit.components[entry.component];
                 !(initializing
                     && c.kind == Kind::Plexer(logisim_core::Plexer::DisplayDecoder)
                     && self.drives.contains_key(&(c.id, 0)))
             })
-            .flat_map(|c| {
-                let ports: Vec<_> = (0..c.ports().len())
-                    .map(|i| self.port_value(c.id, i).expect("compiled component port"))
-                    .collect();
+            .flat_map(|entry| {
+                let c = &self.circuit.components[entry.component];
+                let ports = entry.sample(&self.values);
                 let outputs = match c.kind {
                     Kind::Arithmetic(_) => arithmetic::evaluate(c, &ports),
                     Kind::Ttl(_) => ttl::evaluate(c, &ports),
@@ -142,75 +129,90 @@ impl Simulator {
         for (port, value) in multiple_outputs {
             self.drive_port(port, value);
         }
-        self.schedule_controls();
-        self.schedule_storage();
-        self.schedule_plugins(None);
-        self.update_displays();
-        self.schedule_memories();
-        self.schedule_terminals();
+        self.schedule_controls(changed);
+        self.schedule_storage(changed);
+        self.schedule_plugins(None, changed);
+        self.update_displays(changed);
+        self.schedule_memories(changed);
+        self.schedule_terminals(changed);
     }
-    pub(crate) fn schedule_memories(&mut self) {
+    pub(crate) fn schedule_memories(&mut self, changed: Option<&crate::work::WorkSet>) {
         let samples: Vec<_> = self
-            .circuit
-            .components
+            .plan
+            .memories
             .iter()
-            .filter(|c| c.kind.is_memory())
-            .map(|c| {
-                let ports = (0..c.ports().len())
-                    .map(|i| self.port_value(c.id, i).expect("compiled memory port"))
-                    .collect::<Vec<_>>();
-                (c.clone(), ports)
-            })
+            .filter(|entry| entry.affected(changed))
+            .map(|entry| (entry.component, entry.sample(&self.values)))
             .collect();
-        for (c, ports) in samples {
+        for (index, ports) in samples {
+            let c = &self.circuit.components[index];
             let output = if c.kind == Kind::Rom {
-                memory::rom(&c, &ports)
+                memory::rom(c, &ports)
             } else {
                 self.memories
                     .get_mut(&c.id)
                     .expect("RAM state")
-                    .evaluate(&c, &ports)
+                    .evaluate(c, &ports)
             };
             self.drive_port((c.id, 0), output);
         }
     }
-    pub(crate) fn schedule_storage(&mut self) {
+    pub(crate) fn schedule_storage(&mut self, changed: Option<&crate::work::WorkSet>) -> usize {
         let samples: Vec<_> = self
-            .circuit
-            .components
+            .plan
+            .storage
             .iter()
-            .filter(|c| c.kind.is_sequential())
-            .map(|c| {
-                let ports: Vec<_> = (0..c.ports().len())
-                    .map(|i| self.port_value(c.id, i).expect("compiled sequential port"))
-                    .collect();
-                (c.clone(), ports)
-            })
+            .filter(|entry| entry.affected(changed))
+            .map(|entry| (entry.component, entry.sample(&self.values)))
             .collect();
-        for (c, ports) in samples {
+        let sampled = samples.len();
+        let mut outputs = Vec::with_capacity(sampled);
+        for (index, ports) in samples {
+            let c = &self.circuit.components[index];
             let output = self
                 .storage
                 .get_mut(&c.id)
                 .expect("sequential state")
-                .evaluate(&c, &ports);
-            self.drive_port((c.id, 0), output);
+                .evaluate(c, &ports);
+            outputs.push(((c.id, 0), output));
             if c.kind == Kind::Counter {
-                let carry = self.storage[&c.id].carry(&c, &ports);
-                self.drive_port((c.id, 5), carry);
+                let carry = self.storage[&c.id].carry(c, &ports);
+                outputs.push(((c.id, 5), carry));
             }
             if matches!(c.kind, Kind::FlipFlop(_) | Kind::Latch(_)) {
-                self.drive_port((c.id, 1), Value::known(1, output.number().unwrap_or(0) ^ 1));
+                outputs.push(((c.id, 1), Value::known(1, output.number().unwrap_or(0) ^ 1)));
             }
         }
+        for (port, value) in outputs {
+            self.drive_port(port, value);
+        }
+        sampled
+    }
+    /// Resolve a driver batch without evaluating any component or sampling state.
+    pub(crate) fn commit_pending(&mut self) -> bool {
+        if self.pending.is_empty() {
+            return false;
+        }
+        let pending = std::mem::take(&mut self.pending);
+        self.resolution.update(
+            &self.network,
+            pending.iter().map(|(port, value)| (*port, Some(*value))),
+            &mut self.values,
+            &mut self.changed_nets,
+        );
+        self.drives.extend(pending);
+        true
     }
     /// Commit one batch of driver changes, then schedule resulting component changes.
     pub fn step(&mut self) -> bool {
-        if self.pending.is_empty() || self.limited {
+        if self.limited || !self.commit_pending() {
             return false;
         }
-        self.drives.extend(std::mem::take(&mut self.pending));
-        self.values = self.network.resolve(&self.drives);
-        self.schedule_components(false);
+        self.invalidate_stable_values();
+        let changed = std::mem::take(&mut self.changed_nets);
+        let initializing = std::mem::take(&mut self.initial_batch);
+        self.schedule_components(false, (!initializing).then_some(&changed));
+        self.changed_nets = changed;
         if self.progress.record_batch(!self.pending.is_empty()) {
             self.limited = true;
             self.enabled = false;

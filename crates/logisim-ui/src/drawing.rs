@@ -1,6 +1,8 @@
 //! Original vector artwork and editor hit geometry.
+mod cache;
 use crate::{ACCENT, INK, canvas::Canvas, simulation::SimulationView};
 use crate::{i18n::tr, tf};
+pub(crate) use cache::CircuitCache;
 use egui::{
     Align2, Color32, FontId, Painter, Pos2, Rect, Shape, Stroke, StrokeKind, Vec2, pos2, vec2,
 };
@@ -240,17 +242,20 @@ pub(crate) fn circuit(
     circuit: &Circuit,
     selection: &BTreeSet<Id>,
     simulation: &SimulationView,
+    cache: &mut CircuitCache,
 ) {
-    let mut net = BTreeSet::new();
-    for id in selection {
-        if !net.contains(id) && circuit.wires.iter().any(|w| w.id == *id) {
-            net.extend(circuit.connected_wires(*id));
-        }
-    }
+    cache.synchronize(circuit, selection);
+    cache.prepare_view(p, canvas);
     for w in &circuit.wires {
         let selected = selection.contains(&w.id);
         let segment = [canvas.screen(w.a), canvas.screen(w.b)];
-        if selected || net.contains(&w.id) {
+        if !Rect::from_two_pos(segment[0], segment[1])
+            .expand(4.0)
+            .intersects(p.clip_rect())
+        {
+            continue;
+        }
+        if selected || cache.selected_net.contains(&w.id) {
             p.line_segment(
                 segment,
                 Stroke::new(
@@ -281,28 +286,18 @@ pub(crate) fn circuit(
             }
         }
     }
-    for point in circuit
-        .junctions()
-        .into_iter()
-        .chain(circuit.dangling_ends())
-    {
-        let color = circuit
-            .wires
-            .iter()
-            .find(|w| w.contains(point))
-            .and_then(|w| simulation.wires.get(&w.id))
+    for &(point, wire) in &cache.markers {
+        let screen = canvas.screen(point);
+        if !p.clip_rect().expand(3.0).contains(screen) {
+            continue;
+        }
+        let color = wire
+            .and_then(|id| simulation.wires.get(&id))
             .map_or(INK, |s| s.tone.color());
-        p.circle_filled(canvas.screen(point), 3.0, color);
+        p.circle_filled(screen, 3.0, color);
     }
-    for c in &circuit.components {
-        component(
-            p,
-            canvas,
-            c,
-            selection.contains(&c.id),
-            false,
-            Some(simulation),
-        );
+    for (index, c) in circuit.components.iter().enumerate() {
+        cache.component(index, p, canvas, c, selection.contains(&c.id), simulation);
     }
 }
 pub(crate) fn component(
@@ -943,14 +938,22 @@ mod tests {
                     text: "1".into(),
                     binary: "1".into(),
                     tone: SignalTone::High,
-                },
+                }
+                .into(),
             );
         }
         let ctx = egui::Context::default();
         let mut canvas = Canvas::default();
         let mut output = ctx.run_ui(Default::default(), |ui| {
             canvas.rect = ui.max_rect();
-            circuit(ui.painter(), &canvas, &c, &BTreeSet::new(), &view);
+            circuit(
+                ui.painter(),
+                &canvas,
+                &c,
+                &BTreeSet::new(),
+                &view,
+                &mut CircuitCache::default(),
+            );
         });
         output.textures_delta.clear();
         let dots: Vec<_> = output

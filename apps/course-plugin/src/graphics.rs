@@ -1,4 +1,60 @@
+use logisim_core::{Bit, Value};
+use logisim_course::decode_instruction;
 use logisim_plugin_api::*;
+use std::sync::OnceLock;
+
+pub fn probe(input: Value) -> Vec<Shape> {
+    input.number().map_or_else(Vec::new, |word| {
+        vec![text(
+            [-60, -20],
+            decode_instruction(word),
+            9,
+            if word == 0 {
+                [200, 45, 55, 255]
+            } else {
+                [37, 99, 235, 255]
+            },
+        )]
+    })
+}
+pub fn register_words(words: &[Value; 32]) -> Vec<Shape> {
+    words
+        .iter()
+        .enumerate()
+        .map(|(i, word)| {
+            let value = word.number().map_or_else(
+                || {
+                    (0..8)
+                        .rev()
+                        .map(|n| {
+                            let bits = (0..4).map(|b| word.bit(n * 4 + b)).collect::<Vec<_>>();
+                            if bits.contains(&Bit::Error) {
+                                'E'
+                            } else if bits.contains(&Bit::Unknown) {
+                                'X'
+                            } else {
+                                char::from_digit(
+                                    bits.iter().enumerate().fold(0, |v, (i, b)| {
+                                        v | if *b == Bit::One { 1 << i } else { 0 }
+                                    }),
+                                    16,
+                                )
+                                .unwrap()
+                            }
+                        })
+                        .collect()
+                },
+                |v| format!("{v:08X}"),
+            );
+            text(
+                [-126 + 76 * (i / 16) as i32, -84 + 10 * (i % 16) as i32],
+                value,
+                7,
+                [51, 65, 85, 255],
+            )
+        })
+        .collect()
+}
 pub fn text(at: [i32; 2], text: impl Into<String>, size: u8, color: [u8; 4]) -> Shape {
     Shape::Text {
         at,
@@ -15,7 +71,11 @@ fn body(min: [i32; 2], max: [i32; 2]) -> Shape {
         stroke: [51, 65, 85, 255],
     }
 }
-pub fn manifest() -> Manifest {
+pub fn manifest() -> &'static Manifest {
+    static MANIFEST: OnceLock<Manifest> = OnceLock::new();
+    MANIFEST.get_or_init(build_manifest)
+}
+fn build_manifest() -> Manifest {
     let mut graphics = vec![body([-160, -90], [0, 90])];
     for i in 0..32 {
         graphics.push(text(

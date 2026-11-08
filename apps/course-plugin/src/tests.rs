@@ -2,7 +2,7 @@ use super::*;
 fn update(request: Evaluation) -> Update {
     let tool = graphics::manifest()
         .tools
-        .into_iter()
+        .iter()
         .find(|t| t.id == request.tool)
         .unwrap();
     let result = evaluate(request).unwrap();
@@ -88,4 +88,97 @@ fn probe_supplies_runtime_graphics_and_unknown_inputs_are_blank() {
         error: 0,
     };
     assert!(update(request).graphics.is_empty());
+}
+
+#[test]
+fn stable_capabilities_are_configuration_specific_and_reject_invalid_requests() {
+    for c in graphics::manifest().components() {
+        let config = StableConfig {
+            tool: c.tool.id.clone(),
+            properties: c.properties.clone(),
+        };
+        let contract = stable::contract(config.clone()).unwrap().unwrap();
+        contract.validate(&c.tool).unwrap();
+        let mut invalid = config.clone();
+        invalid.tool = "missing".into();
+        assert!(stable::contract(invalid).is_err());
+        invalid = config.clone();
+        invalid.properties.insert("extra".into(), "true".into());
+        assert!(stable::contract(invalid).is_err());
+        if c.tool.id == "register-file" {
+            for trigger in ["high", "low"] {
+                let mut config = config.clone();
+                config.properties.insert("trigger".into(), trigger.into());
+                assert!(stable::contract(config.clone()).unwrap().is_none());
+                let request = StableEvaluation {
+                    tool: config.tool,
+                    properties: config.properties,
+                    inputs: c
+                        .tool
+                        .ports
+                        .iter()
+                        .map(|p| Value::known(p.width, 0).into())
+                        .collect(),
+                    state: vec![],
+                };
+                assert!(stable::outputs(request.clone()).is_err());
+                assert!(stable::sample(request).is_err());
+            }
+        }
+    }
+}
+
+#[test]
+fn stable_reads_do_not_consume_edges_and_samples_do_not_depend_on_read_addresses() {
+    let c = graphics::manifest().components().remove(0);
+    let mut inputs: Vec<Signal> = [
+        (32, 0),
+        (32, 0),
+        (32, 42),
+        (1, 0),
+        (1, 1),
+        (5, 1),
+        (5, 1),
+        (5, 0),
+    ]
+    .into_iter()
+    .map(|(w, v)| Value::known(w, v).into())
+    .collect();
+    let state = update(Evaluation {
+        tool: c.tool.id.clone(),
+        properties: c.properties.clone(),
+        inputs: inputs.clone(),
+        state: vec![],
+        event: Event::Reset,
+    })
+    .state;
+    inputs[3].value = 1;
+    let mut request = StableEvaluation {
+        tool: c.tool.id,
+        properties: c.properties,
+        inputs,
+        state,
+    };
+    let old = stable::outputs(request.clone()).unwrap();
+    let next = stable::sample(request.clone()).unwrap();
+    assert_eq!(old.outputs[0].value, 0);
+    assert_eq!(stable::outputs(request.clone()).unwrap(), old);
+    request.inputs[6].value = 31;
+    request.inputs[7].value = 31;
+    assert_eq!(stable::sample(request.clone()).unwrap(), next);
+    request.inputs[6].value = 1;
+    request.inputs[7].value = 0;
+    request.state = next;
+    assert_eq!(
+        stable::outputs(request.clone()).unwrap().outputs[0].value,
+        42
+    );
+    let held = stable::outputs(request.clone()).unwrap();
+    // All write inputs may vary without changing current-state reads or graphics.
+    for port in [2, 3, 4, 5] {
+        request.inputs[port].value = 0;
+    }
+    let after = stable::outputs(request).unwrap();
+    assert_eq!(after.outputs[..2], held.outputs[..2]);
+    assert_eq!(after.graphics, held.graphics);
 }

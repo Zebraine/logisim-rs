@@ -1,9 +1,11 @@
 //! Sandboxed module loading. No filesystem access or implicit plugin discovery.
+mod stable;
 #[cfg(test)]
 mod tests;
 use logisim_plugin_api::{
-    ABI_VERSION, Component, Evaluation, MAX_MESSAGE, Manifest, Request, Response, Update,
+    Component, Evaluation, MAX_MESSAGE, Manifest, Request, Response, Update, supports_abi,
 };
+pub use stable::StableInstance;
 use std::{collections::BTreeMap, sync::Arc};
 use wasmi::{
     Config, Engine, Linker, Memory, Module, Store, StoreLimits, StoreLimitsBuilder, TypedFunc,
@@ -37,6 +39,9 @@ impl Plugin {
             return Err("Plugin did not return a manifest.".into());
         };
         manifest.validate()?;
+        if manifest.abi != instance.abi {
+            return Err("Plugin manifest and exported ABI differ.".into());
+        }
         Ok(Self { module, manifest })
     }
     pub fn manifest(&self) -> &Manifest {
@@ -58,6 +63,7 @@ impl Plugin {
     }
 }
 pub struct Instance {
+    abi: u32,
     store: Store<StoreLimits>,
     memory: Memory,
     buffer: TypedFunc<u32, u32>,
@@ -82,10 +88,12 @@ impl Instance {
         let abi = instance
             .get_typed_func::<(), u32>(&store, "logisim_abi")
             .map_err(error)?;
-        if abi.call(&mut store, ()).map_err(error)? != ABI_VERSION {
+        let abi = abi.call(&mut store, ()).map_err(error)?;
+        if !supports_abi(abi) {
             return Err("Unsupported plugin ABI version.".into());
         }
         Ok(Self {
+            abi,
             memory: instance
                 .get_memory(&store, "memory")
                 .ok_or("Plugin has no exported memory.")?,
@@ -176,6 +184,12 @@ impl Registry {
         self.entries.values().map(|p| p.manifest())
     }
     pub fn instantiate(&self, component: &Component) -> Result<Instance> {
+        self.plugin(component)?.instantiate(component)
+    }
+    pub fn instantiate_stable(&self, component: &Component) -> Result<Option<StableInstance>> {
+        self.plugin(component)?.instantiate_stable(component)
+    }
+    fn plugin(&self, component: &Component) -> Result<&Plugin> {
         self.entries
             .get(&(component.plugin.clone(), component.version.clone()))
             .ok_or_else(|| {
@@ -189,7 +203,7 @@ impl Registry {
                     "Plugin not loaded: {} {}",
                     component.plugin, component.version
                 )
-            })?
-            .instantiate(component)
+            })
+            .map(Arc::as_ref)
     }
 }
