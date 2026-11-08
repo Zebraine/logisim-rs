@@ -186,20 +186,28 @@ impl Simulator {
             self.drive_port(port, value);
         }
     }
-    /// Commit one batch of driver changes, then schedule resulting component changes.
-    pub fn step(&mut self) -> bool {
-        if self.pending.is_empty() || self.limited {
+    /// Resolve a driver batch without evaluating any component or sampling state.
+    pub(crate) fn commit_pending(&mut self) -> bool {
+        if self.pending.is_empty() {
             return false;
         }
         let pending = std::mem::take(&mut self.pending);
-        let mut changed = std::mem::take(&mut self.changed_nets);
         self.resolution.update(
             &self.network,
             pending.iter().map(|(port, value)| (*port, Some(*value))),
             &mut self.values,
-            &mut changed,
+            &mut self.changed_nets,
         );
         self.drives.extend(pending);
+        true
+    }
+    /// Commit one batch of driver changes, then schedule resulting component changes.
+    pub fn step(&mut self) -> bool {
+        if self.limited || !self.commit_pending() {
+            return false;
+        }
+        self.invalidate_stable_values();
+        let changed = std::mem::take(&mut self.changed_nets);
         let initializing = std::mem::take(&mut self.initial_batch);
         self.schedule_components(false, (!initializing).then_some(&changed));
         self.changed_nets = changed;

@@ -5,6 +5,7 @@ mod execution;
 mod gates;
 mod hierarchy;
 mod progress;
+pub mod stable;
 mod work;
 pub use hierarchy::ProjectSimulator;
 mod arithmetic;
@@ -82,6 +83,7 @@ pub struct Simulator {
     changed_nets: work::WorkSet,
     initial_batch: bool,
     plan: execution::Plan,
+    stable_plan: Option<Result<stable::Plan, stable::Failure>>,
     inputs: BTreeMap<Id, Value>,
     joysticks: BTreeMap<Id, Point>,
     terminals: BTreeMap<Id, terminal::State>,
@@ -107,6 +109,7 @@ impl Default for Simulator {
             changed_nets: work::WorkSet::default(),
             initial_batch: false,
             plan: execution::Plan::default(),
+            stable_plan: None,
             inputs: BTreeMap::new(),
             joysticks: BTreeMap::new(),
             terminals: BTreeMap::new(),

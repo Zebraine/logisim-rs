@@ -1,5 +1,6 @@
 //! Isolated circuit instances linked by directional, four-state interface signals.
 mod control;
+mod stable;
 #[cfg(test)]
 mod tests;
 use crate::{Diagnostic, Problem, Simulator, Value};
@@ -36,6 +37,7 @@ pub struct ProjectSimulator {
     progress: crate::progress::Propagation,
     limited: bool,
     error: Option<String>,
+    stable_checked: Option<Result<(), crate::stable::Error>>,
 }
 impl Default for ProjectSimulator {
     fn default() -> Self {
@@ -51,6 +53,7 @@ impl Default for ProjectSimulator {
             progress: crate::progress::Propagation::default(),
             limited: false,
             error: None,
+            stable_checked: None,
         }
     }
 }
@@ -173,6 +176,7 @@ impl ProjectSimulator {
         match compiled {
             Ok(changed) => {
                 if changed {
+                    self.stable_checked = None;
                     self.progress.reset();
                     self.limited = false;
                 }
@@ -180,6 +184,7 @@ impl ProjectSimulator {
                 changed
             }
             Err(e) => {
+                self.stable_checked = None;
                 self.states.clear();
                 self.bridges.clear();
                 self.error = Some(e);

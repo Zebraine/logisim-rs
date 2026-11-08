@@ -301,8 +301,27 @@ impl Evaluator {
     /// no results. Physically undriven inputs are compiled as X without callbacks.
     pub fn evaluate(
         &mut self,
-        mut read: impl FnMut(Port) -> Option<Value>,
+        read: impl FnMut(Port) -> Option<Value>,
     ) -> Result<(), EvaluationError> {
+        self.run(read, true).map(|_| ())
+    }
+
+    /// Reuse the previous result when every four-state boundary value is unchanged.
+    /// Returns true when refreshing results instead of reusing a valid result.
+    /// Every input is still validated; an error invalidates the cache and queries.
+    pub fn evaluate_cached(
+        &mut self,
+        read: impl FnMut(Port) -> Option<Value>,
+    ) -> Result<bool, EvaluationError> {
+        self.run(read, false)
+    }
+
+    fn run(
+        &mut self,
+        mut read: impl FnMut(Port) -> Option<Value>,
+        force: bool,
+    ) -> Result<bool, EvaluationError> {
+        let mut changed = force || !self.valid;
         self.valid = false;
         for &(port, slot) in &self.program.inputs {
             let value = read(port).ok_or(EvaluationError::MissingInput { port })?;
@@ -314,13 +333,16 @@ impl Evaluator {
                     actual: value.width(),
                 });
             }
+            changed |= self.values[slot] != value;
             self.values[slot] = value;
         }
-        for instruction in &self.program.instructions {
-            instruction.execute(&mut self.values, &mut self.scratch);
+        if changed {
+            for instruction in &self.program.instructions {
+                instruction.execute(&mut self.values, &mut self.scratch);
+            }
         }
         self.valid = true;
-        Ok(())
+        Ok(changed)
     }
 
     /// Compiled output drives, including internal nodes, after a successful evaluate.

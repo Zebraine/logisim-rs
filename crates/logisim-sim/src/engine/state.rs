@@ -91,6 +91,7 @@ impl Simulator {
         self.circuit = circuit.clone();
         self.network = Network::compile(circuit);
         self.plan = crate::execution::Plan::compile(circuit, &self.network);
+        self.stable_plan = None;
         self.initialize(held);
         true
     }
@@ -131,6 +132,7 @@ impl Simulator {
         self.initialize(BTreeMap::new());
     }
     pub(crate) fn initialize(&mut self, held: BTreeMap<network::Port, Value>) {
+        self.invalidate_stable_values();
         self.drives = held;
         self.pending = self
             .inputs

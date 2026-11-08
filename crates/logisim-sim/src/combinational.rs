@@ -4,7 +4,7 @@
 //! certify timing-safe substitution into an event-driven parent. Discovery never
 //! changes propagation, samples state, or assumes that a subcircuit is stateless.
 mod expression;
-mod graph;
+pub(crate) mod graph;
 pub use expression::{CompileStats, CompiledCircuit, EvaluationError, Evaluator};
 #[cfg(test)]
 mod tests;

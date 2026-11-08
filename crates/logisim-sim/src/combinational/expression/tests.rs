@@ -379,6 +379,43 @@ fn compiled_rom_is_an_immutable_document_snapshot() {
 }
 
 #[test]
+fn cached_evaluation_checks_every_four_state_input_and_recovers_after_errors() {
+    let (c, output, pins) = fixture(component(Kind::Gate(Gate::Or), 4));
+    let mut evaluator = CompiledCircuit::new(&c).evaluator();
+    for bit in FOUR {
+        assert!(
+            evaluator
+                .evaluate_cached(|_| Some(Value::filled(4, bit)))
+                .unwrap()
+        );
+        let expected = evaluator.value((output, 0));
+        let mut reads = 0;
+        assert!(
+            !evaluator
+                .evaluate_cached(|_| {
+                    reads += 1;
+                    Some(Value::filled(4, bit))
+                })
+                .unwrap()
+        );
+        assert_eq!(reads, pins.len());
+        assert_eq!(evaluator.value((output, 0)), expected);
+        assert!(
+            evaluator
+                .evaluate_cached(|p| { (p.0 == pins[0].0).then(|| Value::known(4, 0)) })
+                .is_err()
+        );
+        assert_eq!(evaluator.value((output, 0)), None);
+        assert!(
+            evaluator
+                .evaluate_cached(|_| Some(Value::filled(4, bit)))
+                .unwrap()
+        );
+        assert_eq!(evaluator.value((output, 0)), expected);
+    }
+}
+
+#[test]
 fn compilation_and_evaluation_do_not_sample_or_advance_state() {
     let mut c = Circuit::default();
     let state = c.add_component(Component::new(Kind::FlipFlop(FlipFlop::D), Point::ZERO));

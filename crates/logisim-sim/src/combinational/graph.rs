@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 
 /// Returns feedback members and weakly connected regions in topological order.
 /// Vertices are ordered by stable component IDs, not insertion/geometry order.
-pub(super) fn partition(edges: &[Vec<usize>]) -> (Vec<usize>, Vec<Vec<usize>>) {
+pub(crate) fn partition(edges: &[Vec<usize>]) -> (Vec<usize>, Vec<Vec<usize>>) {
     let mut reverse = vec![vec![]; edges.len()];
     for (from, targets) in edges.iter().enumerate() {
         for &to in targets {
