@@ -13,7 +13,7 @@ logisim_plugin_sdk::export_plugin!(handle);
 
 pub fn handle(request: Request) -> Response {
     match request {
-        Request::Describe => Response::Manifest(graphics::manifest()),
+        Request::Describe => Response::Manifest(graphics::manifest().clone()),
         Request::StableContract(config) => stable::contract(config)
             .map(Response::StableContract)
             .unwrap_or_else(Response::Error),

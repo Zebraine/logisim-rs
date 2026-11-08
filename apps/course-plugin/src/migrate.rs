@@ -176,15 +176,15 @@ mod tests {
     fn source() -> PluginSource {
         let m = crate::graphics::manifest();
         PluginSource {
-            plugin: m.id,
-            version: m.version,
+            plugin: m.id.clone(),
+            version: m.version.clone(),
             path: "course.wasm".into(),
             fallback: String::new(),
         }
     }
     #[test]
     fn migration_preserves_wires_positions_properties_and_uses_manifest_graphics() {
-        let mut manifest = crate::graphics::manifest();
+        let mut manifest = crate::graphics::manifest().clone();
         manifest.tools[0].name = "Plugin supplied display name".into();
         let output = convert(LEGACY, &manifest, source()).unwrap();
         assert!(!output.contains("jar#"));
@@ -233,10 +233,10 @@ mod tests {
             LEGACY.replace("loc=\"(300,200)\"", "loc=\"(300,200)\" rotation=\"90\""),
         ] {
             assert_ne!(LEGACY, broken);
-            assert!(convert(&broken, &manifest, source()).is_err(), "{broken}");
+            assert!(convert(&broken, manifest, source()).is_err(), "{broken}");
         }
         let mut wrong = source();
         wrong.version = "other".into();
-        assert!(convert(LEGACY, &manifest, wrong).is_err());
+        assert!(convert(LEGACY, manifest, wrong).is_err());
     }
 }

@@ -1,28 +1,31 @@
 use crate::{graphics, register_state};
 use logisim_core::Value;
 use logisim_plugin_api::*;
+use std::sync::OnceLock;
 
 pub fn contract(config: StableConfig) -> Result<Option<StableContract>, String> {
     let tool = graphics::manifest()
         .tools
-        .into_iter()
+        .iter()
         .find(|t| t.id == config.tool)
         .ok_or("Unknown tool")?;
     tool.validate_stable_config(&config)?;
-    Ok(describe(&config.tool, &config.properties))
+    Ok(describe(&config.tool, &config.properties).cloned())
 }
-fn describe(tool: &str, properties: &Properties) -> Option<StableContract> {
+fn describe(tool: &str, properties: &Properties) -> Option<&'static StableContract> {
     if tool == "riscv-probe" {
-        return Some(StableContract {
+        static PROBE: OnceLock<StableContract> = OnceLock::new();
+        return Some(PROBE.get_or_init(|| StableContract {
             outputs: vec![],
             graphics_inputs: vec![0],
             state_inputs: None,
-        });
+        }));
     }
     if !matches!(properties["trigger"].as_str(), "rising" | "falling") {
         return None;
     }
-    Some(StableContract {
+    static REGISTER: OnceLock<StableContract> = OnceLock::new();
+    Some(REGISTER.get_or_init(|| StableContract {
         outputs: vec![
             OutputDependency {
                 port: 0,
@@ -35,12 +38,12 @@ fn describe(tool: &str, properties: &Properties) -> Option<StableContract> {
         ],
         graphics_inputs: vec![],
         state_inputs: Some(vec![2, 3, 4, 5]),
-    })
+    }))
 }
 fn validate(request: &StableEvaluation) -> Result<(), String> {
     let tool = graphics::manifest()
         .tools
-        .into_iter()
+        .iter()
         .find(|t| t.id == request.tool)
         .ok_or("Unknown tool")?;
     tool.validate_stable_evaluation(request)?;

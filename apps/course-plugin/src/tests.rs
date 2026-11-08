@@ -2,7 +2,7 @@ use super::*;
 fn update(request: Evaluation) -> Update {
     let tool = graphics::manifest()
         .tools
-        .into_iter()
+        .iter()
         .find(|t| t.id == request.tool)
         .unwrap();
     let result = evaluate(request).unwrap();

@@ -1,6 +1,7 @@
 use logisim_core::{Bit, Value};
 use logisim_course::decode_instruction;
 use logisim_plugin_api::*;
+use std::sync::OnceLock;
 
 pub fn probe(input: Value) -> Vec<Shape> {
     input.number().map_or_else(Vec::new, |word| {
@@ -70,7 +71,11 @@ fn body(min: [i32; 2], max: [i32; 2]) -> Shape {
         stroke: [51, 65, 85, 255],
     }
 }
-pub fn manifest() -> Manifest {
+pub fn manifest() -> &'static Manifest {
+    static MANIFEST: OnceLock<Manifest> = OnceLock::new();
+    MANIFEST.get_or_init(build_manifest)
+}
+fn build_manifest() -> Manifest {
     let mut graphics = vec![body([-160, -90], [0, 90])];
     for i in 0..32 {
         graphics.push(text(
