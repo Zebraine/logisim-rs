@@ -8,8 +8,13 @@
 - `Cargo.toml`、`Cargo.lock`、工具链及必要的 Cargo、格式和 lint 配置。
 - `LICENSE`、Git 配置及 `.github/workflows/ci.yml` 构建检查配置。
 - 根目录 `AGENTS.md`、`CONTRIBUTING.md`、`README.md`。
+- `examples/course/*.circ` 及其共用运行依赖 `examples/course/course.wasm`。
 
-设计/进度文档、规格、实验、fixtures、resources、缓存及构建产物仅保留在本地，
+示例更新时验证无省略导入、相对路径加载和插件定义匹配；电路仅保留所需子电路，
+不写入本机绝对备用路径。插件行为或协议更新后用锁定依赖重建示例模块，并重新验证。
+示例使用说明集中在根 README；课程电路的来源及许可范围与本项目原创代码区分。
+
+设计/进度文档、规格、实验、fixtures、resources、缓存及其他构建产物仅保留在本地，
 不进入提交，也不能成为构建或 CI 的必需输入。新增必要源码或构建资产时，
 按实际路径扩展 `.gitignore` 白名单，不整体放行资料目录。
 

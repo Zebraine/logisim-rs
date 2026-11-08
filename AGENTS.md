@@ -85,7 +85,9 @@
   不翻译用户名称/标签/外观文字及 `.circ` 标识；控件持久 ID 不依赖翻译结果。
   语言与仿真模式偏好由桌面宿主保存到用户配置目录，不进入项目、编辑历史或 Git；中文使用系统字体。
 - Git 仅保存必要源码、Cargo/工具链文件、LICENSE、Git/构建检查配置及根目录的
-  AGENTS.md、CONTRIBUTING.md、README.md。范围由 `.gitignore` 白名单控制；
+  AGENTS.md、CONTRIBUTING.md、README.md；另按用户要求保存 `examples/course/` 中的
+  CPU 示例 `.circ` 及共用的 `course.wasm`。示例只用相对插件路径，不含本机绝对备用路径。
+  范围由 `.gitignore` 白名单控制；
   新增构建必需文件时同步调整，不用 `git add -f` 绕过忽略规则。
 - 设计、进度、行为规格、实验、fixtures、resources 和缓存仅留本地，不提交。
   本地 `docs/`、`specs/`、`experiments/` 存在时先阅读相关材料；这些资料不是构建依赖。

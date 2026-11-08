@@ -1,4 +1,4 @@
-# Default deny: only the minimal build and root project documents enter Git.
+# Default deny: minimal build, root documents, and runnable circuit examples.
 *
 
 # Workspace, toolchain, license, and root project documents.
@@ -33,6 +33,12 @@
 !/crates/**/Cargo.toml
 !/crates/**/build.rs
 !/crates/**/src/**/*.rs
+
+# Published CPU examples and their shared runtime plugin only.
+!/examples/
+!/examples/course/
+!/examples/course/*.circ
+!/examples/course/course.wasm
 
 # Local design and observation material, including each directory's README.
 /docs/

@@ -143,6 +143,46 @@ Linux 构建另需 `pkg-config` 与 Fontconfig 开发包（Debian/Ubuntu：`libf
 拖动分隔线可调整侧栏宽度和上下比例。滚轮缩放，中键或空格＋左键拖动平移；
 左下可输入缩放比例、开关网格，Home 按钮或 Ctrl+0 复位。画布右键也可复位。
 
+## CPU 示例
+
+[`examples/course/`](examples/course/) 提供最终检查交付版中的 8 类 CPU 与 2 个配套测试。
+每个文件可以独立打开，包含所需子电路、原有布局和内嵌 ROM；共用同目录的
+[`course.wasm`](examples/course/course.wasm)（ABI v3，线性内存传输 v1），无需 Java。
+移动示例时请同时复制该模块；依赖仅记录相对路径，不含开发者机器的绝对备用路径。
+
+| 文件 | 主电路 |
+| --- | --- |
+| [single-cycle.circ](examples/course/single-cycle.circ) | 单周期 RISC-V |
+| [ideal-pipeline.circ](examples/course/ideal-pipeline.circ) | 理想流水线 |
+| [bubble-pipeline.circ](examples/course/bubble-pipeline.circ) | 气泡流水线 |
+| [redirect-pipeline.circ](examples/course/redirect-pipeline.circ) | 重定向流水线 |
+| [dynamic-branch-prediction.circ](examples/course/dynamic-branch-prediction.circ) | 动态分支预测 |
+| [single-interrupt.circ](examples/course/single-interrupt.circ) | 单周期＋单级中断 |
+| [nested-interrupt.circ](examples/course/nested-interrupt.circ) | 单周期＋多级中断 |
+| [pipeline-interrupt.circ](examples/course/pipeline-interrupt.circ) | 流水多级中断 |
+| [pipeline-interrupt-benchmark.circ](examples/course/pipeline-interrupt-benchmark.circ) | 流水中断基准测试 |
+| [instruction-coverage.circ](examples/course/instruction-coverage.circ) | 综合指令覆盖测试 |
+
+```sh
+cargo run -p logisim-rs --release --locked -- examples/course/redirect-pipeline.circ
+```
+
+使用 Poke 工具按下并松开电路中的“总复位”或“复位”，再用 Ctrl+K 启动自动时钟。
+全部示例已检查无省略导入、文件往返、相对路径加载及稳定态模式下复位后 128 tick 推进。
+重定向流水线和动态分支预测另已对照完整运行轨迹，分别为 2298 和 1766 周期，
+结束时数码管均为 `0000 0038`。其余示例尚未完成整段程序和中断操作的参考行为验收。
+
+随附插件由本仓库 `apps/course-plugin` 构建；更新插件后可重建并替换：
+
+```sh
+cargo build -p logisim-course-plugin --release --target wasm32-unknown-unknown --locked --offline
+cp target/wasm32-unknown-unknown/release/logisim_course_plugin.wasm examples/course/course.wasm
+```
+
+电路来自用户提供的“2026秋硬件综合训练课设资料发布包／最终检查交付”，沿用原有电路名称和标注；
+分发副本将课程 JAR 元件迁移为 Wasm 插件，并只保留各主电路所需的子电路。
+这些课程电路属于外部资料，不纳入本项目原创代码的 MIT 许可范围；原始资料、JAR、实验记录不随示例提交。
+
 ## 用户设置
 
 首次启动使用英语。通过 **File → Settings → Language**（文件 → 设置 → 语言）
@@ -360,7 +400,7 @@ Simulate 菜单与工具栏提供单 tick、自动 tick，默认频率为 4 Hz�
 求值有传播预算，超限暂停并提示检查反馈，可修改输入/电路或复位恢复。
 当前覆盖已有组合与基础时序元件，不承诺参考程序的全部传播延迟或反馈行为兼容。
 
-Git 只保存最小构建及根目录必要文档。设计、规格、实验和参考资料保留在本地，
+Git 保存最小构建、根目录必要文档及 CPU 示例。设计、规格、实验和其他参考资料保留在本地，
 不参与构建。提交范围见 [CONTRIBUTING.md](CONTRIBUTING.md)，
 协作及 Cleanroom 约定见 [AGENTS.md](AGENTS.md)。
 
