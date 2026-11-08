@@ -47,7 +47,12 @@ crates/logisim-ui/       egui 编辑器与画布
 `logisim_sim::combinational::Analysis::new(&circuit)` 可按连接关系自动识别组合区域，
 返回拓扑顺序、逐位输入来源、对外输出和状态/反馈/连接异常等边界原因。
 已同步的实例可调用 `Simulator::combinational_analysis()` 复用拓扑；分析只读、按需执行，
-支持含寄存器的混合电路，不依赖自动生成标记。当前尚未接管求值或改变传播/采样行为。
+支持含寄存器的混合电路，不依赖自动生成标记。
+`CompiledCircuit::new(&circuit)` 或 `Simulator::compile_combinational()` 将这些区域编译为
+四态表达式计划，保留共享节点、预计算总线映射并折叠常量子图。通过 `evaluator()` 创建
+实例工作区，`evaluate` 读取边界驱动快照，`values` 查询内部与对外输出；输入缺失或位宽
+错误会使本次结果失效。计划可共享，电气属性或 ROM 内容编辑后须重编译。
+目前此 API 用于独立求值与稳定态对照，尚未接入桌面运行循环，不改变传播或时序采样。
 
 ## 运行与检查
 
