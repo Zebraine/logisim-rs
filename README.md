@@ -44,6 +44,11 @@ crates/logisim-ui/       egui 编辑器与画布
 新增元件沿现有族模块扩展；专有默认值、端口规则和四态行为留在对应层，
 共享流程不放宽兼容边界。详细重构设计和运行证据仅保存在本地资料中。
 
+`logisim_sim::combinational::Analysis::new(&circuit)` 可按连接关系自动识别组合区域，
+返回拓扑顺序、逐位输入来源、对外输出和状态/反馈/连接异常等边界原因。
+已同步的实例可调用 `Simulator::combinational_analysis()` 复用拓扑；分析只读、按需执行，
+支持含寄存器的混合电路，不依赖自动生成标记。当前尚未接管求值或改变传播/采样行为。
+
 ## 运行与检查
 
 动态插件使用 Wasm32 ABI v1。协议类型和约束位于 `logisim-plugin-api` 的 Rust 文档，

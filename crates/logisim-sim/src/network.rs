@@ -1,5 +1,6 @@
 use logisim_core::{Circuit, Id, Kind, WireIndex};
 use std::collections::{BTreeMap, BTreeSet};
+mod dependencies;
 mod resolution;
 pub(crate) use resolution::Resolution;
 
