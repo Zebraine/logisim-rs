@@ -4,6 +4,67 @@ use logisim_core::{Circuit, Project, Radix};
 use logisim_core::{Component, Kind, Point};
 use logisim_sim::{ProjectSimulator, Value};
 use logisim_ui::{SignalTone, SimulationAction};
+
+#[test]
+fn presentation_retains_each_display_family_and_prunes_removed_devices() {
+    let kinds = [
+        Kind::Led,
+        Kind::SevenSegment,
+        Kind::HexDisplay,
+        Kind::RgbLed,
+        Kind::DotMatrix,
+        Kind::Keyboard,
+        Kind::Tty,
+        Kind::Joystick,
+        Kind::Register,
+        Kind::Ram,
+    ];
+    let mut project = Project::default();
+    let circuit = &mut project.main_circuit_mut().circuit;
+    let ids: Vec<_> = kinds
+        .into_iter()
+        .enumerate()
+        .map(|(i, kind)| {
+            circuit.add_component(Component::new(kind, Point::new(500 * i as i32, 100)))
+        })
+        .collect();
+    let ordinary = circuit.add_component(Component::new(
+        Kind::Gate(logisim_core::Gate::Not),
+        Point::new(6000, 100),
+    ));
+    let mut sim = ProjectSimulator::default();
+    sim.synchronize(&project, project.main);
+    sim.advance(128);
+    let view = present_project(&project.main_circuit().circuit, &sim, &[]);
+    assert_eq!(
+        view.indicators.keys().copied().collect::<Vec<_>>(),
+        ids[..3]
+    );
+    assert_eq!(view.rgb.keys().copied().collect::<Vec<_>>(), [ids[3]]);
+    assert_eq!(view.matrices.keys().copied().collect::<Vec<_>>(), [ids[4]]);
+    assert_eq!(view.keyboards.keys().copied().collect::<Vec<_>>(), [ids[5]]);
+    assert_eq!(view.ttys.keys().copied().collect::<Vec<_>>(), [ids[6]]);
+    assert_eq!(view.joysticks.keys().copied().collect::<Vec<_>>(), [ids[7]]);
+    assert_eq!(view.storage.keys().copied().collect::<Vec<_>>(), [ids[8]]);
+    assert_eq!(view.memories.keys().copied().collect::<Vec<_>>(), [ids[9]]);
+    assert!(view.ports.contains_key(&(ordinary, 0)));
+    project
+        .main_circuit_mut()
+        .circuit
+        .remove(&ids.into_iter().collect());
+    sim.synchronize(&project, project.main);
+    sim.advance(128);
+    let view = present_project(&project.main_circuit().circuit, &sim, &[]);
+    assert!(view.indicators.is_empty());
+    assert!(view.rgb.is_empty());
+    assert!(view.matrices.is_empty());
+    assert!(view.keyboards.is_empty());
+    assert!(view.ttys.is_empty());
+    assert!(view.joysticks.is_empty());
+    assert!(view.storage.is_empty());
+    assert!(view.memories.is_empty());
+}
+
 #[test]
 fn nested_switches_are_pokable_but_parent_driven_pins_are_protected() {
     let mut p = logisim_core::Project::default();

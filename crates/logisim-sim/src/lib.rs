@@ -1,5 +1,6 @@
 //! Bounded signal propagation and sequential state, independent of the GUI.
 mod engine;
+mod execution;
 mod gates;
 mod hierarchy;
 mod progress;
@@ -66,6 +67,7 @@ pub struct Simulator {
     plugin_states: BTreeMap<Id, plugins::State>,
     circuit: Circuit,
     network: Network,
+    plan: execution::Plan,
     inputs: BTreeMap<Id, Value>,
     joysticks: BTreeMap<Id, Point>,
     terminals: BTreeMap<Id, terminal::State>,
@@ -87,6 +89,7 @@ impl Default for Simulator {
             plugin_states: BTreeMap::new(),
             circuit: Circuit::default(),
             network: Network::default(),
+            plan: execution::Plan::default(),
             inputs: BTreeMap::new(),
             joysticks: BTreeMap::new(),
             terminals: BTreeMap::new(),

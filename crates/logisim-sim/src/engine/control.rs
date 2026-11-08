@@ -89,9 +89,7 @@ impl Simulator {
     }
     /// Tick controls are useful for clock sources and for display persistence.
     pub fn has_clocks(&self) -> bool {
-        self.circuit.components.iter().any(|c| {
-            c.kind == Kind::Clock || (c.kind == Kind::DotMatrix && c.io.matrix_persistence > 0)
-        })
+        self.plan.has_clocks
     }
     /// Queue a tick only on a settled network, so separate edges cannot collapse into one batch.
     pub fn tick(&mut self) -> bool {
@@ -104,18 +102,15 @@ impl Simulator {
     pub(crate) fn tick_clocks(&mut self) {
         self.display_ticks = self.display_ticks.saturating_add(1);
         self.update_displays();
-        let clocks: Vec<_> = self
-            .circuit
-            .components
-            .iter()
-            .filter(|c| c.kind == Kind::Clock)
-            .cloned()
-            .collect();
-        for c in clocks {
+        let mut outputs = Vec::with_capacity(self.plan.clocks.len());
+        for index in &self.plan.clocks {
+            let c = &self.circuit.components[*index];
             let state = self.storage.get_mut(&c.id).unwrap();
-            state.tick(&c);
-            let value = state.value;
-            self.drive_port((c.id, 0), value);
+            state.tick(c);
+            outputs.push((c.id, state.value));
+        }
+        for (id, value) in outputs {
+            self.drive_port((id, 0), value);
         }
     }
     pub fn poke_clock(&mut self, id: Id) {

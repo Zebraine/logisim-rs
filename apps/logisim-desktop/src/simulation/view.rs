@@ -19,7 +19,9 @@ fn present(circuit: &Circuit, sim: &Simulator) -> SimulationView {
         }
     }
     for c in &circuit.components {
-        if let Some(graphics) = sim.plugin_graphics(c.id) {
+        if c.kind == Kind::Plugin
+            && let Some(graphics) = sim.plugin_graphics(c.id)
+        {
             view.plugin_graphics.insert(c.id, graphics.to_vec());
         }
         for index in 0..c.ports().len() {
@@ -34,16 +36,24 @@ fn present(circuit: &Circuit, sim: &Simulator) -> SimulationView {
         if c.kind == Kind::Clock {
             view.clocks.insert(c.id);
         }
-        if let Some(contents) = sim.memory_contents(c.id) {
+        if c.kind == Kind::Ram
+            && let Some(contents) = sim.memory_contents(c.id)
+        {
             view.memories.insert(c.id, contents.clone());
         }
-        if let Some(value) = sim.stored_value(c.id) {
+        if c.kind.is_storage()
+            && let Some(value) = sim.stored_value(c.id)
+        {
             view.storage.insert(c.id, signal(value, false));
         }
-        if let Some(rgb) = sim.rgb_color(c.id) {
+        if c.kind == Kind::RgbLed
+            && let Some(rgb) = sim.rgb_color(c.id)
+        {
             view.rgb.insert(c.id, rgb);
         }
-        if let Some(cells) = sim.matrix_cells(c.id) {
+        if c.kind == Kind::DotMatrix
+            && let Some(cells) = sim.matrix_cells(c.id)
+        {
             view.matrices.insert(
                 c.id,
                 cells
@@ -56,10 +66,14 @@ fn present(circuit: &Circuit, sim: &Simulator) -> SimulationView {
                     .collect(),
             );
         }
-        if let Some(buffer) = sim.keyboard_buffer(c.id) {
+        if c.kind == Kind::Keyboard
+            && let Some(buffer) = sim.keyboard_buffer(c.id)
+        {
             view.keyboards.insert(c.id, buffer);
         }
-        if let Some(screen) = sim.tty(c.id) {
+        if c.kind == Kind::Tty
+            && let Some(screen) = sim.tty(c.id)
+        {
             view.ttys.insert(
                 c.id,
                 logisim_ui::TtyView {
@@ -69,10 +83,14 @@ fn present(circuit: &Circuit, sim: &Simulator) -> SimulationView {
                 },
             );
         }
-        if let Some(offset) = sim.joystick(c.id) {
+        if c.kind == Kind::Joystick
+            && let Some(offset) = sim.joystick(c.id)
+        {
             view.joysticks.insert(c.id, offset);
         }
-        if let Some(lights) = sim.indicator(c.id) {
+        if matches!(c.kind, Kind::Led | Kind::SevenSegment | Kind::HexDisplay)
+            && let Some(lights) = sim.indicator(c.id)
+        {
             view.indicators.insert(c.id, lights);
         }
         if c.kind == Kind::Button {

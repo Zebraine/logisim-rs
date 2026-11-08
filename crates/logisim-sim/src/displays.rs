@@ -42,15 +42,15 @@ impl Simulator {
     }
     pub(crate) fn update_displays(&mut self) {
         let samples: Vec<_> = self
-            .circuit
-            .components
+            .plan
+            .matrices
             .iter()
-            .filter(|c| c.kind == Kind::DotMatrix)
-            .map(|c| {
+            .map(|entry| {
+                let c = &self.circuit.components[entry.component];
                 (
                     c.id,
                     c.io.matrix_persistence,
-                    matrix(c, &self.display_ports(c)),
+                    matrix(c, &entry.sample(&self.values)),
                 )
             })
             .collect();

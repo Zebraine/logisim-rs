@@ -33,6 +33,7 @@ fn main() -> eframe::Result {
                 clocks: Default::default(),
                 rates: Default::default(),
                 files: Default::default(),
+                window_title: String::new(),
             };
             if let Some(path) = std::env::args_os().nth(1) {
                 logisim_ui::i18n::with_language(app.workspace.language(), || {
@@ -55,6 +56,7 @@ struct DesktopApp {
     clocks: clocks::Clocks,
     rates: runtime_rates::RuntimeRates,
     files: files::Files,
+    window_title: String,
 }
 
 impl eframe::App for DesktopApp {
@@ -116,18 +118,22 @@ impl DesktopApp {
             .show(ui.ctx(), &mut self.workspace, &mut self.simulator);
         self.preferences.synchronize(&mut self.workspace);
         let view = self.files.present(&self.workspace);
-        ui.ctx()
-            .send_viewport_cmd(eframe::egui::ViewportCommand::Title(format!(
-                "Logisim rs — {} · {}{}{}",
-                view.circuit_name,
-                view.display_title(),
-                if view.dirty { " *" } else { "" },
-                if view.partial {
-                    logisim_ui::i18n::tr(" (partial)")
-                } else {
-                    ""
-                }
-            )));
+        let title = format!(
+            "Logisim rs — {} · {}{}{}",
+            view.circuit_name,
+            view.display_title(),
+            if view.dirty { " *" } else { "" },
+            if view.partial {
+                logisim_ui::i18n::tr(" (partial)")
+            } else {
+                ""
+            }
+        );
+        if self.window_title != title {
+            ui.ctx()
+                .send_viewport_cmd(eframe::egui::ViewportCommand::Title(title.clone()));
+            self.window_title = title;
+        }
         let edited = self
             .simulator
             .synchronize(self.workspace.project(), self.workspace.simulation_root());

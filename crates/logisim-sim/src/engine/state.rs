@@ -15,6 +15,8 @@ impl Simulator {
         self.synchronize_plugins(circuit);
         if electrically_equal(&self.circuit, circuit) {
             self.circuit = circuit.clone();
+            // Text insertion/removal can shift indices without changing any nets.
+            self.plan = crate::execution::Plan::compile(circuit, &self.network);
             self.update_displays();
             return false;
         }
@@ -88,6 +90,7 @@ impl Simulator {
             .collect();
         self.circuit = circuit.clone();
         self.network = Network::compile(circuit);
+        self.plan = crate::execution::Plan::compile(circuit, &self.network);
         self.initialize(held);
         true
     }

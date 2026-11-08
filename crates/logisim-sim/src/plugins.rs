@@ -101,17 +101,14 @@ impl Simulator {
     }
     pub(crate) fn schedule_plugins(&mut self, action: Option<(Id, Event)>) {
         let samples: Vec<_> = self
-            .circuit
-            .components
+            .plan
+            .plugins
             .iter()
-            .filter(|c| c.kind == Kind::Plugin)
-            .map(|c| {
-                let values = (0..c.ports().len())
-                    .map(|i| {
-                        self.port_value(c.id, i)
-                            .expect("compiled plugin port")
-                            .into()
-                    })
+            .map(|entry| {
+                let c = &self.circuit.components[entry.component];
+                let values = entry
+                    .values(&self.values)
+                    .map(Into::into)
                     .collect::<Vec<_>>();
                 (c.id, values)
             })
