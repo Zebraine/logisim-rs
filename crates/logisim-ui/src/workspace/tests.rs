@@ -37,7 +37,15 @@ fn canvas_keeps_the_right_hand_layout_at_both_window_sizes() {
         frame(&ctx, &mut app, size, vec![]);
         let canvas = app.canvas.rect;
         assert!(canvas.left() >= 230.0 && canvas.left() < size.x * 0.5);
-        assert!(canvas.top() >= 65.0 && canvas.top() < 90.0);
+        let toolbar_bottom = if size.x < 1000.0 {
+            95.0..115.0 // A second toolbar row keeps runtime telemetry visible.
+        } else {
+            65.0..90.0
+        };
+        assert!(
+            toolbar_bottom.contains(&canvas.top()),
+            "{size:?}: {canvas:?}"
+        );
         assert_eq!(canvas.right(), size.x);
         assert_eq!(
             canvas.bottom(),

@@ -14,7 +14,7 @@ impl Workspace {
             self.appearance.toolbar(ui, &mut self.editor);
             return;
         }
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             for (icon, tool, hint) in [
                 (
                     Icon::Poke,

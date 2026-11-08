@@ -8,6 +8,7 @@ mod library_import;
 mod memory_import;
 mod plugins;
 mod preferences;
+mod runtime_rates;
 mod simulation;
 mod storage;
 
@@ -30,6 +31,7 @@ fn main() -> eframe::Result {
                 preferences,
                 simulator: Default::default(),
                 clocks: Default::default(),
+                rates: Default::default(),
                 files: Default::default(),
             };
             if let Some(path) = std::env::args_os().nth(1) {
@@ -51,6 +53,7 @@ struct DesktopApp {
     workspace: logisim_ui::Workspace,
     simulator: logisim_sim::ProjectSimulator,
     clocks: clocks::Clocks,
+    rates: runtime_rates::RuntimeRates,
     files: files::Files,
 }
 
@@ -64,6 +67,7 @@ impl DesktopApp {
         self.simulator.set_plugins(self.files.plugins.clone());
         self.simulator
             .synchronize(self.workspace.project(), self.workspace.simulation_root());
+        let ticks_before_poll = self.simulator.ticks();
         if self.files.busy() {
             self.clocks.suspend();
         } else if let Some(delay) = self
@@ -72,6 +76,8 @@ impl DesktopApp {
         {
             ui.ctx().request_repaint_after(delay);
         }
+        self.rates
+            .record_ticks(self.simulator.ticks().saturating_sub(ticks_before_poll));
         if !self.files.busy() {
             self.simulator.advance(64);
         }
@@ -81,6 +87,13 @@ impl DesktopApp {
             self.workspace.simulation_path(),
         );
         self.clocks.present(&mut simulation_view);
+        self.rates.present(
+            std::time::Instant::now(),
+            ui.ctx().cumulative_frame_nr(),
+            &mut simulation_view,
+        );
+        ui.ctx()
+            .request_repaint_after(runtime_rates::REFRESH_INTERVAL);
         self.workspace.set_simulation(simulation_view);
         if ui.input(|i| i.viewport().close_requested()) && !self.files.allow_close {
             ui.ctx()
@@ -122,11 +135,14 @@ impl DesktopApp {
         let acted = !actions.is_empty();
         for action in actions {
             self.clocks.action(&action);
+            let ticks_before_action = self.simulator.ticks();
             simulation::apply_project(
                 &mut self.simulator,
                 self.workspace.simulation_path(),
                 action,
             );
+            self.rates
+                .record_ticks(self.simulator.ticks().saturating_sub(ticks_before_action));
         }
         if edited || acted || (self.simulator.enabled() && self.simulator.pending_count() > 0) {
             ui.ctx().request_repaint();

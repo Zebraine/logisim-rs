@@ -119,7 +119,7 @@ impl Workspace {
             .show(ui, |ui| self.menus(ui));
 
         Panel::top("tools")
-            .exact_size(42.0)
+            .min_size(42.0)
             .frame(
                 Frame::NONE
                     .fill(CHROME)

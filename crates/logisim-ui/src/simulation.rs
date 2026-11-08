@@ -93,6 +93,9 @@ pub struct SimulationView {
     pub ticks: u64,
     pub automatic_ticks: bool,
     pub tick_hz: u32,
+    /// Host measurements over a wall-clock sampling interval, not target rates.
+    pub frames_per_second: Option<f64>,
+    pub actual_tick_hz: f64,
     pub clocks: BTreeSet<Id>,
     pub buttons: BTreeMap<Id, bool>,
     pub joysticks: BTreeMap<Id, Point>,
@@ -345,6 +348,31 @@ impl SimulationUi {
             .changed()
         {
             self.actions.push(SimulationAction::ToggleTicks);
+        }
+        ui.separator();
+        let fps = self
+            .view
+            .frames_per_second
+            .map_or_else(|| "—".into(), |value| format!("{value:.1}"));
+        for (label, hint) in [
+            (
+                tf!("FPS: {}", fps),
+                "Completed UI frames per second, measured over about one second. Idle redraws are included.",
+            ),
+            (
+                tf!("Target: {} Hz", self.view.tick_hz),
+                "Configured automatic clock tick frequency.",
+            ),
+            (
+                tf!("Actual: {} Hz", format!("{:.1}", self.view.actual_tick_hz)),
+                "Successful clock ticks per second, measured over about one second. Includes manual ticks; not full clock cycles or propagation steps.",
+            ),
+        ] {
+            ui.add(
+                egui::Label::new(egui::RichText::new(label).monospace().size(11.0))
+                    .wrap_mode(egui::TextWrapMode::Extend),
+            )
+            .on_hover_text(tr(hint));
         }
     }
     fn can_tick(&self) -> bool {

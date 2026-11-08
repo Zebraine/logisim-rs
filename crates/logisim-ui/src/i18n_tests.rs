@@ -3,9 +3,17 @@ use egui::{Context, Event, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, 
 use logisim_core::{Component, Kind, Point};
 
 fn frame(ctx: &Context, app: &mut Workspace, events: Vec<Event>) -> Vec<(String, Rect)> {
+    frame_at_size(ctx, app, events, egui::vec2(1200.0, 820.0))
+}
+fn frame_at_size(
+    ctx: &Context,
+    app: &mut Workspace,
+    events: Vec<Event>,
+    size: egui::Vec2,
+) -> Vec<(String, Rect)> {
     let mut output = ctx.run_ui(
         RawInput {
-            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(1200.0, 820.0))),
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, size)),
             events,
             ..Default::default()
         },
@@ -61,6 +69,59 @@ fn click(ctx: &Context, app: &mut Workspace, text: &str) {
 }
 fn has(labels: &[(String, Rect)], expected: &str) -> bool {
     labels.iter().any(|(text, _)| text == expected)
+}
+
+#[test]
+fn runtime_rates_are_visible_beside_controls_in_both_languages_and_narrow_windows() {
+    for language in Language::ALL {
+        for size in [egui::vec2(1200.0, 820.0), egui::vec2(720.0, 480.0)] {
+            let ctx = Context::default();
+            configure(&ctx);
+            let mut app = Workspace::default();
+            app.set_language(language);
+            app.set_simulation(SimulationView {
+                enabled: true,
+                has_clocks: true,
+                tick_hz: 4096,
+                actual_tick_hz: 1766.5,
+                frames_per_second: Some(59.9),
+                ..Default::default()
+            });
+            let before = app.project().clone();
+            let mut labels = vec![];
+            for _ in 0..3 {
+                labels = frame_at_size(&ctx, &mut app, vec![], size);
+            }
+            let expected = i18n::with_language(language, || {
+                [
+                    tf!("FPS: {}", "59.9"),
+                    tf!("Target: {} Hz", 4096),
+                    tf!("Actual: {} Hz", "1766.5"),
+                ]
+            });
+            let auto = i18n::with_language(language, || i18n::tr("Auto ticks"));
+            let auto = labels.iter().find(|(text, _)| text == auto).unwrap().1;
+            for expected in expected {
+                let rect = labels
+                    .iter()
+                    .find(|(text, _)| text == &expected)
+                    .unwrap_or_else(|| panic!("Missing {expected}: {labels:?}"))
+                    .1;
+                assert!(
+                    rect.left() >= 0.0 && rect.right() <= size.x,
+                    "{expected}: {rect:?}"
+                );
+                assert!(
+                    rect.bottom() <= app.canvas.rect.top(),
+                    "{expected} is outside the toolbar"
+                );
+                assert!(rect.left() >= auto.right() || rect.top() >= auto.bottom());
+            }
+            assert_eq!(app.project(), &before);
+            assert!(!app.editor.can_undo());
+            assert!(app.take_simulation_actions().is_empty());
+        }
+    }
 }
 
 #[test]
