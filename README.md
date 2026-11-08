@@ -1,6 +1,7 @@
 # logisim-rs
 
-[![Rust 2024](https://img.shields.io/badge/Rust-2024-000000?logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![Rust 1.99.0](https://img.shields.io/badge/Rust-1.99.0-000000?logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![Total downloads](https://img.shields.io/github/downloads/Zebraine/logisim-rs/total?logo=github)](https://github.com/Zebraine/logisim-rs/releases)
 
 基于 Rust + egui 的桌面数字逻辑电路编辑与仿真工具。
 以 Logisim-ITA v2.16.2.2 的实际运行行为为兼容目标，采用 Cleanroom 方式独立实现。
