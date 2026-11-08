@@ -114,6 +114,10 @@ impl Workspace {
     pub fn set_simulation(&mut self, view: SimulationView) {
         self.editor.simulation.view = view;
     }
+    /// Update host telemetry without rebuilding or cloning the displayed snapshot.
+    pub fn simulation_mut(&mut self) -> &mut SimulationView {
+        &mut self.editor.simulation.view
+    }
     pub fn take_simulation_actions(&mut self) -> Vec<SimulationAction> {
         std::mem::take(&mut self.editor.simulation.actions)
     }

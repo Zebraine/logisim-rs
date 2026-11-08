@@ -1,7 +1,7 @@
 //! The host owns file access; decoded data is committed only after full validation.
+use crate::simulation::Host;
 use logisim_core::{Kind, MemoryContents};
 use logisim_file::HexError;
-use logisim_sim::ProjectSimulator;
 use logisim_ui::{MemoryImportTarget, Workspace, i18n::tr, tf};
 use std::path::Path;
 
@@ -32,7 +32,7 @@ pub(crate) fn load(
     path: &Path,
     target: &MemoryImportTarget,
     workspace: &mut Workspace,
-    sim: &mut ProjectSimulator,
+    sim: &mut impl Host,
 ) -> Result<(), String> {
     let c = target.component();
     let contents = read(path, c.memory.address_bits, c.bits)?;

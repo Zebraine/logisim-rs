@@ -8,11 +8,13 @@ mod plugin_tests;
 mod tests;
 use dialog::{Dialog, Response};
 
+use crate::simulation::Host;
 use crate::{
     file_picker::{Mode, Picker},
     storage::{self, SaveMode, Storage},
 };
 use eframe::egui;
+#[cfg(test)]
 use logisim_sim::ProjectSimulator as Simulator;
 use logisim_ui::{DocumentView, FileAction, Workspace};
 use logisim_ui::{i18n::tr, tf};
@@ -78,7 +80,7 @@ impl Files {
     fn resolve_plugins(
         &mut self,
         workspace: &mut Workspace,
-        sim: &mut Simulator,
+        sim: &mut impl Host,
         warnings: Vec<String>,
     ) {
         let resolution = crate::plugins::Resolution::new(
@@ -95,7 +97,7 @@ impl Files {
             self.import_warnings(resolution.warnings);
         }
     }
-    pub fn load(&mut self, path: &Path, workspace: &mut Workspace, sim: &mut Simulator) {
+    pub fn load(&mut self, path: &Path, workspace: &mut Workspace, sim: &mut impl Host) {
         match self.storage.load(path) {
             Ok((circuit, warnings)) => {
                 self.directory = self
@@ -106,7 +108,7 @@ impl Files {
                     .unwrap_or(Path::new("."))
                     .to_path_buf();
                 workspace.replace_project(circuit);
-                *sim = Simulator::default();
+                sim.new_document();
                 self.resolve_plugins(workspace, sim, warnings);
             }
             Err(e) => self.error(format!("{}\n\n{}", path.display(), tr(&e))),
@@ -117,7 +119,7 @@ impl Files {
         action: FileAction,
         ctx: &egui::Context,
         workspace: &mut Workspace,
-        sim: &mut Simulator,
+        sim: &mut impl Host,
     ) {
         if self.busy() {
             return;
@@ -155,7 +157,7 @@ impl Files {
         action: FileAction,
         ctx: &egui::Context,
         workspace: &mut Workspace,
-        sim: &mut Simulator,
+        sim: &mut impl Host,
     ) {
         match action {
             FileAction::New => {
@@ -163,7 +165,7 @@ impl Files {
                 workspace.set_plugin_catalogue(vec![]);
                 self.storage = Storage::new();
                 workspace.replace_project(Default::default());
-                *sim = Simulator::default();
+                sim.new_document();
             }
             FileAction::Open => self.picker(Mode::Open),
             FileAction::ImportLibrary => self.picker(Mode::Library),
@@ -201,7 +203,7 @@ impl Files {
         mode: SaveMode<'_>,
         ctx: &egui::Context,
         workspace: &mut Workspace,
-        sim: &mut Simulator,
+        sim: &mut impl Host,
     ) {
         match self.storage.save(workspace.project(), path, mode) {
             Ok(()) => {
@@ -215,7 +217,7 @@ impl Files {
             Err(e) => self.error(format!("{}\n\n{}", path.display(), tr(&e))),
         }
     }
-    pub fn show(&mut self, ctx: &egui::Context, workspace: &mut Workspace, sim: &mut Simulator) {
+    pub fn show(&mut self, ctx: &egui::Context, workspace: &mut Workspace, sim: &mut impl Host) {
         let Some(mut dialog) = self.dialog.take() else {
             return;
         };
@@ -228,7 +230,7 @@ impl Files {
         response: Response,
         ctx: &egui::Context,
         workspace: &mut Workspace,
-        sim: &mut Simulator,
+        sim: &mut impl Host,
     ) {
         if matches!(response, Response::Cancel) {
             self.after_save = None;

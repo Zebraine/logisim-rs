@@ -60,7 +60,7 @@ impl Clocks {
         }
         let period = Duration::from_secs_f64(1.0 / f64::from(self.hz));
         let mut due = *self.deadline.get_or_insert(now + period);
-        // Absorb normal rendering jitter, but never replay a stalled window's backlog.
+        // Absorb normal scheduling jitter, but never replay a stalled worker's backlog.
         if now.saturating_duration_since(due) > Duration::from_millis(50) {
             due = now;
         }
@@ -74,7 +74,7 @@ impl Clocks {
             ticks += 1;
             due += period;
             // Every edge propagates fully before the next one. Bound both work and
-            // elapsed time so high rates cannot starve the editor on a costly circuit.
+            // elapsed time so high rates cannot delay queued commands on a costly circuit.
             while sim.pending_count() > 0
                 && sim.enabled()
                 && !sim.limited()
