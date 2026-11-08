@@ -75,5 +75,5 @@ pub fn sample(request: StableEvaluation) -> Result<Vec<u8>, String> {
     let mut file = register_state::decode(&request.state)?;
     let ports = std::array::from_fn(|i| Value::from(request.inputs[i]));
     file.sample(register_state::trigger(&request.properties), &ports);
-    register_state::encode(&file)
+    Ok(register_state::encode(&file))
 }

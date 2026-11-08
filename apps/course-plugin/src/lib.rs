@@ -76,7 +76,7 @@ fn evaluate(request: Evaluation) -> Result<Update, String> {
     for (i, v) in outputs.into_iter().enumerate() {
         update.outputs[i] = Signal::from(v);
     }
-    update.state = register_state::encode(&file)?;
+    update.state = register_state::encode(&file);
     update.graphics = graphics::register_words(file.words());
     Ok(update)
 }

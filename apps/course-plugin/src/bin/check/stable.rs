@@ -46,6 +46,14 @@ pub fn run(registry: &Registry, tools: &[Component]) -> Result<(), String> {
     pb[2].value = 0;
     let mut sa = a.reset(&pa)?.state;
     let mut sb = b.reset(&pb)?.state;
+    // Snapshots produced by the old JSON codec remain valid in the actual VM.
+    let mut legacy = vec![Signal::from(Value::known(32, 0)); 32];
+    legacy.push(Value::known(1, 0).into());
+    let legacy = serde_json::to_vec(&legacy).map_err(|e| e.to_string())?;
+    assert_eq!(a.outputs(&pa, &legacy)?, a.outputs(&pa, &sa)?);
+    pa[3].value = 1;
+    assert_eq!(a.sample(&pa, &legacy)?, a.sample(&pa, &sa)?);
+    pa[3].value = 0;
     // Two output closures and one simultaneous sample per external edge. Q2 sees
     // old Q1 even when Q1's next-state computation happens first.
     for (clock, expected) in [(1, [42, 0]), (0, [42, 0]), (1, [42, 42])] {
