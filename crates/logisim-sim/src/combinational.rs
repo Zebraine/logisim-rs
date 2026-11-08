@@ -5,7 +5,7 @@
 //! changes propagation, samples state, or assumes that a subcircuit is stateless.
 mod expression;
 pub(crate) mod graph;
-pub use expression::{CompileStats, CompiledCircuit, EvaluationError, Evaluator};
+pub use expression::{CompileStats, CompiledCircuit, EvaluationError, EvaluationStats, Evaluator};
 #[cfg(test)]
 mod tests;
 

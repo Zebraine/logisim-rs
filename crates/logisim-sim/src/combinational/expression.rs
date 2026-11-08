@@ -1,5 +1,9 @@
 //! Dense, immutable expression plans. No event queue, clock or mutable circuit state.
+mod incremental;
 mod operation;
+pub use incremental::{EvaluationStats, Evaluator};
+#[cfg(test)]
+mod incremental_tests;
 #[cfg(test)]
 mod tests;
 
@@ -32,6 +36,8 @@ struct Program {
     outputs: BTreeMap<Port, usize>,
     initial: Vec<Value>,
     instructions: Vec<Instruction>,
+    consumers: Vec<Box<[incremental::Consumer]>>,
+    output_ports: Vec<Option<Port>>,
     stats: CompileStats,
     max_ports: usize,
 }
@@ -124,7 +130,12 @@ impl Scratch {
 }
 
 impl Instruction {
-    fn execute(&self, values: &mut [Value], scratch: &mut Scratch) {
+    fn execute(
+        &self,
+        values: &mut [Value],
+        scratch: &mut Scratch,
+        mut changed: impl FnMut(usize, Value, Value),
+    ) {
         scratch.ports.clear();
         scratch
             .ports
@@ -135,7 +146,10 @@ impl Instruction {
         self.operation
             .evaluate(&scratch.ports, &mut scratch.optional, |index, value| {
                 let slot = self.outputs[index].expect("compiled output slot");
-                values[slot] = value;
+                if values[slot] != value {
+                    changed(slot, values[slot], value);
+                    values[slot] = value;
+                }
             });
     }
 }
@@ -170,7 +184,7 @@ impl CompiledCircuit {
             .flat_map(|r| &r.inputs)
             .map(|s| (s.port, slot_for(s.port)))
             .collect();
-        let outputs = analysis
+        let outputs: BTreeMap<_, _> = analysis
             .regions
             .iter()
             .flat_map(|r| &r.nodes)
@@ -215,7 +229,7 @@ impl CompiledCircuit {
                 .all(|(_, r)| matches!(r, Read::Constant(_)))
             {
                 // Use exactly the same four-state kernel; no Boolean identities.
-                instruction.execute(&mut initial, &mut scratch);
+                instruction.execute(&mut initial, &mut scratch, |_, _, _| {});
                 for slot in instruction.outputs.iter().flatten() {
                     known[*slot] = true;
                 }
@@ -226,12 +240,19 @@ impl CompiledCircuit {
             }
         }
         stats.instructions = instructions.len();
+        let consumers = incremental::consumers(&instructions, &initial);
+        let mut output_ports = vec![None; initial.len()];
+        for (&port, &slot) in &outputs {
+            output_ports[slot] = Some(port);
+        }
         Self(Arc::new(Program {
             analysis,
             inputs: inputs.into_iter().collect(),
             outputs,
             initial,
             instructions,
+            consumers,
+            output_ports,
             stats,
             max_ports,
         }))
@@ -246,12 +267,7 @@ impl CompiledCircuit {
     }
 
     pub fn evaluator(&self) -> Evaluator {
-        Evaluator {
-            program: Arc::clone(&self.0),
-            values: self.0.initial.clone(),
-            scratch: Scratch::new(self.0.max_ports),
-            valid: false,
-        }
+        Evaluator::new(Arc::clone(&self.0))
     }
 }
 
@@ -285,78 +301,3 @@ impl fmt::Display for EvaluationError {
     }
 }
 impl std::error::Error for EvaluationError {}
-
-/// Per-instance working values. Evaluators share code but never mutable signals.
-pub struct Evaluator {
-    program: Arc<Program>,
-    values: Vec<Value>,
-    scratch: Scratch,
-    valid: bool,
-}
-
-impl Evaluator {
-    /// Read each boundary drive port once, then evaluate all regions in topological
-    /// order. The caller supplies one coherent snapshot, including X/E bits. Missing
-    /// or incorrectly sized drives fail the whole evaluation; queries then return
-    /// no results. Physically undriven inputs are compiled as X without callbacks.
-    pub fn evaluate(
-        &mut self,
-        read: impl FnMut(Port) -> Option<Value>,
-    ) -> Result<(), EvaluationError> {
-        self.run(read, true).map(|_| ())
-    }
-
-    /// Reuse the previous result when every four-state boundary value is unchanged.
-    /// Returns true when refreshing results instead of reusing a valid result.
-    /// Every input is still validated; an error invalidates the cache and queries.
-    pub fn evaluate_cached(
-        &mut self,
-        read: impl FnMut(Port) -> Option<Value>,
-    ) -> Result<bool, EvaluationError> {
-        self.run(read, false)
-    }
-
-    fn run(
-        &mut self,
-        mut read: impl FnMut(Port) -> Option<Value>,
-        force: bool,
-    ) -> Result<bool, EvaluationError> {
-        let mut changed = force || !self.valid;
-        self.valid = false;
-        for &(port, slot) in &self.program.inputs {
-            let value = read(port).ok_or(EvaluationError::MissingInput { port })?;
-            let expected = self.program.initial[slot].width();
-            if value.width() != expected {
-                return Err(EvaluationError::WidthMismatch {
-                    port,
-                    expected,
-                    actual: value.width(),
-                });
-            }
-            changed |= self.values[slot] != value;
-            self.values[slot] = value;
-        }
-        if changed {
-            for instruction in &self.program.instructions {
-                instruction.execute(&mut self.values, &mut self.scratch);
-            }
-        }
-        self.valid = true;
-        Ok(changed)
-    }
-
-    /// Compiled output drives, including internal nodes, after a successful evaluate.
-    /// Boundary ports and excluded components have no computed value here.
-    pub fn value(&self, port: Port) -> Option<Value> {
-        self.valid
-            .then(|| self.program.outputs.get(&port).map(|&s| self.values[s]))
-            .flatten()
-    }
-
-    pub fn values(&self) -> impl Iterator<Item = (Port, Value)> + '_ {
-        self.program
-            .outputs
-            .iter()
-            .filter_map(|(&port, &slot)| self.valid.then_some((port, self.values[slot])))
-    }
-}

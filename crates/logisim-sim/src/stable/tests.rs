@@ -581,3 +581,148 @@ fn supported_edge_state_families_keep_transitions_and_clock_ticks() {
         }
     }
 }
+
+#[test]
+fn stable_sampling_skips_idle_state_and_recovers_after_steps_reset_and_reindexing() {
+    let mut c = Circuit::default();
+    let mut ffs = vec![];
+    for _ in 0..64 {
+        ffs.push(add(&mut c, Kind::FlipFlop(FlipFlop::D), 1));
+    }
+    let active = ffs[31];
+    let data = driven(&mut c, (active, 3));
+    let clock = driven(&mut c, (active, 2));
+    let unrelated = add(&mut c, Kind::Pin, 1);
+    chain(&mut c, unrelated, 8);
+    let mut sim = Simulator::default();
+    sim.synchronize(&c);
+    assert!(sim.settle_compiled().unwrap().sampled_components >= 64);
+    let report = sim.settle_compiled().unwrap();
+    assert_eq!(
+        (report.evaluated_instructions, report.sampled_components),
+        (0, 0)
+    );
+    sim.set_input(unrelated, 1);
+    let report = sim.settle_compiled().unwrap();
+    assert_eq!(
+        (report.evaluated_instructions, report.sampled_components),
+        (8, 0)
+    );
+    sim.set_input(data, 1);
+    assert_eq!(sim.settle_compiled().unwrap().sampled_components, 1);
+    // Reindexing state entries must not invalidate topology-based dirty membership.
+    add(&mut c, Kind::Text, 1);
+    c.components.rotate_right(1);
+    assert!(!sim.synchronize(&c));
+    sim.set_input(clock, 1);
+    assert_eq!(sim.settle_compiled().unwrap().sampled_components, 2);
+    for id in ffs {
+        assert_eq!(stored(&sim, id), u32::from(id == active));
+    }
+    sim.set_input(clock, 0);
+    assert!(sim.step());
+    assert!(sim.settle_compiled().unwrap().sampled_components >= 64);
+    sim.reset();
+    assert!(sim.settle_compiled().unwrap().sampled_components >= 64);
+    assert_eq!(stored(&sim, active), 0);
+}
+
+#[test]
+fn early_clock_and_reset_changes_survive_unrelated_late_hierarchy_batches() {
+    let mut p = Project::default();
+    let root = p.main;
+    let (child, input, output) = buffered_child(&mut p, 4);
+    let (id, ports) = instance(&mut p, child, root, Point::new(500, 1000));
+    let ip = ports.iter().find(|p| p.0 == input).unwrap().1;
+    let op = ports.iter().find(|p| p.0 == output).unwrap().1;
+    let c = &mut p.main_circuit_mut().circuit;
+    let unrelated = driven(c, (id, ip));
+    let buffer = add(c, Kind::Gate(Gate::Buffer), 1);
+    link(c, (id, op), (buffer, 1));
+    let ff = add(c, Kind::FlipFlop(FlipFlop::D), 1);
+    let clock = driven(c, (ff, 2));
+    let clear = driven(c, (ff, 5));
+    let high = add(c, Kind::Power, 1);
+    link(c, (high, 0), (ff, 3));
+    let mut sim = ProjectSimulator::default();
+    sim.synchronize(&p, root);
+    sim.settle_compiled().unwrap();
+    for i in 0..8 {
+        sim.set_input(clock, i & 1);
+        sim.set_input(clear, u32::from(i % 4 == 3));
+        sim.set_input(unrelated, i & 1);
+        let report = sim.settle_compiled().unwrap();
+        if i > 0 {
+            assert!(report.combinational_passes >= 3);
+        }
+        assert_eq!(
+            stored(sim.view(&[]).unwrap(), ff),
+            u32::from(matches!(i % 4, 1 | 2))
+        );
+        assert_eq!(sim.settle_compiled().unwrap().sampled_components, 0);
+    }
+}
+
+#[test]
+fn selective_state_sampling_matches_full_sampling_over_sparse_four_state_stimuli() {
+    let mut c = Circuit::default();
+    let mut ids = vec![];
+    let mut pins = vec![];
+    for kind in [
+        Kind::FlipFlop(FlipFlop::D),
+        Kind::Register,
+        Kind::Counter,
+        Kind::ShiftRegister,
+        Kind::Random,
+    ] {
+        let id = add(
+            &mut c,
+            kind,
+            if matches!(kind, Kind::FlipFlop(_)) {
+                1
+            } else {
+                4
+            },
+        );
+        let mut comp = c.component(id).unwrap().clone();
+        comp.sequential.random_seed = 17;
+        c.replace_component(comp.clone());
+        for port in 0..comp.ports().len() {
+            if !comp.drives_port(port) {
+                let pin = driven(&mut c, (id, port));
+                pins.push((pin, comp.port_width(port).unwrap()));
+            }
+        }
+        ids.push(id);
+    }
+    let mut fast = Simulator::default();
+    let mut full = Simulator::default();
+    fast.synchronize(&c);
+    full.synchronize(&c);
+    full.prepare_stable().unwrap();
+    let mut seed = 0x8912_3456u32;
+    for i in 0..512 {
+        seed ^= seed << 13;
+        seed ^= seed >> 17;
+        seed ^= seed << 5;
+        let (pin, width) = pins[seed as usize % pins.len()];
+        let bit = [Bit::Zero, Bit::One, Bit::Unknown, Bit::Error][i % 4];
+        for sim in [&mut fast, &mut full] {
+            sim.external_input(pin, Value::filled(width, bit));
+        }
+        fast.settle_compiled().unwrap();
+        for round in 0..PROPAGATION_LIMIT {
+            full.stable_combinational_pass();
+            full.schedule_storage(None);
+            if full.pending.is_empty() {
+                break;
+            }
+            assert!(round + 1 < PROPAGATION_LIMIT);
+        }
+        assert_eq!(fast.drives, full.drives);
+        assert_eq!(fast.values, full.values);
+        for &id in &ids {
+            assert_eq!(fast.stored_value(id), full.stored_value(id));
+        }
+    }
+}

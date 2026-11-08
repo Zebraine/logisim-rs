@@ -8,6 +8,7 @@
 mod tests;
 
 use crate::combinational::{BoundaryReason, CompileStats, Evaluator, Port};
+use crate::work::WorkSet;
 use crate::{Bit, PROPAGATION_LIMIT, Simulator, Value};
 use logisim_core::{Id, Kind, Trigger};
 use std::{
@@ -49,6 +50,10 @@ pub struct Report {
     pub combinational_passes: usize,
     /// Simultaneous whole-design state samples, not individual component evaluations.
     pub state_samples: usize,
+    /// Expression instructions actually evaluated, excluding folded nodes.
+    pub evaluated_instructions: usize,
+    /// Individual state components sampled across all stable boundaries.
+    pub sampled_components: usize,
 }
 impl Report {
     pub(crate) fn include(&mut self, stats: CompileStats) {
@@ -64,6 +69,8 @@ pub(crate) struct Plan {
     stats: CompileStats,
     pub dependencies: BTreeSet<(Port, Port)>,
     materialized: bool,
+    state_changes: WorkSet,
+    sample_all: bool,
 }
 impl Plan {
     fn compile(sim: &Simulator) -> Result<Self, Failure> {
@@ -174,6 +181,8 @@ impl Plan {
             stats: compiled.stats(),
             dependencies,
             materialized: false,
+            state_changes: WorkSet::new(sim.network.nets.len()),
+            sample_all: true,
         })
     }
 }
@@ -182,6 +191,7 @@ impl Simulator {
     pub(crate) fn invalidate_stable_values(&mut self) {
         if let Some(Ok(plan)) = &mut self.stable_plan {
             plan.materialized = false;
+            plan.sample_all = true;
         }
     }
     pub(crate) fn prepare_stable(&mut self) -> Result<CompileStats, Failure> {
@@ -196,7 +206,7 @@ impl Simulator {
 
     /// One expression pass, without any state evaluation. All node drives are
     /// materialized so ordinary wire/port views and subsequent `step` remain valid.
-    pub(crate) fn stable_combinational_pass(&mut self) {
+    pub(crate) fn stable_combinational_pass(&mut self) -> usize {
         self.stable_commit();
         let plan = self.stable_plan.as_mut().unwrap().as_mut().unwrap();
         let evaluated = plan
@@ -213,25 +223,58 @@ impl Simulator {
             })
             .expect("runtime drive widths match compiled topology");
         if !evaluated && plan.materialized {
-            return;
+            return 0;
         }
-        for (port, value) in plan.evaluator.values() {
+        let mut materialize = |(port, value)| {
             if self.drives.get(&port) == Some(&value) {
                 self.pending.remove(&port);
             } else {
                 self.pending.insert(port, value);
             }
+        };
+        if plan.materialized {
+            plan.evaluator.changed_values().for_each(&mut materialize);
+        } else {
+            plan.evaluator.values().for_each(&mut materialize);
         }
+        let evaluated = plan.evaluator.stats().unwrap().instructions;
         plan.materialized = true;
         self.stable_commit();
         self.initial_batch = false;
+        evaluated
     }
 
     fn stable_commit(&mut self) {
         if self.commit_pending() {
+            let plan = self.stable_plan.as_mut().unwrap().as_mut().unwrap();
+            // A hierarchy closure can commit several batches before sampling.
+            // Keep their union; the final batch alone can omit a clock or reset.
+            if !self.plan.storage.is_empty() {
+                for &net in &self.changed_nets.items {
+                    plan.state_changes.insert(net);
+                }
+            }
             // The stable coordinator owns the convergence limit, including bridges.
             self.progress.record_batch(false);
         }
+    }
+
+    pub(crate) fn stable_sample_storage(&mut self) -> usize {
+        let plan = self.stable_plan.as_mut().unwrap().as_mut().unwrap();
+        if !plan.sample_all && plan.state_changes.items.is_empty() {
+            return 0;
+        }
+        let mut changes = std::mem::take(&mut plan.state_changes);
+        let all = std::mem::replace(&mut plan.sample_all, false);
+        let sampled = self.schedule_storage((!all).then_some(&changes));
+        changes.clear();
+        self.stable_plan
+            .as_mut()
+            .unwrap()
+            .as_mut()
+            .unwrap()
+            .state_changes = changes;
+        sampled
     }
 
     pub(crate) fn stable_limit(&mut self) {
@@ -261,11 +304,11 @@ impl Simulator {
                 return Err(Failure::PropagationLimit);
             }
             for _ in 0..PROPAGATION_LIMIT {
-                sim.stable_combinational_pass();
+                report.evaluated_instructions += sim.stable_combinational_pass();
                 report.combinational_passes += 1;
                 // Pure regions are acyclic, and all other drivers are state/input
                 // boundaries, so one local expression pass completes this closure.
-                sim.schedule_storage(None);
+                report.sampled_components += sim.stable_sample_storage();
                 report.state_samples += 1;
                 if sim.pending.is_empty() {
                     return Ok(report);

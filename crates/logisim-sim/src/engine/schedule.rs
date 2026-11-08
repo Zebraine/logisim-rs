@@ -157,7 +157,7 @@ impl Simulator {
             self.drive_port((c.id, 0), output);
         }
     }
-    pub(crate) fn schedule_storage(&mut self, changed: Option<&crate::work::WorkSet>) {
+    pub(crate) fn schedule_storage(&mut self, changed: Option<&crate::work::WorkSet>) -> usize {
         let samples: Vec<_> = self
             .plan
             .storage
@@ -165,7 +165,8 @@ impl Simulator {
             .filter(|entry| entry.affected(changed))
             .map(|entry| (entry.component, entry.sample(&self.values)))
             .collect();
-        let mut outputs = Vec::with_capacity(samples.len());
+        let sampled = samples.len();
+        let mut outputs = Vec::with_capacity(sampled);
         for (index, ports) in samples {
             let c = &self.circuit.components[index];
             let output = self
@@ -185,6 +186,7 @@ impl Simulator {
         for (port, value) in outputs {
             self.drive_port(port, value);
         }
+        sampled
     }
     /// Resolve a driver batch without evaluating any component or sampling state.
     pub(crate) fn commit_pending(&mut self) -> bool {

@@ -35,7 +35,7 @@ impl ProjectSimulator {
         self.progress.restart();
         for _ in 0..crate::PROPAGATION_LIMIT {
             for instance in self.states.values_mut() {
-                instance.sim.stable_combinational_pass();
+                report.evaluated_instructions += instance.sim.stable_combinational_pass();
             }
             report.combinational_passes += 1;
             self.refresh_bridges();
@@ -43,7 +43,7 @@ impl ProjectSimulator {
                 // None of these calls commits outputs. Tree traversal order cannot
                 // make a later register observe an earlier register's next state.
                 for instance in self.states.values_mut() {
-                    instance.sim.schedule_storage(None);
+                    report.sampled_components += instance.sim.stable_sample_storage();
                 }
                 report.state_samples += 1;
                 if self.pending_count() == 0 {

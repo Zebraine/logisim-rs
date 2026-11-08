@@ -4,15 +4,15 @@ use logisim_core::{
     ParityOutput, Pla, PlaInput, Plexer, Point, Shift,
 };
 
-const FOUR: [Bit; 4] = [Bit::Zero, Bit::One, Bit::Unknown, Bit::Error];
+pub(super) const FOUR: [Bit; 4] = [Bit::Zero, Bit::One, Bit::Unknown, Bit::Error];
 
-fn component(kind: Kind, width: u8) -> Component {
+pub(super) fn component(kind: Kind, width: u8) -> Component {
     let mut c = Component::new(kind, Point::new(300, 300));
     c.bits = width;
     c
 }
 
-fn fixture(c: Component) -> (Circuit, Id, Vec<(Id, u8)>) {
+pub(super) fn fixture(c: Component) -> (Circuit, Id, Vec<(Id, u8)>) {
     let mut circuit = Circuit::default();
     let mut inputs = vec![];
     for (i, point) in c.ports().into_iter().enumerate() {
@@ -35,15 +35,20 @@ fn settle(sim: &mut Simulator) {
 
 fn compare(sim: &Simulator, evaluator: &mut Evaluator) {
     evaluator
-        .evaluate(|(id, port)| sim.port_value(id, port))
+        .evaluate_cached(|(id, port)| sim.port_value(id, port))
         .unwrap();
     assert!(evaluator.values().count() > 0);
     for (port, value) in evaluator.values() {
         assert_eq!(Some(value), sim.port_value(port.0, port.1), "{port:?}");
     }
+    let incremental: Vec<_> = evaluator.values().collect();
+    evaluator
+        .evaluate(|(id, port)| sim.port_value(id, port))
+        .unwrap();
+    assert_eq!(incremental, evaluator.values().collect::<Vec<_>>());
 }
 
-fn link(c: &mut Circuit, from: Port, to: Port, label: &str) {
+pub(super) fn link(c: &mut Circuit, from: Port, to: Port, label: &str) {
     for port in [from, to] {
         let comp = c.component(port.0).unwrap();
         let mut t = Component::new(Kind::Tunnel, comp.ports()[port.1]);
