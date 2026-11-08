@@ -613,7 +613,17 @@ pub(crate) fn component(
             for (branch, port) in ports.iter().skip(1).enumerate() {
                 p.line_segment([at(10.0, port.y as f32), at(20.0, port.y as f32)], stroke);
                 let bits = c.splitter.branch_bits(c.bits, branch as u8);
-                let text = bits.iter().map(u8::to_string).collect::<Vec<_>>().join(",");
+                let text = bits
+                    .chunk_by(|a, b| *b == *a + 1)
+                    .map(|range| {
+                        if range.len() == 1 {
+                            range[0].to_string()
+                        } else {
+                            format!("{}-{}", range[0], range[range.len() - 1])
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",");
                 p.text(
                     at(23.0, port.y as f32),
                     Align2::LEFT_BOTTOM,
