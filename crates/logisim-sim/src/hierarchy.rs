@@ -74,6 +74,7 @@ impl ProjectSimulator {
             return;
         }
         self.plugins = plugins;
+        self.stable_checked = None;
         for instance in self.states.values_mut().chain(
             self.cached_roots
                 .values_mut()

@@ -34,19 +34,53 @@ impl ProjectSimulator {
         }
         self.progress.restart();
         for _ in 0..crate::PROPAGATION_LIMIT {
-            for instance in self.states.values_mut() {
+            for (path, instance) in &mut self.states {
                 report.evaluated_instructions += instance.sim.stable_combinational_pass();
+                report.evaluated_plugins +=
+                    instance
+                        .sim
+                        .stable_plugin_outputs()
+                        .map_err(|reason| Error {
+                            path: path.clone(),
+                            reason,
+                        })?;
             }
             report.combinational_passes += 1;
             self.refresh_bridges();
             if self.pending_count() == 0 {
+                // Stage every plugin first. A Wasm failure must not partially commit
+                // this whole-design state sample, including built-in registers.
+                let mut error = None;
+                for (path, instance) in &mut self.states {
+                    match instance.sim.stage_stable_plugins() {
+                        Ok(sampled) => {
+                            report.sampled_plugins += sampled;
+                            report.sampled_components += sampled;
+                        }
+                        Err(reason) => {
+                            error = Some(Error {
+                                path: path.clone(),
+                                reason,
+                            });
+                            break;
+                        }
+                    }
+                }
+                if let Some(error) = error {
+                    for instance in self.states.values_mut() {
+                        instance.sim.discard_stable_plugin_samples();
+                    }
+                    return Err(error);
+                }
                 // None of these calls commits outputs. Tree traversal order cannot
                 // make a later register observe an earlier register's next state.
+                let mut plugin_changed = false;
                 for instance in self.states.values_mut() {
                     report.sampled_components += instance.sim.stable_sample_storage();
+                    plugin_changed |= instance.sim.commit_stable_plugins();
                 }
                 report.state_samples += 1;
-                if self.pending_count() == 0 {
+                if self.pending_count() == 0 && !plugin_changed {
                     self.progress.record_batch(false);
                     return Ok(report);
                 }

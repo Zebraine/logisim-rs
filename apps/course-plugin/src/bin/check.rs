@@ -3,6 +3,8 @@
 use logisim_core::{Circuit, Component, Id, Kind, Point, Project, plugin::api};
 use logisim_plugin::Registry;
 use logisim_sim::{Bit, ProjectSimulator, Simulator};
+#[path = "check/scheduling.rs"]
+mod scheduling_checks;
 #[path = "check/stable.rs"]
 mod stable_checks;
 
@@ -54,6 +56,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     } else {
         stable_checks::run(&registry, &tools)?;
+        scheduling_checks::run(&registry, &tools);
     }
     let (mut project, rf, clock, probe) = fixture(&tools);
     let serialized = logisim_file::serialize(&project)?;

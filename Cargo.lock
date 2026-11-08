@@ -1313,6 +1313,8 @@ version = "0.1.0"
 dependencies = [
  "logisim-core",
  "logisim-plugin",
+ "serde_json",
+ "wat",
 ]
 
 [[package]]

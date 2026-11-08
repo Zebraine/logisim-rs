@@ -1,4 +1,5 @@
 //! Generic plugin scheduling. No library-specific component behavior or drawing.
+pub(crate) mod stable;
 use crate::{Bit, Simulator, Value};
 use logisim_core::{
     Circuit, Id, Kind,
@@ -14,6 +15,7 @@ pub(crate) struct State {
     outputs: Vec<api::Signal>,
     graphics: Vec<api::Shape>,
     error: Option<String>,
+    event_dirty: bool,
 }
 impl State {
     fn new(definition: api::Component, registry: &Registry) -> Self {
@@ -33,11 +35,14 @@ impl State {
             outputs,
             graphics: vec![],
             error,
+            event_dirty: false,
         }
     }
     fn evaluate(&mut self, inputs: Vec<api::Signal>, event: Event) {
         if self.error.is_some()
-            || (matches!(event, Event::Propagate) && self.inputs.as_ref() == Some(&inputs))
+            || (matches!(event, Event::Propagate)
+                && !self.event_dirty
+                && self.inputs.as_ref() == Some(&inputs))
         {
             return;
         }
@@ -49,6 +54,7 @@ impl State {
             event,
         };
         self.inputs = Some(inputs);
+        self.event_dirty = false;
         let result = self
             .instance
             .as_mut()
@@ -60,14 +66,23 @@ impl State {
                 self.outputs = update.outputs;
                 self.graphics = update.graphics;
             }
-            Err(error) => {
-                self.error = Some(error);
-                self.graphics.clear();
-                for (v, p) in self.outputs.iter_mut().zip(&self.definition.tool.ports) {
-                    *v = Value::filled(p.width, Bit::Error).into();
-                }
-            }
+            Err(error) => self.fail(error),
         }
+    }
+    fn fail(&mut self, error: String) {
+        self.error = Some(error);
+        self.graphics.clear();
+        for (v, p) in self.outputs.iter_mut().zip(&self.definition.tool.ports) {
+            *v = Value::filled(p.width, Bit::Error).into();
+        }
+    }
+    fn drives(&self) -> impl Iterator<Item = (usize, Value)> + '_ {
+        self.outputs
+            .iter()
+            .zip(&self.definition.tool.ports)
+            .enumerate()
+            .filter(|(_, (_, p))| p.output)
+            .map(|(i, (v, _))| (i, Value::from(*v)))
     }
 }
 impl Simulator {
@@ -78,6 +93,7 @@ impl Simulator {
         self.plugin_states
             .retain(|_, state| self.plugins.same_plugin(&plugins, &state.definition));
         self.plugins = plugins;
+        self.stable_plan = None;
         self.synchronize_plugins(&self.circuit.clone());
         self.schedule_plugins(None, None);
         self.progress.restart();
@@ -131,14 +147,7 @@ impl Simulator {
                     .map_or(Event::Propagate, |(_, event)| event.clone())
             };
             state.evaluate(inputs, event);
-            let drives: Vec<_> = state
-                .outputs
-                .iter()
-                .zip(&state.definition.tool.ports)
-                .enumerate()
-                .filter(|(_, (_, p))| p.output)
-                .map(|(i, (v, _))| (i, Value::from(*v)))
-                .collect();
+            let drives: Vec<_> = state.drives().collect();
             for (i, v) in drives {
                 self.drive_port((id, i), v);
             }
@@ -151,6 +160,7 @@ impl Simulator {
         if argument.len() > 1024 || !state.definition.tool.actions.iter().any(|a| a.id == action) {
             return;
         }
+        self.invalidate_stable_values();
         self.schedule_plugins(
             Some((
                 id,

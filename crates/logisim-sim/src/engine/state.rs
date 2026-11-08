@@ -96,6 +96,10 @@ impl Simulator {
         true
     }
     pub fn reset(&mut self) {
+        // Plugin phase VMs (including faulted ones) cannot survive an explicit reset.
+        if !self.plugin_states.is_empty() {
+            self.stable_plan = None;
+        }
         self.plugin_states.clear();
         self.synchronize_plugins(&self.circuit.clone());
         self.reset_displays();

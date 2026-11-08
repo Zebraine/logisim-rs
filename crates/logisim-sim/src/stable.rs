@@ -28,6 +28,10 @@ pub enum Failure {
     },
     HierarchyRequiresProject(Id),
     InvalidProject(String),
+    Plugin {
+        component: Id,
+        message: String,
+    },
     PropagationLimit,
 }
 
@@ -56,6 +60,10 @@ pub struct Report {
     pub evaluated_instructions: usize,
     /// Individual state components sampled across all stable boundaries.
     pub sampled_components: usize,
+    /// Actual Wasm output calls; unchanged declared inputs and state are cached.
+    pub evaluated_plugins: usize,
+    /// Actual Wasm state calls, also included in sampled_components.
+    pub sampled_plugins: usize,
 }
 impl Report {
     pub(crate) fn include(&mut self, stats: CompileStats) {
@@ -70,6 +78,7 @@ pub(crate) struct Plan {
     inputs: BTreeMap<Port, u8>,
     stats: CompileStats,
     pub dependencies: BTreeSet<(Port, Port)>,
+    pub plugins: BTreeMap<Id, crate::plugins::stable::Plan>,
     materialized: bool,
     state_changes: WorkSet,
     sample_all: bool,
@@ -103,6 +112,7 @@ impl Plan {
                 Kind::Pin
                 | Kind::Button
                 | Kind::Clock
+                | Kind::Plugin
                 | Kind::Subcircuit(_)
                 | Kind::Text
                 | Kind::Tunnel
@@ -149,7 +159,7 @@ impl Plan {
                 )
             })
             .collect();
-        let dependencies = analysis
+        let mut dependencies = analysis
             .regions
             .iter()
             .flat_map(|r| &r.nodes)
@@ -164,11 +174,14 @@ impl Plan {
                     })
             })
             .collect();
+        let plugins = crate::plugins::stable::Plan::compile(sim, &mut dependencies)?;
+        check_feedback(&dependencies)?;
         Ok(Self {
             evaluator: compiled.evaluator(),
             inputs,
             stats: compiled.stats(),
             dependencies,
+            plugins,
             materialized: false,
             state_changes: WorkSet::new(sim.network.nets.len()),
             sample_all: true,
@@ -176,14 +189,44 @@ impl Plan {
     }
 }
 
+/// Plugin declarations can close cycles through expression boundaries. Check raw
+/// driver ports, keeping state-only inputs out of the combinational dependency graph.
+fn check_feedback(dependencies: &BTreeSet<(Port, Port)>) -> Result<(), Failure> {
+    let ports: Vec<_> = dependencies
+        .iter()
+        .flat_map(|&(a, b)| [a, b])
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let indices: BTreeMap<_, _> = ports.iter().enumerate().map(|(i, &p)| (p, i)).collect();
+    let mut edges = vec![vec![]; ports.len()];
+    for &(from, to) in dependencies {
+        edges[indices[&from]].push(indices[&to]);
+    }
+    let (feedback, _) = crate::combinational::graph::partition(&edges);
+    if let Some(&i) = feedback.first() {
+        return Err(Failure::Topology {
+            component: ports[i].0,
+            reason: BoundaryReason::Feedback,
+        });
+    }
+    Ok(())
+}
+
 impl Simulator {
     pub(crate) fn invalidate_stable_values(&mut self) {
         if let Some(Ok(plan)) = &mut self.stable_plan {
             plan.materialized = false;
             plan.sample_all = true;
+            for plugin in plan.plugins.values_mut() {
+                plugin.invalidate();
+            }
         }
     }
     pub(crate) fn prepare_stable(&mut self) -> Result<CompileStats, Failure> {
+        if let Some(failure) = self.stable_plugin_error() {
+            return Err(failure);
+        }
         if self.stable_plan.is_none() {
             self.stable_plan = Some(Plan::compile(self));
         }
@@ -233,7 +276,7 @@ impl Simulator {
         evaluated
     }
 
-    fn stable_commit(&mut self) {
+    pub(crate) fn stable_commit(&mut self) {
         if self.commit_pending() {
             let plan = self.stable_plan.as_mut().unwrap().as_mut().unwrap();
             // A hierarchy closure can commit several batches before sampling.
@@ -294,13 +337,19 @@ impl Simulator {
             }
             for _ in 0..PROPAGATION_LIMIT {
                 report.evaluated_instructions += sim.stable_combinational_pass();
+                report.evaluated_plugins += sim.stable_plugin_outputs()?;
                 report.combinational_passes += 1;
-                // Pure regions are acyclic, and all other drivers are state/input
-                // boundaries, so one local expression pass completes this closure.
-                report.sampled_components += sim.stable_sample_storage();
-                report.state_samples += 1;
                 if sim.pending.is_empty() {
-                    return Ok(report);
+                    let sampled = sim
+                        .stage_stable_plugins()
+                        .inspect_err(|_| sim.discard_stable_plugin_samples())?;
+                    report.sampled_plugins += sampled;
+                    report.sampled_components += sampled + sim.stable_sample_storage();
+                    report.state_samples += 1;
+                    let changed = sim.commit_stable_plugins();
+                    if sim.pending.is_empty() && !changed {
+                        return Ok(report);
+                    }
                 }
             }
             sim.stable_limit();
