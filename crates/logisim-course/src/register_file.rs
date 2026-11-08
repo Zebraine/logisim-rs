@@ -46,6 +46,16 @@ impl RegisterFile {
     /// Ports follow core's fixed contract: A/B/W (32), CLK/WE (1), rW/rA/rB (5).
     /// A/B inputs are ignored; the returned values drive those two output ports.
     pub fn evaluate(&mut self, trigger: Trigger, ports: &[Value; 8]) -> [Value; 2] {
+        self.sample(trigger, ports);
+        self.outputs(ports)
+    }
+    /// Read the committed words without consuming a clock edge or changing state.
+    pub fn outputs(&self, ports: &[Value; 8]) -> [Value; 2] {
+        [self.read(ports[6]), self.read(ports[7])]
+    }
+    /// Sample next state only. Callers must capture all instances' inputs before
+    /// publishing outputs from any updated instance.
+    pub fn sample(&mut self, trigger: Trigger, ports: &[Value; 8]) {
         let clock = ports[3].bit(0);
         let write = match trigger {
             Trigger::Rising => self.clock == Bit::Zero && clock == Bit::One,
@@ -61,7 +71,6 @@ impl RegisterFile {
                 None => self.words[1..].fill(Value::filled(32, Bit::Unknown)),
             }
         }
-        [self.read(ports[6]), self.read(ports[7])]
     }
 }
 #[cfg(test)]

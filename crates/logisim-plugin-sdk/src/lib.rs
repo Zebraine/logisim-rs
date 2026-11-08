@@ -36,7 +36,7 @@ pub fn call(length: u32, handler: fn(Request) -> Response) -> u64 {
     }
     ((output.len() as u64) << 32) | u64::from(output.as_ptr() as u32)
 }
-/// Export ABI v1 entry points from a cdylib. The handler must not assume the Describe
+/// Export current ABI entry points from a cdylib. The handler must not assume the Describe
 /// instance is reused for simulation. Each component has independent module memory.
 #[macro_export]
 macro_rules! export_plugin {

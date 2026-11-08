@@ -68,11 +68,17 @@ crates/logisim-ui/       egui 编辑器与画布
 
 ## 运行与检查
 
-动态插件使用 Wasm32 ABI v1。协议类型和约束位于 `logisim-plugin-api` 的 Rust 文档，
+动态插件使用 Wasm32 ABI v2，宿主仍兼容 ABI v1 的事件执行。协议类型和约束位于 `logisim-plugin-api` 的 Rust 文档，
 `logisim-plugin-sdk` 提供安全缓冲区与导出宏，`apps/course-plugin` 是包含图形、端口、
 属性、运行时动作和四态逻辑的完整示例。插件没有 Java/egui 依赖，不使用主机函数或 WASI。
 运行器限制每次调用的 fuel、16 MiB 内存、256 KiB 消息、64 KiB 状态和 4 MiB 模块。
 元件定义改变时须提升插件版本；保存的定义与加载模块不一致时拒绝运行。
+
+ABI v2 可按工具和属性查询 `StableContract`，分别声明输出、图形和状态采样的输入依赖。
+`Plugin::instantiate_stable` / `Registry::instantiate_stable` 返回绑定该配置的分阶段 VM：
+`outputs` 只求当前输出，`sample` 只返回下一状态，由调用者统一提交；旧 ABI 或不支持的模式返回 `None`。
+课程插件的边沿触发寄存器文件与无状态指令探针已提供此能力，电平透明模式不提供。
+接口尚未接入 `settle_compiled` 或桌面调度；当前完整 CPU 仍使用事件引擎。
 
 通过 **Project → Load Wasm Plugin… / 项目 → 加载 Wasm 插件…** 选择 `.wasm`，
 从左侧插件分组放置元件。选中元件可编辑插件声明的属性、查看信号并执行插件动作。
