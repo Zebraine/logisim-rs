@@ -104,4 +104,4 @@ jobs:
           cd dist
           test "$(find . -name '*.sha256' | wc -l)" -eq "$EXPECTED_PACKAGES"
           sha256sum -c ./*.sha256
-          gh release create "$RELEASE_TAG" ./* --repo "$GITHUB_REPOSITORY" --verify-tag --title "$RELEASE_TAG" --notes-from-tag
+          gh release create "$RELEASE_TAG" ./* --verify-tag --title "$RELEASE_TAG" --notes-from-tag
