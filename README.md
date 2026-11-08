@@ -1,477 +1,79 @@
 # logisim-rs
 
-Rust＋egui 数字逻辑电路工具，以 Logisim-ITA v2.16.2.2 的实际运行行为为兼容目标，
-采用 Cleanroom 方式独立实现。当前支持桌面布局、画布、电路编辑、组合与基础时序仿真
-及子电路、外观与封装设计、多层实例仿真和已实现元件的 `.circ` 读取与保存。
-字符交互支持键盘与 TTY：ASCII 7 位 / UTF-16 16 位、缓冲区与时钟读写、清零、折行和滚屏。
-使用交互工具点击键盘后输入；Enter 输入换行、Backspace 输入退格，Esc 结束输入。
-字符缓冲和显示内容属于仿真实例，复位清空，不写入电路文件。
+[![Rust 2024](https://img.shields.io/badge/Rust-2024-000000?logo=rust&logoColor=white)](https://www.rust-lang.org/)
 
-## v0.1.0 下载
+基于 Rust + egui 的桌面数字逻辑电路编辑与仿真工具。
+以 Logisim-ITA v2.16.2.2 的实际运行行为为兼容目标，采用 Cleanroom 方式独立实现。
 
-从 [GitHub Releases](https://github.com/Zebraine/logisim-rs/releases/tag/v0.1.0)
-下载对应平台的压缩包及 `.sha256` 校验文件。包内附带 CPU 示例与配套 Wasm，解压整个目录后运行：
+## 功能
 
-- Linux x86-64：`./logisim-rs`，构建基于 Ubuntu 24.04，需要系统 Fontconfig 和图形驱动。
-- Windows x86-64：`logisim-rs.exe`。
-- macOS 15 或更新版本：按 Apple Silicon / Intel 选择包，打开 `Logisim rs.app`。
+- 电路编辑、子电路、自定义外观与封装设计。
+- 门电路、布线、算术、Plexers、时序、存储器、输入/输出及基础 TTL 元件。
+- 四态与层级仿真，可选择稳定态或事件传播模式。
+- 已实现内容的 `.circ` 读写、ROM/RAM 的 `v2.0 raw` 格式 `.hex` 导入。
+- `.circ` 子电路库与 Wasm 元件插件，支持英语和简体中文。
 
-Windows/macOS 包尚未签名或公证；跨平台构建检查不等同于实机界面验收。
-示例位于解压目录的 `examples/course/`，可通过 File → Open 打开。
+## 下载与运行
 
-## 项目结构
+从 [Releases](https://github.com/Zebraine/logisim-rs/releases) 下载对应平台包及 `.sha256` 校验文件，完整解压后运行。
 
-通过 **Project → Load .circ Library… / 项目 → 加载 .circ 库…**，可把已有 `.circ`
-项目作为子电路库导入。定义使用 `库文件名::电路名` 命名，重名自动编号；支持嵌套引用、
-自定义封装及一次撤销/重做。左侧库分组可选择电路放置，定义也可在项目树中编辑。
-这是可编辑的快照：保存时嵌入当前项目，重新打开无需原库文件，定义仍显示在项目树中；
-本次会话的库分组不另行保存。导入不会修改原库文件，不跟随其后续变化。
-存在未支持内容或超出项目限制时整库拒绝导入，并报告原因。
-暂不解析 `file#` 链接库或执行 JAR；请导入包含完整子电路定义的 `.circ`。
+| 平台 | 启动方式 |
+| --- | --- |
+| Linux x86-64 | `./logisim-rs`；基于 Ubuntu 24.04 构建，需要 Fontconfig 和图形驱动 |
+| Windows x86-64 | `logisim-rs.exe` |
+| macOS 15+ | 打开 `Logisim rs.app`；Apple Silicon，v0.1.0 另提供 Intel 包 |
 
-```text
-apps/logisim-desktop/    应用入口与组装（logisim-rs）
-apps/course-plugin/     独立课程 Wasm 插件、迁移工具及端到端校验器
-crates/logisim-plugin-api/  版本化协议、图形和属性模式及验证
-crates/logisim-plugin-sdk/  插件缓冲区与 ABI 导出宏
-crates/logisim-plugin/      Wasm 加载、资源限制和注册表
-crates/logisim-core/     电路领域模型
-crates/logisim-course/   独立课程元件行为包（RegisterFile、RISC-V Probe）
-crates/logisim-sim/      无界面仿真及元件行为
-crates/logisim-file/     .circ 导入、导出与诊断
-crates/logisim-ui/       egui 编辑器与画布
-```
+Windows/macOS 包未签名或公证；目前实机界面验证限于 Linux X11。
+中文显示依赖系统字体，可安装 Noto Sans CJK SC。
 
-`logisim-course` 只依赖 `core`，为课程 Wasm 插件提供寄存器文件状态机和指令探针解码。
-桌面程序不依赖此包，课程元件通过通用 `Kind::Plugin` 运行；图形和功能都来自外部模块。
-
-各 crate 保持稳定的公开入口，内部按职责扩展：
-
-- `core`：`geometry`、`component` 与 `circuit`；元件连接映射和导线编辑分开。
-- `file`：项目装配、`component` 编解码、`attributes` 标量校验与 `xml` 原语。
-- `sim`：`engine` 的状态同步、命令、调度和查询，以及 `hierarchy` 实例管理。
-- `ui`：`workspace` 各区域与工具目录，`fonts` 共享文字排版；元件绘制和属性仍按族组织。
-- 桌面宿主：`simulation` 命令/视图适配，`files` 工作流与弹窗，`storage` 磁盘事务。
-
-新增元件沿现有族模块扩展；专有默认值、端口规则和四态行为留在对应层，
-共享流程不放宽兼容边界。详细重构设计和运行证据仅保存在本地资料中。
-
-`logisim_sim::combinational::Analysis::new(&circuit)` 可按连接关系自动识别组合区域，
-返回拓扑顺序、逐位输入来源、对外输出和状态/反馈/位宽异常等边界原因。
-`InputBit` 记录每位的全部强驱动来源与弱拉值，保留分线器映射和共享总线。
-已同步的实例可调用 `Simulator::combinational_analysis()` 复用拓扑；分析只读、按需执行，
-支持含寄存器的混合电路，不依赖自动生成标记。
-`CompiledCircuit::new(&circuit)` 或 `Simulator::compile_combinational()` 将这些区域编译为
-四态表达式计划，保留共享节点、预计算总线映射并折叠常量子图。通过 `evaluator()` 创建
-实例工作区，`evaluate` 读取边界驱动快照，`values` 查询内部与对外输出；输入缺失或位宽
-错误会使本次结果失效。`Simulator::drive_value` 提供边界所需的原始驱动快照，
-`port_value` 则提供总线合并后的值。`evaluate_cached` 按实际使用的总线位增量执行，输出不变时停止
-下游重算；`changed_values` 返回变化驱动，`stats` 报告实际执行量。
-独立计划可共享，电气属性或 ROM 内容编辑后须重编译。
-
-`Simulator::settle_compiled()` / `ProjectSimulator::settle_compiled()` 是显式稳定态入口：
-先收敛组合表达式与全部层级接口，再统一采样状态并提交，内部导线值仍可查询。
-支持受控缓冲器/反相器、多驱动总线与逐位弱拉，以及边沿触发的触发器、寄存器、
-计数器、移位寄存器、随机数发生器、同步 RAM，以及声明稳定态能力的 ABI2/3 插件；旧插件、异步写 RAM、锁存器、
-电平触发、组合反馈及未支持的连接会在推进前返回原因和实例路径，可继续使用原引擎。
-状态采样累计整个组合闭包中的网络变化，只重采样受影响元件；插件声明的输出依赖
-纳入平面与跨封装反馈检查，所有插件采样成功后才推进这一批插件及内置状态。
-同步 RAM 的读出先按地址、片选和 Load 收敛，再与其他状态元件同时采样写入；
-读出缓存随相关输入、内容编辑和写入变化更新，内容仍按实例隔离。
-报告包含实际表达式执行量、状态采样量、RAM 读出量与 Wasm 调用量。运行期缓存随电气编辑失效，
-复位或逐批调试后重新写入内部值；插件故障报告实例路径/元件，输出 E，复位后重建 VM。
-桌面后台默认采用稳定态采样；整个层级预检不支持时使用事件传播。
-通过 **File → Settings → Simulation mode**（文件 → 设置 → 仿真模式）选择稳定态或事件传播。
-`ProjectSimulator::prepare_compiled()` 只预检，`step_compiled()` 推进一个可让出线程的批次，
-跨批次保留收敛预算。状态闭包未完成时仍报告待传播，禁止提前进入下一时钟沿。
-运行期插件故障暂停并显示错误，不转入事件传播掩盖故障；复位或修复依赖后可恢复。
-暂停后的手动传播单步及 `step` / `advance` 保留事件语义，运行恢复时按所选模式调度。
-
-## 运行与检查
-
-动态插件使用 Wasm32 ABI v3，宿主仍兼容 ABI v1 的事件执行及 ABI v2 的稳定态接口。协议类型和约束位于 `logisim-plugin-api` 的 Rust 文档，
-`logisim-plugin-sdk` 提供安全缓冲区与导出宏，`apps/course-plugin` 是包含图形、端口、
-属性、运行时动作和四态逻辑的完整示例。插件没有 Java/egui 依赖，不使用主机函数或 WASI。
-运行器限制每次调用的 fuel、16 MiB 内存、256 KiB 消息、64 KiB 状态和 4 MiB 模块。
-元件定义改变时须提升插件版本；保存的定义与加载模块不一致时拒绝运行。
-
-ABI v2 可按工具和属性查询 `StableContract`，分别声明输出、图形和状态采样的输入依赖。
-`Plugin::instantiate_stable` / `Registry::instantiate_stable` 返回绑定该配置的分阶段 VM：
-`outputs` 只求当前输出，`sample` 只返回下一状态，由调用者统一提交；ABI v1 或不支持的模式返回 `None`。
-ABI v3 的 `StableTransition` 同时声明输出/图形是否可能变化、相同采样输入下是否已到固定点。
-宿主依这些显式保证分别复用输出和采样缓存；ABI v2 保持保守重算，失败仍撤销整批采样。
-课程插件的边沿触发寄存器文件与无状态指令探针已提供此能力，电平透明模式不提供。
-`settle_compiled` 已使用此接口，按声明输入与显式状态变化缓存调用；模块、属性、动作、
-复位与事件步进会使相关缓存失效。桌面自动时钟与后台传播使用同一调度策略，显示仍通过独立快照更新。
-
-ABI v3 另支持可选的线性内存传输 v1，用于稳定态输出与状态采样。SDK 使用
-`export_plugin!(handle, stable = handle_stable_frame)` 导出协商入口；处理函数接收
-`&StableConfig`、`frame::Operation`、`&[Signal]`、`&[u8]`，返回 `Result<frame::Output, String>`。
-属性只在 VM 初始化时传递，热路径采用 `zerocopy` 校验的固定小端结构、偏移和长度；
-宿主直接写入输入区，插件借用状态，宿主直接读取返回区。仍保留必要的信号/状态和显示快照复制，
-不共享宿主指针或 Rust 容器布局。布局与边界规则见 `logisim_plugin_api::frame` 的 Rust 文档。
-没有该扩展或版本不支持时继续用 JSON；识别到的扩展若格式、范围或执行错误则报告故障，不能静默回退。
-Describe、能力查询、复位、动作与事件传播仍使用 JSON，新旧插件及旧宿主可继续互通。
-
-通过 **Project → Load Wasm Plugin… / 项目 → 加载 Wasm 插件…** 选择 `.wasm`，
-从左侧插件分组放置元件。选中元件可编辑插件声明的属性、查看信号并执行插件动作。
-当前 ABI 支持矩形、椭圆、线段和文字，固定端口/位宽与朝向；属性支持布尔、整数和枚举。
-属性修改初始化该元件状态；几何编辑保留状态，Reset 重建实例。运行故障输出 E 并显示原因。
-
-电路保存插件身份、版本、定义快照、属性及模块路径，不嵌入 Wasm 或运行状态。
-打开时先按电路所在目录解析相对路径，再尝试记录的绝对备用路径；另存会重新计算相对路径。
-找不到文件或插件身份、版本、定义不匹配时，会弹出列表，可输入实际位置、浏览选择或检查。
-点击 **Confirm / 确认** 后，有效插件正常运行；未补选或路径仍无效的元件保留静态图形，
-在属性区显示具体错误，输出 E，运行时动作禁用。有效补选作为文档修改保存并支持撤销。
-已有插件文件没有路径记录时也进入补选流程。导入 `.circ` 库时，插件路径以原库文件目录解析。
-包含插件的 `.circ` 使用 `logisim-rs#plugin-v1` 扩展，需 logisim-rs 运行；普通元件保留原有兼容格式。
-同版本重复加载会被拒绝，暂不支持卸载、热替换或插件自定义 egui 控件。
+从源码运行需 Rust 1.99+，仓库工具链固定为 1.99.0。Linux 构建另需 `pkg-config` 和 Fontconfig 开发包。
 
 ```sh
-rustup target add wasm32-unknown-unknown
-cargo fetch --locked
-cargo build -p logisim-course-plugin --release --target wasm32-unknown-unknown --locked --offline
-cargo run -p logisim-plugin --bin logisim-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_course_plugin.wasm
-cargo run -p logisim-course-plugin --features host-check --bin course-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_course_plugin.wasm
-cargo doc -p logisim-plugin-api --no-deps --locked --offline
+cargo run -p logisim-rs --release --locked
+# 启动时打开示例
+cargo run -p logisim-rs --release --locked -- examples/course/redirect-pipeline.circ
 ```
 
-```sh
-cargo run -p logisim-rs --locked
-# 启动时打开文件（也可通过 File 菜单打开）
-cargo run -p logisim-rs --locked -- path/to/circuit.circ
-cargo fmt --all -- --check
-cargo fetch --locked
-cargo check --workspace --all-targets --locked --offline
-cargo clippy --workspace --all-targets --locked --offline -- -D warnings
-cargo test --workspace --locked --offline
-```
+## 快速上手
 
-使用 Rust 2024，最低 Rust 1.99，构建工具链固定为 Rust 1.99.0。
-界面基于 egui/eframe 0.37.0 和 wgpu，启用 Wayland/X11 后端；已在 Linux X11 环境运行验证。
-Linux 构建另需 `pkg-config` 与 Fontconfig 开发包（Debian/Ubuntu：`libfontconfig1-dev`）。
-
-布局保留顶部菜单/工具栏、左上项目树、左下属性表及缩放区、右侧画布。
-拖动分隔线可调整侧栏宽度和上下比例。滚轮缩放，中键或空格＋左键拖动平移；
-左下可输入缩放比例、开关网格，Home 按钮或 Ctrl+0 复位。画布右键也可复位。
+- 从左侧选择元件，在画布放置；选中后编辑属性，从端口或线段中间拖出连线。
+- 使用 Poke（`P`）操作输入，`Ctrl+T` 推进一个 tick，`Ctrl+K` 开关自动时钟。
+- 自动时钟默认 4 Hz，可在 Simulate 菜单设置 1–4096 Hz；一个 tick 不等于完整时钟周期。
+- 在 File → Settings 切换语言与仿真模式；默认英语、稳定态。
+- 在 Project 菜单添加子电路、编辑封装、加载 `.circ` 库或 Wasm 插件。
+- ROM/RAM 的内容编辑器提供 `.hex` 导入；ROM 内容随电路保存，RAM 内容复位后清零。
 
 ## CPU 示例
 
-[`examples/course/`](examples/course/) 提供最终检查交付版中的 8 类 CPU 与 2 个配套测试。
-每个文件可以独立打开，包含所需子电路、原有布局和内嵌 ROM；共用同目录的
-[`course.wasm`](examples/course/course.wasm)（ABI v3，线性内存传输 v1），无需 Java。
-移动示例时请同时复制该模块；依赖仅记录相对路径，不含开发者机器的绝对备用路径。
+[`examples/course/`](examples/course/) 包含 8 类 CPU 和 2 个测试，共用同目录的 `course.wasm`，无需 Java。
+移动示例时请同时复制插件；打开后使用 Poke 按下并松开“复位”或“总复位”，再启动自动时钟。
 
-| 文件 | 主电路 |
+| 文件 | 电路 |
 | --- | --- |
-| [single-cycle.circ](examples/course/single-cycle.circ) | 单周期 RISC-V |
+| [single-cycle.circ](examples/course/single-cycle.circ) | 单周期 |
 | [ideal-pipeline.circ](examples/course/ideal-pipeline.circ) | 理想流水线 |
 | [bubble-pipeline.circ](examples/course/bubble-pipeline.circ) | 气泡流水线 |
 | [redirect-pipeline.circ](examples/course/redirect-pipeline.circ) | 重定向流水线 |
 | [dynamic-branch-prediction.circ](examples/course/dynamic-branch-prediction.circ) | 动态分支预测 |
-| [single-interrupt.circ](examples/course/single-interrupt.circ) | 单周期＋单级中断 |
-| [nested-interrupt.circ](examples/course/nested-interrupt.circ) | 单周期＋多级中断 |
+| [single-interrupt.circ](examples/course/single-interrupt.circ) | 单级中断 |
+| [nested-interrupt.circ](examples/course/nested-interrupt.circ) | 多级中断 |
 | [pipeline-interrupt.circ](examples/course/pipeline-interrupt.circ) | 流水多级中断 |
-| [pipeline-interrupt-benchmark.circ](examples/course/pipeline-interrupt-benchmark.circ) | 流水中断基准测试 |
-| [instruction-coverage.circ](examples/course/instruction-coverage.circ) | 综合指令覆盖测试 |
+| [pipeline-interrupt-benchmark.circ](examples/course/pipeline-interrupt-benchmark.circ) | 流水中断基准 |
+| [instruction-coverage.circ](examples/course/instruction-coverage.circ) | 指令覆盖 |
 
-```sh
-cargo run -p logisim-rs --release --locked -- examples/course/redirect-pipeline.circ
-```
+重定向流水线和动态分支预测已核对完整运行轨迹，分别为 2298、1766 周期，最终显示 `0000 0038`。
+全部示例已通过导入、往返保存、插件加载和复位后 128 tick 检查；其余示例尚未完成整机验收。
 
-使用 Poke 工具按下并松开电路中的“总复位”或“复位”，再用 Ctrl+K 启动自动时钟。
-全部示例已检查无省略导入、文件往返、相对路径加载及稳定态模式下复位后 128 tick 推进。
-重定向流水线和动态分支预测另已对照完整运行轨迹，分别为 2298 和 1766 周期，
-结束时数码管均为 `0000 0038`。其余示例尚未完成整段程序和中断操作的参考行为验收。
+## 兼容范围
 
-随附插件由本仓库 `apps/course-plugin` 构建；更新插件后可重建并替换：
+仅保存已实现内容；导入遇到不支持的内容会报告省略并禁止覆盖原文件。
+`.circ` 库以可编辑快照导入。插件路径优先相对电路目录解析；缺失时可补选，未修复的元件显示静态图形、属性报错并输出 E。
 
-```sh
-cargo build -p logisim-course-plugin --release --target wasm32-unknown-unknown --locked --offline
-cp target/wasm32-unknown-unknown/release/logisim_course_plugin.wasm examples/course/course.wasm
-```
+宿主不执行 Java/JAR。含 Wasm 元件的 `.circ` 使用本项目扩展，需 logisim-rs 运行并附带模块。
+不承诺完整兼容参考程序的全部元件、传播延迟与反馈行为。
 
-电路来自用户提供的“2026秋硬件综合训练课设资料发布包／最终检查交付”，沿用原有电路名称和标注；
-分发副本将课程 JAR 元件迁移为 Wasm 插件，并只保留各主电路所需的子电路。
-这些课程电路属于外部资料，不纳入本项目原创代码的 MIT 许可范围；原始资料、JAR、实验记录不随示例提交。
+## 开发与许可
 
-## 用户设置
+开发、检查和发布流程见 [CONTRIBUTING.md](CONTRIBUTING.md)，协作约定见 [AGENTS.md](AGENTS.md)。
 
-首次启动使用英语。通过 **File → Settings → Language**（文件 → 设置 → 语言）
-选择 English 或简体中文，立即生效，重启后保留。菜单、工具与属性、外观编辑、
-文件操作和仿真提示支持两种语言；文件解析器和系统返回的原始技术诊断保留原文。
-切换不修改电路名称、标签、外观文字、文件内容或仿真状态，也不产生编辑历史。
-
-中文使用系统字体，不随程序打包字体资源；推荐安装 Noto Sans CJK SC。
-缺少中文字体时设置窗口会给出英文提示。Windows/macOS 的系统字体支持已启用，尚未实窗验证。
-语言与仿真模式偏好保存在用户配置目录的 `logisim-rs/preferences`：Linux 使用 `$XDG_CONFIG_HOME`
-或 `~/.config`，Windows 使用 `%APPDATA%`，macOS 使用 `~/Library/Application Support`。
-保存失败时当前选择仍生效，可在设置窗口重试，不影响电路保存。
-仿真模式默认稳定态；切换保留寄存器、RAM、插件状态、暂停状态与时钟计数，不修改电路或撤销历史。
-原有只含语言的设置文件继续有效，缺少模式时使用稳定态。
-
-## 课程插件与旧电路迁移
-
-Register File 和 RISC-V Probe 已从宿主内置库移除，由 `apps/course-plugin` 独立提供。
-寄存器文件固定为32×32位、双读单写、四种触发模式；零号寄存器只读，运行值通过插件动作编辑。
-状态按子电路实例隔离，复位清零，不写入文件。指令探针按已观察的课程库规则显示32位输入。
-
-原来的 `jar#` 引用不能直接当作 Wasm 路径。先按上文构建插件，再显式转换旧课程电路：
-
-```sh
-cargo run -p logisim-course-plugin --features host-check --bin course-plugin-convert --locked --offline -- path/to/course.wasm path/to/original.circ path/to/new.circ
-```
-
-迁移工具只处理已验证的两个课程库入口及其支持属性，使用实际 Wasm 模块的元件定义。
-它保留实例位置、导线和属性，删除旧课程库放置默认设置；遇到未知内容则拒绝转换，
-输出文件必须不存在。建议把 `.wasm` 与新 `.circ` 放在同一目录，便于通过相对路径一起分发。
-该工具属于课程插件包，桌面程序不包含迁移规则，也不需要 Java。
-
-最终检查交付版 CPU 的 Wasm 副本已验证：重定向流水线 2298 周期，动态分支预测 1766 周期，
-数码管均为 `0000 0038`；10 个输出 Pin 的完整变化序列与先前对照参考程序的基线一致。
-其他程序和中断变体尚未完成整机验收。电路、模块产物和运行记录仅留本地，不进入 Git。
-
-## 基本编辑
-
-- 可放置 NOT、Buffer、AND、OR、NAND、NOR、XOR、XNOR、Pin、文字和 Tunnel。
-- Gates 库提供奇校验门和偶校验门，支持 1–32 位、2–32 路输入、逐输入取反和三种输出模式（0/1、0/浮空、浮空/1）。修改输入数量、尺寸、朝向或取反保留原导线；缩减输入数后再次增加可恢复暂时隐藏的取反设置，保存仅写入当前输入。
-- Gates 库另提供 1–32 位受控缓冲器、受控反相器，可设置控制端位置和反转使能极性。
-- Wiring 库提供 Constant、Power、Ground、Probe、Splitter、Bit Extender、Pull Resistor、Transistor 和 Transmission Gate。晶体管可选 P/N 型，两者支持 1–32 位、四个朝向和栅极位置编辑；修改朝向或栅极位置保留导线，移动后的端口需重连。
-- Plexers 库提供多路选择器、解复用器、译码器和优先编码器，支持 1–5 位选择信号（2–32 路）、四个朝向及端口提示；选择器/解复用器的数据位宽为 1–32。
-  另有位选择器和七段译码器，支持分组取数与总线/分立输入编辑。
-- Input/Output 库提供按钮、开关、拨码开关、滑块、摇杆、LED、RGB LED、LED 点阵、七段数码管和十六进制显示器，支持颜色、透明度及对应属性编辑。
-- 摇杆提供 2–5 位 X/Y 输出，支持四个朝向和透明配色。使用 Poke（P）拖动，松手或复位回中；向右增大 X、向下增大 Y。运行位置按子电路实例隔离，不写入文件，也不产生撤销记录；朝向编辑保留原导线。
-- Arithmetic 库提供 1–32 位加法器、减法器、乘法器、除法器、取负器、比较器、移位器、位加法器和位查找器，端口方向固定。
-- 工具栏/元件树选择工具，点击画布放置；左侧编辑标签、方向、位宽、门尺寸、输入数量、字号和位置；文字可选择对齐方式。
-  普通门支持 2–8 个输入（NOT/Buffer 为单输入），信号位宽为 1–32。
-- 从端口或线段中间拖出导线，也可单击线段后再点击终点；Wire 工具可从空白处布线。
-  Shift 切换折弯，Escape 取消。Ctrl＋单击选中导线，Ctrl＋左键拖动移动导线或当前选择。
-  端点与导线相接形成分支；无端点的十字交叉不连接。选中导线后可拖动端点调整路径。
-  共线相接或重叠的线段在编辑完成后自动合并，分支与端口处保留连接节点；导入也会整理线段。
-  悬空端点始终显示信号色圆点，无需选中；普通折弯不显示分支圆点。合并可随本次编辑一起撤销。
-- 单击元件选择，Shift 多选，空白处拖动框选；元件可直接拖动，选中项目也可用方向键移动。移动元件会调整相接导线。
-  选中导线时，高亮相连网络，导线颜色保留信号状态。同名隧道关联、标签区分大小写；位宽冲突会报错。
-
-快捷键：V 选择、W 连线、T 文字、U 隧道、R 旋转、Delete 删除；
-Ctrl+A 全选，Ctrl+C/X/V 复制/剪切/粘贴，Ctrl+D 重复，Ctrl+Z 撤销，Ctrl+Shift+Z 重做。
-复制粘贴当前限同一窗口；文本框获得焦点时优先处理文字编辑快捷键。
-
-## 子电路
-
-Project → Add Circuit（Ctrl+Shift+N）或左上 `+` 创建电路。项目树双击打开定义，
-单击其他电路后点击画布放置实例；`(main)` 标记文件的主电路。Project 菜单可重命名、
-排序、设置主电路和删除未被引用的电路，这些操作与元件编辑共用撤销/重做历史。
-
-定义中的 Pin 构成实例端口，保留位宽、输入/输出角色及标签；Pin 朝向决定端口所在边。
-修改接口后同步所有实例；默认接口按 Pin 身份维护仍存在端口的连线。实例可旋转、移动、
-复制和编辑标签，悬停端口可查看名称、位宽及信号。
-
-双击实例、右键 View 或属性中的 View instance 查看该实例内部信号；Back 或 Alt+Left
-返回父电路。实例的输入由父电路驱动；修改内部电路会更新所有实例。项目树打开定义
-时可独立测试。每个实例的信号和隧道网络隔离，支持嵌套、多输入/多输出和多位总线。
-禁止直接或间接递归；时序状态在各实例间隔离，切换定义或查看实例时保留。
-
-## 自定义外观与封装
-
-Project → Edit Circuit Appearance 或 Ctrl+Shift+E 进入外观画布；Circuit layout 返回内部线路。
-支持矩形、圆角矩形、椭圆、线段、折线、多边形、二次曲线和文字；左侧可编辑描边、
-填充、圆角、字体、对齐和精确坐标。曲线先拖出两端，再点击控制点；折线/多边形逐点
-点击，双击或 Enter 完成，Escape 取消。文字点击放置后在左侧修改。
-
-选择后拖动对象或控制点，Shift 多选/框选，方向键微移；Snap 控制图形网格吸附。
-支持复制/剪切/粘贴/重复、删除、撤销/重做、顶点增删及图层上下调整（Ctrl+Up/Down，
-加 Shift 移至顶层/底层）。端口和锚点可通过左侧 Ports 列表选中，保持 10 单位网格；
-端口绑定内部 Pin，输入/输出角色和位宽由 Pin 决定。锚点设置实例的放置原点与原始朝向。
-
-Package design 可按输入/输出 Pin 生成带标题和引脚名称的封装，调整宽度与端口间距；
-生成的文字与图形可继续独立编辑。Revert to default appearance 恢复默认封装，可撤销。
-外观变更影响全部实例；修改自定义端口、锚点或恢复默认外观时，导线保留原坐标，
-需要在电路画布重新连接移动后的端口。这与参考程序实测一致，避免自动布线误连信号。
-移动整个实例仍会维护其附着连线。
-
-已支持上述图形的 `.circ` 外观读写及旋转；每个外观最多 2048 个图形、每条折线/多边形
-最多 256 个顶点。字体名称及粗斜体属性保留，实际字形使用程序可用字体，不承诺像素一致。
-这不是通用 SVG 编辑器；未知形状/属性、无效或有歧义的端口绑定会报告并保护原文件。
-
-## 文件读取与保存
-
-File 菜单提供 New、Open、Save 和 Save As；快捷键依次为 Ctrl+N、Ctrl+O、Ctrl+S、
-Ctrl+Shift+S，Ctrl+Q 退出。文件选择框可浏览目录或输入完整路径，保存时自动补 `.circ`。
-标题中的 `*` 表示未保存修改；新建、打开或退出前可保存、放弃或取消。
-保存失败不会清除修改状态，检测到文件被外部修改时要求另存为。
-
-当前互通范围：多电路项目、主电路选择、默认或已支持自定义外观的子电路实例，以及各电路中的八种门、1–32 位二态/三态输入及输出 Pin、正交导线、文字、普通 Tunnel
-及 TTL 7400/7402/7404/7408/7432/7486/747266、Controlled Buffer、Controlled Inverter、上述基础布线、六种 Plexers 与九种算术元件、Clock、D/T/JK/SR Flip-Flop、Register、Counter、Universal Register、Random、ROM、RAM、PlaRom、Button、Switch、DipSwitch、Slider、LED、RGBLed、DotMatrix、7-Segment Display 和 Hex Digit Display；
-包括门尺寸、2–8 个输入、方向、标签、字号、颜色和文字对齐。文字支持 RGBA 透明色，按钮标签可居中。
-导入保留实际坐标及连接端口；兼容已观察的 MUX 冗余 size=30、Probe 冗余 width=16，
-以及 8×8 输出外观端口（保存时保留中心并归一到 10×10）。常量也可读取无前导零的无符号十进制。
-多行文字数据可往返，但参考程序与本程序的排版不同；字体使用本程序的默认字体，
-不承诺字体族、字形覆盖或样式一致，隧道采用固定文字色。
-
-未支持的存储器选项、三态输入、普通门的逐输入取反等元件/电气属性会跳过并报告；
-其他不支持的项目内容或外观设置也会报告。含省略内容的文件标记为 `partial`，
-禁止覆盖原文件，必须另存为其他路径；只写出已支持的项目内容。
-未支持的外观、无效端口绑定或未支持的接口 Pin 会使相关实例被省略，避免错误地套用默认端口坐标。
-不保存仿真输入、时钟与存储的运行值、暂停状态、库/工具栏自定义和未实现部分。
-当前文件上限为 8 MiB、128 个电路、合计 65536 个元件/线段，单电路最多 4096 项，XML 最多 100 万节点，不接受 DTD。
-省略报告按电路、元件和原因汇总次数及示例位置；接口不可用的子电路实例会列出父电路位置，元件省略优先于字体替代提示。
-仿真展开限制为 32 层、1024 个实例、65536 项；超限会报告并停止求值。
-
-## 电路仿真
-
-TTL 库提供七种基础门芯片，支持 14 脚封装、四向旋转、引脚提示和内部逻辑显示。
-可选显示 Vcc/GND 电源引脚；启用后只有 Vcc=1、GND=0 时工作，其余供电组合释放输出。
-属性编辑和旋转保留原导线位置；移动芯片仍维护附着连线。支持属性撤销及 `.circ` 往返。
-
-
-Memory 库的随机数发生器支持 1–32 位、上升/下降沿、使能和异步复位。非零种子可复现序列，
-种子修改在复位后生效；0 使用本次运行的自动种子，复位保持期间输出稳定。自动种子来源
-与参考程序不同，不保证相同输出；运行序列按实例隔离，不写入 `.circ`。
-
-普通 AND/NAND/OR/NOR/XOR/XNOR 支持逐输入取反；XOR/XNOR 可选择恰好一个或奇数个为 1。
-输入按世界上到下或左到右编号，取反端口向外延伸一格；修改取反保留原导线坐标。
-新建输入 Pin 默认为二态（复位 0）；三态输入复位 X，Poke 按 X→0→1→X 切换，支持逐位操作。
-Pin 可编辑三态、上拉/下拉和四向标签位置，属性随文件保存；导入省略 tristate 时采用三态。
-拉值用于子电路的外部输入，按实测保留三态初始全 X 与后续变化的差异；输出 Pin 只读取网络。
-P 切换 Poke，点击单比特输入切换 0/1；多位输入在左侧用十六进制编辑后按 Enter/Apply，
-也可逐位点击。导线和端口区分低、高、未知 X、错误 E、位宽不匹配；悬停查看完整二进制值。
-左侧错误提示可选中相关元件和导线。
-
-Constant 使用十六进制属性设置固定值；Power/Ground 分别驱动全 1/全 0，复位不改变这些值。
-Probe 自动获取位宽，可选择二进制、八进制、有符号/无符号十进制或十六进制。
-Splitter 支持 1–32 位、1–32 个分支、逐位映射（含断开）、升/降序分配和四种端口排列，
-可双向拆分或合并总线；未知与冲突按位传播。Bit Extender 支持补零、补一、符号及外部
-输入扩展，也可截断为较窄位宽；其端口方向固定。
-
-Plexers 可设置使能端口、选择端口位置、禁用输出和三态输出（依组件类型）。
-优先编码器选择最高编号的高电平输入，提供有效输入指示及级联使能输出，可设置无有效输入时的值。
-修改选择位数、朝向或使能端口时，已有连线按端口角色和编号保持连接；编辑支持撤销/重做。
-
-位选择器支持 1–32 位输入和 1–32 位输出，按分组索引取出相应位段，超出输入的部分补零；
-选择端口位宽自动计算，选择信号含 X 或 E 时输出 X。
-七段译码器支持 4 位总线或四个单比特输入，输出七路段信号，提供灯测试（LT）、消隐（BI）和零值消隐（RBI）。
-EN=0 保持上一组输出，重新使能后更新，复位后恢复未知状态；各实例独立保存运行值，文件不保存这些值。
-总线输入中的 X/E 会产生未知输出；分立输入中的 E 按 0 处理，X 仍产生未知输出。
-切换总线/分立输入时导线保留原坐标，需要重新连接移动后的数据端口。
-
-Arithmetic 的加法器/减法器提供单比特进位/借位输入与输出，未连接的控制输入按 0。
-乘法器计算两操作数乘积加顶部输入，分别输出低位和高位；除法器组合顶部高位与左侧低位，输出商和余数。
-乘除法的辅助端口与数据同宽，全悬空的顶部输入按 0；除数为 0 时按 1 处理。
-32 位除法的组合被除数按有符号 64 位向下整除，保留参考程序实测边界行为；取负器按位宽截断结果。
-比较器可切换补码/无符号模式，同时输出大于、等于、小于；移位器支持逻辑左/右移、
-算术右移和循环左/右移，移位量端口位宽随数据位宽自动调整。各端口可悬停查看用途与信号。
-位加法器统计 1–32 个输入总线中所有 1 的数量，输出位宽自动调整，最多计数 1024；
-修改输入数量时保留原导线坐标，端口移动后需要重新接线。位查找器可寻找最低/最高位的 0 或 1，
-输出位索引及找到标志；没有匹配时两者均为 0。
-这些属性支持编辑、撤销及 `.circ` 往返；数据与控制信号按实测四态行为传播。
-
-| 快捷键 | 动作 |
-| --- | --- |
-| P | Poke 工具 |
-| 0 / 1 | 设置选中的输入值 |
-| Ctrl+E | 启用 / 暂停仿真 |
-| Ctrl+I | 暂停时传播一步 |
-| Ctrl+R | 运行输入、存储及时钟复位为零；保留滑块文档值和启用/暂停状态 |
-| Ctrl+T | 推进一个时钟 tick |
-| Ctrl+K | 开关自动时钟 |
-
-暂停时修改输入会排队，单步依次推进网络和门输出。运行输入操作不进入电路编辑撤销历史；
-文本框获得焦点时不会触发上述全局快捷键。编辑电路后重建网络，保留仍有效的输入、时钟与存储值；改变存储类型会复位该元件；计数器与移位寄存器修改位宽保留低位并补零，普通 Register 修改位宽会复位。
-
-Wiring 库的 Clock 可设置高/低持续 tick 数（各 1–65535），默认各 1；Poke 可翻转输出。
-Memory 库提供 D/T/JK/SR 触发器及 1–32 位 Register、Counter 和 Shift Register。触发器支持上升/下降沿、异步
-置位/清零、控制端口位置与新/旧布局；寄存器另支持高/低电平触发、使能和片选极性。
-悬停端口查看用途与信号，属性区查看存储值；Poke 可翻转触发器存储位。
-
-Memory 库另提供 1 位 D 锁存器和 S-R 锁存器，支持高/低电平使能；S-R 还可选择无使能端。
-使能有效时 D 跟随输入，S-R 的 10 置位、01 清零、00/11 保持；未知、错误或悬空数据保持原值。
-异步清零优先于预置和普通写入，控制端可取反。两者支持新旧布局、三种控制位置、Q 与反相 Q，
-属性编辑保留原导线坐标。Poke 可翻转保持中的存储位；运行状态按实例隔离，不写入 `.circ`。
-
-Counter 支持上升/下降沿、异步置满/清零、最大值与四种溢出动作（回绕、保持、继续计数、加载）。
-新模式提供加载、反向和使能，旧模式使用加载/计数两个控制端口；Carry 表示当前值到达该方向边界。
-修改位宽将最大值重设为新位宽上限。Shift Register 的 2 位 Mode 控制保持（0）、向低位移位（1）、
-向高位移位（2）或并行加载（3）；移入位分别取 D 的最高/最低位，支持异步清零。
-文件标识为 `Universal Register`，`length` 表示总位数；两类元件的运行值均不写入文件。
-
-Simulate 菜单与工具栏提供单 tick、自动 tick，默认频率为 4 Hz；预设档位从 1 Hz 到 4096 Hz。
-通过 **Simulate → Tick frequency → Custom… / 仿真 → 时钟步进频率 → 自定义…**
-输入 1–4096 的整数频率，点击 Apply / 应用后生效，取消保持原频率。频率属于会话运行设置，不写入电路文件。
-仿真在独立工作线程运行，界面最多每秒接收 60 次最新显示快照；慢帧不会积压显示更新。
-高频时可在一次界面更新间推进多个 tick，每次均完成传播后再进入下次；实际速度受电路复杂度和机器性能限制。
-暂停、单步与输入操作按顺序执行；文件对话框期间自动推进暂停，关闭窗口会停止并回收工作线程。
-一个 tick 不等同于一个完整时钟周期。暂停时单 tick 排队，使用 Step 或 Run 传播完成后
-才能推进下一 tick；自动时钟随仿真暂停，不补发暂停期间的 tick。
-
-多输入 XOR 默认按“恰好一个输入为 1”求值，XNOR 取反。
-受控缓冲器与受控反相器禁用时释放总线，使能端未知或错误时输出错误。
-拉电阻提供 Zero、One、Error，逐位补足未被驱动的信号，已有有效驱动优先；
-拉电阻不指定总线位宽，作用可通过分线器传递。修改控制端位置或反相器尺寸保留原导线坐标，需重新接线。
-
-完全未接线的门输入与接了悬空导线的输入不同；全空门报错（Buffer 保持 X）。
-求值有传播预算，超限暂停并提示检查反馈，可修改输入/电路或复位恢复。
-当前覆盖已有组合与基础时序元件，不承诺参考程序的全部传播延迟或反馈行为兼容。
-
-Git 保存最小构建、根目录必要文档及 CPU 示例。设计、规格、实验和其他参考资料保留在本地，
-不参与构建。提交范围见 [CONTRIBUTING.md](CONTRIBUTING.md)，
-协作及 Cleanroom 约定见 [AGENTS.md](AGENTS.md)。
-
-本项目原创内容采用 [MIT](LICENSE)；外部资料不属于该许可范围。
-
-## 输入与显示
-
-Input/Output 库的 Button 在 Poke 工具下按住左键输出 1，拖出本体仍保持，任意位置松开后归零；
-也可使用属性区的“Hold to press / 按住按钮”。复位会归零，切换上下文、打开模态窗口或失焦时释放，避免卡住输入。
-按钮运行状态按子电路实例隔离，不修改文档、不进入撤销历史或 `.circ` 文件。
-
-Switch 支持 1–32 位：Poke 点击闭合后将输入逐位传到输出，断开时输出 X，不反向导通。
-Dip Switch 提供 1–32 个独立的单比特输出，Poke 点击每个拨码切换；属性区也可按十六进制设置整组状态。
-两者的状态按子电路实例隔离，复位清零，不进入文档或撤销历史。
-
-Slider 支持 1–32 位：Poke 拖动手柄调整数值，属性区可精确设置十六进制值、显示进制及左右方向。
-滑块值随电路保存、支持撤销，并在同一定义的所有实例间共享，仿真复位保留该值。
-缩小位宽时数值夹紧到新上限；减少拨码数量时丢弃移除的状态位。
-三种组件均支持四向、标签及透明外壳颜色；拨码按从上到下或从左到右排列，滑块保持横向。
-
-LED 和七段数码管支持高/低电平点亮、点亮/熄灭颜色；数码管另可设置背景，颜色支持透明度。
-七段数码管有八个单比特输入，分别控制七段与小数点；十六进制显示器接收 4 位数字与独立的 1 位小数点输入。
-悬停端口查看用途。按钮与 LED 支持四向和标签位置，两种显示器方向固定。
-LED 的 X/E 输入均熄灭；七段数码管的 X/E 在高电平模式熄灭、低电平模式点亮。
-十六进制输入含 X/E 时显示横杠，小数点仅在明确为 1 时点亮。
-
-RGB LED 提供红、绿、蓝三个输入，每路可选 1 位开关或 8 位亮度，支持四向与标签编辑。
-通道含 X/E 时该通道亮度为零，其余通道独立显示。
-
-LED 点阵支持 1–32 行、1–32 列、按列/按行/行列选择三种输入形式，以及方形/圆形光点和透明配色。
-按列模式最低位在底部，按行模式最低位在右侧；行列选择模式的列数据最低位在左侧，
-行选择最低位在底部。X/E 显示红色，未选中行熄灭。修改输入形式或尺寸保留原导线坐标。
-余辉按仿真 Tick 计数，支持 Ctrl+T 单次推进及自动 Tick；实例状态独立，复位清空且不写入文件。
-
-## PLA ROM
-
-Memory 库的 PLA ROM 支持 1–32 个输入、AND 项和输出，以及高/低电平片选。
-选中后点击“编辑编程表”：输入单元在不连接、原值、反值间切换，输出单元切换连接；
-列按高位到低位排列。应用（Ctrl+Enter）或取消（Esc），清空后需应用才生效；支持撤销重做。
-尺寸变化保留左上重叠连接，移除的单元不再恢复，导线坐标保持不变。
-编程表随 `.circ` 保存，支持 Logisim-ITA 的 `PlaRom` 读写；空 AND 项或无连接输出为 E。
-
-## ROM 与 RAM
-
-Memory 库提供 ROM 和 RAM，支持 2–24 位地址、1–32 位数据，位置和端口与实测兼容。
-ROM 异步读取；RAM 可选共享同步、共享异步或独立读写端口，同步写入使用上升沿。
-属性中可设置简化模式、片选极性；完整 RAM 提供整块清零，独立端口另有写使能。
-共享端口的 Load=0 写入、Load=1 读取，写入时需由外部电路驱动数据总线。
-修改接口保留原导线坐标，需要重新连接移动或新增的端口。
-
-选中元件后点击 **Edit contents… / 编辑内容…**，可按十六进制地址查看、写入单字、
-填充范围或清空内容。ROM 内容支持撤销，随 `.circ` 保存；RAM 内容仅作用于当前仿真实例，
-不产生文档修改、不保存到电路文件，仿真复位后清零。缩小地址范围会丢弃超出部分，
-缩小数据位宽会截断高位；大容量相同内容采用压缩表示。
-
-内容编辑器中的 **Import .hex… / 导入 .hex…** 支持 Logisim 的 `v2.0 raw` 映像（最多 8 MiB）。
-首行为 `v2.0 raw`，后续使用十六进制数据、十进制重复次数（如 `16*aa`），可用 `#` 添加行注释。
-导入覆盖全部内容，未提供的地址补零，数据高位按元件位宽截断；格式错误或超出地址容量时保持原内容。
-ROM 导入支持一次撤销；RAM 导入只更新当前实例，复位后清零。取消不会修改内容。
-其他 `.hex` 编码和独立映像导出尚未支持。
-
-元件文字与封装标签保留字体名、字号、粗体/斜体及颜色；封装标签支持朝向与实例旋转。显示使用可用的系统回退字体，字形不保证与参考程序逐像素相同。
+原创代码采用 [MIT](LICENSE)。
