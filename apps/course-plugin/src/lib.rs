@@ -23,6 +23,9 @@ pub fn handle(request: Request) -> Response {
         Request::StableSample(request) => stable::sample(request)
             .map(Response::StableState)
             .unwrap_or_else(Response::Error),
+        Request::StableTransition(request) => stable::transition(request)
+            .map(Response::StableTransition)
+            .unwrap_or_else(Response::Error),
         Request::Evaluate(request) => match evaluate(request) {
             Ok(update) => Response::Update(update),
             Err(e) => Response::Error(e),

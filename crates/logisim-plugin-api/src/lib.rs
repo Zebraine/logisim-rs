@@ -43,16 +43,19 @@
 //! See [`StableContract`]. The manifest ABI must equal the exported ABI. Existing
 //! component schemas and event behavior are unchanged; an additive execution capability
 //! alone does not require changing the saved component version or Tool snapshot.
+//! ABI 3 adds [`StateTransition`] results for stable sampling. ABI 2 modules only
+//! receive the original StableSample request and use conservative cache invalidation.
 mod stable;
 mod validate;
 use serde::{Deserialize, Serialize};
 pub use stable::*;
 use std::collections::BTreeMap;
 
-pub const ABI_VERSION: u32 = 2;
+pub const ABI_VERSION: u32 = 3;
+pub const STABLE_ABI_VERSION: u32 = 2;
 pub const LEGACY_ABI_VERSION: u32 = 1;
 pub fn supports_abi(abi: u32) -> bool {
-    matches!(abi, LEGACY_ABI_VERSION | ABI_VERSION)
+    matches!(abi, LEGACY_ABI_VERSION | STABLE_ABI_VERSION | ABI_VERSION)
 }
 pub const MAX_MESSAGE: usize = 256 * 1024;
 pub const MAX_STATE: usize = 64 * 1024;
@@ -189,6 +192,7 @@ pub enum Request {
     StableContract(StableConfig),
     StableOutputs(StableEvaluation),
     StableSample(StableEvaluation),
+    StableTransition(StableEvaluation),
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(
@@ -203,6 +207,7 @@ pub enum Response {
     StableContract(Option<StableContract>),
     StableOutputs(StableOutputs),
     StableState(Vec<u8>),
+    StableTransition(StateTransition),
     Error(String),
 }
 

@@ -60,7 +60,7 @@ crates/logisim-ui/       egui 编辑器与画布
 `Simulator::settle_compiled()` / `ProjectSimulator::settle_compiled()` 是显式稳定态入口：
 先收敛组合表达式与全部层级接口，再统一采样状态并提交，内部导线值仍可查询。
 支持受控缓冲器/反相器、多驱动总线与逐位弱拉，以及边沿触发的触发器、寄存器、
-计数器、移位寄存器、随机数发生器、同步 RAM，以及声明稳定态能力的 ABI2 插件；旧插件、异步写 RAM、锁存器、
+计数器、移位寄存器、随机数发生器、同步 RAM，以及声明稳定态能力的 ABI2/3 插件；旧插件、异步写 RAM、锁存器、
 电平触发、组合反馈及未支持的连接会在推进前返回原因和实例路径，可继续使用原引擎。
 状态采样累计整个组合闭包中的网络变化，只重采样受影响元件；插件声明的输出依赖
 纳入平面与跨封装反馈检查，所有插件采样成功后才推进这一批插件及内置状态。
@@ -72,7 +72,7 @@ crates/logisim-ui/       egui 编辑器与画布
 
 ## 运行与检查
 
-动态插件使用 Wasm32 ABI v2，宿主仍兼容 ABI v1 的事件执行。协议类型和约束位于 `logisim-plugin-api` 的 Rust 文档，
+动态插件使用 Wasm32 ABI v3，宿主仍兼容 ABI v1 的事件执行及 ABI v2 的稳定态接口。协议类型和约束位于 `logisim-plugin-api` 的 Rust 文档，
 `logisim-plugin-sdk` 提供安全缓冲区与导出宏，`apps/course-plugin` 是包含图形、端口、
 属性、运行时动作和四态逻辑的完整示例。插件没有 Java/egui 依赖，不使用主机函数或 WASI。
 运行器限制每次调用的 fuel、16 MiB 内存、256 KiB 消息、64 KiB 状态和 4 MiB 模块。
@@ -80,7 +80,9 @@ crates/logisim-ui/       egui 编辑器与画布
 
 ABI v2 可按工具和属性查询 `StableContract`，分别声明输出、图形和状态采样的输入依赖。
 `Plugin::instantiate_stable` / `Registry::instantiate_stable` 返回绑定该配置的分阶段 VM：
-`outputs` 只求当前输出，`sample` 只返回下一状态，由调用者统一提交；旧 ABI 或不支持的模式返回 `None`。
+`outputs` 只求当前输出，`sample` 只返回下一状态，由调用者统一提交；ABI v1 或不支持的模式返回 `None`。
+ABI v3 的 `StableTransition` 同时声明输出/图形是否可能变化、相同采样输入下是否已到固定点。
+宿主依这些显式保证分别复用输出和采样缓存；ABI v2 保持保守重算，失败仍撤销整批采样。
 课程插件的边沿触发寄存器文件与无状态指令探针已提供此能力，电平透明模式不提供。
 `settle_compiled` 已使用此接口，按声明输入与显式状态变化缓存调用；模块、属性、动作、
 复位与事件步进会使相关缓存失效。桌面自动运行仍使用事件引擎，完整 CPU 尚需扩展其他状态元件。

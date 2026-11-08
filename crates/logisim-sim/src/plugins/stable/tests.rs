@@ -38,6 +38,17 @@ fn module(id: &str, abi: u32, contract: Option<api::StableContract>, fault: &str
         }],
     };
     let outputs = vec![Value::known(1, 1).into(), Value::known(1, 0).into()];
+    let sample = |state| {
+        if abi >= 3 {
+            Response::StableTransition(StateTransition {
+                state,
+                outputs_changed: matches!(fault, "conservative" | "output"),
+                fixed_point: !matches!(fault, "conservative" | "resample" | "oscillate"),
+            })
+        } else {
+            Response::StableState(state)
+        }
+    };
     let responses = [
         Response::Manifest(manifest),
         Response::StableContract(contract),
@@ -53,9 +64,9 @@ fn module(id: &str, abi: u32, contract: Option<api::StableContract>, fault: &str
         if fault == "sample" {
             Response::Error("sample failed".into())
         } else {
-            Response::StableState(vec![1])
+            sample(vec![1])
         },
-        Response::StableState(vec![0]),
+        sample(vec![0]),
     ];
     let mut data = String::new();
     let mut offsets = vec![];
@@ -276,76 +287,78 @@ fn hierarchical_feedback_check_is_invalidated_when_only_module_capabilities_chan
 }
 #[test]
 fn failed_sample_discards_all_staged_instances_before_builtin_sampling() {
-    let mut p = Project::default();
-    let mut registry = Registry::default();
-    let (good, g, _, _) = child(
-        &mut p,
-        &mut registry,
-        module("good", 2, contract(false, true), ""),
-    );
-    let (bad, b, _, _) = child(
-        &mut p,
-        &mut registry,
-        module("bad", 2, contract(false, true), "sample"),
-    );
-    let good = p.instance(good, Point::new(100, 100)).unwrap();
-    let bad = p.instance(bad, Point::new(600, 100)).unwrap();
-    let c = &mut p.main_circuit_mut().circuit;
-    let good = c.add_component(good);
-    let bad = c.add_component(bad);
-    let ff = add(c, Kind::FlipFlop(FlipFlop::D));
-    let clock = add(c, Kind::Pin);
-    link(c, (clock, 0), (ff, 2));
-    let data = add(c, Kind::Pin);
-    link(c, (data, 0), (ff, 3));
-    let ram = add(c, Kind::Ram);
-    let memory = c.components.iter_mut().find(|c| c.id == ram).unwrap();
-    memory.bits = 1;
-    memory.memory.interface = logisim_core::MemoryInterface::Separate;
-    memory.memory.address_bits = 2;
-    let data_port = memory.memory_port(logisim_core::MemoryRole::Input).unwrap();
-    let clock_port = memory.memory_port(logisim_core::MemoryRole::Clock).unwrap();
-    link(c, (data, 0), (ram, data_port));
-    link(c, (clock, 0), (ram, clock_port));
-    let address = add(c, Kind::Constant);
-    let constant = c.components.iter_mut().find(|c| c.id == address).unwrap();
-    constant.bits = 2;
-    constant.constant = 0;
-    link(c, (address, 0), (ram, 1));
-    let mut sim = ProjectSimulator::default();
-    sim.set_plugins(registry);
-    sim.synchronize(&p, p.main);
-    sim.advance(128);
-    sim.set_input(data, 1);
-    sim.set_input(clock, 1);
-    let error = sim.settle_compiled().unwrap_err();
-    assert_eq!(error.path, vec![bad]);
-    assert_eq!(
-        sim.view(&[]).unwrap().memory_contents(ram).unwrap().get(0),
-        0
-    );
-    assert!(matches!(error.reason,Failure::Plugin {component,..} if component==b));
-    assert!(
-        sim.view(&[good]).unwrap().plugin_states[&g]
-            .state
-            .is_empty()
-    );
-    assert_eq!(
-        sim.view(&[]).unwrap().stored_value(ff),
-        Some(Value::known(1, 0))
-    );
-    assert_eq!(
-        sim.view(&[bad]).unwrap().port_value(b, 0),
-        Some(Value::filled(1, Bit::Error))
-    );
-    assert!(
-        sim.view(&[bad])
-            .unwrap()
-            .plugin_graphics(b)
-            .unwrap()
-            .is_empty()
-    );
-    assert!(sim.settle_compiled().is_err());
+    for abi in [2, 3] {
+        let mut p = Project::default();
+        let mut registry = Registry::default();
+        let (good, g, _, _) = child(
+            &mut p,
+            &mut registry,
+            module("good", abi, contract(false, true), ""),
+        );
+        let (bad, b, _, _) = child(
+            &mut p,
+            &mut registry,
+            module("bad", abi, contract(false, true), "sample"),
+        );
+        let good = p.instance(good, Point::new(100, 100)).unwrap();
+        let bad = p.instance(bad, Point::new(600, 100)).unwrap();
+        let c = &mut p.main_circuit_mut().circuit;
+        let good = c.add_component(good);
+        let bad = c.add_component(bad);
+        let ff = add(c, Kind::FlipFlop(FlipFlop::D));
+        let clock = add(c, Kind::Pin);
+        link(c, (clock, 0), (ff, 2));
+        let data = add(c, Kind::Pin);
+        link(c, (data, 0), (ff, 3));
+        let ram = add(c, Kind::Ram);
+        let memory = c.components.iter_mut().find(|c| c.id == ram).unwrap();
+        memory.bits = 1;
+        memory.memory.interface = logisim_core::MemoryInterface::Separate;
+        memory.memory.address_bits = 2;
+        let data_port = memory.memory_port(logisim_core::MemoryRole::Input).unwrap();
+        let clock_port = memory.memory_port(logisim_core::MemoryRole::Clock).unwrap();
+        link(c, (data, 0), (ram, data_port));
+        link(c, (clock, 0), (ram, clock_port));
+        let address = add(c, Kind::Constant);
+        let constant = c.components.iter_mut().find(|c| c.id == address).unwrap();
+        constant.bits = 2;
+        constant.constant = 0;
+        link(c, (address, 0), (ram, 1));
+        let mut sim = ProjectSimulator::default();
+        sim.set_plugins(registry);
+        sim.synchronize(&p, p.main);
+        sim.advance(128);
+        sim.set_input(data, 1);
+        sim.set_input(clock, 1);
+        let error = sim.settle_compiled().unwrap_err();
+        assert_eq!(error.path, vec![bad]);
+        assert_eq!(
+            sim.view(&[]).unwrap().memory_contents(ram).unwrap().get(0),
+            0
+        );
+        assert!(matches!(error.reason,Failure::Plugin {component,..} if component==b));
+        assert!(
+            sim.view(&[good]).unwrap().plugin_states[&g]
+                .state
+                .is_empty()
+        );
+        assert_eq!(
+            sim.view(&[]).unwrap().stored_value(ff),
+            Some(Value::known(1, 0))
+        );
+        assert_eq!(
+            sim.view(&[bad]).unwrap().port_value(b, 0),
+            Some(Value::filled(1, Bit::Error))
+        );
+        assert!(
+            sim.view(&[bad])
+                .unwrap()
+                .plugin_graphics(b)
+                .unwrap()
+                .is_empty()
+        );
+        assert!(sim.settle_compiled().is_err());
+    }
 }
 #[test]
 fn output_fault_is_visible_and_reset_recreates_the_phase_vm() {
@@ -373,20 +386,62 @@ fn output_fault_is_visible_and_reset_recreates_the_phase_vm() {
 }
 #[test]
 fn changing_state_without_changing_drives_is_bounded() {
-    let mut c = Circuit::default();
-    let mut registry = Registry::default();
-    library(
-        &mut c,
-        &mut registry,
-        module("test", 2, contract(false, true), "oscillate"),
-    );
-    let mut sim = Simulator::default();
-    sim.set_plugins(registry);
-    sim.synchronize(&c);
-    assert_eq!(
-        sim.settle_compiled().unwrap_err().reason,
-        Failure::PropagationLimit
-    );
-    assert!(sim.limited());
-    assert!(!sim.enabled());
+    for abi in [2, 3] {
+        let mut c = Circuit::default();
+        let mut registry = Registry::default();
+        library(
+            &mut c,
+            &mut registry,
+            module("test", abi, contract(false, true), "oscillate"),
+        );
+        let mut sim = Simulator::default();
+        sim.set_plugins(registry);
+        sim.synchronize(&c);
+        assert_eq!(
+            sim.settle_compiled().unwrap_err().reason,
+            Failure::PropagationLimit
+        );
+        assert!(sim.limited());
+        assert!(!sim.enabled());
+    }
+}
+
+#[test]
+fn only_explicit_transition_promises_skip_output_and_sample_rechecks() {
+    for (abi, mode, samples, outputs) in [
+        (2, "", 2, 2),
+        (3, "conservative", 2, 2),
+        (3, "", 1, 1),
+        (3, "output", 1, 2),
+        (3, "resample", 2, 1),
+    ] {
+        let mut c = Circuit::default();
+        let mut registry = Registry::default();
+        let id = library(
+            &mut c,
+            &mut registry,
+            module("test", abi, contract(false, true), mode),
+        );
+        let input = add(&mut c, Kind::Pin);
+        link(&mut c, (input, 0), (id, 1));
+        let mut sim = Simulator::default();
+        sim.set_plugins(registry);
+        sim.synchronize(&c);
+        let report = sim.settle_compiled().unwrap();
+        assert_eq!(report.sampled_plugins, samples);
+        assert_eq!(report.evaluated_plugins, outputs);
+        assert_eq!(sim.plugin_states[&id].state, [1]);
+        assert!(sim.plugin_states[&id].event_dirty);
+        let report = sim.settle_compiled().unwrap();
+        assert_eq!(report.sampled_plugins, 0);
+        assert_eq!(report.evaluated_plugins, 0);
+        sim.set_input(input, 1);
+        let report = sim.settle_compiled().unwrap();
+        assert_eq!(report.sampled_plugins, 1);
+        assert_eq!(report.evaluated_plugins, 0);
+        sim.reset();
+        let report = sim.settle_compiled().unwrap();
+        assert_eq!(report.sampled_plugins, samples);
+        assert_eq!(report.evaluated_plugins, outputs);
+    }
 }

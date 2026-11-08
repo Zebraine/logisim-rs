@@ -25,7 +25,8 @@ pub struct StableConfig {
 /// Port indices refer to Tool.ports. Each output must appear exactly once. Dependency
 /// lists contain unique INPUT ports and must conservatively include every input which
 /// can affect that result for any explicit state. State itself is an implicit dependency
-/// of every output/graphic. `state_inputs: None` means stateless (empty opaque state);
+/// of every output/graphic, unless an ABI 3 StateTransition explicitly preserves it.
+/// `state_inputs: None` means stateless (empty opaque state);
 /// `Some` declares the inputs affecting next state, including clock/history controls.
 /// These declarations are promises, not proofs; hosts validate shape/bounds but cannot
 /// prove arbitrary Wasm is pure or that the declared dependencies are complete.
@@ -57,6 +58,39 @@ pub struct StableEvaluation {
 pub struct StableOutputs {
     pub outputs: Vec<Signal>,
     pub graphics: Vec<Shape>,
+}
+
+/// ABI 3 next state and explicit promises about this transition. A plugin supporting
+/// stable execution in ABI 3 must implement StableTransition as well as StableSample;
+/// both produce the same state. Hosts never send this request to ABI 1/2 modules.
+///
+/// `outputs_changed: false` promises that replacing the old state with `state` cannot
+/// affect ANY output drive or runtime graphic for ANY legal inputs with these properties,
+/// including future read addresses, not just the inputs sampled in this request.
+/// `true` conservatively invalidates the output cache even if nothing actually changed.
+///
+/// `fixed_point: true` promises that sampling the returned state again with the same
+/// declared state inputs returns exactly these bytes. Hosts may retain the sample cache
+/// across this commit. Input changes still trigger sampling. `false` requests the usual
+/// bounded convergence check after a state change; it is always safe to return false.
+/// These promises cannot be proven by the host, just like StableContract dependencies.
+/// They never authorize skipping state publication or committing a partial sample batch.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StateTransition {
+    pub state: Vec<u8>,
+    pub outputs_changed: bool,
+    pub fixed_point: bool,
+}
+impl StateTransition {
+    /// Preserve ABI 2 semantics when no additional promises are available.
+    pub fn conservative(state: Vec<u8>) -> Self {
+        Self {
+            state,
+            outputs_changed: true,
+            fixed_point: false,
+        }
+    }
 }
 
 impl StableContract {

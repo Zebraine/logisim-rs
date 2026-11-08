@@ -49,9 +49,55 @@ pub fn run(registry: &Registry, tools: &[api::Component]) {
         siblings(registry, tools, reverse);
     }
     invalidation(registry, tools);
+    if registry.manifests().next().unwrap().abi >= 3 {
+        history_and_hidden_writes(registry, tools);
+    }
     println!(
         "Wasm stable scheduling: mixed same-edge chain, hierarchy, dependency caches, actions, properties, registry changes, reset and event stepping passed"
     );
+}
+fn history_and_hidden_writes(registry: &Registry, tools: &[api::Component]) {
+    let mut c = Circuit::default();
+    let rf = register_file(&mut c, &tools[0]);
+    // Read zero while writing word one: dynamic graphics must still be refreshed.
+    for port in [6, 7] {
+        let at = c.component(rf).unwrap().ports()[port];
+        c.components
+            .iter_mut()
+            .find(|c| c.kind == Kind::Constant && c.position == at)
+            .unwrap()
+            .constant = 0;
+    }
+    let data = pin(&mut c, (rf, 2));
+    let clk = pin(&mut c, (rf, 3));
+    let mut sim = Simulator::default();
+    sim.set_plugins(registry.clone());
+    sim.synchronize(&c);
+    sim.settle_compiled().unwrap();
+    sim.set_input(data, 42);
+    sim.settle_compiled().unwrap();
+    sim.set_input(clk, 1);
+    let report = sim.settle_compiled().unwrap();
+    assert_eq!(report.sampled_plugins, 1);
+    assert_eq!(report.evaluated_plugins, 1);
+    assert_eq!(output(&sim, rf), Some(0));
+    assert!(text(&sim, rf, "0000002A"));
+    for clock in [0, 1, 0] {
+        sim.set_input(clk, clock);
+        let report = sim.settle_compiled().unwrap();
+        assert_eq!(report.sampled_plugins, 1);
+        assert_eq!(report.evaluated_plugins, 0);
+        assert_eq!(output(&sim, rf), Some(0));
+        idle(sim.settle_compiled().unwrap());
+    }
+    // History-only transitions must still update the state used by event stepping.
+    sim.set_input(data, 17);
+    sim.advance(128);
+    sim.set_input(clk, 1);
+    sim.advance(128);
+    assert!(text(&sim, rf, "00000011"));
+    sim.settle_compiled().unwrap();
+    assert!(text(&sim, rf, "00000011"));
 }
 fn mixed_chain(registry: &Registry, tools: &[api::Component], reverse: bool) {
     let mut c = Circuit::default();

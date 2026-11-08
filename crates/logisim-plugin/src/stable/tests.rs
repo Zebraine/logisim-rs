@@ -82,6 +82,7 @@ fn module(
         data.push_str(&format!("(data (i32.const {offset}) \"{text}\")"));
         packed.push(((bytes.len() as u64) << 32) | offset as u64);
     }
+    let sample_tag = if abi >= 3 { 116 } else { 115 }; // transition / sample
     let [m, reset, c, o, s] = packed.as_slice() else {
         unreachable!()
     };
@@ -101,7 +102,7 @@ fn module(
                     else global.get $query if unreachable end
                         i32.const 16 i32.load8_u i32.const 111 i32.eq
                         if (result i64) {code} i64.const {o}
-                        else i64.const {s} end
+                        else i32.const 16 i32.load8_u i32.const {sample_tag} i32.ne if unreachable end i64.const {s} end
                     end
                 end
             end))"#
@@ -109,7 +110,7 @@ fn module(
     .unwrap()
 }
 fn load(declared: Response, output: Response, sampled: Response, code: &str) -> Plugin {
-    Plugin::load(&module(ABI_VERSION, declared, output, sampled, code)).unwrap()
+    Plugin::load(&module(STABLE_ABI_VERSION, declared, output, sampled, code)).unwrap()
 }
 #[test]
 fn legacy_opt_out_and_bad_contracts_are_distinguished() {
@@ -264,4 +265,64 @@ fn phase_outputs_samples_and_requests_are_bounded_and_validated() {
             .sample(&[signal()], &vec![0; MAX_STATE + 1])
             .is_err()
     );
+}
+
+#[test]
+fn transition_promises_are_version_gated_bounded_and_fail_closed() {
+    for abi in [STABLE_ABI_VERSION, ABI_VERSION] {
+        for outputs_changed in [false, true] {
+            for fixed_point in [false, true] {
+                let next = if abi == STABLE_ABI_VERSION {
+                    StateTransition::conservative(vec![42])
+                } else {
+                    StateTransition {
+                        state: vec![42],
+                        outputs_changed,
+                        fixed_point,
+                    }
+                };
+                let response = if abi == STABLE_ABI_VERSION {
+                    Response::StableState(next.state.clone())
+                } else {
+                    Response::StableTransition(next.clone())
+                };
+                let p = Plugin::load(&module(
+                    abi,
+                    Response::StableContract(Some(contract())),
+                    Response::StableOutputs(outputs()),
+                    response,
+                    "",
+                ))
+                .unwrap();
+                let mut vm = p
+                    .instantiate_stable(&p.manifest().components()[0])
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(vm.transition(&[signal()], &[]).unwrap(), next);
+                assert_eq!(vm.sample(&[signal()], &[]).unwrap(), next.state);
+            }
+        }
+    }
+    for response in [
+        Response::StableState(vec![42]), // ABI 3 must explicitly return promises
+        Response::StableTransition(StateTransition::conservative(vec![0; MAX_STATE + 1])),
+        Response::Error("bad transition".into()),
+    ] {
+        let p = Plugin::load(&module(
+            ABI_VERSION,
+            Response::StableContract(Some(contract())),
+            Response::StableOutputs(outputs()),
+            response,
+            "",
+        ))
+        .unwrap();
+        let mut vm = p
+            .instantiate_stable(&p.manifest().components()[0])
+            .unwrap()
+            .unwrap();
+        assert!(vm.transition(&[signal()], &[]).is_err());
+        assert!(vm.outputs(&[signal()], &[]).is_err());
+        vm.reset(&[signal()]).unwrap();
+        assert_eq!(vm.outputs(&[signal()], &[]).unwrap(), outputs());
+    }
 }

@@ -2,8 +2,8 @@ use super::*;
 #[cfg(test)]
 mod tests;
 use logisim_plugin_api::{
-    Event, LEGACY_ABI_VERSION, Signal, StableConfig, StableContract, StableEvaluation,
-    StableOutputs,
+    Event, LEGACY_ABI_VERSION, STABLE_ABI_VERSION, Signal, StableConfig, StableContract,
+    StableEvaluation, StableOutputs, StateTransition,
 };
 
 impl Plugin {
@@ -86,17 +86,36 @@ impl StableInstance {
         self.finish(result)
     }
     pub fn sample(&mut self, inputs: &[Signal], state: &[u8]) -> Result<Vec<u8>> {
+        self.transition(inputs, state).map(|next| next.state)
+    }
+    /// Sample without committing. ABI 2 results conservatively invalidate both phase
+    /// caches; only ABI 3 receives the request for explicit transition promises.
+    pub fn transition(&mut self, inputs: &[Signal], state: &[u8]) -> Result<StateTransition> {
         let result = (|| {
             let request = self.request(inputs, state)?;
             if self.contract.state_inputs.is_none() {
-                return Ok(vec![]);
+                return Ok(StateTransition {
+                    state: vec![],
+                    outputs_changed: false,
+                    fixed_point: true,
+                });
             }
-            let Response::StableState(next) =
-                self.instance.call(&Request::StableSample(request))?
-            else {
-                return Err("Plugin did not return a stable-state sample.".into());
+            let next = if self.plugin.manifest.abi == STABLE_ABI_VERSION {
+                let Response::StableState(next) =
+                    self.instance.call(&Request::StableSample(request))?
+                else {
+                    return Err("Plugin did not return a stable-state sample.".into());
+                };
+                StateTransition::conservative(next)
+            } else {
+                let Response::StableTransition(next) =
+                    self.instance.call(&Request::StableTransition(request))?
+                else {
+                    return Err("Plugin did not return a stable-state transition.".into());
+                };
+                next
             };
-            self.contract.validate_state(&next)?;
+            self.contract.validate_state(&next.state)?;
             Ok(next)
         })();
         self.finish(result)

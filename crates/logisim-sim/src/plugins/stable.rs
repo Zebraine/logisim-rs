@@ -13,7 +13,7 @@ pub(crate) struct Plan {
     sample_ports: Option<Vec<usize>>,
     output_inputs: Option<Vec<api::Signal>>,
     sample_inputs: Option<Vec<api::Signal>>,
-    next_state: Option<Vec<u8>>,
+    next_state: Option<api::StateTransition>,
 }
 impl Plan {
     pub fn compile(
@@ -176,9 +176,9 @@ impl Simulator {
             let state = self.plugin_states.get_mut(&id).unwrap();
             let inputs: Vec<_> = entry.values(&self.values).map(Into::into).collect();
             sampled += 1;
-            match phase.vm.sample(&inputs, &state.state) {
+            match phase.vm.transition(&inputs, &state.state) {
                 Ok(next) => {
-                    phase.next_state = (next != state.state).then_some(next);
+                    phase.next_state = (next.state != state.state).then_some(next);
                     phase.sample_inputs = Some(ports.iter().map(|&i| inputs[i]).collect());
                 }
                 Err(message) => {
@@ -217,10 +217,17 @@ impl Simulator {
         for (&id, phase) in &mut plan.plugins {
             if let Some(next) = phase.next_state.take() {
                 let state = self.plugin_states.get_mut(&id).unwrap();
-                state.state = next;
+                state.state = next.state;
                 state.event_dirty = true;
-                phase.invalidate();
-                changed = true;
+                if next.outputs_changed {
+                    phase.output_inputs = None;
+                }
+                if !next.fixed_point {
+                    phase.sample_inputs = None;
+                }
+                // History-only fixed points still publish state and dirty the event
+                // cache, but cannot require another combinational/sample closure.
+                changed |= next.outputs_changed || !next.fixed_point;
             }
         }
         changed

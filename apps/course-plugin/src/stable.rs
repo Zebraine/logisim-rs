@@ -71,12 +71,24 @@ pub fn outputs(request: StableEvaluation) -> Result<StableOutputs, String> {
     })
 }
 pub fn sample(request: StableEvaluation) -> Result<Vec<u8>, String> {
+    transition(request).map(|next| next.state)
+}
+pub fn transition(request: StableEvaluation) -> Result<StateTransition, String> {
     validate(&request)?;
     if request.tool == "riscv-probe" {
-        return Ok(vec![]);
+        return Ok(StateTransition {
+            state: vec![],
+            outputs_changed: false,
+            fixed_point: true,
+        });
     }
     let mut file = register_state::decode(&request.state)?;
+    let before = *file.words();
     let ports = std::array::from_fn(|i| Value::from(request.inputs[i]));
     file.sample(register_state::trigger(&request.properties), &ports);
-    Ok(register_state::encode(&file))
+    Ok(StateTransition {
+        state: register_state::encode(&file),
+        outputs_changed: before != *file.words(),
+        fixed_point: true,
+    })
 }

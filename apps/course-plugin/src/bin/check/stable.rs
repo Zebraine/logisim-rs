@@ -133,6 +133,7 @@ pub fn run(registry: &Registry, tools: &[Component]) -> Result<(), String> {
 }
 fn four_state(registry: &Registry, component: &Component) -> Result<(), String> {
     let bits = [Bit::Zero, Bit::One, Bit::Unknown, Bit::Error];
+    let effects = registry.manifests().next().unwrap().abi >= 3;
     let mut cases = 0;
     for trigger in ["rising", "falling"] {
         let mut c = component.clone();
@@ -154,9 +155,20 @@ fn four_state(registry: &Registry, component: &Component) -> Result<(), String> 
                         p[6] = Value::known(5, 31).into();
                         p[7] = Value::filled(5, address).into();
                         let old = stable.outputs(&p, &initial)?;
-                        let next = stable.sample(&p, &initial)?;
+                        let transition = stable.transition(&p, &initial)?;
+                        let next = transition.state;
                         assert_eq!(stable.outputs(&p, &initial)?, old);
                         let out = stable.outputs(&p, &next)?;
+                        if effects {
+                            assert!(transition.fixed_point);
+                            assert_eq!(stable.sample(&p, &next)?, next);
+                            // Here every tested write targets word 31 (or all words),
+                            // with uniform data, so the graphics also expose each change.
+                            assert_eq!(transition.outputs_changed, out.graphics != old.graphics);
+                            if !transition.outputs_changed {
+                                assert_eq!(out.outputs[..2], old.outputs[..2]);
+                            }
+                        }
                         let legacy = event.evaluate(
                             &c,
                             Evaluation {

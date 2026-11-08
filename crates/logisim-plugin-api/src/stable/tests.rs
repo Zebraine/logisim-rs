@@ -80,3 +80,20 @@ fn stable_wire_schema_rejects_state_in_outputs_and_extra_fields() {
     );
     assert!(serde_json::from_str::<Request>(r#"{"type":"stable_sample","data":{"tool":"test","properties":{},"inputs":[],"state":[],"event":{"type":"reset"}}}"#).is_err());
 }
+
+#[test]
+fn transition_wire_requires_explicit_boolean_promises_and_rejects_extra_fields() {
+    for json in [
+        r#"{"state":[],"outputs_changed":false}"#,
+        r#"{"state":[],"outputs_changed":null,"fixed_point":true}"#,
+        r#"{"state":[],"outputs_changed":false,"fixed_point":true,"skip":true}"#,
+    ] {
+        assert!(serde_json::from_str::<StateTransition>(json).is_err());
+    }
+    let response = Response::StableTransition(StateTransition::conservative(vec![0, 255]));
+    let encoded = serde_json::to_string(&response).unwrap();
+    assert!(
+        matches!(serde_json::from_str::<Response>(&encoded).unwrap(),
+        Response::StableTransition(StateTransition { state, outputs_changed: true, fixed_point: false }) if state == [0, 255])
+    );
+}
