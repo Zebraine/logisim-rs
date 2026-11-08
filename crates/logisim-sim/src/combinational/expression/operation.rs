@@ -1,5 +1,5 @@
 use super::super::Node;
-use crate::{Bit, Value, arithmetic, gates, memory, parity, pla, plexers};
+use crate::{Bit, Value, arithmetic, bus, gates, memory, parity, pla, plexers};
 use logisim_core::{Component, Extension, Kind};
 
 /// Snapshots reuse the engine's observed pure kernels, including their attributes.
@@ -13,6 +13,7 @@ pub(super) enum Operation {
     Rom(Box<Component>),
     Pla(Box<logisim_core::Pla>),
     Constant(Value),
+    Controlled(Box<Component>),
     Extend(u8, Extension),
 }
 
@@ -39,6 +40,9 @@ impl Operation {
             Kind::Constant => Self::Constant(Value::known(c.bits, c.constant)),
             Kind::Power => Self::Constant(Value::filled(c.bits, Bit::One)),
             Kind::Ground => Self::Constant(Value::known(c.bits, 0)),
+            Kind::ControlledBuffer | Kind::ControlledInverter => {
+                Self::Controlled(Box::new(c.clone()))
+            }
             Kind::BitExtender => Self::Extend(c.bits.clamp(1, 32), c.extension),
             _ => unreachable!("analysis admits only supported pure operations"),
         }
@@ -79,6 +83,7 @@ impl Operation {
             Self::Rom(c) => memory::rom(c, ports),
             Self::Pla(p) => pla::evaluate(p, ports[1], ports[2].bit(0)),
             Self::Constant(value) => *value,
+            Self::Controlled(c) => bus::evaluate(c, ports[1], ports[2].bit(0)),
             Self::Extend(width, extension) => {
                 let input = ports[1];
                 let extra = match extension {

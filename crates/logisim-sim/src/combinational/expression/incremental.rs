@@ -18,9 +18,7 @@ pub(super) fn consumers(instructions: &[Instruction], initial: &[Value]) -> Vec<
                 }
                 Read::Gather(bits) => {
                     for bit in bits {
-                        if let BitRead::Slot(slot, bit) = bit {
-                            *reads.entry(*slot).or_default() |= 1 << bit;
-                        }
+                        bit.dependencies(&mut reads);
                     }
                 }
             }

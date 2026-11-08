@@ -61,7 +61,7 @@ fn state_cuts_preserve_shared_nodes_topological_order_and_external_readers() {
     );
     assert_eq!(
         analysis.regions[0].nodes[1].inputs[0].bits,
-        vec![Some(source((a, 0), 0))]
+        vec![input_bit(vec![source((a, 0), 0)], Bit::Unknown)]
     );
     c.components.reverse();
     c.wires.reverse();
@@ -121,7 +121,10 @@ fn splitters_and_tunnels_keep_source_bit_order_and_partial_exports() {
     assert_eq!(ids(&analysis), vec![vec![gate, low]]);
     assert_eq!(
         analysis.regions[0].nodes[1].inputs[0].bits,
-        vec![Some(source((gate, 0), 1)), Some(source((gate, 0), 3))]
+        vec![
+            input_bit(vec![source((gate, 0), 1)], Bit::Unknown),
+            input_bit(vec![source((gate, 0), 3)], Bit::Unknown)
+        ]
     );
     assert_eq!(
         analysis.regions[0].outputs,
@@ -152,18 +155,14 @@ fn topology_barriers_are_local_and_repaired_connections_become_candidates() {
     let position = c.component(wide).unwrap().ports()[1];
     removals.insert(add(&mut c, Kind::Pin, position.x, position.y, 8));
     let analysis = Analysis::new(&c);
-    assert_eq!(ids(&analysis), vec![vec![good]]);
-    for (id, reason) in [
-        (conflict, BoundaryReason::MultipleDrivers),
-        (pull, BoundaryReason::WeakPull),
-        (wide, BoundaryReason::WidthMismatch),
-    ] {
-        assert!(analysis.boundaries.contains(&Boundary {
-            component: id,
-            reason,
-            port: Some(1)
-        }));
-    }
+    assert_eq!(ids(&analysis), vec![vec![good], vec![conflict], vec![pull]]);
+    assert_eq!(reasons(&analysis, conflict), vec![]);
+    assert_eq!(reasons(&analysis, pull), vec![]);
+    assert!(analysis.boundaries.contains(&Boundary {
+        component: wide,
+        reason: BoundaryReason::WidthMismatch,
+        port: Some(1)
+    }));
     c.remove(&removals);
     assert_eq!(
         ids(&Analysis::new(&c)),
@@ -185,15 +184,22 @@ fn different_bits_of_one_driver_shortened_by_splitters_are_multiple_sources() {
     let gate = add(&mut c, Kind::Gate(Gate::Buffer), 600, 100, 1);
     tunnel(&mut c, (gate, 1), "short");
     let analysis = Analysis::new(&c);
-    assert!(analysis.regions.is_empty());
+    assert_eq!(ids(&analysis), vec![vec![gate]]);
     assert_eq!(
-        reasons(&analysis, gate),
-        vec![BoundaryReason::MultipleDrivers]
+        analysis.regions[0].nodes[0].inputs[0].bits,
+        vec![input_bit(
+            vec![source((input, 0), 0), source((input, 0), 1)],
+            Bit::Unknown
+        )]
+    );
+    assert_eq!(
+        analysis.regions[0].inputs,
+        vec![source((input, 0), 0), source((input, 0), 1)]
     );
 }
 
 #[test]
-fn weak_pull_on_a_splitter_branch_blocks_its_combined_bus() {
+fn weak_pull_on_a_splitter_branch_only_supplies_that_bit() {
     let mut c = Circuit::default();
     let mut split = Component::new(Kind::Splitter, Point::new(300, 100));
     split.bits = 2;
@@ -204,9 +210,14 @@ fn weak_pull_on_a_splitter_branch_blocks_its_combined_bus() {
     add(&mut c, Kind::PullResistor, end.x, end.y, 1);
     let gate = add(&mut c, Kind::Gate(Gate::Buffer), 600, 100, 2);
     link(&mut c, (split, 0), (gate, 1), "combined");
+    let analysis = Analysis::new(&c);
+    assert_eq!(ids(&analysis), vec![vec![gate]]);
     assert_eq!(
-        reasons(&Analysis::new(&c), gate),
-        vec![BoundaryReason::WeakPull]
+        analysis.regions[0].nodes[0].inputs[0].bits,
+        vec![
+            input_bit(vec![], Bit::Zero),
+            input_bit(vec![], Bit::Unknown)
+        ]
     );
 }
 
@@ -220,8 +231,8 @@ fn physical_disconnection_and_connected_floating_are_distinct() {
     let inputs = &analysis.regions[0].nodes[0].inputs;
     assert!(!inputs[0].connected);
     assert!(inputs[1].connected);
-    assert_eq!(inputs[0].bits, vec![None]);
-    assert_eq!(inputs[1].bits, vec![None]);
+    assert_eq!(inputs[0].bits, vec![input_bit(vec![], Bit::Unknown)]);
+    assert_eq!(inputs[1].bits, vec![input_bit(vec![], Bit::Unknown)]);
     assert!(analysis.regions[0].inputs.is_empty());
 }
 
@@ -237,7 +248,7 @@ fn hidden_state_and_opaque_components_are_boundaries_while_rom_is_pure() {
         Kind::Plugin,
         Kind::Subcircuit(123),
         Kind::Button,
-        Kind::ControlledBuffer,
+        Kind::Transistor,
     ]
     .into_iter()
     .enumerate()
@@ -371,4 +382,8 @@ fn long_dependency_chains_and_large_feedback_do_not_use_the_call_stack() {
     assert_eq!(graph::partition(&chain), (vec![], vec![(0..n).collect()]));
     chain[n - 1].push(0);
     assert_eq!(graph::partition(&chain), ((0..n).collect(), vec![]));
+}
+
+fn input_bit(sources: Vec<Source>, pull: Bit) -> InputBit {
+    InputBit { sources, pull }
 }

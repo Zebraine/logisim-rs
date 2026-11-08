@@ -17,12 +17,10 @@ impl Network {
             })
     }
 
-    pub(crate) fn port_has_pull(&self, port: Port) -> bool {
-        let net = &self.nets[self.ports[&port]];
-        !net.pulls.is_empty()
-            || net
-                .bits
-                .iter()
-                .any(|bit| self.bit_pulls[*bit] != Bit::Unknown)
+    pub(crate) fn port_pulls(&self, port: Port) -> impl Iterator<Item = Bit> + '_ {
+        self.nets[self.ports[&port]]
+            .bits
+            .iter()
+            .map(|bit| self.bit_pulls[*bit])
     }
 }

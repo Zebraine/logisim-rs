@@ -35,15 +35,15 @@ fn settle(sim: &mut Simulator) {
 
 fn compare(sim: &Simulator, evaluator: &mut Evaluator) {
     evaluator
-        .evaluate_cached(|(id, port)| sim.port_value(id, port))
+        .evaluate_cached(|(id, port)| sim.drive_value(id, port))
         .unwrap();
     assert!(evaluator.values().count() > 0);
     for (port, value) in evaluator.values() {
-        assert_eq!(Some(value), sim.port_value(port.0, port.1), "{port:?}");
+        assert_eq!(Some(value), sim.drive_value(port.0, port.1), "{port:?}");
     }
     let incremental: Vec<_> = evaluator.values().collect();
     evaluator
-        .evaluate(|(id, port)| sim.port_value(id, port))
+        .evaluate(|(id, port)| sim.drive_value(id, port))
         .unwrap();
     assert_eq!(incremental, evaluator.values().collect::<Vec<_>>());
 }
@@ -102,6 +102,16 @@ fn gates_preserve_four_states_negation_and_physically_absent_inputs() {
 
 fn variants(width: u8) -> Vec<Component> {
     let mut result = vec![];
+    for kind in [Kind::ControlledBuffer, Kind::ControlledInverter] {
+        for negate in [false, true] {
+            for left in [false, true] {
+                let mut c = component(kind, width);
+                c.bus.negate_control = negate;
+                c.bus.control_left = left;
+                result.push(c);
+            }
+        }
+    }
     for kind in Arithmetic::ALL {
         for mode in 0..5 {
             let mut c = component(Kind::Arithmetic(kind), width);

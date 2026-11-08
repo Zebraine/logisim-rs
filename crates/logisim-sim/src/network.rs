@@ -214,7 +214,7 @@ impl Groups {
     }
 }
 
-fn merge(a: crate::Bit, b: crate::Bit) -> crate::Bit {
+pub(crate) fn merge(a: crate::Bit, b: crate::Bit) -> crate::Bit {
     use crate::Bit;
     match (a, b) {
         (Bit::Unknown, b) | (b, Bit::Unknown) => b,

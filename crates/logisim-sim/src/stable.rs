@@ -5,6 +5,8 @@
 //! model from observing intermediate propagation batches, not a claim that those
 //! batches are equivalent. Unsupported circuits are rejected before advancing them.
 #[cfg(test)]
+mod bus_tests;
+#[cfg(test)]
 mod tests;
 
 use crate::combinational::{BoundaryReason, CompileStats, Evaluator, Port};
@@ -79,10 +81,7 @@ impl Plan {
         for b in &analysis.boundaries {
             if matches!(
                 b.reason,
-                BoundaryReason::Feedback
-                    | BoundaryReason::WidthMismatch
-                    | BoundaryReason::MultipleDrivers
-                    | BoundaryReason::WeakPull
+                BoundaryReason::Feedback | BoundaryReason::WidthMismatch
             ) {
                 return Err(Failure::Topology {
                     component: b.component,
@@ -108,6 +107,7 @@ impl Plan {
                 | Kind::Text
                 | Kind::Tunnel
                 | Kind::Splitter
+                | Kind::PullResistor
                 | Kind::Probe
                 | Kind::Led
                 | Kind::RgbLed
@@ -126,23 +126,12 @@ impl Plan {
             }
         }
         // State-only and interface-only connections may never touch an expression
-        // node. Check those too, using canonical splitter bits rather than net drivers.
+        // node. Width errors still reject the whole design before any state changes.
         for (&port, &net) in &sim.network.ports {
-            let reason = if sim.network.nets[net].mismatch {
-                Some(BoundaryReason::WidthMismatch)
-            } else if sim.network.port_has_pull(port) {
-                Some(BoundaryReason::WeakPull)
-            } else {
-                let mut seen = [false; 32];
-                sim.network
-                    .port_sources(port)
-                    .any(|(bit, _, _)| std::mem::replace(&mut seen[usize::from(bit)], true))
-                    .then_some(BoundaryReason::MultipleDrivers)
-            };
-            if let Some(reason) = reason {
+            if sim.network.nets[net].mismatch {
                 return Err(Failure::Topology {
                     component: port.0,
-                    reason,
+                    reason: BoundaryReason::WidthMismatch,
                 });
             }
         }
@@ -167,7 +156,7 @@ impl Plan {
             .flat_map(|node| {
                 node.inputs
                     .iter()
-                    .flat_map(|input| input.bits.iter().flatten())
+                    .flat_map(|input| input.bits.iter().flat_map(|bit| &bit.sources))
                     .flat_map(|source| {
                         node.outputs
                             .iter()

@@ -45,6 +45,12 @@ impl Simulator {
             .get(&(id, index))
             .is_some_and(|i| self.network.nets[*i].mismatch)
     }
+    /// Last committed component drive, before merging other drivers or weak pulls.
+    /// Pending drives are not exposed; undriven/non-output ports return None.
+    /// Use this snapshot for expression boundary inputs, not `port_value`.
+    pub fn drive_value(&self, id: Id, index: usize) -> Option<Value> {
+        self.drives.get(&(id, index)).copied()
+    }
     pub fn port_value(&self, id: Id, index: usize) -> Option<Value> {
         let net = *self.network.ports.get(&(id, index))?;
         Some(if self.network.nets[net].mismatch {

@@ -3,6 +3,8 @@ mod incremental;
 mod operation;
 pub use incremental::{EvaluationStats, Evaluator};
 #[cfg(test)]
+mod bus_tests;
+#[cfg(test)]
 mod incremental_tests;
 #[cfg(test)]
 mod tests;
@@ -55,17 +57,41 @@ enum Read {
     Gather(Box<[BitRead]>),
 }
 
-#[derive(Clone, Copy)]
 enum BitRead {
     Constant(Bit),
     Slot(usize, u8),
+    /// Resolution is one level deep: its sources are raw constant/slot drive bits.
+    Resolved(Box<[BitRead]>, Bit),
 }
 
 impl BitRead {
-    fn get(self, values: &[Value]) -> Bit {
+    fn get(&self, values: &[Value]) -> Bit {
         match self {
-            Self::Constant(bit) => bit,
-            Self::Slot(slot, bit) => values[slot].bit(bit),
+            Self::Constant(bit) => *bit,
+            Self::Slot(slot, bit) => values[*slot].bit(*bit),
+            Self::Resolved(sources, pull) => {
+                let driven = sources
+                    .iter()
+                    .map(|s| s.get(values))
+                    .fold(Bit::Unknown, crate::network::merge);
+                if driven == Bit::Unknown {
+                    *pull
+                } else {
+                    driven
+                }
+            }
+        }
+    }
+
+    fn dependencies(&self, reads: &mut BTreeMap<usize, u32>) {
+        match self {
+            Self::Constant(_) => {}
+            Self::Slot(slot, bit) => *reads.entry(*slot).or_default() |= 1 << bit,
+            Self::Resolved(sources, _) => {
+                for source in sources {
+                    source.dependencies(reads);
+                }
+            }
         }
     }
 }
@@ -80,14 +106,28 @@ impl Read {
         let bits: Box<[_]> = input
             .bits
             .iter()
-            .map(|source| match source {
-                None => BitRead::Constant(Bit::Unknown),
-                Some(source) => {
-                    let slot = slots[&source.port];
-                    if known[slot] {
-                        BitRead::Constant(values[slot].bit(source.bit))
+            .map(|bit| {
+                let sources: Box<[_]> = bit
+                    .sources
+                    .iter()
+                    .map(|source| {
+                        let slot = slots[&source.port];
+                        if known[slot] {
+                            BitRead::Constant(values[slot].bit(source.bit))
+                        } else {
+                            BitRead::Slot(slot, source.bit)
+                        }
+                    })
+                    .collect();
+                if sources.len() == 1 && bit.pull == Bit::Unknown {
+                    sources.into_vec().pop().unwrap()
+                } else {
+                    let constant = sources.iter().all(|s| matches!(s, BitRead::Constant(_)));
+                    let read = BitRead::Resolved(sources, bit.pull);
+                    if constant {
+                        BitRead::Constant(read.get(values))
                     } else {
-                        BitRead::Slot(slot, source.bit)
+                        read
                     }
                 }
             })

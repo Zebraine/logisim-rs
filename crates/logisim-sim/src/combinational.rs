@@ -9,7 +9,7 @@ pub use expression::{CompileStats, CompiledCircuit, EvaluationError, EvaluationS
 #[cfg(test)]
 mod tests;
 
-use crate::{Simulator, network::Network};
+use crate::{Bit, Simulator, network::Network};
 use logisim_core::{Circuit, Component, Id, Kind, Plexer};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -22,13 +22,21 @@ pub struct Source {
     pub bit: u8,
 }
 
+/// Canonical strong driver bits and the weak value used only when all release.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct InputBit {
+    pub sources: Vec<Source>,
+    /// Unknown means no effective pull; conflicting pulls resolve to Error.
+    pub pull: Bit,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Input {
     pub port: Port,
     /// Physically absent gate inputs differ from connected, undriven inputs.
     pub connected: bool,
-    /// Low bit first. None is undriven, not a Boolean zero or a cached signal.
-    pub bits: Vec<Option<Source>>,
+    /// Low bit first. Empty sources with no pull are floating, not Boolean zero.
+    pub bits: Vec<InputBit>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -58,8 +66,6 @@ pub enum BoundaryReason {
     Hierarchy,
     UnsupportedComponent,
     WidthMismatch,
-    MultipleDrivers,
-    WeakPull,
     /// A conservative component dependency cycle, not a diagnosis of oscillation.
     Feedback,
 }
@@ -135,7 +141,7 @@ impl Analysis {
         let mut edges = vec![vec![]; nodes.len()];
         for (target, node) in nodes.iter().enumerate() {
             for input in &node.inputs {
-                for source in input.bits.iter().flatten() {
+                for source in input.bits.iter().flat_map(|bit| &bit.sources) {
                     if let Some(&origin) = indices.get(&source.port.0) {
                         edges[origin].push(target);
                     }
@@ -163,7 +169,7 @@ impl Analysis {
                 inputs.extend(
                     node.inputs
                         .iter()
-                        .flat_map(|input| input.bits.iter().flatten())
+                        .flat_map(|input| input.bits.iter().flat_map(|bit| &bit.sources))
                         .filter(|source| !members.contains(&source.port.0))
                         .copied(),
                 );
@@ -204,21 +210,12 @@ fn node(c: &Component, network: &Network, barriers: &mut Vec<Boundary>) -> Optio
         for (bit, port, source) in network.port_sources(port) {
             bits[usize::from(bit)].insert(Source { port, bit: source });
         }
-        for (blocked, reason) in [
-            (net.mismatch, BoundaryReason::WidthMismatch),
-            (
-                bits.iter().any(|b| b.len() > 1),
-                BoundaryReason::MultipleDrivers,
-            ),
-            (network.port_has_pull(port), BoundaryReason::WeakPull),
-        ] {
-            if blocked {
-                barriers.push(Boundary {
-                    component: c.id,
-                    reason,
-                    port: Some(index),
-                });
-            }
+        if net.mismatch {
+            barriers.push(Boundary {
+                component: c.id,
+                reason: BoundaryReason::WidthMismatch,
+                port: Some(index),
+            });
         }
         if c.drives_port(index) {
             node.outputs.push(port);
@@ -226,7 +223,14 @@ fn node(c: &Component, network: &Network, barriers: &mut Vec<Boundary>) -> Optio
             node.inputs.push(Input {
                 port,
                 connected: network.connected(port),
-                bits: bits.into_iter().map(|b| b.into_iter().next()).collect(),
+                bits: bits
+                    .into_iter()
+                    .zip(network.port_pulls(port))
+                    .map(|(sources, pull)| InputBit {
+                        sources: sources.into_iter().collect(),
+                        pull,
+                    })
+                    .collect(),
             });
         }
     }
@@ -256,6 +260,8 @@ fn classify(c: &Component) -> Classification {
         | Kind::Constant
         | Kind::Power
         | Kind::Ground
+        | Kind::ControlledBuffer
+        | Kind::ControlledInverter
         | Kind::BitExtender
         | Kind::Rom
         | Kind::PlaRom => Pure,
@@ -277,13 +283,11 @@ fn classify(c: &Component) -> Classification {
         }
         Kind::Plugin => Boundary(B::Plugin),
         Kind::Subcircuit(_) => Boundary(B::Hierarchy),
-        Kind::PullResistor => Boundary(B::WeakPull),
-        Kind::Ttl(_)
-        | Kind::ControlledBuffer
-        | Kind::ControlledInverter
-        | Kind::Transistor
-        | Kind::TransmissionGate => Boundary(B::UnsupportedComponent),
+        Kind::Ttl(_) | Kind::Transistor | Kind::TransmissionGate => {
+            Boundary(B::UnsupportedComponent)
+        }
         Kind::Pin
+        | Kind::PullResistor
         | Kind::Tunnel
         | Kind::Text
         | Kind::Probe

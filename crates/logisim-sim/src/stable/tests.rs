@@ -2,13 +2,13 @@ use super::*;
 use crate::ProjectSimulator;
 use logisim_core::{Circuit, Component, Facing, FlipFlop, Gate, Latch, Point, Project};
 
-fn add(c: &mut Circuit, kind: Kind, bits: u8) -> Id {
+pub(super) fn add(c: &mut Circuit, kind: Kind, bits: u8) -> Id {
     let mut component =
         Component::new(kind, Point::new(200 + c.components.len() as i32 * 200, 300));
     component.bits = bits;
     c.add_component(component)
 }
-fn link(c: &mut Circuit, from: Port, to: Port) {
+pub(super) fn link(c: &mut Circuit, from: Port, to: Port) {
     let label = format!("{}:{}", from.0, from.1);
     for port in [from, to] {
         let component = c.component(port.0).unwrap();
@@ -18,7 +18,7 @@ fn link(c: &mut Circuit, from: Port, to: Port) {
         c.add_component(tunnel);
     }
 }
-fn driven(c: &mut Circuit, port: Port) -> Id {
+pub(super) fn driven(c: &mut Circuit, port: Port) -> Id {
     let pin = add(
         c,
         Kind::Pin,
@@ -37,7 +37,7 @@ fn chain(c: &mut Circuit, input: Id, count: usize) -> Id {
     }
     previous
 }
-fn stored(sim: &Simulator, id: Id) -> u32 {
+pub(super) fn stored(sim: &Simulator, id: Id) -> u32 {
     sim.stored_value(id).unwrap().number().unwrap()
 }
 fn output_pin(c: &mut Circuit) -> Id {
@@ -171,7 +171,7 @@ fn asynchronous_controls_and_four_state_register_data_match_settled_reference() 
     }
 }
 
-fn buffered_child(p: &mut Project, depth: usize) -> (Id, Id, Id) {
+pub(super) fn buffered_child(p: &mut Project, depth: usize) -> (Id, Id, Id) {
     let id = p.add(format!("buffer{depth}")).unwrap();
     let c = &mut p.circuit_mut(id).unwrap().circuit;
     let input = add(c, Kind::Pin, 1);
@@ -180,7 +180,7 @@ fn buffered_child(p: &mut Project, depth: usize) -> (Id, Id, Id) {
     link(c, (buffer, 0), (output, 0));
     (id, input, output)
 }
-fn instance(
+pub(super) fn instance(
     p: &mut Project,
     definition: Id,
     parent: Id,
@@ -350,7 +350,7 @@ fn unsupported_preflight_is_atomic_and_the_event_engine_remains_available() {
 }
 
 #[test]
-fn state_only_conflicts_feedback_and_level_triggers_are_rejected() {
+fn state_only_conflicts_resolve_but_feedback_and_level_triggers_are_rejected() {
     let mut c = Circuit::default();
     let ff = add(&mut c, Kind::FlipFlop(FlipFlop::D), 1);
     let pin = driven(&mut c, (ff, 2));
@@ -358,13 +358,14 @@ fn state_only_conflicts_feedback_and_level_triggers_are_rejected() {
     link(&mut c, (pin, 0), (conflicting, 0));
     let mut sim = Simulator::default();
     sim.synchronize(&c);
-    assert!(matches!(
-        sim.settle_compiled().unwrap_err().reason,
-        Failure::Topology {
-            reason: BoundaryReason::MultipleDrivers,
-            ..
-        }
-    ));
+    sim.set_input(conflicting, 1);
+    sim.settle_compiled().unwrap();
+    assert_eq!(sim.port_value(ff, 2), Some(Value::filled(1, Bit::Error)));
+    assert!(
+        sim.diagnostics()
+            .iter()
+            .any(|d| d.problem == crate::Problem::ErrorSignal)
+    );
     c.remove(&BTreeSet::from([conflicting]));
     sim.synchronize(&c);
     sim.settle_compiled().unwrap();
