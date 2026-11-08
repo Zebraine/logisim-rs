@@ -318,17 +318,12 @@ pub(crate) fn component(
     } else {
         Color32::from_rgba_unmultiplied(c.color[0], c.color[1], c.color[2], c.color_alpha)
     };
-    if !ghost && c.kind != Kind::Text {
-        let body = bounds(c);
-        p.rect_filled(
-            Rect::from_min_max(
-                canvas.screen_vec(body.min.to_vec2()),
-                canvas.screen_vec(body.max.to_vec2()),
-            ),
-            0,
-            Color32::WHITE,
-        );
-    }
+    // Hit bounds include empty space and ports; only actual closed bodies get a fill.
+    let fill = if ghost {
+        Color32::TRANSPARENT
+    } else {
+        Color32::WHITE
+    };
     let stroke = Stroke::new(1.7, color);
     let scale_x = if matches!(c.kind, Kind::Gate(_)) {
         c.gate_depth() as f32 / 60.0
@@ -337,7 +332,10 @@ pub(crate) fn component(
     };
     let at = |x, y| canvas.screen_vec(local(c, vec2(x * scale_x, y)));
     let path = |points: Vec<Vec2>, closed| {
-        let points = points.into_iter().map(|v| at(v.x, v.y)).collect();
+        let points: Vec<_> = points.into_iter().map(|v| at(v.x, v.y)).collect();
+        if closed {
+            crate::artwork::fill_polygon(p, &points, fill);
+        }
         p.add(if closed {
             Shape::closed_line(points, stroke)
         } else {
@@ -366,9 +364,11 @@ pub(crate) fn component(
     match c.kind {
         Kind::Plugin => crate::plugins::draw(p, canvas, c, simulation, ghost),
         Kind::Ttl(_) => crate::ttl::draw(p, canvas, c, color),
-        Kind::Transistor | Kind::TransmissionGate => crate::transistors::draw(p, canvas, c, color),
+        Kind::Transistor | Kind::TransmissionGate => {
+            crate::transistors::draw(p, canvas, c, color, fill)
+        }
         Kind::ControlledBuffer | Kind::ControlledInverter | Kind::PullResistor => {
-            crate::bus::draw(p, canvas, c, color)
+            crate::bus::draw(p, canvas, c, color, fill)
         }
         Kind::Button
         | Kind::Switch
@@ -456,7 +456,7 @@ pub(crate) fn component(
                 );
             }
         }
-        Kind::Parity(_) => crate::parity::draw(p, canvas, c, color),
+        Kind::Parity(_) => crate::parity::draw(p, canvas, c, color, fill),
         Kind::Gate(gate) => {
             let h = half_height(c);
             match gate {
@@ -465,7 +465,7 @@ pub(crate) fn component(
                     true,
                 ),
                 Gate::And | Gate::Nand => {
-                    let mut points = vec![vec2(-50.0, -h), vec2(-30.0, -h)];
+                    let mut points = vec![vec2(-50.0, -h)];
                     for step in 0..=24 {
                         let angle = -std::f32::consts::FRAC_PI_2
                             + step as f32 * std::f32::consts::PI / 24.0;
@@ -531,7 +531,12 @@ pub(crate) fn component(
                 }
             }
             if gate.inverted() {
-                p.circle_stroke(at(-5.0, 0.0), 5.0 * scale_x * canvas.camera.zoom, stroke);
+                p.circle(
+                    at(-5.0, 0.0),
+                    5.0 * scale_x * canvas.camera.zoom,
+                    fill,
+                    stroke,
+                );
             } else {
                 p.line_segment([at(-10.0, 0.0), at(0.0, 0.0)], stroke);
             }
@@ -830,6 +835,101 @@ pub(crate) fn component(
 mod tests {
     use super::*;
     use crate::simulation::{SignalTone, SignalView};
+
+    fn white_fill(c: &Component, zoom: f32, ghost: bool) -> (Canvas, Vec<[Pos2; 3]>) {
+        let ctx = egui::Context::default();
+        let mut canvas = Canvas::default();
+        canvas.camera.zoom = zoom;
+        let mut output = ctx.run_ui(Default::default(), |ui| {
+            canvas.rect = ui.max_rect();
+            component(ui.painter(), &canvas, c, false, ghost, None);
+        });
+        output.textures_delta.clear();
+        let mut triangles = vec![];
+        for primitive in ctx.tessellate(output.shapes, output.pixels_per_point) {
+            if let egui::epaint::Primitive::Mesh(mesh) = primitive.primitive {
+                for &[a, b, c] in mesh.indices.as_chunks::<3>().0 {
+                    let vertices = [a, b, c].map(|i| mesh.vertices[i as usize]);
+                    if vertices.iter().all(|v| v.color == Color32::WHITE) {
+                        triangles.push(vertices.map(|v| v.pos));
+                    }
+                }
+            }
+        }
+        (canvas, triangles)
+    }
+
+    fn covered(triangles: &[[Pos2; 3]], point: Pos2) -> bool {
+        let cross = |a: Vec2, b: Vec2| a.x * b.y - a.y * b.x;
+        triangles.iter().any(|&[a, b, c]| {
+            if cross(b - a, c - a).abs() < 0.0001 {
+                return false;
+            }
+            let sides = [
+                cross(b - a, point - a),
+                cross(c - b, point - b),
+                cross(a - c, point - c),
+            ];
+            sides.iter().all(|s| *s >= 0.0) || sides.iter().all(|s| *s <= 0.0)
+        })
+    }
+
+    #[test]
+    fn open_symbols_do_not_erase_nearby_labels_with_a_background() {
+        for kind in [
+            Kind::Splitter,
+            Kind::Power,
+            Kind::Ground,
+            Kind::PullResistor,
+            Kind::Transistor,
+        ] {
+            for facing in Facing::ALL {
+                let mut c = Component::new(kind, Point::new(200, 200));
+                c.facing = facing;
+                c.transistor.transistor_type = logisim_core::TransistorType::N;
+                let (_, triangles) = white_fill(&c, 1.0, false);
+                assert!(
+                    triangles.is_empty(),
+                    "{kind:?} {facing:?} has an opaque background"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn gate_fill_preserves_empty_corners_and_concave_notches_when_rotated() {
+        for gate in [Gate::Not, Gate::And, Gate::Or, Gate::Xor] {
+            for facing in Facing::ALL {
+                for zoom in [0.5, 1.0, 2.0] {
+                    let mut c = Component::new(Kind::Gate(gate), Point::new(200, 200));
+                    c.facing = facing;
+                    let scale = c.gate_depth() as f32 / 60.0;
+                    let (canvas, triangles) = white_fill(&c, zoom, false);
+                    let at = |x, y| canvas.screen_vec(local(&c, vec2(x * scale, y)));
+                    assert!(
+                        covered(&triangles, at(-35.0, 0.0)),
+                        "missing body fill: {gate:?}"
+                    );
+                    assert!(
+                        !covered(&triangles, at(-15.0, half_height(&c) - 2.0)),
+                        "filled empty corner: {gate:?}"
+                    );
+                    if matches!(gate, Gate::Or | Gate::Xor) {
+                        assert!(
+                            !covered(&triangles, at(-48.0, 0.0)),
+                            "filled concave notch: {gate:?}"
+                        );
+                    }
+                    let (_, ghost_fill) = white_fill(&c, zoom, true);
+                    assert!(
+                        ghost_fill.is_empty(),
+                        "placement preview should stay transparent"
+                    );
+                }
+            }
+        }
+    }
+
     #[test]
     fn unselected_open_ends_have_signal_colored_dots_without_marking_elbows() {
         let mut c = Circuit::default();

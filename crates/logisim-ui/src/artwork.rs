@@ -140,6 +140,21 @@ fn triangles(points: &[Pos2]) -> Vec<[usize; 3]> {
     }
     out
 }
+pub(crate) fn fill_polygon(p: &Painter, points: &[Pos2], fill: Color32) {
+    if fill == Color32::TRANSPARENT || points.len() < 3 {
+        return;
+    }
+    let mut mesh = egui::epaint::Mesh::default();
+    for point in points {
+        mesh.colored_vertex(*point, fill);
+    }
+    for [a, b, c] in triangles(points) {
+        mesh.add_triangle(a as u32, b as u32, c as u32);
+    }
+    if !mesh.indices.is_empty() {
+        p.add(Shape::mesh(mesh));
+    }
+}
 pub(crate) fn paint(
     p: &Painter,
     canvas: &Canvas,
@@ -182,19 +197,8 @@ pub(crate) fn paint(
         .into_iter()
         .map(|v| canvas.screen_vec(map(v)))
         .collect();
-    if let Some(fill) = art.paint.fill
-        && points.len() >= 3
-    {
-        let mut mesh = egui::epaint::Mesh::default();
-        for point in &points {
-            mesh.colored_vertex(*point, color(fill));
-        }
-        for [a, b, c] in triangles(&points) {
-            mesh.add_triangle(a as u32, b as u32, c as u32);
-        }
-        if !mesh.indices.is_empty() {
-            p.add(Shape::mesh(mesh));
-        }
+    if let Some(fill) = art.paint.fill {
+        fill_polygon(p, &points, color(fill));
     }
     if let Some(stroke) = art.paint.stroke
         && points.len() >= 2

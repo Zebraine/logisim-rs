@@ -51,18 +51,19 @@ pub(crate) fn fields(ui: &mut Ui, c: &mut Component) -> bool {
     }
     active
 }
-pub(crate) fn draw(p: &Painter, canvas: &Canvas, c: &Component, color: Color32) {
+pub(crate) fn draw(p: &Painter, canvas: &Canvas, c: &Component, color: Color32, fill: Color32) {
     let at = |x, y| canvas.screen(c.position + c.facing.transform(Point::new(x, y)));
     let stroke = Stroke::new(1.7, color);
     let width = c.gate_width();
     let height = c.parity_half_height();
-    p.add(Shape::closed_line(
+    p.add(Shape::convex_polygon(
         vec![
             at(-width, -height),
             at(0, -height),
             at(0, height),
             at(-width, height),
         ],
+        fill,
         stroke,
     ));
     for (i, port) in c.parity_ports().into_iter().skip(1).enumerate() {

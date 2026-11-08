@@ -51,7 +51,7 @@ pub(crate) fn fields(ui: &mut Ui, c: &mut Component) {
         ));
     ui.end_row();
 }
-pub(crate) fn draw(p: &Painter, canvas: &Canvas, c: &Component, color: Color32) {
+pub(crate) fn draw(p: &Painter, canvas: &Canvas, c: &Component, color: Color32, fill: Color32) {
     let at = |x, y| canvas.screen(c.position + c.facing.transform(Point::new(x, y)));
     let stroke = Stroke::new(1.7, color);
     let line = |a: (i32, i32), b: (i32, i32)| {
@@ -61,8 +61,9 @@ pub(crate) fn draw(p: &Painter, canvas: &Canvas, c: &Component, color: Color32) 
     if c.kind == Kind::TransmissionGate {
         line((-40, 0), (-30, 0));
         line((-10, 0), (0, 0));
-        p.add(Shape::closed_line(
+        p.add(Shape::convex_polygon(
             vec![at(-30, -8), at(-10, -8), at(-10, 8), at(-30, 8)],
+            fill,
             stroke,
         ));
         line((-31, sign * 10), (-9, sign * 10));

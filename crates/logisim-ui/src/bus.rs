@@ -60,7 +60,7 @@ pub(crate) fn fields(ui: &mut Ui, c: &mut Component) {
     ui.checkbox(&mut c.bus.negate_control, "");
     ui.end_row();
 }
-pub(crate) fn draw(p: &Painter, canvas: &Canvas, c: &Component, color: Color32) {
+pub(crate) fn draw(p: &Painter, canvas: &Canvas, c: &Component, color: Color32, fill: Color32) {
     let at = |x, y| canvas.screen(c.position + c.facing.transform(Point::new(x, y)));
     let stroke = Stroke::new(1.7, color);
     let line = |a: (i32, i32), b: (i32, i32)| {
@@ -93,8 +93,9 @@ pub(crate) fn draw(p: &Painter, canvas: &Canvas, c: &Component, color: Color32) 
     } else {
         -2
     };
-    p.add(Shape::closed_line(
+    p.add(Shape::convex_polygon(
         vec![at(-depth, -8), at(tip, 0), at(-depth, 8)],
+        fill,
         stroke,
     ));
     if c.kind == Kind::ControlledInverter {
