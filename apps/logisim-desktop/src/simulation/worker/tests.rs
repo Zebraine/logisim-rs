@@ -245,3 +245,29 @@ fn unexpected_worker_exit_is_reported_and_does_not_accept_more_commands() {
     assert!(!worker.replace_memory(&[], ram, MemoryContents::default()));
     assert!(worker.shared.inbox.lock().unwrap().commands.is_empty());
 }
+
+#[test]
+fn final_settled_snapshot_arrives_without_automatic_ticks_or_further_input() {
+    let mut project = Project::default();
+    let circuit = &mut project.main_circuit_mut().circuit;
+    let gate = Component::new(Kind::Gate(logisim_core::Gate::Buffer), Point::new(200, 100));
+    let ports = gate.ports();
+    let gate = circuit.add_component(gate);
+    let input = circuit.add_component(Component::new(Kind::Pin, ports[1]));
+    let mut workspace = Workspace::default();
+    workspace.replace_project(project);
+    let mut worker = Worker::new(|| {});
+    worker.synchronize(&mut workspace, false);
+    wait(&mut worker, &mut workspace, |v| {
+        v.pending == 0 && v.ports.get(&(gate, 0)).is_some_and(|p| p.binary == "0")
+    });
+    worker.action(SimulationAction::SetInput {
+        id: input,
+        value: 1,
+    });
+    wait(&mut worker, &mut workspace, |v| {
+        v.pending == 0 && v.ports.get(&(gate, 0)).is_some_and(|p| p.binary == "1")
+    });
+    assert_eq!(workspace.simulation_mut().ticks, 0);
+    assert!(!workspace.simulation_mut().automatic_ticks);
+}

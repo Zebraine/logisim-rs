@@ -14,12 +14,14 @@ struct Engine {
     suspended: bool,
     dirty: bool,
     total_ticks: u64,
+    unsettled_since: Option<Instant>,
 }
 impl Engine {
     fn command(&mut self, command: Command) {
         let before = self.sim.ticks();
         match command {
             Command::Configure(context) => {
+                self.unsettled_since = None;
                 self.sim.set_plugins(context.plugins.clone());
                 if self.sim.synchronize(&context.project, context.root) {
                     self.clocks.suspend();
@@ -33,6 +35,7 @@ impl Engine {
             Command::NewDocument => {
                 self.sim = ProjectSimulator::default();
                 self.context = None;
+                self.unsettled_since = None;
                 self.clocks.suspend();
             }
             Command::Action(revision, action) => {
@@ -86,6 +89,21 @@ impl Engine {
             delay.map(|delay| delay.saturating_sub(started.elapsed()))
         }
     }
+    fn snapshot_ready(&mut self, now: Instant) -> bool {
+        if !self.sim.enabled()
+            || self.suspended
+            || self.sim.limited()
+            || self.sim.error().is_some()
+            || self.sim.pending_count() == 0
+        {
+            self.unsettled_since = None;
+            return true;
+        }
+        // Short propagation transients should not toggle controls and status at
+        // the display rate. Long-running propagation still needs visible progress.
+        let since = *self.unsettled_since.get_or_insert(now);
+        now.saturating_duration_since(since) >= Duration::from_millis(100)
+    }
     fn snapshot(&mut self) -> Option<Snapshot> {
         let context = self.context.as_ref()?;
         let circuit = &context.project.circuit(context.circuit)?.circuit;
@@ -116,20 +134,24 @@ pub(super) fn run(shared: Arc<Shared>, repaint: impl Fn()) {
         for command in commands {
             engine.command(command);
         }
+        // Observe a settled boundary before the scheduler can start another edge.
+        // Paused/stepped and faulted states remain eligible even with pending work.
+        let now = Instant::now();
+        let ready = engine.snapshot_ready(now);
+        if engine.dirty && now >= next_display && ready {
+            if let Some(snapshot) = engine.snapshot() {
+                let old = shared.latest.lock().unwrap().replace(snapshot);
+                drop(old);
+                repaint();
+            }
+            next_display = now + DISPLAY_INTERVAL;
+        }
         let mut delay = engine.advance();
         if engine.dirty && engine.context.is_some() {
-            let now = Instant::now();
-            if now >= next_display {
-                if let Some(snapshot) = engine.snapshot() {
-                    let old = shared.latest.lock().unwrap().replace(snapshot);
-                    drop(old);
-                    repaint();
-                }
-                next_display = now + DISPLAY_INTERVAL;
-            } else {
-                let display_delay = next_display.saturating_duration_since(now);
-                delay = Some(delay.map_or(display_delay, |d| d.min(display_delay)));
-            }
+            // A final propagation batch may have settled without another clock
+            // deadline. Wake for its snapshot instead of leaving the old view up.
+            let display_delay = next_display.saturating_duration_since(Instant::now());
+            delay = Some(delay.map_or(display_delay, |d| d.min(display_delay)));
         }
         let inbox = shared.inbox.lock().unwrap();
         if inbox.stop {

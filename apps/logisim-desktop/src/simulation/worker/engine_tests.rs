@@ -91,3 +91,104 @@ fn snapshot_diagnostics_use_context_language_on_the_worker() {
     assert!(!view.issues.is_empty());
     assert!(view.issues[0].message.contains("错误"), "{:?}", view.issues);
 }
+
+fn pending_engine() -> Engine {
+    let mut project = Project::default();
+    project
+        .main_circuit_mut()
+        .circuit
+        .add_component(Component::new(Kind::Clock, Point::new(100, 100)));
+    let mut engine = Engine::default();
+    engine.command(Command::Configure(Context {
+        revision: 1,
+        root: project.main,
+        circuit: project.main,
+        project: Arc::new(project),
+        path: vec![],
+        language: Language::English,
+        plugins: Registry::default(),
+    }));
+    assert!(engine.sim.pending_count() > 0);
+    engine
+}
+
+#[test]
+fn running_snapshots_wait_for_settling_but_show_continuous_slow_propagation() {
+    let mut engine = pending_engine();
+    let now = Instant::now();
+    assert!(!engine.snapshot_ready(now));
+    assert!(!engine.snapshot_ready(now + Duration::from_millis(99)));
+    assert!(engine.snapshot_ready(now + Duration::from_millis(100)));
+    let snapshot = engine.snapshot().unwrap();
+    assert!(snapshot.view.pending > 0); // Progress is real, never relabeled "settled".
+    engine.sim.advance(4096);
+    assert!(engine.snapshot_ready(now + Duration::from_millis(101)));
+    assert_eq!(engine.snapshot().unwrap().view.pending, 0);
+    // A new edge after a long idle gets its own settling interval.
+    engine.command(Command::Action(1, SimulationAction::Tick));
+    assert!(engine.sim.pending_count() > 0);
+    assert!(!engine.snapshot_ready(now + Duration::from_secs(10)));
+    engine.sim.advance(4096);
+    assert!(engine.snapshot_ready(now + Duration::from_secs(10)));
+    let snapshot = engine.snapshot().unwrap();
+    assert_eq!(snapshot.view.pending, 0);
+    assert_eq!(snapshot.view.ticks, 1);
+    assert_eq!(snapshot.total_ticks, 1);
+}
+
+#[test]
+fn paused_steps_and_suspension_do_not_wait_for_settling() {
+    let mut engine = pending_engine();
+    let now = Instant::now();
+    assert!(!engine.snapshot_ready(now));
+    engine.command(Command::Action(1, SimulationAction::ToggleEnabled));
+    assert!(engine.snapshot_ready(now));
+    let before = engine.snapshot().unwrap().view;
+    assert!(!before.enabled);
+    assert!(before.pending > 0);
+    engine.command(Command::Action(1, SimulationAction::Step));
+    assert!(engine.snapshot_ready(now));
+    assert_eq!(engine.snapshot().unwrap().view.steps, before.steps + 1);
+    engine.command(Command::Action(1, SimulationAction::Reset));
+    assert!(engine.snapshot_ready(now));
+    engine.command(Command::Action(1, SimulationAction::ToggleEnabled));
+    assert!(!engine.snapshot_ready(now));
+    engine.command(Command::Suspend(true));
+    assert!(engine.snapshot_ready(now));
+    engine.command(Command::Suspend(false));
+    assert!(!engine.snapshot_ready(now));
+}
+
+#[test]
+fn propagation_limit_bypasses_transient_snapshot_filter() {
+    let mut engine = pending_engine();
+    let mut project = Project::default();
+    let circuit = &mut project.main_circuit_mut().circuit;
+    let gate = Component::new(Kind::Gate(logisim_core::Gate::Nor), Point::new(200, 100));
+    let ports = gate.ports();
+    circuit.add_component(gate);
+    circuit.add_route(ports[0], ports[1], false);
+    let input = circuit.add_component(Component::new(Kind::Pin, ports[2]));
+    engine.command(Command::Configure(Context {
+        revision: 2,
+        root: project.main,
+        circuit: project.main,
+        project: Arc::new(project),
+        path: vec![],
+        language: Language::English,
+        plugins: Registry::default(),
+    }));
+    engine.sim.set_input(input, 1);
+    engine.sim.advance(32);
+    assert_eq!(engine.sim.pending_count(), 0);
+    engine.sim.set_input(input, 0);
+    let now = Instant::now();
+    assert!(!engine.snapshot_ready(now));
+    engine.sim.advance(4096);
+    assert!(engine.sim.limited());
+    assert!(engine.snapshot_ready(now)); // No wall time needs to pass for a fault.
+    let view = engine.snapshot().unwrap().view;
+    assert!(view.limited);
+    assert!(!view.enabled);
+    assert!(!view.issues.is_empty());
+}
