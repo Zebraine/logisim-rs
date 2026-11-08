@@ -1,5 +1,5 @@
 //! Canonical straight segments, retaining explicit electrical junctions.
-use crate::{Circuit, Component, Id, Point, Wire};
+use crate::{Circuit, Component, Id, Point, Wire, WireIndex};
 use std::collections::{BTreeMap, BTreeSet};
 
 type Line = (bool, i32);
@@ -108,12 +108,17 @@ impl Circuit {
 
     /// Open wire ends, excluding component terminals, elbows and attached branches.
     pub fn dangling_ends(&self) -> Vec<Point> {
+        let index = WireIndex::new(&self.wires);
         let ports: BTreeSet<_> = self.components.iter().flat_map(Component::ports).collect();
         let ends: BTreeSet<_> = self.wires.iter().flat_map(|w| [w.a, w.b]).collect();
         ends.into_iter()
             .filter(|p| {
-                !ports.contains(p)
-                    && self.wires.iter().filter(|w| w.contains(*p)).take(2).count() == 1
+                if ports.contains(p) {
+                    return false;
+                }
+                let mut count = 0;
+                index.visit(*p, |_, _| count += 1);
+                count == 1
             })
             .collect()
     }

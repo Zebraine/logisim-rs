@@ -1,5 +1,8 @@
-use logisim_core::{Circuit, Id, Kind};
+use logisim_core::{Circuit, Id, Kind, WireIndex};
 use std::collections::{BTreeMap, BTreeSet};
+
+#[cfg(test)]
+mod topology_tests;
 
 pub(crate) type Port = (Id, usize);
 
@@ -36,25 +39,26 @@ impl Network {
             .collect();
         let offset = circuit.wires.len();
         let mut groups = Groups((0..offset + ports.len()).collect());
-        for (a, wire) in circuit.wires.iter().enumerate() {
-            for (b, other) in circuit.wires[..a].iter().enumerate() {
-                if wire.touches(*other) {
-                    groups.join(a, b);
-                }
+        let index = WireIndex::new(&circuit.wires);
+        let mut positions = BTreeMap::new();
+        // Query each connection coordinate once. Repeated endpoints and co-located
+        // ports reuse its representative, without materializing pairwise wire edges.
+        let mut attach = |point, node, groups: &mut Groups| {
+            if let Some(previous) = positions.insert(point, node) {
+                groups.join(node, previous);
+            } else {
+                index.visit(point, |wire, _| groups.join(node, wire));
+            }
+        };
+        for (i, wire) in circuit.wires.iter().enumerate() {
+            for point in [wire.a, wire.b] {
+                attach(point, i, &mut groups);
             }
         }
-        let mut positions = BTreeMap::new();
         let mut tunnels = BTreeMap::new();
         for (i, (c, _, point)) in ports.iter().enumerate() {
             let node = offset + i;
-            for (j, wire) in circuit.wires.iter().enumerate() {
-                if wire.contains(*point) {
-                    groups.join(node, j);
-                }
-            }
-            if let Some(previous) = positions.insert(*point, node) {
-                groups.join(node, previous);
-            }
+            attach(*point, node, &mut groups);
             if c.kind == Kind::Tunnel
                 && !c.label.is_empty()
                 && let Some(previous) = tunnels.insert(&c.label, node)
