@@ -26,7 +26,7 @@ impl Simulator {
             .component(id)
             .is_some_and(|c| matches!(c.kind, Kind::Switch | Kind::DipSwitch))
         {
-            self.schedule_controls();
+            self.schedule_controls(None);
         } else {
             self.schedule(id, value);
         }
@@ -61,7 +61,7 @@ impl Simulator {
         state.contents.fill(start, end, value & mask);
         self.limited = false;
         self.progress.restart();
-        self.schedule_components(false);
+        self.schedule_components(false, None);
     }
     pub fn clear_memory(&mut self, id: Id) {
         let Some(state) = self.memories.get_mut(&id) else {
@@ -70,7 +70,7 @@ impl Simulator {
         state.contents.clear();
         self.limited = false;
         self.progress.restart();
-        self.schedule_components(false);
+        self.schedule_components(false, None);
     }
     /// Replace a RAM image atomically, then schedule one propagation pass.
     pub fn replace_memory(&mut self, id: Id, mut contents: logisim_core::MemoryContents) -> bool {
@@ -84,7 +84,7 @@ impl Simulator {
         state.contents = contents;
         self.limited = false;
         self.progress.restart();
-        self.schedule_components(false);
+        self.schedule_components(false, None);
         true
     }
     /// Tick controls are useful for clock sources and for display persistence.
@@ -101,7 +101,7 @@ impl Simulator {
     }
     pub(crate) fn tick_clocks(&mut self) {
         self.display_ticks = self.display_ticks.saturating_add(1);
-        self.update_displays();
+        self.update_displays(None);
         let mut outputs = Vec::with_capacity(self.plan.clocks.len());
         for index in &self.plan.clocks {
             let c = &self.circuit.components[*index];
@@ -135,7 +135,7 @@ impl Simulator {
         {
             self.storage.get_mut(&id).unwrap().toggle();
             // Apply asserted asynchronous controls and output scheduling through the same path.
-            self.schedule_storage();
+            self.schedule_storage(None);
             self.limited = false;
             self.progress.restart();
         }

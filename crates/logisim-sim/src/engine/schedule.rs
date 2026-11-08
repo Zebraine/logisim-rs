@@ -35,11 +35,16 @@ impl Simulator {
             self.pending.insert(port, value);
         }
     }
-    pub(crate) fn schedule_components(&mut self, initializing: bool) {
+    pub(crate) fn schedule_components(
+        &mut self,
+        initializing: bool,
+        changed: Option<&crate::work::WorkSet>,
+    ) {
         let outputs: Vec<_> = self
             .plan
             .single
             .iter()
+            .filter(|entry| entry.affected(changed))
             .map(|entry| {
                 let c = &self.circuit.components[entry.component];
                 let read = |index| entry.port(index, &self.values);
@@ -99,6 +104,7 @@ impl Simulator {
             .plan
             .multiple
             .iter()
+            .filter(|entry| entry.affected(changed))
             // Restore held outputs before sampling freshly compiled inputs.
             .filter(|entry| {
                 let c = &self.circuit.components[entry.component];
@@ -123,18 +129,19 @@ impl Simulator {
         for (port, value) in multiple_outputs {
             self.drive_port(port, value);
         }
-        self.schedule_controls();
-        self.schedule_storage();
-        self.schedule_plugins(None);
-        self.update_displays();
-        self.schedule_memories();
-        self.schedule_terminals();
+        self.schedule_controls(changed);
+        self.schedule_storage(changed);
+        self.schedule_plugins(None, changed);
+        self.update_displays(changed);
+        self.schedule_memories(changed);
+        self.schedule_terminals(changed);
     }
-    pub(crate) fn schedule_memories(&mut self) {
+    pub(crate) fn schedule_memories(&mut self, changed: Option<&crate::work::WorkSet>) {
         let samples: Vec<_> = self
             .plan
             .memories
             .iter()
+            .filter(|entry| entry.affected(changed))
             .map(|entry| (entry.component, entry.sample(&self.values)))
             .collect();
         for (index, ports) in samples {
@@ -150,11 +157,12 @@ impl Simulator {
             self.drive_port((c.id, 0), output);
         }
     }
-    pub(crate) fn schedule_storage(&mut self) {
+    pub(crate) fn schedule_storage(&mut self, changed: Option<&crate::work::WorkSet>) {
         let samples: Vec<_> = self
             .plan
             .storage
             .iter()
+            .filter(|entry| entry.affected(changed))
             .map(|entry| (entry.component, entry.sample(&self.values)))
             .collect();
         let mut outputs = Vec::with_capacity(samples.len());
@@ -183,9 +191,18 @@ impl Simulator {
         if self.pending.is_empty() || self.limited {
             return false;
         }
-        self.drives.extend(std::mem::take(&mut self.pending));
-        self.values = self.network.resolve(&self.drives);
-        self.schedule_components(false);
+        let pending = std::mem::take(&mut self.pending);
+        let mut changed = std::mem::take(&mut self.changed_nets);
+        self.resolution.update(
+            &self.network,
+            pending.iter().map(|(port, value)| (*port, Some(*value))),
+            &mut self.values,
+            &mut changed,
+        );
+        self.drives.extend(pending);
+        let initializing = std::mem::take(&mut self.initial_batch);
+        self.schedule_components(false, (!initializing).then_some(&changed));
+        self.changed_nets = changed;
         if self.progress.record_batch(!self.pending.is_empty()) {
             self.limited = true;
             self.enabled = false;

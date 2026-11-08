@@ -9,11 +9,12 @@ pub(crate) fn control_bits(c: &Component) -> Option<u8> {
     }
 }
 impl Simulator {
-    pub(crate) fn schedule_controls(&mut self) {
+    pub(crate) fn schedule_controls(&mut self, changed: Option<&crate::work::WorkSet>) {
         let outputs: Vec<_> = self
             .plan
             .controls
             .iter()
+            .filter(|entry| entry.affected(changed))
             .flat_map(|entry| {
                 let c = &self.circuit.components[entry.component];
                 let state = self.inputs.get(&c.id).and_then(|v| v.number()).unwrap_or(0);

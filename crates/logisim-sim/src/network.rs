@@ -1,5 +1,7 @@
 use logisim_core::{Circuit, Id, Kind, WireIndex};
 use std::collections::{BTreeMap, BTreeSet};
+mod resolution;
+pub(crate) use resolution::Resolution;
 
 #[cfg(test)]
 mod topology_tests;
@@ -14,6 +16,9 @@ pub(crate) struct Network {
     drivers: Vec<Port>,
     bit_drivers: Vec<Vec<(usize, u8)>>,
     bit_pulls: Vec<crate::Bit>,
+    driver_indices: BTreeMap<Port, usize>,
+    driver_bits: Vec<Vec<usize>>,
+    bit_nets: Vec<Vec<usize>>,
 }
 #[derive(Default)]
 pub(crate) struct Net {
@@ -103,6 +108,7 @@ impl Network {
             net.mismatch = widths.len() > 1;
         }
         network.connect_bits(circuit);
+        network.index_dependencies();
         network
     }
     fn connect_bits(&mut self, circuit: &Circuit) {
@@ -150,6 +156,8 @@ impl Network {
             }
         }
     }
+    // Full-resolution oracle retained for differential tests.
+    #[cfg(test)]
     pub fn resolve(&self, drives: &BTreeMap<Port, crate::Value>) -> Vec<crate::Value> {
         use crate::{Bit, Value};
         // Resolve each bus driver once. Splitter aliases and individual bits share

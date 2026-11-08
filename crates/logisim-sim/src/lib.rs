@@ -4,6 +4,7 @@ mod execution;
 mod gates;
 mod hierarchy;
 mod progress;
+mod work;
 pub use hierarchy::ProjectSimulator;
 mod arithmetic;
 #[cfg(test)]
@@ -76,6 +77,9 @@ pub struct Simulator {
     plugin_states: BTreeMap<Id, plugins::State>,
     circuit: Circuit,
     network: Network,
+    resolution: network::Resolution,
+    changed_nets: work::WorkSet,
+    initial_batch: bool,
     plan: execution::Plan,
     inputs: BTreeMap<Id, Value>,
     joysticks: BTreeMap<Id, Point>,
@@ -98,6 +102,9 @@ impl Default for Simulator {
             plugin_states: BTreeMap::new(),
             circuit: Circuit::default(),
             network: Network::default(),
+            resolution: network::Resolution::default(),
+            changed_nets: work::WorkSet::default(),
+            initial_batch: false,
             plan: execution::Plan::default(),
             inputs: BTreeMap::new(),
             joysticks: BTreeMap::new(),

@@ -79,7 +79,7 @@ impl Simulator {
             .retain(|_, state| self.plugins.same_plugin(&plugins, &state.definition));
         self.plugins = plugins;
         self.synchronize_plugins(&self.circuit.clone());
-        self.schedule_plugins(None);
+        self.schedule_plugins(None, None);
         self.progress.restart();
         self.limited = false;
     }
@@ -99,11 +99,16 @@ impl Simulator {
             })
             .collect();
     }
-    pub(crate) fn schedule_plugins(&mut self, action: Option<(Id, Event)>) {
+    pub(crate) fn schedule_plugins(
+        &mut self,
+        action: Option<(Id, Event)>,
+        changed: Option<&crate::work::WorkSet>,
+    ) {
         let samples: Vec<_> = self
             .plan
             .plugins
             .iter()
+            .filter(|entry| entry.affected(changed))
             .map(|entry| {
                 let c = &self.circuit.components[entry.component];
                 let values = entry
@@ -146,13 +151,16 @@ impl Simulator {
         if argument.len() > 1024 || !state.definition.tool.actions.iter().any(|a| a.id == action) {
             return;
         }
-        self.schedule_plugins(Some((
-            id,
-            Event::Action {
-                id: action,
-                argument,
-            },
-        )));
+        self.schedule_plugins(
+            Some((
+                id,
+                Event::Action {
+                    id: action,
+                    argument,
+                },
+            )),
+            None,
+        );
         self.progress.restart();
         self.limited = false;
     }

@@ -39,7 +39,7 @@ impl Simulator {
         *current = offset;
         self.limited = false;
         self.progress.restart();
-        self.schedule_controls();
+        self.schedule_controls(None);
     }
     pub fn release_joysticks(&mut self) {
         let ids: Vec<_> = self.joysticks.keys().copied().collect();

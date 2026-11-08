@@ -40,11 +40,12 @@ impl Simulator {
             state.until.fill(0);
         }
     }
-    pub(crate) fn update_displays(&mut self) {
+    pub(crate) fn update_displays(&mut self, changed: Option<&crate::work::WorkSet>) {
         let samples: Vec<_> = self
             .plan
             .matrices
             .iter()
+            .filter(|entry| entry.affected(changed))
             .map(|entry| {
                 let c = &self.circuit.components[entry.component];
                 (

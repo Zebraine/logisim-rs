@@ -17,7 +17,7 @@ impl Simulator {
             self.circuit = circuit.clone();
             // Text insertion/removal can shift indices without changing any nets.
             self.plan = crate::execution::Plan::compile(circuit, &self.network);
-            self.update_displays();
+            self.update_displays(None);
             return false;
         }
         self.inputs = circuit
@@ -142,10 +142,14 @@ impl Simulator {
             })
             .map(|(id, value)| ((*id, 0), *value))
             .collect();
-        self.values = self.network.resolve(&self.drives);
+        self.resolution = network::Resolution::new(&self.network, &self.drives);
+        self.values = self.resolution.values(&self.network);
+        self.changed_nets = crate::work::WorkSet::new(self.network.nets.len());
+        // Held decoder outputs are restored before their first ordinary sample.
+        self.initial_batch = true;
         self.progress.reset();
         self.limited = false;
-        self.schedule_components(true);
+        self.schedule_components(true, None);
     }
 }
 

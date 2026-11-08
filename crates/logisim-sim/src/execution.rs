@@ -1,7 +1,7 @@
 //! Document-derived scheduling metadata. Values and instance state are never cached here.
 #[cfg(test)]
 mod tests;
-use crate::{Bit, Value, network::Network};
+use crate::{Bit, Value, network::Network, work::WorkSet};
 use logisim_core::{Circuit, Component, Kind};
 
 #[derive(Default)]
@@ -21,6 +21,7 @@ pub(crate) struct Plan {
 pub(crate) struct Entry {
     pub component: usize,
     ports: Vec<Reader>,
+    per_batch: bool,
 }
 struct Reader {
     net: usize,
@@ -31,6 +32,13 @@ impl Entry {
     fn new(component: usize, c: &Component, network: &Network) -> Self {
         Self {
             component,
+            // Level-triggered state can change on repeated evaluations without a
+            // port change (e.g. T/JK feedback masked by another bus driver).
+            per_batch: c.kind.is_sequential()
+                && matches!(
+                    c.sequential.trigger,
+                    logisim_core::Trigger::High | logisim_core::Trigger::Low
+                ),
             ports: c
                 .ports()
                 .iter()
@@ -47,6 +55,16 @@ impl Entry {
                 })
                 .collect(),
         }
+    }
+    pub fn affected(&self, changed: Option<&WorkSet>) -> bool {
+        self.per_batch
+            || changed.is_none_or(|set| {
+                // Include output/bidirectional readers: held decoders, RAM and plugin
+                // definitions may sample those ports as well as ordinary inputs.
+                self.ports
+                    .iter()
+                    .any(|p| p.mismatch_width.is_none() && set.contains(p.net))
+            })
     }
     pub fn port(&self, index: usize, values: &[Value]) -> Value {
         let reader = &self.ports[index];
