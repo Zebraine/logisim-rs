@@ -21,6 +21,9 @@
 !/.github/
 !/.github/workflows/
 !/.github/workflows/ci.yml
+!/.github/workflows/release.yml
+!/.github/scripts/
+!/.github/scripts/package.py
 
 # Package manifests, build scripts, and Rust sources only.
 !/apps/

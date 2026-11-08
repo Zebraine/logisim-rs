@@ -7,6 +7,18 @@ Rust＋egui 数字逻辑电路工具，以 Logisim-ITA v2.16.2.2 的实际运行
 使用交互工具点击键盘后输入；Enter 输入换行、Backspace 输入退格，Esc 结束输入。
 字符缓冲和显示内容属于仿真实例，复位清空，不写入电路文件。
 
+## v0.1.0 下载
+
+从 [GitHub Releases](https://github.com/Zebraine/logisim-rs/releases/tag/v0.1.0)
+下载对应平台的压缩包及 `.sha256` 校验文件。包内附带 CPU 示例与配套 Wasm，解压整个目录后运行：
+
+- Linux x86-64：`./logisim-rs`，构建基于 Ubuntu 24.04，需要系统 Fontconfig 和图形驱动。
+- Windows x86-64：`logisim-rs.exe`。
+- macOS 15 或更新版本：按 Apple Silicon / Intel 选择包，打开 `Logisim rs.app`。
+
+Windows/macOS 包尚未签名或公证；跨平台构建检查不等同于实机界面验收。
+示例位于解压目录的 `examples/course/`，可通过 File → Open 打开。
+
 ## 项目结构
 
 通过 **Project → Load .circ Library… / 项目 → 加载 .circ 库…**，可把已有 `.circ`
@@ -135,7 +147,7 @@ cargo clippy --workspace --all-targets --locked --offline -- -D warnings
 cargo test --workspace --locked --offline
 ```
 
-使用 Rust 2024，声明最低 Rust 1.95，工具链暂用 stable；已在 1.97.1 和 1.99.0 检查。
+使用 Rust 2024，声明最低 Rust 1.95，版本构建固定 Rust 1.99.0；已在 1.97.1 和 1.99.0 检查。
 界面基于 egui/eframe 0.37.0 和 wgpu，启用 Wayland/X11 后端；已在 Linux X11 环境运行验证。
 Linux 构建另需 `pkg-config` 与 Fontconfig 开发包（Debian/Ubuntu：`libfontconfig1-dev`）。
 

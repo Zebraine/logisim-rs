@@ -6,7 +6,8 @@
 
 - `apps/`、`crates/` 中必要的 Rust 源码、包 manifest 和构建脚本。
 - `Cargo.toml`、`Cargo.lock`、工具链及必要的 Cargo、格式和 lint 配置。
-- `LICENSE`、Git 配置及 `.github/workflows/ci.yml` 构建检查配置。
+- `LICENSE`、Git 配置及 `.github/workflows/{ci,release}.yml` 构建检查/发布配置，
+  以及必要的 `.github/scripts/package.py` 打包脚本。
 - 根目录 `AGENTS.md`、`CONTRIBUTING.md`、`README.md`。
 - `examples/course/*.circ` 及其共用运行依赖 `examples/course/course.wasm`。
 
@@ -21,6 +22,18 @@
 提交前核对 `git diff --check`、`git diff --cached --check` 和
 `git diff --cached --stat`。忽略规则不影响已跟踪文件；取消跟踪时保留本地内容。
 是否暂存、提交或调整历史，遵循当次用户指令。
+
+## 版本构建
+
+`release/vX.Y.Z` 分支推送后运行完整检查，并构建 Linux x86-64、Windows x86-64、
+macOS Apple Silicon / Intel 包，在 Actions 中提供下载。各平台共用本次源码构建、
+经过 ABI 与端到端校验的 Wasm；包中包含 CPU 示例、根 README、LICENSE 和 SHA-256 校验文件。
+构建工具链由 `rust-toolchain.toml` 固定，依赖使用 `Cargo.lock`。
+
+先确认分支构建通过，再对同一提交创建附注标签 `vX.Y.Z` 并推送。
+标签必须与 workspace 版本相等；标签构建和检查全部成功后创建 GitHub Release 并附上四个平台包。
+普通分支构建不发布 Release。既有标签和已发布资产不强制覆盖；修复先提交到版本分支。
+打包输出在忽略的 `dist/`，不提交桌面二进制或压缩包。
 
 ## 本地检查
 

@@ -1,0 +1,109 @@
+name: Release builds
+
+on:
+  push:
+    branches: ['release/**']
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+
+  plugin:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Check version and prepare toolchain
+        run: |
+          python .github/scripts/package.py --version
+          rustup show
+          rustup target add wasm32-unknown-unknown
+          cargo fetch --locked
+      - name: Build and verify shared plugin
+        run: |
+          cargo build -p logisim-course-plugin --release --target wasm32-unknown-unknown --locked --offline
+          cargo run -p logisim-plugin --bin logisim-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_course_plugin.wasm
+          cargo run -p logisim-course-plugin --features host-check --bin course-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_course_plugin.wasm
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: course-wasm
+          path: target/wasm32-unknown-unknown/release/logisim_course_plugin.wasm
+          if-no-files-found: error
+
+  desktop:
+    needs: plugin
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - os: windows-2025
+            target: x86_64-pc-windows-msvc
+          - os: macos-15
+            target: aarch64-apple-darwin
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      BUILD_TARGET: ${{ matrix.target }}
+      MACOSX_DEPLOYMENT_TARGET: '15.0'
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libfontconfig1-dev
+      - name: Prepare toolchain
+        run: |
+          rustup show
+          rustup target add "$BUILD_TARGET"
+          cargo fetch --locked
+      - name: Build desktop
+        run: cargo build -p logisim-rs --release --target "$BUILD_TARGET" --locked --offline
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          name: course-wasm
+          path: target/release-plugin
+      - name: Package desktop and examples
+        run: python .github/scripts/package.py "$BUILD_TARGET" --plugin target/release-plugin/logisim_course_plugin.wasm
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: package-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+          compression-level: 0
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [checks, desktop]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          pattern: package-*
+          path: dist
+          merge-multiple: true
+      - name: Verify packages and publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python .github/scripts/package.py --version
+          cd dist
+          test "$(find . -name '*.sha256' | wc -l)" -eq 4
+          sha256sum -c ./*.sha256
+          gh release create "$RELEASE_TAG" ./* --repo "$GITHUB_REPOSITORY" --verify-tag --title "$RELEASE_TAG" --notes-from-tag
