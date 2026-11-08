@@ -33,12 +33,14 @@ impl Simulator {
     }
     pub fn port_value(&self, id: Id, index: usize) -> Option<Value> {
         let net = *self.network.ports.get(&(id, index))?;
-        let width = self
-            .circuit
-            .component(id)?
-            .port_width(index)
-            .unwrap_or(self.network.nets[net].width);
         Some(if self.network.nets[net].mismatch {
+            // Only mismatched nets need the individual port's declared width.
+            // Normal reads use the resolved bus directly, without scanning the circuit.
+            let width = self
+                .circuit
+                .component(id)?
+                .port_width(index)
+                .unwrap_or(self.network.nets[net].width);
             Value::filled(width, Bit::Unknown)
         } else {
             self.values[net]

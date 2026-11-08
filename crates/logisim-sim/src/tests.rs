@@ -250,6 +250,42 @@ fn tunnel_labels_are_case_sensitive_and_width_mismatches_are_not_separate_nets()
 }
 
 #[test]
+fn port_reads_follow_width_repairs_and_deleted_connections() {
+    let mut circuit = Circuit::default();
+    let source = pin(&mut circuit, Point::ZERO, 8, false);
+    let output = pin(&mut circuit, Point::ZERO, 4, true);
+    let probe = circuit.add_component(Component::new(Kind::Probe, Point::ZERO));
+    let mut sim = run(&circuit);
+    for (id, width) in [(source, 8), (output, 4), (probe, 8)] {
+        assert!(sim.port_mismatch(id, 0));
+        assert_eq!(
+            sim.port_value(id, 0),
+            Some(Value::filled(width, Bit::Unknown))
+        );
+    }
+    let mut edited = circuit.component(output).unwrap().clone();
+    edited.bits = 8;
+    circuit.replace_component(edited);
+    assert!(sim.synchronize(&circuit));
+    sim.set_input(source, 0xa5);
+    sim.advance(16);
+    for id in [source, output, probe] {
+        assert!(!sim.port_mismatch(id, 0));
+        assert_eq!(sim.port_value(id, 0), Some(Value::known(8, 0xa5)));
+        assert_eq!(sim.port_value(id, 1), None);
+    }
+    circuit.remove(&[source, output].into());
+    assert!(sim.synchronize(&circuit));
+    sim.advance(16);
+    assert_eq!(sim.port_value(source, 0), None);
+    assert_eq!(sim.port_value(output, 0), None);
+    assert_eq!(
+        sim.port_value(probe, 0),
+        Some(Value::filled(0, Bit::Unknown))
+    );
+}
+
+#[test]
 fn edits_preserve_valid_inputs_prune_deleted_state_and_initialize_new_widths() {
     let (mut circuit, output, inputs) = fixture(Gate::Not, 1, 1);
     let mut sim = run(&circuit);
