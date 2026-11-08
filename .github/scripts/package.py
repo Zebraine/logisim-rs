@@ -24,6 +24,18 @@ TARGETS = (
 )
 
 
+def build_matrix(release):
+    platforms = [
+        ("ubuntu-24.04", TARGETS[0]),
+        ("windows-2025", TARGETS[1]),
+        ("macos-15", TARGETS[2]),
+    ]
+    # Intel macOS is retained only for this first release.
+    if release == "0.1.0":
+        platforms.append(("macos-15-intel", TARGETS[3]))
+    return {"include": [{"os": os, "target": target} for os, target in platforms]}
+
+
 def version():
     with (ROOT / "Cargo.toml").open("rb") as manifest:
         value = tomllib.load(manifest)["workspace"]["package"]["version"]
@@ -113,9 +125,14 @@ if __name__ == "__main__":
     parser.add_argument("target", nargs="?", choices=TARGETS)
     parser.add_argument("--plugin", type=Path)
     parser.add_argument("--version", action="store_true")
+    parser.add_argument("--matrix", action="store_true")
     args = parser.parse_args()
     if args.version:
         print(version())
+    elif args.matrix:
+        matrix = build_matrix(version())
+        print("matrix=" + json.dumps(matrix, separators=(",", ":")))
+        print("package_count=" + str(len(matrix["include"])))
     elif args.target and args.plugin:
         package(args.target, args.plugin)
     else:
