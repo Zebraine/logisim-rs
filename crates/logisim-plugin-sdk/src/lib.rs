@@ -1,5 +1,6 @@
 //! Rust SDK for the versioned Wasm interface. Only the export macro needs an unsafe
 //! attribute (symbol naming); memory buffers and parsing use safe Rust throughout.
+pub mod frame;
 use api::{MAX_MESSAGE, Request, Response};
 pub use logisim_plugin_api as api;
 use std::sync::Mutex;
@@ -40,6 +41,27 @@ pub fn call(length: u32, handler: fn(Request) -> Response) -> u64 {
 /// instance is reused for simulation. Each component has independent module memory.
 #[macro_export]
 macro_rules! export_plugin {
+    ($handler:path, stable = $stable:path) => {
+        $crate::export_plugin!($handler);
+        #[cfg(target_arch = "wasm32")]
+        #[allow(unsafe_code)]
+        #[unsafe(no_mangle)]
+        pub extern "C" fn logisim_frame_version() -> u32 {
+            $crate::api::frame::VERSION
+        }
+        #[cfg(target_arch = "wasm32")]
+        #[allow(unsafe_code)]
+        #[unsafe(no_mangle)]
+        pub extern "C" fn logisim_frame_config(length: u32) -> u32 {
+            $crate::frame::configure(length)
+        }
+        #[cfg(target_arch = "wasm32")]
+        #[allow(unsafe_code)]
+        #[unsafe(no_mangle)]
+        pub extern "C" fn logisim_frame_call(length: u32) -> u64 {
+            $crate::frame::call(length, $stable)
+        }
+    };
     ($handler:path) => {
         #[cfg(target_arch = "wasm32")]
         #[allow(unsafe_code)]

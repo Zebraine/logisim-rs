@@ -59,6 +59,16 @@ fn module(
     sampled: Response,
     code: &str,
 ) -> Vec<u8> {
+    module_with_exports(abi, declared, output, sampled, code, "")
+}
+fn module_with_exports(
+    abi: u32,
+    declared: Response,
+    output: Response,
+    sampled: Response,
+    code: &str,
+    exports: &str,
+) -> Vec<u8> {
     let responses = [
         Response::Manifest(manifest(abi)),
         Response::Update(Update {
@@ -90,6 +100,7 @@ fn module(
         r#"(module (memory (export "memory") 32)
         (global $query (mut i32) (i32.const 0)) (global $calls (mut i32) (i32.const 0))
         {data}
+        {exports}
         (func (export "logisim_abi") (result i32) i32.const {abi})
         (func (export "logisim_buffer") (param i32) (result i32) i32.const 0)
         (func (export "logisim_call") (param i32) (result i64)
@@ -325,4 +336,148 @@ fn transition_promises_are_version_gated_bounded_and_fail_closed() {
         vm.reset(&[signal()]).unwrap();
         assert_eq!(vm.outputs(&[signal()], &[]).unwrap(), outputs());
     }
+}
+
+fn frame_exports(output: &[u8], sample: &[u8], before: &str) -> String {
+    let data = |bytes: &[u8]| {
+        bytes
+            .iter()
+            .map(|b| format!("\\{b:02x}"))
+            .collect::<String>()
+    };
+    let o = ((output.len() as u64) << 32) | 1_900_000;
+    let s = ((sample.len() as u64) << 32) | 1_950_000;
+    format!(
+        r#"
+        (global $bound (mut i32) (i32.const 0))
+        (func (export "logisim_frame_version") (result i32) i32.const 1)
+        (func (export "logisim_frame_config") (param i32) (result i32)
+            i32.const 1 global.set $bound i32.const 0)
+        (data (i32.const 1900000) "{}")
+        (data (i32.const 1950000) "{}")
+        (func (export "logisim_frame_call") (param i32) (result i64)
+            global.get $bound i32.eqz if unreachable end
+            global.get $query if unreachable end
+            {before}
+            i32.const 8 i32.load i32.const 1 i32.eq
+            if (result i64) i64.const {o} else i64.const {s} end)
+    "#,
+        data(output),
+        data(sample)
+    )
+}
+fn frame_module(exports: &str) -> Plugin {
+    Plugin::load(&module_with_exports(
+        ABI_VERSION,
+        Response::StableContract(Some(contract())),
+        Response::StableOutputs(outputs()),
+        Response::StableTransition(StateTransition::conservative(vec![])),
+        "unreachable", // Hot calls MUST NOT take the JSON path when negotiated.
+        exports,
+    ))
+    .unwrap()
+}
+#[test]
+fn linear_memory_negotiation_binding_state_and_reset_are_independent_of_json() {
+    let mut out = vec![];
+    let mut next = vec![];
+    frame::write_output(&mut out, &frame::Output::Outputs(outputs())).unwrap();
+    let transition = StateTransition {
+        state: vec![42, 255],
+        outputs_changed: false,
+        fixed_point: true,
+    };
+    frame::write_output(&mut next, &frame::Output::Transition(transition.clone())).unwrap();
+    // Exercise memory growth during calls; the host must acquire a fresh memory borrow.
+    let p = frame_module(&frame_exports(&out, &next, "i32.const 1 memory.grow drop"));
+    let c = p.manifest().components().remove(0);
+    let mut a = p.instantiate_stable(&c).unwrap().unwrap();
+    let mut b = p.instantiate_stable(&c).unwrap().unwrap();
+    assert!(a.uses_linear_memory());
+    assert_eq!(a.outputs(&[signal()], &[]).unwrap(), outputs());
+    assert_eq!(a.transition(&[signal()], &[]).unwrap(), transition);
+    assert_eq!(b.outputs(&[signal()], &[]).unwrap(), outputs());
+    a.reset(&[signal()]).unwrap();
+    assert!(a.uses_linear_memory());
+    assert_eq!(
+        a.outputs(&[signal()], &transition.state).unwrap(),
+        outputs()
+    );
+    let unknown = frame_exports(&out, &next, "")
+        .replace("(result i32) i32.const 1)", "(result i32) i32.const 99)");
+    let p = frame_module(&unknown);
+    assert!(
+        !p.instantiate_stable(&p.manifest().components()[0])
+            .unwrap()
+            .unwrap()
+            .uses_linear_memory()
+    );
+    let partial = r#"(func (export "logisim_frame_version") (result i32) i32.const 1)"#;
+    assert!(
+        Plugin::load(&module_with_exports(
+            ABI_VERSION,
+            Response::StableContract(Some(contract())),
+            Response::StableOutputs(outputs()),
+            Response::StableState(vec![]),
+            "",
+            partial
+        ))
+        .is_err()
+    );
+}
+#[test]
+fn linear_memory_faults_are_sticky_and_bad_ranges_flags_and_responses_fail() {
+    let mut out = vec![];
+    let mut sample = vec![];
+    frame::write_output(&mut out, &frame::Output::Outputs(outputs())).unwrap();
+    frame::write_output(
+        &mut sample,
+        &frame::Output::Transition(StateTransition::conservative(vec![])),
+    )
+    .unwrap();
+    let p = frame_module(&frame_exports(
+        &out,
+        &sample,
+        "global.get $calls if unreachable end i32.const 1 global.set $calls",
+    ));
+    let mut a = p
+        .instantiate_stable(&p.manifest().components()[0])
+        .unwrap()
+        .unwrap();
+    a.outputs(&[signal()], &[]).unwrap();
+    let fault = a.outputs(&[signal()], &[]).unwrap_err();
+    assert_eq!(a.transition(&[signal()], &[]).unwrap_err(), fault);
+    a.reset(&[signal()]).unwrap();
+    a.outputs(&[signal()], &[]).unwrap();
+    let huge = ((MAX_MESSAGE as u64 + 1) << 32) | 1_900_000;
+    for code in [
+        "i64.const 4294967295 return".to_owned(),
+        format!("i64.const {huge} return"),
+        "(loop $forever br $forever)".into(),
+    ] {
+        let p = frame_module(&frame_exports(&out, &sample, &code));
+        let mut a = p
+            .instantiate_stable(&p.manifest().components()[0])
+            .unwrap()
+            .unwrap();
+        assert!(a.outputs(&[signal()], &[]).is_err());
+    }
+    let mut bad_flags = out.clone();
+    bad_flags[12] = 4;
+    let mut bad_signals = out.clone();
+    bad_signals[32] = 2; // valid frame, wrong tool port width
+    for bad in [sample.clone(), out[..31].to_vec(), bad_flags, bad_signals] {
+        let p = frame_module(&frame_exports(&bad, &sample, ""));
+        let mut a = p
+            .instantiate_stable(&p.manifest().components()[0])
+            .unwrap()
+            .unwrap();
+        assert!(a.outputs(&[signal()], &[]).is_err());
+    }
+    let exports = frame_exports(&out, &sample, "").replace(
+        "global.set $bound i32.const 0",
+        "global.set $bound i32.const 1",
+    );
+    let p = frame_module(&exports);
+    assert!(p.instantiate_stable(&p.manifest().components()[0]).is_err());
 }

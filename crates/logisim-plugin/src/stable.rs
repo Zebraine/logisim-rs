@@ -3,7 +3,7 @@ use super::*;
 mod tests;
 use logisim_plugin_api::{
     Event, LEGACY_ABI_VERSION, STABLE_ABI_VERSION, Signal, StableConfig, StableContract,
-    StableEvaluation, StableOutputs, StateTransition,
+    StableEvaluation, StableOutputs, StateTransition, frame,
 };
 
 impl Plugin {
@@ -28,11 +28,13 @@ impl Plugin {
             return Ok(None);
         };
         contract.validate(&component.tool)?;
+        let mut instance = self.instantiate(component)?;
+        instance.bind_frame(component)?;
         Ok(Some(StableInstance {
             plugin: self.clone(),
             component: component.clone(),
             contract,
-            instance: self.instantiate(component)?,
+            instance,
             fault: None,
         }))
     }
@@ -50,12 +52,17 @@ pub struct StableInstance {
     fault: Option<String>,
 }
 impl StableInstance {
+    /// Whether this VM negotiated the optional direct linear-memory transport.
+    pub fn uses_linear_memory(&self) -> bool {
+        self.instance.frame.is_some()
+    }
     pub fn contract(&self) -> &StableContract {
         &self.contract
     }
     pub fn reset(&mut self, inputs: &[Signal]) -> Result<Update> {
         let result = (|| {
             self.instance = self.plugin.instantiate(&self.component)?;
+            self.instance.bind_frame(&self.component)?;
             let update = self.instance.evaluate(
                 &self.component,
                 Evaluation {
@@ -74,7 +81,18 @@ impl StableInstance {
     }
     pub fn outputs(&mut self, inputs: &[Signal], state: &[u8]) -> Result<StableOutputs> {
         let result = (|| {
-            let request = self.request(inputs, state)?;
+            self.validate(inputs, state)?;
+            if self.instance.frame.is_some() {
+                let frame::Output::Outputs(update) =
+                    self.instance
+                        .call_frame(frame::Operation::Outputs, inputs, state)?
+                else {
+                    return Err("Plugin did not return stable-state outputs.".into());
+                };
+                self.component.tool.validate_stable_outputs(&update)?;
+                return Ok(update);
+            }
+            let request = self.request(inputs, state);
             let Response::StableOutputs(update) =
                 self.instance.call(&Request::StableOutputs(request))?
             else {
@@ -92,7 +110,7 @@ impl StableInstance {
     /// caches; only ABI 3 receives the request for explicit transition promises.
     pub fn transition(&mut self, inputs: &[Signal], state: &[u8]) -> Result<StateTransition> {
         let result = (|| {
-            let request = self.request(inputs, state)?;
+            self.validate(inputs, state)?;
             if self.contract.state_inputs.is_none() {
                 return Ok(StateTransition {
                     state: vec![],
@@ -100,6 +118,17 @@ impl StableInstance {
                     fixed_point: true,
                 });
             }
+            if self.instance.frame.is_some() {
+                let frame::Output::Transition(next) =
+                    self.instance
+                        .call_frame(frame::Operation::Transition, inputs, state)?
+                else {
+                    return Err("Plugin did not return a stable-state transition.".into());
+                };
+                self.contract.validate_state(&next.state)?;
+                return Ok(next);
+            }
+            let request = self.request(inputs, state);
             let next = if self.plugin.manifest.abi == STABLE_ABI_VERSION {
                 let Response::StableState(next) =
                     self.instance.call(&Request::StableSample(request))?
@@ -120,19 +149,25 @@ impl StableInstance {
         })();
         self.finish(result)
     }
-    fn request(&self, inputs: &[Signal], state: &[u8]) -> Result<StableEvaluation> {
+    fn validate(&self, inputs: &[Signal], state: &[u8]) -> Result<()> {
         if let Some(fault) = &self.fault {
             return Err(fault.clone());
         }
         self.contract.validate_state(state)?;
-        let request = StableEvaluation {
+        self.component.tool.validate_stable_values(
+            &self.component.tool.id,
+            &self.component.properties,
+            inputs,
+            state,
+        )
+    }
+    fn request(&self, inputs: &[Signal], state: &[u8]) -> StableEvaluation {
+        StableEvaluation {
             tool: self.component.tool.id.clone(),
             properties: self.component.properties.clone(),
             inputs: inputs.to_vec(),
             state: state.to_vec(),
-        };
-        self.component.tool.validate_stable_evaluation(&request)?;
-        Ok(request)
+        }
     }
     fn finish<T>(&mut self, result: Result<T>) -> Result<T> {
         if let Err(error) = &result {

@@ -136,12 +136,22 @@ impl Tool {
         self.validate_properties(&config.properties)
     }
     pub fn validate_stable_evaluation(&self, request: &StableEvaluation) -> Result<(), String> {
-        self.validate_request(
+        self.validate_stable_values(
             &request.tool,
             &request.properties,
             &request.inputs,
             &request.state,
         )
+    }
+    /// Borrowed form for transports that access guest memory directly.
+    pub fn validate_stable_values(
+        &self,
+        tool: &str,
+        properties: &Properties,
+        inputs: &[Signal],
+        state: &[u8],
+    ) -> Result<(), String> {
+        self.validate_request(tool, properties, inputs, state)
     }
     pub fn validate_stable_outputs(&self, update: &StableOutputs) -> Result<(), String> {
         self.validate_outputs(&update.outputs, &update.graphics)

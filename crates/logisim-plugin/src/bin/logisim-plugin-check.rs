@@ -40,6 +40,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             component.tool.graphics.len(),
             update.graphics.len()
         );
+        if let Some(instance) = plugin.instantiate_stable(&component)? {
+            println!(
+                "{}: stable transport = {}",
+                component.tool.id,
+                if instance.uses_linear_memory() {
+                    "linear memory v1"
+                } else {
+                    "JSON"
+                }
+            );
+        }
     }
     println!(
         "{} {}: ABI verified",
