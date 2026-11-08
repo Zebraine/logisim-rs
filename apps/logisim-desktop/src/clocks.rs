@@ -39,14 +39,20 @@ impl Clocks {
     pub fn suspend(&mut self) {
         self.deadline = None;
     }
-    pub fn poll(&mut self, now: Instant, sim: &mut ProjectSimulator) -> Option<Duration> {
+    pub fn poll(
+        &mut self,
+        now: Instant,
+        sim: &mut ProjectSimulator,
+        propagate: impl FnMut(&mut ProjectSimulator) -> bool,
+    ) -> Option<Duration> {
         let started = Instant::now();
-        self.poll_with_elapsed(now, sim, || started.elapsed())
+        self.poll_with_elapsed(now, sim, propagate, || started.elapsed())
     }
     fn poll_with_elapsed(
         &mut self,
         now: Instant,
         sim: &mut ProjectSimulator,
+        mut propagate: impl FnMut(&mut ProjectSimulator) -> bool,
         mut elapsed: impl FnMut() -> Duration,
     ) -> Option<Duration> {
         if !self.automatic
@@ -82,7 +88,7 @@ impl Clocks {
                 && elapsed() < Duration::from_millis(4)
             {
                 steps += 1;
-                if !sim.step() {
+                if !propagate(sim) {
                     break;
                 }
             }
@@ -139,7 +145,7 @@ mod tests {
         (sim, id)
     }
     fn poll(clocks: &mut Clocks, now: Instant, sim: &mut ProjectSimulator) -> Option<Duration> {
-        clocks.poll_with_elapsed(now, sim, || Duration::ZERO)
+        clocks.poll_with_elapsed(now, sim, ProjectSimulator::step, || Duration::ZERO)
     }
     #[test]
     fn defaults_custom_rates_and_invalid_commands() {
@@ -237,7 +243,9 @@ mod tests {
         let start = Instant::now();
         poll(&mut c, start, &mut sim);
         let busy = start + Duration::from_millis(16);
-        let delay = c.poll_with_elapsed(busy, &mut sim, || Duration::from_millis(5));
+        let delay = c.poll_with_elapsed(busy, &mut sim, ProjectSimulator::step, || {
+            Duration::from_millis(5)
+        });
         assert_eq!(sim.ticks(), 1);
         assert!(sim.pending_count() > 0);
         assert_eq!(delay, Some(Duration::from_secs_f64(1.0 / 4096.0)));
@@ -246,5 +254,35 @@ mod tests {
         assert_eq!(sim.ticks(), 1);
         poll(&mut c, busy + Duration::from_millis(6), &mut sim);
         assert_eq!(sim.ticks(), 5);
+    }
+    #[test]
+    fn automatic_clocks_use_the_supplied_compiled_scheduler_for_every_edge() {
+        let (mut sim, id) = fixture();
+        let mut c = Clocks::default();
+        c.action(&SimulationAction::SetTickRate(4096));
+        c.action(&SimulationAction::ToggleTicks);
+        let start = Instant::now();
+        let period = Duration::from_secs_f64(1.0 / 4096.0);
+        let mut calls = 0;
+        for frame in 0..=8 {
+            c.poll_with_elapsed(
+                start + period * (64 * frame),
+                &mut sim,
+                |sim| {
+                    calls += 1;
+                    sim.step_compiled().unwrap();
+                    true
+                },
+                || Duration::ZERO,
+            );
+            assert_eq!(sim.ticks(), u64::from(64 * frame));
+            assert_eq!(sim.pending_count(), 0);
+            assert_eq!(
+                sim.view(&[]).unwrap().stored_value(id).unwrap().number(),
+                Some(32 * frame)
+            );
+        }
+        assert!(calls >= 512);
+        assert!(!sim.limited());
     }
 }

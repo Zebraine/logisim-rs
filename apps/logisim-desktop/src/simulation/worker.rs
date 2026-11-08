@@ -1,6 +1,7 @@
 //! The GUI sends ordered intents and takes the latest immutable presentation.
 //! Only the worker owns the simulator; no simulation lock is held by the GUI.
 mod engine;
+mod propagation;
 #[cfg(test)]
 mod tests;
 use super::Host;

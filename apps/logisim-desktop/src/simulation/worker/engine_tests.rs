@@ -192,3 +192,126 @@ fn propagation_limit_bypasses_transient_snapshot_filter() {
     assert!(!view.enabled);
     assert!(!view.issues.is_empty());
 }
+
+fn compiled_engine() -> (Engine, Id, Id, Id) {
+    use logisim_core::{Circuit, FlipFlop, Gate};
+    fn link(c: &mut Circuit, a: (Id, usize), b: (Id, usize)) {
+        for port in [a, b] {
+            let mut tunnel =
+                Component::new(Kind::Tunnel, c.component(port.0).unwrap().ports()[port.1]);
+            tunnel.label = format!("{}:{}", a.0, a.1);
+            c.add_component(tunnel);
+        }
+    }
+    let mut project = Project::default();
+    let c = &mut project.main_circuit_mut().circuit;
+    let data = c.add_component(Component::new(Kind::Pin, Point::new(100, 100)));
+    let clock = c.add_component(Component::new(Kind::Clock, Point::new(100, 500)));
+    let ff = c.add_component(Component::new(
+        Kind::FlipFlop(FlipFlop::D),
+        Point::new(300, 500),
+    ));
+    let mut previous = data;
+    for i in 0..8 {
+        let next = c.add_component(Component::new(
+            Kind::Gate(Gate::Buffer),
+            Point::new(300 + 200 * i, 100),
+        ));
+        link(c, (previous, 0), (next, 1));
+        previous = next;
+    }
+    link(c, (previous, 0), (ff, 3));
+    link(c, (clock, 0), (ff, 2));
+    let mut engine = Engine::default();
+    engine.command(Command::Configure(Context {
+        revision: 1,
+        root: project.main,
+        circuit: project.main,
+        project: Arc::new(project),
+        path: vec![],
+        language: Language::English,
+        plugins: Registry::default(),
+    }));
+    (engine, data, clock, ff)
+}
+pub(super) fn finish(engine: &mut Engine) {
+    for _ in 0..128 {
+        engine.advance();
+        if engine.sim.pending_count() == 0 {
+            break;
+        }
+    }
+    assert_eq!(engine.sim.pending_count(), 0);
+    assert!(engine.sim.enabled());
+}
+#[test]
+fn automatic_propagation_uses_compiled_sampling_and_manual_steps_remain_events() {
+    let (mut engine, data, clock, ff) = compiled_engine();
+    finish(&mut engine);
+    assert_eq!(engine.propagation, Propagation::Compiled);
+    for paused in [false, true] {
+        engine.command(Command::Action(1, SimulationAction::Reset));
+        finish(&mut engine);
+        if paused {
+            engine.command(Command::Action(1, SimulationAction::ToggleEnabled));
+        }
+        engine.command(Command::Action(
+            1,
+            SimulationAction::SetInput { id: data, value: 1 },
+        ));
+        engine.command(Command::Action(
+            1,
+            SimulationAction::PokeClock { id: clock },
+        ));
+        if paused {
+            let before = engine.sim.steps();
+            engine.command(Command::Action(1, SimulationAction::Step));
+            assert_eq!(engine.sim.steps(), before + 1);
+            for _ in 0..32 {
+                engine.command(Command::Action(1, SimulationAction::Step));
+            }
+        } else {
+            finish(&mut engine);
+        }
+        assert_eq!(
+            engine
+                .sim
+                .view(&[])
+                .unwrap()
+                .stored_value(ff)
+                .unwrap()
+                .number(),
+            Some(u32::from(!paused))
+        );
+    }
+}
+#[test]
+fn unsupported_fallback_is_reselected_after_edits_but_not_view_changes() {
+    let (mut engine, _, _, _) = compiled_engine();
+    finish(&mut engine);
+    let mut context = engine.context.clone().unwrap();
+    context.language = Language::SimplifiedChinese;
+    engine.command(Command::Configure(context.clone()));
+    assert_eq!(engine.propagation, Propagation::Compiled);
+    let latch = Arc::make_mut(&mut context.project)
+        .main_circuit_mut()
+        .circuit
+        .add_component(Component::new(
+            Kind::Latch(logisim_core::Latch::D),
+            Point::new(2000, 500),
+        ));
+    engine.command(Command::Configure(context.clone()));
+    assert_eq!(engine.propagation, Propagation::Unselected);
+    finish(&mut engine);
+    assert_eq!(engine.propagation, Propagation::Event);
+    Arc::make_mut(&mut context.project)
+        .main_circuit_mut()
+        .circuit
+        .components
+        .retain(|c| c.id != latch);
+    engine.command(Command::Configure(context));
+    finish(&mut engine);
+    assert_eq!(engine.propagation, Propagation::Compiled);
+    engine.command(Command::NewDocument);
+    assert_eq!(engine.propagation, Propagation::Unselected);
+}

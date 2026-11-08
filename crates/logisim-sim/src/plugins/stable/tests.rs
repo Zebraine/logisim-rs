@@ -445,3 +445,54 @@ fn only_explicit_transition_promises_skip_output_and_sample_rechecks() {
         assert_eq!(report.evaluated_plugins, outputs);
     }
 }
+
+#[test]
+fn cooperative_batches_keep_state_only_work_pending_and_bound_convergence() {
+    for mode in ["conservative", "oscillate"] {
+        let mut p = Project::default();
+        let mut registry = Registry::default();
+        library(
+            &mut p.main_circuit_mut().circuit,
+            &mut registry,
+            module("test", 3, contract(false, true), mode),
+        );
+        p.main_circuit_mut()
+            .circuit
+            .add_component(Component::new(Kind::Clock, Point::ZERO));
+        let mut sim = ProjectSimulator::default();
+        sim.set_plugins(registry);
+        sim.synchronize(&p, p.main);
+        let before = (sim.steps(), sim.pending_count());
+        sim.prepare_compiled().unwrap();
+        assert_eq!(before, (sim.steps(), sim.pending_count()));
+        // Reset already supplied the outputs: sampling changes state without a new drive.
+        sim.step_compiled().unwrap();
+        assert_eq!(sim.view(&[]).unwrap().pending_count(), 0);
+        assert!(sim.pending_count() > 0);
+        assert!(!sim.tick());
+        if mode == "oscillate" {
+            for _ in 1..crate::PROPAGATION_LIMIT - 1 {
+                sim.step_compiled().unwrap();
+                assert!(sim.pending_count() > 0);
+            }
+            assert_eq!(
+                sim.step_compiled().unwrap_err().reason,
+                Failure::PropagationLimit
+            );
+            assert!(sim.limited());
+            assert_eq!(sim.steps(), crate::PROPAGATION_LIMIT as u64);
+        } else {
+            let before = sim.steps();
+            sim.set_enabled(false);
+            assert!(sim.step()); // Hand off even though there were no pending drives.
+            assert_eq!(sim.steps(), before + 1);
+            while sim.step() {}
+            assert_eq!(sim.pending_count(), 0);
+            sim.settle_compiled().unwrap();
+            assert_eq!(sim.pending_count(), 0);
+        }
+        sim.reset();
+        assert!(!sim.limited());
+        assert!(sim.prepare_compiled().is_ok());
+    }
+}

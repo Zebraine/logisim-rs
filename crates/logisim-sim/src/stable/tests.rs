@@ -744,3 +744,74 @@ fn selective_state_sampling_matches_full_sampling_over_sparse_four_state_stimuli
         }
     }
 }
+
+#[test]
+fn cooperative_hierarchy_handoff_preserves_an_already_committed_clock() {
+    let mut p = Project::default();
+    let root = p.main;
+    let (child, child_in, child_out) = buffered_child(&mut p, 8);
+    let (inner, pins) = instance(&mut p, child, root, Point::new(600, 600));
+    let ip = pins.iter().find(|p| p.0 == child_in).unwrap().1;
+    let op = pins.iter().find(|p| p.0 == child_out).unwrap().1;
+    let c = &mut p.main_circuit_mut().circuit;
+    let input = driven(c, (inner, ip));
+    let ff = add(c, Kind::FlipFlop(FlipFlop::D), 1);
+    let clock = driven(c, (ff, 2));
+    let data = driven(c, (ff, 3));
+    let observe = output_pin(c);
+    link(c, (inner, op), (observe, 0));
+    for mode in 0..4 {
+        let mut sim = ProjectSimulator::default();
+        sim.synchronize(&p, root);
+        sim.settle_compiled().unwrap();
+        sim.set_input(data, 1);
+        sim.settle_compiled().unwrap();
+        sim.set_input(clock, 1);
+        sim.set_input(input, 1);
+        sim.step_compiled().unwrap();
+        assert!(sim.pending_count() > 0); // Interface still pending, clock already committed.
+        assert_eq!(stored(sim.view(&[]).unwrap(), ff), 0);
+        sim.set_enabled(false);
+        if mode == 2 {
+            // Cache an unfinished root, visit another definition, then restore it.
+            sim.synchronize(&p, child);
+            sim.settle_compiled().unwrap();
+            sim.synchronize(&p, root);
+        } else if mode == 3 {
+            // A label edit must not restart propagation or erase the in-flight clock.
+            let mut edited = p.clone();
+            edited
+                .main_circuit_mut()
+                .circuit
+                .components
+                .iter_mut()
+                .find(|c| c.id == ff)
+                .unwrap()
+                .label = "renamed".into();
+            assert!(!sim.synchronize(&edited, root));
+        }
+        if mode == 1 {
+            let steps = sim.steps();
+            assert!(sim.step());
+            assert_eq!(sim.steps(), steps + 1);
+            assert_eq!(stored(sim.view(&[]).unwrap(), ff), 1, "handoff mode {mode}");
+            while sim.step() {}
+        } else {
+            for _ in 0..64 {
+                if sim.pending_count() == 0 {
+                    break;
+                }
+                sim.step_compiled().unwrap();
+            }
+        }
+        assert_eq!(sim.pending_count(), 0);
+        assert_eq!(stored(sim.view(&[]).unwrap(), ff), 1, "handoff mode {mode}");
+        assert_eq!(
+            sim.view(&[]).unwrap().port_value(observe, 0),
+            Some(Value::known(1, 1))
+        );
+        assert!(!sim.enabled());
+        sim.settle_compiled().unwrap(); // Event -> compiled restores cached values safely.
+        assert_eq!(stored(sim.view(&[]).unwrap(), ff), 1, "handoff mode {mode}");
+    }
+}

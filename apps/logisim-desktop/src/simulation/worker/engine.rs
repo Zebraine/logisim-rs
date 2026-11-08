@@ -1,3 +1,4 @@
+use super::propagation::Propagation;
 use super::*;
 use crate::{
     clocks::Clocks,
@@ -10,6 +11,7 @@ use std::time::Instant;
 struct Engine {
     sim: ProjectSimulator,
     clocks: Clocks,
+    propagation: Propagation,
     context: Option<Context>,
     suspended: bool,
     dirty: bool,
@@ -22,8 +24,14 @@ impl Engine {
         match command {
             Command::Configure(context) => {
                 self.unsettled_since = None;
+                let plugins_changed = self
+                    .context
+                    .as_ref()
+                    .is_none_or(|old| !old.plugins.same(&context.plugins));
                 self.sim.set_plugins(context.plugins.clone());
-                if self.sim.synchronize(&context.project, context.root) {
+                let electrical_changed = self.sim.synchronize(&context.project, context.root);
+                if electrical_changed || plugins_changed {
+                    self.propagation = Propagation::default();
                     self.clocks.suspend();
                 }
                 self.context = Some(context);
@@ -34,6 +42,7 @@ impl Engine {
             }
             Command::NewDocument => {
                 self.sim = ProjectSimulator::default();
+                self.propagation = Propagation::default();
                 self.context = None;
                 self.unsettled_since = None;
                 self.clocks.suspend();
@@ -42,6 +51,9 @@ impl Engine {
                 let Some(context) = &self.context else { return };
                 if revision != context.revision {
                     return;
+                }
+                if matches!(action, SimulationAction::Reset) {
+                    self.propagation = Propagation::default();
                 }
                 self.clocks.action(&action);
                 apply_project(&mut self.sim, &context.path, action);
@@ -64,21 +76,26 @@ impl Engine {
         if self.suspended || self.context.is_none() {
             return None;
         }
-        let before = (self.sim.ticks(), self.sim.steps());
-        let delay = self.clocks.poll(Instant::now(), &mut self.sim);
+        let before = (self.sim.ticks(), self.sim.steps(), self.sim.enabled());
+        let delay = self.clocks.poll(Instant::now(), &mut self.sim, |sim| {
+            self.propagation.step(sim)
+        });
         self.total_ticks += self.sim.ticks().saturating_sub(before.0);
         let started = Instant::now();
         // Finish pending manual/automatic propagation, yielding between batches so
         // pause and editor commands do not wait for an entire expensive clock edge.
         for _ in 0..4096 {
-            if !self.sim.enabled() || self.sim.pending_count() == 0 || !self.sim.step() {
+            if !self.sim.enabled()
+                || self.sim.pending_count() == 0
+                || !self.propagation.step(&mut self.sim)
+            {
                 break;
             }
             if started.elapsed() >= Duration::from_millis(2) {
                 break;
             }
         }
-        self.dirty |= before != (self.sim.ticks(), self.sim.steps());
+        self.dirty |= before != (self.sim.ticks(), self.sim.steps(), self.sim.enabled());
         if self.sim.enabled()
             && !self.sim.limited()
             && self.sim.error().is_none()
@@ -177,3 +194,7 @@ pub(super) fn run(shared: Arc<Shared>, repaint: impl Fn()) {
 #[cfg(test)]
 #[path = "engine_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "engine_plugin_tests.rs"]
+mod plugin_tests;

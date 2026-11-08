@@ -3,12 +3,9 @@ use crate::combinational::BoundaryReason;
 use crate::stable::{Error, Failure, Report};
 
 impl ProjectSimulator {
-    /// Opt-in stable-state execution across the complete expanded hierarchy.
-    /// Preflight every instance before committing any pending drive. Unsupported
-    /// designs can still use `step`/`advance`; they are never partially accelerated.
-    /// Every bridge settles before any state samples, and every instance samples
-    /// before any new state output is committed. See `Simulator::settle_compiled`.
-    pub fn settle_compiled(&mut self) -> Result<Report, Error> {
+    /// Validate the complete hierarchy before any pending drive or state changes.
+    /// A rejected design can safely continue with the event engine.
+    pub fn prepare_compiled(&mut self) -> Result<Report, Error> {
         if let Some(error) = &self.error {
             return Err(Error {
                 path: vec![],
@@ -32,65 +29,91 @@ impl ProjectSimulator {
                 reason: Failure::PropagationLimit,
             });
         }
-        self.progress.restart();
-        for _ in 0..crate::PROPAGATION_LIMIT {
+        Ok(report)
+    }
+
+    /// Settle a stimulus completely, using simultaneous whole-design state samples.
+    pub fn settle_compiled(&mut self) -> Result<Report, Error> {
+        let mut report = self.prepare_compiled()?;
+        loop {
+            self.compiled_pass(&mut report)?;
+            if !self.stable_active {
+                return Ok(report);
+            }
+        }
+    }
+
+    /// Execute one cooperative stable-state batch, without advancing clocks.
+    /// `pending_count` includes unfinished state closure even with no queued drives.
+    /// Repeated calls retain the convergence budget; `step` switches back to events.
+    pub fn step_compiled(&mut self) -> Result<Report, Error> {
+        let mut report = self.prepare_compiled()?;
+        self.compiled_pass(&mut report)?;
+        Ok(report)
+    }
+
+    fn compiled_pass(&mut self, report: &mut Report) -> Result<(), Error> {
+        if !self.stable_active {
+            self.progress.restart();
+            self.stable_active = true;
+        }
+        for (path, instance) in &mut self.states {
+            report.evaluated_instructions += instance.sim.stable_combinational_pass();
+            report.evaluated_plugins +=
+                instance
+                    .sim
+                    .stable_plugin_outputs()
+                    .map_err(|reason| Error {
+                        path: path.clone(),
+                        reason,
+                    })?;
+            report.evaluated_memories += instance.sim.stable_memory_outputs();
+        }
+        report.combinational_passes += 1;
+        self.refresh_bridges();
+        if self.pending_drives() == 0 {
+            // Stage every plugin first. A Wasm failure must not partially commit
+            // this whole-design state sample, including built-in registers.
+            let mut error = None;
             for (path, instance) in &mut self.states {
-                report.evaluated_instructions += instance.sim.stable_combinational_pass();
-                report.evaluated_plugins +=
-                    instance
-                        .sim
-                        .stable_plugin_outputs()
-                        .map_err(|reason| Error {
+                match instance.sim.stage_stable_plugins() {
+                    Ok(sampled) => {
+                        report.sampled_plugins += sampled;
+                        report.sampled_components += sampled;
+                    }
+                    Err(reason) => {
+                        error = Some(Error {
                             path: path.clone(),
                             reason,
-                        })?;
-                report.evaluated_memories += instance.sim.stable_memory_outputs();
+                        });
+                        break;
+                    }
+                }
             }
-            report.combinational_passes += 1;
-            self.refresh_bridges();
-            if self.pending_count() == 0 {
-                // Stage every plugin first. A Wasm failure must not partially commit
-                // this whole-design state sample, including built-in registers.
-                let mut error = None;
-                for (path, instance) in &mut self.states {
-                    match instance.sim.stage_stable_plugins() {
-                        Ok(sampled) => {
-                            report.sampled_plugins += sampled;
-                            report.sampled_components += sampled;
-                        }
-                        Err(reason) => {
-                            error = Some(Error {
-                                path: path.clone(),
-                                reason,
-                            });
-                            break;
-                        }
-                    }
-                }
-                if let Some(error) = error {
-                    for instance in self.states.values_mut() {
-                        instance.sim.discard_stable_plugin_samples();
-                    }
-                    return Err(error);
-                }
-                // None of these calls commits outputs. Tree traversal order cannot
-                // make a later register observe an earlier register's next state.
-                let mut state_changed = false;
+            if let Some(error) = error {
                 for instance in self.states.values_mut() {
-                    let (sampled, changed) = instance.sim.stable_sample_state();
-                    report.sampled_components += sampled;
-                    state_changed |= changed;
-                    state_changed |= instance.sim.commit_stable_plugins();
+                    instance.sim.discard_stable_plugin_samples();
                 }
-                report.state_samples += 1;
-                if self.pending_count() == 0 && !state_changed {
-                    self.progress.record_batch(false);
-                    return Ok(report);
-                }
+                return Err(error);
             }
-            if self.progress.record_batch(true) {
-                break;
+            // None of these calls commits outputs. Tree traversal order cannot
+            // make a later register observe an earlier register's next state.
+            let mut state_changed = false;
+            for instance in self.states.values_mut() {
+                let (sampled, changed) = instance.sim.stable_sample_state();
+                report.sampled_components += sampled;
+                state_changed |= changed;
+                state_changed |= instance.sim.commit_stable_plugins();
             }
+            report.state_samples += 1;
+            if self.pending_drives() == 0 && !state_changed {
+                self.progress.record_batch(false);
+                self.stable_active = false;
+                return Ok(());
+            }
+        }
+        if !self.progress.record_batch(true) {
+            return Ok(());
         }
         self.limited = true;
         self.enabled = false;
@@ -101,6 +124,25 @@ impl ProjectSimulator {
             path: vec![],
             reason: Failure::PropagationLimit,
         })
+    }
+
+    pub(super) fn resume_event(&mut self) {
+        if !std::mem::take(&mut self.stable_active) {
+            return;
+        }
+        // A compiled pass may already have committed a clock without sampling it,
+        // or sampled plugin/RAM state without scheduling its new outputs. Requeue
+        // current drives (preserving newer pending values) and evaluate all readers
+        // in the next event batch, even if those drives do not change network values.
+        for instance in self.states.values_mut() {
+            let sim = &mut instance.sim;
+            for (&port, &value) in &sim.drives {
+                sim.pending.entry(port).or_insert(value);
+            }
+            sim.initial_batch = true;
+            sim.invalidate_stable_values();
+        }
+        self.progress.restart();
     }
 
     /// Detect cycles crossing definition boundaries. State outputs have no incoming

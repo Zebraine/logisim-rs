@@ -330,7 +330,7 @@ impl Simulator {
     /// Explicitly settle one stimulus with four-state expressions and simultaneous
     /// state sampling. Like `step`, works while paused and never advances clocks.
     /// Reuses a document-derived plan, invalidated by electrical edits. It is not
-    /// selected by `advance` or the desktop. Unsupported contents leave pending
+    /// selected by `advance`; the desktop uses the project batch API. Unsupported contents leave pending
     /// drives and state untouched; callers can continue with the propagation engine.
     /// A convergence failure retains the last bounded state and sets `limited`.
     pub fn settle_compiled(&mut self) -> Result<Report, Error> {
