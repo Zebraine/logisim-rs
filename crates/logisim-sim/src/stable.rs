@@ -6,13 +6,16 @@
 //! batches are equivalent. Unsupported circuits are rejected before advancing them.
 #[cfg(test)]
 mod bus_tests;
+mod memory;
+#[cfg(test)]
+mod memory_tests;
 #[cfg(test)]
 mod tests;
 
 use crate::combinational::{BoundaryReason, CompileStats, Evaluator, Port};
 use crate::work::WorkSet;
 use crate::{Bit, PROPAGATION_LIMIT, Simulator, Value};
-use logisim_core::{Id, Kind, Trigger};
+use logisim_core::{Id, Kind, MemoryInterface, Trigger};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
@@ -64,6 +67,8 @@ pub struct Report {
     pub evaluated_plugins: usize,
     /// Actual Wasm state calls, also included in sampled_components.
     pub sampled_plugins: usize,
+    /// Pure RAM reads actually evaluated, excluding unchanged inputs and contents.
+    pub evaluated_memories: usize,
 }
 impl Report {
     pub(crate) fn include(&mut self, stats: CompileStats) {
@@ -79,6 +84,7 @@ pub(crate) struct Plan {
     stats: CompileStats,
     pub dependencies: BTreeSet<(Port, Port)>,
     pub plugins: BTreeMap<Id, crate::plugins::stable::Plan>,
+    memories: BTreeMap<Id, memory::Plan>,
     materialized: bool,
     state_changes: WorkSet,
     sample_all: bool,
@@ -123,6 +129,7 @@ impl Plan {
                 | Kind::RgbLed
                 | Kind::SevenSegment
                 | Kind::HexDisplay => {}
+                Kind::Ram if c.memory.interface != MemoryInterface::SharedAsync => {}
                 Kind::FlipFlop(_)
                 | Kind::Register
                 | Kind::Counter
@@ -175,6 +182,7 @@ impl Plan {
             })
             .collect();
         let plugins = crate::plugins::stable::Plan::compile(sim, &mut dependencies)?;
+        let memories = memory::Plan::compile(sim, &mut dependencies);
         check_feedback(&dependencies)?;
         Ok(Self {
             evaluator: compiled.evaluator(),
@@ -182,6 +190,7 @@ impl Plan {
             stats: compiled.stats(),
             dependencies,
             plugins,
+            memories,
             materialized: false,
             state_changes: WorkSet::new(sim.network.nets.len()),
             sample_all: true,
@@ -189,7 +198,7 @@ impl Plan {
     }
 }
 
-/// Plugin declarations can close cycles through expression boundaries. Check raw
+/// RAM reads and plugin declarations can close cycles through expression boundaries. Check raw
 /// driver ports, keeping state-only inputs out of the combinational dependency graph.
 fn check_feedback(dependencies: &BTreeSet<(Port, Port)>) -> Result<(), Failure> {
     let ports: Vec<_> = dependencies
@@ -220,6 +229,9 @@ impl Simulator {
             plan.sample_all = true;
             for plugin in plan.plugins.values_mut() {
                 plugin.invalidate();
+            }
+            for memory in plan.memories.values_mut() {
+                memory.invalidate();
             }
         }
     }
@@ -281,7 +293,7 @@ impl Simulator {
             let plan = self.stable_plan.as_mut().unwrap().as_mut().unwrap();
             // A hierarchy closure can commit several batches before sampling.
             // Keep their union; the final batch alone can omit a clock or reset.
-            if !self.plan.storage.is_empty() {
+            if !self.plan.storage.is_empty() || !plan.memories.is_empty() {
                 for &net in &self.changed_nets.items {
                     plan.state_changes.insert(net);
                 }
@@ -291,14 +303,15 @@ impl Simulator {
         }
     }
 
-    pub(crate) fn stable_sample_storage(&mut self) -> usize {
+    pub(crate) fn stable_sample_state(&mut self) -> (usize, bool) {
         let plan = self.stable_plan.as_mut().unwrap().as_mut().unwrap();
         if !plan.sample_all && plan.state_changes.items.is_empty() {
-            return 0;
+            return (0, false);
         }
         let mut changes = std::mem::take(&mut plan.state_changes);
         let all = std::mem::replace(&mut plan.sample_all, false);
         let sampled = self.schedule_storage((!all).then_some(&changes));
+        let (memories, changed) = self.stable_sample_memories((!all).then_some(&changes));
         changes.clear();
         self.stable_plan
             .as_mut()
@@ -306,7 +319,7 @@ impl Simulator {
             .as_mut()
             .unwrap()
             .state_changes = changes;
-        sampled
+        (sampled + memories, changed)
     }
 
     pub(crate) fn stable_limit(&mut self) {
@@ -338,16 +351,18 @@ impl Simulator {
             for _ in 0..PROPAGATION_LIMIT {
                 report.evaluated_instructions += sim.stable_combinational_pass();
                 report.evaluated_plugins += sim.stable_plugin_outputs()?;
+                report.evaluated_memories += sim.stable_memory_outputs();
                 report.combinational_passes += 1;
                 if sim.pending.is_empty() {
                     let sampled = sim
                         .stage_stable_plugins()
                         .inspect_err(|_| sim.discard_stable_plugin_samples())?;
                     report.sampled_plugins += sampled;
-                    report.sampled_components += sampled + sim.stable_sample_storage();
+                    let (builtins, memory_changed) = sim.stable_sample_state();
+                    report.sampled_components += sampled + builtins;
                     report.state_samples += 1;
                     let changed = sim.commit_stable_plugins();
-                    if sim.pending.is_empty() && !changed {
+                    if sim.pending.is_empty() && !changed && !memory_changed {
                         return Ok(report);
                     }
                 }

@@ -293,6 +293,14 @@ fn unsupported_preflight_is_atomic_and_the_event_engine_remains_available() {
         let input = add(&mut c, Kind::Pin, 1);
         let gate = chain(&mut c, input, 3);
         let unsupported = add(&mut c, kind, 1);
+        if kind == Kind::Ram {
+            c.components
+                .iter_mut()
+                .find(|c| c.id == unsupported)
+                .unwrap()
+                .memory
+                .interface = MemoryInterface::SharedAsync;
+        }
         let mut sim = Simulator::default();
         sim.synchronize(&c);
         sim.set_input(input, 1);
@@ -322,6 +330,15 @@ fn unsupported_preflight_is_atomic_and_the_event_engine_remains_available() {
     let root = p.main;
     let child = p.add("unsupported".into()).unwrap();
     let unsupported = add(&mut p.circuit_mut(child).unwrap().circuit, Kind::Ram, 8);
+    p.circuit_mut(child)
+        .unwrap()
+        .circuit
+        .components
+        .iter_mut()
+        .find(|c| c.id == unsupported)
+        .unwrap()
+        .memory
+        .interface = MemoryInterface::SharedAsync;
     let (instance, _) = instance(&mut p, child, root, Point::ZERO);
     let pin = add(&mut p.main_circuit_mut().circuit, Kind::Pin, 1);
     let mut sim = ProjectSimulator::default();

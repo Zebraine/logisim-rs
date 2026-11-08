@@ -1,5 +1,5 @@
 use super::*;
-use logisim_core::{Gate, Value};
+use logisim_core::{Gate, MemoryInterface, MemoryRole, Value};
 use logisim_sim::stable::{Failure, Report};
 
 type Port = (Id, usize);
@@ -41,6 +41,7 @@ fn idle(report: Report) {
     assert_eq!(report.evaluated_plugins, 0);
     assert_eq!(report.sampled_plugins, 0);
     assert_eq!(report.sampled_components, 0);
+    assert_eq!(report.evaluated_memories, 0);
 }
 pub fn run(registry: &Registry, tools: &[api::Component]) {
     for reverse in [false, true] {
@@ -56,18 +57,28 @@ fn mixed_chain(registry: &Registry, tools: &[api::Component], reverse: bool) {
     let mut c = Circuit::default();
     let first = register_file(&mut c, &tools[0]);
     let second = register_file(&mut c, &tools[0]);
+    let ram = add(&mut c, Kind::Ram, 32);
+    let memory = c.components.iter_mut().find(|c| c.id == ram).unwrap();
+    memory.memory.interface = MemoryInterface::Separate;
+    memory.memory.address_bits = 2;
+    let data_port = memory.memory_port(MemoryRole::Input).unwrap();
+    let clock_port = memory.memory_port(MemoryRole::Clock).unwrap();
+    let address = memory.ports()[1];
+    constant(&mut c, address, 2, 0);
     let reg = add(&mut c, Kind::Register, 32);
     let data = pin(&mut c, (first, 2));
     let clk = pin(&mut c, (first, 3));
     link(&mut c, (clk, 0), (second, 3));
     link(&mut c, (clk, 0), (reg, 2));
+    link(&mut c, (clk, 0), (ram, clock_port));
     let mut previous = first;
     for _ in 0..8 {
         let buffer = add(&mut c, Kind::Gate(Gate::Buffer), 32);
         link(&mut c, (previous, 0), (buffer, 1));
         previous = buffer;
     }
-    link(&mut c, (previous, 0), (second, 2));
+    link(&mut c, (previous, 0), (ram, data_port));
+    link(&mut c, (ram, 0), (second, 2));
     link(&mut c, (second, 0), (reg, 1));
     let ports = c.component(reg).unwrap().ports();
     for (i, value) in [(3, 1), (4, 0), (5, 0), (6, 0)] {
@@ -85,10 +96,13 @@ fn mixed_chain(registry: &Registry, tools: &[api::Component], reverse: bool) {
     let report = sim.settle_compiled().unwrap();
     assert_eq!(report.evaluated_plugins, 0); // write data cannot affect reads before sampling
     assert_eq!(report.sampled_plugins, 1);
-    for (expected_second, expected_reg) in [(0, 0), (42, 0), (42, 42)] {
+    for (expected_ram, expected_second, expected_reg) in
+        [(0, 0, 0), (42, 0, 0), (42, 42, 0), (42, 42, 42)]
+    {
         sim.set_input(clk, 1);
         sim.settle_compiled().unwrap();
         assert_eq!(output(&sim, first), Some(42));
+        assert_eq!(output(&sim, ram), Some(expected_ram));
         assert_eq!(output(&sim, second), Some(expected_second));
         assert_eq!(sim.stored_value(reg), Some(Value::known(32, expected_reg)));
         idle(sim.settle_compiled().unwrap());
@@ -107,6 +121,7 @@ fn mixed_chain(registry: &Registry, tools: &[api::Component], reverse: bool) {
     sim.settle_compiled().unwrap();
     assert_eq!(output(&sim, first), Some(0));
     assert_eq!(output(&sim, second), Some(0));
+    assert_eq!(output(&sim, ram), Some(0));
     assert_eq!(sim.plugin_errors().count(), 0);
 }
 fn siblings(registry: &Registry, tools: &[api::Component], reverse: bool) {

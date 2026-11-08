@@ -44,6 +44,7 @@ impl ProjectSimulator {
                             path: path.clone(),
                             reason,
                         })?;
+                report.evaluated_memories += instance.sim.stable_memory_outputs();
             }
             report.combinational_passes += 1;
             self.refresh_bridges();
@@ -74,13 +75,15 @@ impl ProjectSimulator {
                 }
                 // None of these calls commits outputs. Tree traversal order cannot
                 // make a later register observe an earlier register's next state.
-                let mut plugin_changed = false;
+                let mut state_changed = false;
                 for instance in self.states.values_mut() {
-                    report.sampled_components += instance.sim.stable_sample_storage();
-                    plugin_changed |= instance.sim.commit_stable_plugins();
+                    let (sampled, changed) = instance.sim.stable_sample_state();
+                    report.sampled_components += sampled;
+                    state_changed |= changed;
+                    state_changed |= instance.sim.commit_stable_plugins();
                 }
                 report.state_samples += 1;
-                if self.pending_count() == 0 && !plugin_changed {
+                if self.pending_count() == 0 && !state_changed {
                     self.progress.record_batch(false);
                     return Ok(report);
                 }

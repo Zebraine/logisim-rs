@@ -59,6 +59,7 @@ impl Simulator {
             return;
         };
         state.contents.fill(start, end, value & mask);
+        self.invalidate_stable_values();
         self.limited = false;
         self.progress.restart();
         self.schedule_components(false, None);
@@ -68,6 +69,7 @@ impl Simulator {
             return;
         };
         state.contents.clear();
+        self.invalidate_stable_values();
         self.limited = false;
         self.progress.restart();
         self.schedule_components(false, None);
@@ -82,6 +84,7 @@ impl Simulator {
         };
         contents.resize(c.memory.address_bits, c.bits);
         state.contents = contents;
+        self.invalidate_stable_values();
         self.limited = false;
         self.progress.restart();
         self.schedule_components(false, None);

@@ -135,6 +135,7 @@ fn add(c: &mut Circuit, kind: Kind) -> Id {
 fn link(c: &mut Circuit, a: Port, b: Port) {
     for port in [a, b] {
         let mut t = Component::new(Kind::Tunnel, c.component(port.0).unwrap().ports()[port.1]);
+        t.bits = c.component(port.0).unwrap().port_width(port.1).unwrap();
         t.label = format!("{}:{}", a.0, a.1);
         c.add_component(t);
     }
@@ -297,6 +298,20 @@ fn failed_sample_discards_all_staged_instances_before_builtin_sampling() {
     link(c, (clock, 0), (ff, 2));
     let data = add(c, Kind::Pin);
     link(c, (data, 0), (ff, 3));
+    let ram = add(c, Kind::Ram);
+    let memory = c.components.iter_mut().find(|c| c.id == ram).unwrap();
+    memory.bits = 1;
+    memory.memory.interface = logisim_core::MemoryInterface::Separate;
+    memory.memory.address_bits = 2;
+    let data_port = memory.memory_port(logisim_core::MemoryRole::Input).unwrap();
+    let clock_port = memory.memory_port(logisim_core::MemoryRole::Clock).unwrap();
+    link(c, (data, 0), (ram, data_port));
+    link(c, (clock, 0), (ram, clock_port));
+    let address = add(c, Kind::Constant);
+    let constant = c.components.iter_mut().find(|c| c.id == address).unwrap();
+    constant.bits = 2;
+    constant.constant = 0;
+    link(c, (address, 0), (ram, 1));
     let mut sim = ProjectSimulator::default();
     sim.set_plugins(registry);
     sim.synchronize(&p, p.main);
@@ -305,6 +320,10 @@ fn failed_sample_discards_all_staged_instances_before_builtin_sampling() {
     sim.set_input(clock, 1);
     let error = sim.settle_compiled().unwrap_err();
     assert_eq!(error.path, vec![bad]);
+    assert_eq!(
+        sim.view(&[]).unwrap().memory_contents(ram).unwrap().get(0),
+        0
+    );
     assert!(matches!(error.reason,Failure::Plugin {component,..} if component==b));
     assert!(
         sim.view(&[good]).unwrap().plugin_states[&g]
