@@ -147,7 +147,7 @@ cargo clippy --workspace --all-targets --locked --offline -- -D warnings
 cargo test --workspace --locked --offline
 ```
 
-使用 Rust 2024，声明最低 Rust 1.95，版本构建固定 Rust 1.99.0；已在 1.97.1 和 1.99.0 检查。
+使用 Rust 2024，最低 Rust 1.99，构建工具链固定为 Rust 1.99.0。
 界面基于 egui/eframe 0.37.0 和 wgpu，启用 Wayland/X11 后端；已在 Linux X11 环境运行验证。
 Linux 构建另需 `pkg-config` 与 Fontconfig 开发包（Debian/Ubuntu：`libfontconfig1-dev`）。
 
