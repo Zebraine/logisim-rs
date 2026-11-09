@@ -1,6 +1,7 @@
 //! The GUI sends ordered intents and takes the latest immutable presentation.
 //! Only the worker owns the simulator; no simulation lock is held by the GUI.
 mod engine;
+mod presentation;
 mod propagation;
 #[cfg(test)]
 mod tests;
@@ -111,6 +112,12 @@ impl Worker {
         }
         let previous = self.context.as_ref();
         let same_project = previous.is_some_and(|c| *c.project == *workspace.project());
+        let same_instance = previous.is_some_and(|c| {
+            c.root == workspace.simulation_root()
+                && c.circuit == workspace.active_circuit()
+                && c.path == workspace.simulation_path()
+                && c.plugins.same(&self.plugins)
+        });
         let same_view = same_project
             && previous.is_some_and(|c| {
                 c.root == workspace.simulation_root()
@@ -139,6 +146,19 @@ impl Worker {
         };
         if !same_view {
             self.ready_memories.clear();
+        }
+        if same_instance {
+            presentation::retain(
+                workspace.simulation_mut(),
+                &previous
+                    .unwrap()
+                    .project
+                    .circuit(context.circuit)
+                    .unwrap()
+                    .circuit,
+                &context.project.circuit(context.circuit).unwrap().circuit,
+            );
+        } else {
             // IDs can be reused by a new document/root: never paint previous values
             // on the newly selected circuit while its first snapshot is in flight.
             let previous_view = std::mem::take(workspace.simulation_mut());

@@ -42,6 +42,8 @@
 !/plugins/**/
 !/plugins/**/Cargo.toml
 !/plugins/**/src/**/*.rs
+!/plugins/course/locales/zh-CN.json
+!/plugins/ttl/locales/zh-CN.json
 !/plugins/course/course.wasm
 !/plugins/ttl/ttl.wasm
 

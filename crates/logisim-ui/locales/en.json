@@ -666,6 +666,7 @@
     "The memory image is not valid UTF-8 text.": "The memory image is not valid UTF-8 text.",
     "The memory target changed. Open its contents editor and try again.": "The memory target changed. Open its contents editor and try again.",
     "The original file is protected. Use Save As to write the supported project subset to a different file.\n\n{}": "The original file is protected. Use Save As to write the supported project subset to a different file.\n\n{}",
+    "The plugin target changed. Select it and try again.": "The plugin target changed. Select it and try again.",
     "The shape is empty, invalid, or exceeds the appearance limit.": "The shape is empty, invalid, or exceeds the appearance limit.",
     "This import omitted unsupported content. Save to a different file to protect the original.": "This import omitted unsupported content. Save to a different file to protect the original.",
     "This input is used by an expression. Edit the expression before removing it.": "This input is used by an expression. Edit the expression before removing it.",

@@ -1,5 +1,7 @@
 //! Example dynamic library: geometry, ports, editable properties, actions and behavior.
 mod graphics;
+mod presentation;
+pub use presentation::metadata as ui_metadata;
 #[cfg(feature = "host-check")]
 pub mod migrate;
 mod register_state;
@@ -10,7 +12,11 @@ mod tests;
 use logisim_core::Value;
 use logisim_course::RegisterFile;
 use logisim_plugin_api::*;
-logisim_plugin_sdk::export_plugin!(handle, stable = handle_stable_frame);
+logisim_plugin_sdk::export_plugin!(
+    handle,
+    stable = handle_stable_frame,
+    presentation = ui_metadata
+);
 
 pub fn handle(request: Request) -> Response {
     match request {
@@ -60,15 +66,28 @@ fn evaluate(request: Evaluation) -> Result<Update, String> {
         if id != "write" {
             return Err("Unknown action".into());
         }
-        let fields: Vec<_> = argument.split_whitespace().collect();
-        if fields.len() != 2 {
-            return Err("Enter a decimal address and a hexadecimal word.".into());
-        }
-        let address = fields[0].parse::<u8>().map_err(|e| e.to_string())?;
-        let word = u32::from_str_radix(fields[1].trim_start_matches("0x"), 16)
-            .map_err(|e| e.to_string())?;
-        if !file.poke(address, word) {
-            return Err("Write address must be 1–31.".into());
+        if let Some(image) = argument.strip_prefix("image ") {
+            let words = image
+                .split_whitespace()
+                .map(|word| u32::from_str_radix(word, 16).map_err(|e| e.to_string()))
+                .collect::<Result<Vec<_>, _>>()?;
+            let words: [u32; 32] = words
+                .try_into()
+                .map_err(|_| "Expected exactly 32 register words.")?;
+            for (address, value) in words.into_iter().enumerate().skip(1) {
+                file.poke(address as u8, value);
+            }
+        } else {
+            let fields: Vec<_> = argument.split_whitespace().collect();
+            if fields.len() != 2 {
+                return Err("Enter a decimal address and a hexadecimal word.".into());
+            }
+            let address = fields[0].parse::<u8>().map_err(|e| e.to_string())?;
+            let word = u32::from_str_radix(fields[1].trim_start_matches("0x"), 16)
+                .map_err(|e| e.to_string())?;
+            if !file.poke(address, word) {
+                return Err("Write address must be 1–31.".into());
+            }
         }
     }
     let outputs = file.evaluate(

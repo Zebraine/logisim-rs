@@ -1,5 +1,7 @@
 //! Standalone TTL package: observed pin maps, four-state behavior and vector drawings.
 mod graphics;
+mod presentation;
+pub use presentation::metadata as ui_metadata;
 mod logic;
 #[cfg(feature = "host-check")]
 pub mod migrate;
@@ -10,7 +12,11 @@ pub use stable::frame as handle_stable_frame;
 mod tests;
 use logisim_core::Value;
 use logisim_plugin_api::*;
-logisim_plugin_sdk::export_plugin!(handle, stable = handle_stable_frame);
+logisim_plugin_sdk::export_plugin!(
+    handle,
+    stable = handle_stable_frame,
+    presentation = ui_metadata
+);
 
 pub fn handle(request: Request) -> Response {
     match request {

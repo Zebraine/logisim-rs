@@ -10,7 +10,8 @@ pub(crate) fn show(
     ui: &mut Ui,
     editor: &mut Editor,
     circuit_name: &str,
-    plugins: &[logisim_core::plugin::api::Manifest],
+    plugins: &[logisim_core::plugin::api::presentation::Library],
+    files: &mut Vec<crate::FileAction>,
 ) {
     let placing = matches!(editor.tool, Tool::Place(_));
     if !editor.session.context.path.is_empty() {
@@ -31,7 +32,13 @@ pub(crate) fn show(
         None
     };
     let title = if let Some(plugin) = target.as_ref().and_then(|c| c.plugin.as_ref()) {
-        plugin.tool.name.clone()
+        crate::plugins::text(
+            target
+                .as_ref()
+                .and_then(|c| crate::plugins::metadata(plugins, c)),
+            &plugin.tool.name,
+        )
+        .to_owned()
     } else if placing {
         tf!("Tool: {}", tr(editor.tool.name()))
     } else if let Some(c) = &target {
@@ -51,8 +58,15 @@ pub(crate) fn show(
             Frame::NONE.inner_margin(12).show(ui, |ui| {
                 if let Some(c) = target {
                     if !placing {
-                        editor.simulation.component(ui, &c);
-                        ui.separator();
+                        let visible = if c.kind == Kind::Plugin {
+                            crate::plugins::runtime(ui, &mut editor.simulation, &c, plugins, files)
+                        } else {
+                            editor.simulation.component(ui, &c);
+                            true
+                        };
+                        if visible {
+                            ui.separator();
+                        }
                     }
                     component_editor(ui, editor, c, placing, plugins);
                 } else {
@@ -178,7 +192,7 @@ fn component_editor(
     editor: &mut Editor,
     mut c: Component,
     placing: bool,
-    plugins: &[logisim_core::plugin::api::Manifest],
+    plugins: &[logisim_core::plugin::api::presentation::Library],
 ) {
     if matches!(c.kind, Kind::Subcircuit(_)) {
         ui.strong(tf!("Circuit: {}", c.interface.name));
@@ -272,7 +286,7 @@ fn fields(
     ui: &mut Ui,
     c: &mut Component,
     placing: bool,
-    plugins: &[logisim_core::plugin::api::Manifest],
+    plugins: &[logisim_core::plugin::api::presentation::Library],
 ) -> bool {
     let mut active = false;
     if c.kind.rotatable() {

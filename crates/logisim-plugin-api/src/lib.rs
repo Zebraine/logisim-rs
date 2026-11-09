@@ -16,7 +16,8 @@
 //! A schema change requires a new plugin version; identity/version/definition must match
 //! the saved document exactly. Ports and bounds are fixed in local coordinates; placement rotation and labels
 //! are host document metadata and do not alter the plugin protocol.
-//! Plugin strings are opaque to host translation. Protocol evolution uses a new ABI.
+//! Plugin strings use only plugin-owned translations via the optional versioned
+//! [`presentation`] extension. Simulation protocol evolution uses a new ABI.
 //!
 //! Coordinates are integer grid units relative to the component origin, with +x right
 //! and +y down. Ports lie on multiples of ten. Shapes are painted in vector order,
@@ -47,6 +48,7 @@
 //! ABI 3 adds [`StateTransition`] results for stable sampling. ABI 2 modules only
 //! receive the original StableSample request and use conservative cache invalidation.
 pub mod frame;
+pub mod presentation;
 mod stable;
 mod validate;
 use serde::{Deserialize, Serialize};

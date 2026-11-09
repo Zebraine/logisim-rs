@@ -48,6 +48,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut registry = Registry::default();
     registry.load(&bytes)?;
     let tools = registry.manifests().next().unwrap().components();
+    let library = registry.libraries().next().unwrap();
+    if !library.presentation.imports.is_empty() {
+        assert_eq!(library.presentation.text("zh-CN", "Trigger"), "触发方式");
+        assert_eq!(library.presentation.imports[0].tool, "register-file");
+    }
     assert_eq!(tools[0].tool.id, "register-file");
     assert_eq!(tools[1].tool.id, "riscv-probe");
     if registry.manifests().next().unwrap().abi == api::LEGACY_ABI_VERSION {
@@ -86,6 +91,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     sim.plugin_action(rf, "write".into(), "1 DEADBEEF".into());
     sim.advance(64);
     assert_eq!(output(&sim, rf), Some(0xDEADBEEF));
+    if !library.presentation.imports.is_empty() {
+        let words = std::iter::repeat_n("12345678", 32)
+            .collect::<Vec<_>>()
+            .join(" ");
+        sim.plugin_action(rf, "write".into(), format!("image {words}"));
+        sim.advance(64);
+        assert_eq!(output(&sim, rf), Some(0x12345678));
+        assert!(text(&sim, rf, "00000000")); // x0 ignores the image's first word.
+        assert_eq!(logisim_file::serialize(&project)?, serialized);
+        sim.plugin_action(rf, "write".into(), "1 DEADBEEF".into());
+        sim.advance(64);
+    }
     project
         .main_circuit_mut()
         .circuit
@@ -164,6 +181,25 @@ fn hierarchy(registry: &Registry, tools: &[api::Component]) {
     sim.advance(64);
     assert_eq!(output(sim.view(&[ids[0]]).unwrap(), rf), Some(0x12345678));
     assert_eq!(output(sim.view(&[ids[1]]).unwrap(), rf), Some(0));
+    if !registry
+        .libraries()
+        .next()
+        .unwrap()
+        .presentation
+        .imports
+        .is_empty()
+    {
+        let image = format!(
+            "image {}",
+            std::iter::repeat_n("89abcdef", 32)
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
+        sim.plugin_action(&[ids[1]], rf, "write".into(), image);
+        sim.advance(64);
+        assert_eq!(output(sim.view(&[ids[0]]).unwrap(), rf), Some(0x12345678));
+        assert_eq!(output(sim.view(&[ids[1]]).unwrap(), rf), Some(0x89abcdef));
+    }
     sim.reset();
     sim.advance(64);
     assert_eq!(output(sim.view(&[ids[0]]).unwrap(), rf), Some(0));

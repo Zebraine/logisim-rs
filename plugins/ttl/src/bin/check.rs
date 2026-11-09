@@ -21,6 +21,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let plugin = Plugin::load(&bytes)?;
     assert_eq!(plugin.manifest().id, "org.logisim-rs.ttl");
     assert_eq!(plugin.manifest().tools.len(), 14);
+    assert_eq!(
+        plugin
+            .library()
+            .presentation
+            .text("zh-CN", "Show internal structure"),
+        "显示内部结构"
+    );
     for mut c in plugin.manifest().components() {
         let chip = Chip::parse(&c.tool.id).unwrap();
         let expected = match chip.kind {

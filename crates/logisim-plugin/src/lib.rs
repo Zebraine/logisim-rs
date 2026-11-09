@@ -1,5 +1,6 @@
 //! Sandboxed module loading. No filesystem access or implicit plugin discovery.
 mod frame;
+mod presentation;
 mod stable;
 #[cfg(test)]
 mod tests;
@@ -22,6 +23,7 @@ fn error(e: impl std::fmt::Display) -> String {
 pub struct Plugin {
     module: Module,
     manifest: Manifest,
+    presentation: logisim_plugin_api::presentation::Presentation,
 }
 impl Plugin {
     pub fn load(bytes: &[u8]) -> Result<Self> {
@@ -43,7 +45,19 @@ impl Plugin {
         if manifest.abi != instance.abi {
             return Err("Plugin manifest and exported ABI differ.".into());
         }
-        Ok(Self { module, manifest })
+        let presentation = instance.presentation()?;
+        presentation.validate(&manifest)?;
+        Ok(Self {
+            module,
+            manifest,
+            presentation,
+        })
+    }
+    pub fn library(&self) -> logisim_plugin_api::presentation::Library {
+        logisim_plugin_api::presentation::Library {
+            manifest: self.manifest.clone(),
+            presentation: self.presentation.clone(),
+        }
     }
     pub fn manifest(&self) -> &Manifest {
         &self.manifest
@@ -64,6 +78,7 @@ impl Plugin {
     }
 }
 pub struct Instance {
+    ui: Option<TypedFunc<(), u64>>,
     frame: Option<frame::FrameApi>,
     abi: u32,
     store: Store<StoreLimits>,
@@ -96,6 +111,7 @@ impl Instance {
         }
         let frame = frame::FrameApi::load(&instance, &mut store, abi)?;
         Ok(Self {
+            ui: presentation::load(&instance, &mut store)?,
             frame,
             abi,
             memory: instance
@@ -183,6 +199,11 @@ impl Registry {
         let key = (plugin, version);
         Arc::make_mut(&mut self.entries).remove(&key);
         Arc::make_mut(&mut self.failures).insert(key, message);
+    }
+    pub fn libraries(
+        &self,
+    ) -> impl Iterator<Item = logisim_plugin_api::presentation::Library> + '_ {
+        self.entries.values().map(|p| p.library())
     }
     pub fn manifests(&self) -> impl Iterator<Item = &Manifest> {
         self.entries.values().map(|p| p.manifest())

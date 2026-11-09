@@ -398,7 +398,6 @@ impl SimulationUi {
     }
     pub fn component(&mut self, ui: &mut Ui, c: &Component) {
         if c.kind == logisim_core::Kind::Plugin {
-            crate::plugins::runtime(ui, self, c);
             return;
         }
         match c.kind {

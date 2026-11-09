@@ -1,4 +1,19 @@
 //! Generic rendering and property/action controls for plugin-owned definitions.
+mod import;
+pub use import::PluginImportTarget;
+use logisim_core::plugin::api::presentation::{Library, Presentation};
+pub(crate) fn text<'a>(metadata: Option<&'a Presentation>, label: &'a str) -> &'a str {
+    metadata.map_or(label, |m| {
+        m.text(crate::i18n::current_language().code(), label)
+    })
+}
+pub(crate) fn metadata<'a>(libraries: &'a [Library], c: &Component) -> Option<&'a Presentation> {
+    let p = c.plugin.as_ref()?;
+    libraries
+        .iter()
+        .find(|l| l.manifest.id == p.plugin && l.manifest.version == p.version)
+        .map(|l| &l.presentation)
+}
 use crate::{
     SimulationAction, Workspace,
     canvas::Canvas,
@@ -9,7 +24,7 @@ use crate::{
 use egui::{Align2, Color32, Painter, Rect, Stroke, StrokeKind, Ui};
 use logisim_core::{
     Component, Kind, Point,
-    plugin::api::{Manifest, PropertyKind, Shape},
+    plugin::api::{PropertyKind, Shape},
 };
 
 impl Workspace {
@@ -22,12 +37,14 @@ impl Workspace {
             self.editor.record(before);
         }
     }
-    pub fn set_plugin_catalogue(&mut self, manifests: Vec<Manifest>) {
+    pub fn set_plugin_catalogue(&mut self, manifests: Vec<Library>) {
         self.plugins = manifests;
     }
     pub(crate) fn plugin_groups(&mut self, ui: &mut Ui) {
-        for manifest in &self.plugins {
-            egui::CollapsingHeader::new(&manifest.name)
+        for library in &self.plugins {
+            let manifest = &library.manifest;
+            let metadata = Some(&library.presentation);
+            egui::CollapsingHeader::new(text(metadata, &manifest.name))
                 .id_salt(("plugin-library", &manifest.id, &manifest.version))
                 .default_open(true)
                 .show(ui, |ui| {
@@ -40,7 +57,7 @@ impl Workspace {
                             });
                         ui.push_id(&component.tool.id, |ui| {
                             if ui
-                                .selectable_label(selected, &component.tool.name)
+                                .selectable_label(selected, text(metadata, &component.tool.name))
                                 .clicked()
                             {
                                 self.editor.session.context.appearance_mode = false;
@@ -54,21 +71,23 @@ impl Workspace {
         }
     }
 }
-pub(crate) fn fields(ui: &mut Ui, c: &mut Component, manifests: &[Manifest]) -> bool {
+pub(crate) fn fields(ui: &mut Ui, c: &mut Component, manifests: &[Library]) -> bool {
     let Some(plugin) = c.plugin.as_mut() else {
         return false;
     };
-    if let Some(manifest) = manifests
+    let library = manifests
         .iter()
-        .find(|m| m.id == plugin.plugin && m.version == plugin.version)
-    {
+        .find(|l| l.manifest.id == plugin.plugin && l.manifest.version == plugin.version);
+    let metadata = library.map(|l| &l.presentation);
+    if let Some(library) = library {
+        let manifest = &library.manifest;
         ui.label(tr("Component"));
         let mut selected = plugin.tool.id.clone();
         egui::ComboBox::from_id_salt("plugin-tool")
-            .selected_text(&plugin.tool.name)
+            .selected_text(text(metadata, &plugin.tool.name))
             .show_ui(ui, |ui| {
                 for tool in &manifest.tools {
-                    ui.selectable_value(&mut selected, tool.id.clone(), &tool.name);
+                    ui.selectable_value(&mut selected, tool.id.clone(), text(metadata, &tool.name));
                 }
             });
         ui.end_row();
@@ -100,7 +119,7 @@ pub(crate) fn fields(ui: &mut Ui, c: &mut Component, manifests: &[Manifest]) -> 
     ui.end_row();
     let mut active = false;
     for property in &plugin.tool.properties {
-        ui.label(&property.label);
+        ui.label(text(metadata, &property.label));
         let value = plugin
             .properties
             .get_mut(&property.id)
@@ -124,10 +143,10 @@ pub(crate) fn fields(ui: &mut Ui, c: &mut Component, manifests: &[Manifest]) -> 
                 }
                 PropertyKind::Choice { values } => {
                     egui::ComboBox::from_id_salt("value")
-                        .selected_text(value.as_str())
+                        .selected_text(text(metadata, value.as_str()))
                         .show_ui(ui, |ui| {
                             for option in values {
-                                ui.selectable_value(value, option.clone(), option);
+                                ui.selectable_value(value, option.clone(), text(metadata, option));
                             }
                         });
                 }
@@ -137,20 +156,45 @@ pub(crate) fn fields(ui: &mut Ui, c: &mut Component, manifests: &[Manifest]) -> 
     }
     active
 }
-pub(crate) fn runtime(ui: &mut Ui, sim: &mut SimulationUi, c: &Component) {
+pub(crate) fn runtime(
+    ui: &mut Ui,
+    sim: &mut SimulationUi,
+    c: &Component,
+    libraries: &[Library],
+    files: &mut Vec<crate::FileAction>,
+) -> bool {
+    let metadata = metadata(libraries, c);
     let Some(plugin) = &c.plugin else {
-        return;
+        return false;
     };
+    let visible = sim.view.plugin_errors.contains_key(&c.id)
+        || !plugin.tool.actions.is_empty()
+        || metadata.is_some_and(|m| m.imports.iter().any(|i| i.tool == plugin.tool.id));
     if let Some(error) = sim.view.plugin_errors.get(&c.id) {
         ui.colored_label(Color32::DARK_RED, error);
         ui.weak(tr(
             "Load the matching plugin, or Reset after correcting the problem.",
         ));
     }
-    for (i, port) in plugin.tool.ports.iter().enumerate() {
-        if let Some(value) = sim.view.ports.get(&(c.id, i)) {
-            ui.label(format!("{}: {}", port.label, value.text))
-                .on_hover_text(&value.binary);
+    if let Some(metadata) = metadata {
+        for (index, import) in metadata
+            .imports
+            .iter()
+            .enumerate()
+            .filter(|(_, i)| i.tool == plugin.tool.id)
+        {
+            if ui
+                .add_enabled(
+                    !sim.view.plugin_errors.contains_key(&c.id),
+                    egui::Button::new(text(Some(metadata), &import.label)),
+                )
+                .clicked()
+            {
+                files.push(crate::FileAction::ImportPlugin {
+                    component: c.id,
+                    import: index,
+                });
+            }
         }
     }
     for action in &plugin.tool.actions {
@@ -160,13 +204,13 @@ pub(crate) fn runtime(ui: &mut Ui, sim: &mut SimulationUi, c: &Component) {
                 .entry((c.id, action.id.clone()))
                 .or_default();
             if let Some(label) = &action.argument {
-                ui.label(label);
+                ui.label(text(metadata, label));
                 ui.add(egui::TextEdit::singleline(argument).char_limit(1024));
             }
             if ui
                 .add_enabled(
                     !sim.view.plugin_errors.contains_key(&c.id),
-                    egui::Button::new(&action.label),
+                    egui::Button::new(text(metadata, &action.label)),
                 )
                 .clicked()
             {
@@ -178,6 +222,7 @@ pub(crate) fn runtime(ui: &mut Ui, sim: &mut SimulationUi, c: &Component) {
             }
         });
     }
+    visible
 }
 pub(crate) fn draw(
     p: &Painter,

@@ -48,5 +48,18 @@ pub(crate) fn load(
     Ok(())
 }
 
+pub(crate) fn load_plugin(
+    path: &Path,
+    target: &logisim_ui::PluginImportTarget,
+    workspace: &mut Workspace,
+) -> Result<(), String> {
+    let import = target.import();
+    let contents = read(path, import.address_bits, import.data_bits)?;
+    if !workspace.complete_plugin_import(target, &contents) {
+        return Err(tr("The plugin target changed. Select it and try again.").into());
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests;

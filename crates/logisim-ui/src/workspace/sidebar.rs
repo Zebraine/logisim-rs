@@ -99,7 +99,13 @@ impl Workspace {
                 if self.editor.session.context.appearance_mode {
                     self.appearance.properties(ui, &mut self.editor);
                 } else {
-                    properties::show(ui, &mut self.editor, &name, &self.plugins);
+                    properties::show(
+                        ui,
+                        &mut self.editor,
+                        &name,
+                        &self.plugins,
+                        &mut self.file_actions,
+                    );
                 }
             });
     }

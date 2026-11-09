@@ -84,7 +84,7 @@ impl Files {
             warnings,
         );
         self.plugins = resolution.registry();
-        workspace.set_plugin_catalogue(self.plugins.manifests().cloned().collect());
+        workspace.set_plugin_catalogue(self.plugins.libraries().collect());
         sim.set_plugins(self.plugins.clone());
         if resolution.missing() {
             self.dialog = Some(Dialog::Plugins(Box::new(resolution)));
@@ -165,6 +165,14 @@ impl Files {
             FileAction::Open => self.picker(Mode::Open),
             FileAction::ImportLibrary => self.picker(Mode::Library),
             FileAction::LoadPlugin => self.picker(Mode::Plugin),
+            FileAction::ImportPlugin { component, import } => {
+                if let Some(target) = workspace.plugin_import_target(component, import) {
+                    self.dialog = Some(Dialog::PluginImportPicker {
+                        picker: Picker::new(Mode::Memory, self.directory.clone(), ""),
+                        target: Box::new(target),
+                    });
+                }
+            }
             FileAction::ImportMemory => {
                 if let Some(target) = workspace.memory_import_target() {
                     self.dialog = Some(Dialog::MemoryPicker {
@@ -246,7 +254,7 @@ impl Files {
                 let sources = resolution.sources(&workspace.project().plugin_sources);
                 workspace.set_plugin_sources(sources);
                 self.plugins = resolution.registry();
-                workspace.set_plugin_catalogue(self.plugins.manifests().cloned().collect());
+                workspace.set_plugin_catalogue(self.plugins.libraries().collect());
                 sim.set_plugins(self.plugins.clone());
                 self.import_warnings(resolution.warnings);
             }
@@ -282,6 +290,16 @@ impl Files {
             }
             (Dialog::Replace { path, bytes }, Response::Replace) => {
                 self.save(&path, SaveMode::Selected(Some(&bytes)), ctx, workspace, sim)
+            }
+            (Dialog::PluginImportPicker { target, .. }, Response::Pick(path)) => {
+                match crate::memory_import::load_plugin(&path, &target, workspace) {
+                    Ok(()) => {
+                        if let Some(parent) = path.parent() {
+                            self.directory = parent.to_path_buf();
+                        }
+                    }
+                    Err(e) => self.error(format!("{}\n\n{}", path.display(), e)),
+                }
             }
             (Dialog::MemoryPicker { target, .. }, Response::Pick(path)) => {
                 match crate::memory_import::load(&path, &target, workspace, sim) {
@@ -330,8 +348,7 @@ impl Files {
                         },
                     ) {
                         Ok(()) => {
-                            workspace
-                                .set_plugin_catalogue(self.plugins.manifests().cloned().collect());
+                            workspace.set_plugin_catalogue(self.plugins.libraries().collect());
                             sim.set_plugins(self.plugins.clone());
                             if let Some(parent) = path.parent() {
                                 self.directory = parent.to_path_buf();

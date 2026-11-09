@@ -62,7 +62,7 @@ fn generic_plugin_palette_properties_actions_and_strings_in_both_languages() {
         configure(&ctx);
         let mut app = Workspace::default();
         app.set_language(language);
-        app.set_plugin_catalogue(vec![manifest.clone()]);
+        app.set_plugin_catalogue(vec![manifest.clone().into()]);
         click(&ctx, &mut app, "Plugin tool A");
         assert_eq!(
             app.editor.template.plugin.as_ref().unwrap().tool.id,
@@ -101,8 +101,17 @@ fn generic_plugin_palette_properties_actions_and_strings_in_both_languages() {
         assert_eq!(c.plugin.as_ref().unwrap().tool.id, "second");
         assert_eq!(c.ports(), vec![c.position + Point::new(20, 0)]);
         app.editor.session.selection = [c.id].into();
+        app.simulation_mut().ports.insert(
+            (c.id, 0),
+            std::sync::Arc::new(SignalView {
+                text: "A".into(),
+                binary: "1010".into(),
+                tone: SignalTone::Bus,
+            }),
+        );
         let labels = frame(&ctx, &mut app, vec![]);
-        assert!(has(&labels, "Address")); // Plugin-owned text is never translated.
+        assert!(has(&labels, "Address")); // No plugin-supplied translation.
+        assert!(!labels.iter().any(|(label, _)| label.starts_with("Output:")));
         assert!(has(&labels, "Pin"));
         click(&ctx, &mut app, "first");
         click(&ctx, &mut app, "second");
@@ -170,6 +179,110 @@ fn generic_plugin_palette_properties_actions_and_strings_in_both_languages() {
 }
 
 #[test]
+fn plugin_owned_translations_and_image_import_preserve_document_and_identity() {
+    use logisim_core::{Component, MemoryContents, plugin::api::presentation::*};
+    let mut manifest = manifest();
+    manifest.tools[0].actions[0].argument = Some("Words".into());
+    let presentation = Presentation {
+        translations: [(
+            "zh-CN".into(),
+            [
+                ("Plugin tool A".into(), "插件工具甲".into()),
+                ("Address".into(), "插件地址".into()),
+                ("first".into(), "第一".into()),
+                ("second".into(), "第二".into()),
+                ("Import image".into(), "导入镜像".into()),
+            ]
+            .into(),
+        )]
+        .into(),
+        imports: vec![MemoryImport {
+            tool: "first".into(),
+            action: "go".into(),
+            label: "Import image".into(),
+            address_bits: 5,
+            data_bits: 32,
+            argument_prefix: "image ".into(),
+        }],
+    };
+    presentation.validate(&manifest).unwrap();
+    let ctx = Context::default();
+    configure(&ctx);
+    let mut app = Workspace::default();
+    app.set_language(Language::SimplifiedChinese);
+    app.set_plugin_catalogue(vec![Library {
+        manifest: manifest.clone(),
+        presentation,
+    }]);
+    let mut c = Component::from_plugin(manifest.components().remove(0), Point::new(200, 200));
+    c.label = "Address".into();
+    let id = app.editor.session.circuit.add_component(c);
+    app.editor.session.selection.insert(id);
+    app.finish_edit();
+    click(&ctx, &mut app, "User library");
+    let labels = frame(&ctx, &mut app, vec![]);
+    assert!(has(&labels, "插件工具甲"));
+    assert!(has(&labels, "插件地址"));
+    assert!(has(&labels, "Address")); // User label remains untouched.
+    assert!(has(&labels, "Pin")); // Graphics text remains untouched.
+    click(&ctx, &mut app, "第一");
+    click(&ctx, &mut app, "第二");
+    app.finish_edit();
+    assert_eq!(
+        app.circuit()
+            .component(id)
+            .unwrap()
+            .plugin
+            .as_ref()
+            .unwrap()
+            .properties["mode"],
+        "second"
+    );
+    let before = app.project().clone();
+    click(&ctx, &mut app, "导入镜像");
+    assert!(
+        matches!(app.take_file_actions().as_slice(), [FileAction::ImportPlugin { component, import: 0 }] if *component == id)
+    );
+    let target = app.plugin_import_target(id, 0).unwrap();
+    let mut contents = MemoryContents::default();
+    contents.set(1, 0xdeadbeef);
+    assert!(app.complete_plugin_import(&target, &contents));
+    let actions = app.take_simulation_actions();
+    let [
+        SimulationAction::PluginAction {
+            id: actual,
+            action,
+            argument,
+        },
+    ] = actions.as_slice()
+    else {
+        panic!("{actions:?}")
+    };
+    assert_eq!(*actual, id);
+    assert_eq!(action, "go");
+    let words: Vec<_> = argument
+        .strip_prefix("image ")
+        .unwrap()
+        .split_whitespace()
+        .collect();
+    assert_eq!(words.len(), 32);
+    assert_eq!(words[0], "0");
+    assert_eq!(words[1], "deadbeef");
+    assert_eq!(app.project(), &before);
+    // Changing an attribute invalidates an already open picker.
+    click(&ctx, &mut app, "第二");
+    click(&ctx, &mut app, "第一");
+    app.finish_edit();
+    assert!(!app.complete_plugin_import(&target, &contents));
+    let target = app.plugin_import_target(id, 0).unwrap();
+    app.simulation_mut()
+        .plugin_errors
+        .insert(id, "Missing plugin".into());
+    assert!(!app.complete_plugin_import(&target, &contents));
+    assert!(app.take_simulation_actions().is_empty());
+}
+
+#[test]
 fn plugin_tool_and_orientation_edits_preserve_wires_and_undo() {
     use logisim_core::{Component, Facing};
     let mut manifest = manifest();
@@ -188,7 +301,7 @@ fn plugin_tool_and_orientation_edits_preserve_wires_and_undo() {
         configure(&ctx);
         let mut app = Workspace::default();
         app.set_language(language);
-        app.set_plugin_catalogue(vec![manifest.clone()]);
+        app.set_plugin_catalogue(vec![manifest.clone().into()]);
         let mut c = Component::from_plugin(manifest.components()[0].clone(), Point::new(200, 200));
         c.label = "User label".into();
         c.plugin

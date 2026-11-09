@@ -1,0 +1,13 @@
+{
+  "Register File (Wasm)": "寄存器文件（Wasm）",
+  "RISC-V Probe (Wasm)": "RISC-V 探针（Wasm）",
+  "Trigger": "触发方式",
+  "rising": "上升沿",
+  "falling": "下降沿",
+  "high": "高电平",
+  "low": "低电平",
+  "Write register": "写寄存器",
+  "Address (decimal), word (hex)": "地址（十进制），数据（十六进制）",
+  "Import .hex…": "导入 .hex…",
+  "Course (Wasm)": "课程元件（Wasm）"
+}

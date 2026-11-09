@@ -50,7 +50,7 @@ cargo run -p logisim-rs --release --locked -- examples/course/redirect-pipeline.
 
 [`plugins/`](plugins/) 收纳独立 Wasm 插件及源码，通过 Project → Load Wasm Plugin 加载：
 
-- [`course/course.wasm`](plugins/course/course.wasm)：RegisterFile、RiscV Probe。
+- [`course/course.wasm`](plugins/course/course.wasm)：RegisterFile、RiscV Probe；RegisterFile 属性面板支持 `.hex` 导入，内容仅属于当前实例，x0 保持为零，复位清空。
 - [`ttl/ttl.wasm`](plugins/ttl/ttl.wasm)：7400、7402、7404、7408、7432、7486、747266。
 
 TTL 的普通封装和 Vcc/GND 封装可在元件属性中切换。旧 `#TTL` 电路需用 `ttl-plugin-convert` 显式迁移，宿主不再内置 TTL。

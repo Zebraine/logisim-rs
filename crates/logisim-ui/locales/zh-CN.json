@@ -666,6 +666,7 @@
     "The memory image is not valid UTF-8 text.": "存储器映像不是有效的 UTF-8 文本。",
     "The memory target changed. Open its contents editor and try again.": "目标存储器已改变，请重新打开其内容编辑器后重试。",
     "The original file is protected. Use Save As to write the supported project subset to a different file.\n\n{}": "原文件已受保护。请使用“另存为”将已支持的项目内容保存到其他文件。\n\n{}",
+    "The plugin target changed. Select it and try again.": "插件目标已更改，请重新选择后再试。",
     "The shape is empty, invalid, or exceeds the appearance limit.": "图形为空、无效或超过外观数量限制。",
     "This import omitted unsupported content. Save to a different file to protect the original.": "导入时省略了未支持的内容，请另存到其他文件以保护原文件。",
     "This input is used by an expression. Edit the expression before removing it.": "表达式仍使用此输入，请先修改表达式再删除。",

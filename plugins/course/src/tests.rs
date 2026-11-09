@@ -9,6 +9,84 @@ fn update(request: Evaluation) -> Update {
     tool.validate_update(&result).unwrap();
     result
 }
+
+#[test]
+fn image_import_replaces_all_words_atomically_and_preserves_clock() {
+    let manifest = graphics::manifest();
+    let metadata = ui_metadata();
+    metadata.validate(manifest).unwrap();
+    assert_eq!(metadata.imports[0].tool, "register-file");
+    assert_eq!(metadata.text("zh-CN", "Trigger"), "触发方式");
+    for tool in &manifest.tools {
+        assert_ne!(metadata.text("zh-CN", &tool.name), tool.name);
+        for property in &tool.properties {
+            assert_ne!(metadata.text("zh-CN", &property.label), property.label);
+            if let PropertyKind::Choice { values } = &property.kind {
+                for value in values {
+                    assert_ne!(metadata.text("zh-CN", value), value);
+                }
+            }
+        }
+    }
+    let c = manifest.components().remove(0);
+    let mut request = Evaluation {
+        tool: c.tool.id,
+        properties: c.properties,
+        inputs: [
+            (32, 0),
+            (32, 0),
+            (32, 42),
+            (1, 0),
+            (1, 1),
+            (5, 1),
+            (5, 1),
+            (5, 0),
+        ]
+        .into_iter()
+        .map(|(w, v)| Value::known(w, v).into())
+        .collect(),
+        state: vec![],
+        event: Event::Reset,
+    };
+    let initial = update(request.clone()).state;
+    request.state = initial.clone();
+    let words = (0..32)
+        .map(|i| format!("{:x}", 0xffff0000u32 + i))
+        .collect::<Vec<_>>()
+        .join(" ");
+    request.event = Event::Action {
+        id: "write".into(),
+        argument: format!("image {words}"),
+    };
+    let imported = update(request.clone());
+    let (stored, clock) = register_state::decode(&imported.state).unwrap().snapshot();
+    assert_eq!(clock, logisim_core::Bit::Zero);
+    assert_eq!(stored[0].number(), Some(0));
+    for (i, word) in stored.iter().enumerate().skip(1) {
+        assert_eq!(word.number(), Some(0xffff0000 + i as u32));
+    }
+    assert_eq!(imported.outputs[0].value, 0xffff0001);
+    assert_eq!(imported.outputs[1].value, 0);
+    // Invalid complete images cannot produce a partial replacement state.
+    for image in [
+        "1".to_owned(),
+        format!("{words} 0"),
+        words.replacen("ffff001f", "badword", 1),
+    ] {
+        request.event = Event::Action {
+            id: "write".into(),
+            argument: format!("image {image}"),
+        };
+        assert!(evaluate(request.clone()).is_err());
+    }
+    request.event = Event::Propagate;
+    assert_eq!(update(request.clone()).state, initial);
+    request.state = imported.state;
+    request.inputs[3].value = 1;
+    assert_eq!(update(request.clone()).outputs[0].value, 42);
+    request.event = Event::Reset;
+    assert_eq!(update(request).outputs[0].value, 0);
+}
 #[test]
 fn manifest_and_state_transport_keep_clock_words_and_runtime_actions() {
     let manifest = graphics::manifest();

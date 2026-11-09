@@ -6,6 +6,10 @@ pub enum FileAction {
     Save,
     SaveAs,
     ImportMemory,
+    ImportPlugin {
+        component: logisim_core::Id,
+        import: usize,
+    },
     ImportLibrary,
     LoadPlugin,
     Close,

@@ -37,10 +37,40 @@ pub fn call(length: u32, handler: fn(Request) -> Response) -> u64 {
     }
     ((output.len() as u64) << 32) | u64::from(output.as_ptr() as u32)
 }
+pub fn presentation(value: api::presentation::Presentation) -> u64 {
+    let mut output = OUTPUT.lock().expect("response buffer");
+    *output = serde_json::to_vec(&value).expect("serializable UI metadata");
+    if output.len() > MAX_MESSAGE {
+        output.clear();
+    }
+    ((output.len() as u64) << 32) | u64::from(output.as_ptr() as u32)
+}
 /// Export current ABI entry points from a cdylib. The handler must not assume the Describe
 /// instance is reused for simulation. Each component has independent module memory.
 #[macro_export]
 macro_rules! export_plugin {
+    ($handler:path, stable = $stable:path, presentation = $ui:path) => {
+        $crate::export_plugin!($handler, stable = $stable);
+        $crate::export_plugin!(@presentation $ui);
+    };
+    ($handler:path, presentation = $ui:path) => {
+        $crate::export_plugin!($handler);
+        $crate::export_plugin!(@presentation $ui);
+    };
+    (@presentation $ui:path) => {
+        #[cfg(target_arch = "wasm32")]
+        #[allow(unsafe_code)]
+        #[unsafe(no_mangle)]
+        pub extern "C" fn logisim_ui_version() -> u32 {
+            $crate::api::presentation::VERSION
+        }
+        #[cfg(target_arch = "wasm32")]
+        #[allow(unsafe_code)]
+        #[unsafe(no_mangle)]
+        pub extern "C" fn logisim_ui() -> u64 {
+            $crate::presentation($ui())
+        }
+    };
     ($handler:path, stable = $stable:path) => {
         $crate::export_plugin!($handler);
         #[cfg(target_arch = "wasm32")]

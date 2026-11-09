@@ -16,6 +16,10 @@ pub(super) enum Dialog {
         picker: Picker,
         target: Box<MemoryImportTarget>,
     },
+    PluginImportPicker {
+        picker: Picker,
+        target: Box<logisim_ui::PluginImportTarget>,
+    },
     Unsaved(FileAction),
     Replace {
         path: PathBuf,
@@ -41,7 +45,7 @@ impl Dialog {
     pub(super) fn show(&mut self, ctx: &egui::Context) -> Response {
         let mut answer = Response::Wait;
         let modal = egui::Modal::new(egui::Id::unique("file-dialog")).show(ctx, |ui| match self {
-            Dialog::Picker(picker) | Dialog::MemoryPicker { picker, .. } | Dialog::PluginPicker { picker, .. } => {
+            Dialog::Picker(picker) | Dialog::MemoryPicker { picker, .. } | Dialog::PluginPicker { picker, .. } | Dialog::PluginImportPicker { picker, .. } => {
                 answer = match picker.show(ui) {
                     Choice::Wait => Response::Wait,
                     Choice::Cancel => Response::Cancel,

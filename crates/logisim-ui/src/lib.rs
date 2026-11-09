@@ -28,6 +28,7 @@ pub use i18n::Language;
 pub use settings::SimulationMode;
 mod libraries;
 mod plugins;
+pub use plugins::PluginImportTarget;
 mod project;
 mod properties;
 use project::NameDialog;
@@ -76,7 +77,7 @@ pub struct Workspace {
     analysis: analysis::AnalysisUi,
     generator: generation::Generator,
     generated_expressions: generation::Memory,
-    plugins: Vec<logisim_core::plugin::api::Manifest>,
+    plugins: Vec<logisim_core::plugin::api::presentation::Library>,
     libraries: Vec<libraries::LibraryGroup>,
     memory_editor: memory::MemoryEditor,
     pla_editor: pla::PlaEditor,

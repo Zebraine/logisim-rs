@@ -311,3 +311,59 @@ fn mode_changes_version_commands_without_clearing_the_current_view_or_memory_tar
     });
     assert!(workspace.simulation_mut().enabled);
 }
+
+#[test]
+fn attribute_edits_keep_the_visible_instance_and_reject_old_snapshots() {
+    let (mut workspace, clock, ram) = workspace();
+    let mut worker = Worker::new(|| {});
+    worker.synchronize(&mut workspace, true);
+    wait(&mut worker, &mut workspace, |v| {
+        v.memories.contains_key(&ram)
+    });
+    let old = worker.revision;
+    let mut project = workspace.project().clone();
+    project
+        .main_circuit_mut()
+        .circuit
+        .components
+        .iter_mut()
+        .find(|c| c.id == ram)
+        .unwrap()
+        .label = "renamed".into();
+    // Apply the document change while preserving the UI state, as an attribute edit does.
+    let view = std::mem::take(workspace.simulation_mut());
+    workspace.replace_project(project);
+    workspace.set_simulation(view);
+    worker.synchronize(&mut workspace, true);
+    assert_eq!(worker.revision, old + 1);
+    assert!(workspace.simulation_mut().memories.contains_key(&ram));
+    assert!(workspace.simulation_mut().clocks.contains(&clock));
+    assert!(!worker.ready_memories.contains(&ram));
+    worker.shared.latest.lock().unwrap().replace(Snapshot {
+        revision: old,
+        total_ticks: 0,
+        view: SimulationView::default(),
+    });
+    worker.receive(&mut workspace);
+    assert!(workspace.simulation_mut().memories.contains_key(&ram));
+    let mut project = workspace.project().clone();
+    let c = project
+        .main_circuit_mut()
+        .circuit
+        .components
+        .iter_mut()
+        .find(|c| c.id == ram)
+        .unwrap();
+    *c = Component {
+        id: ram,
+        ..Component::new(Kind::Constant, c.position)
+    };
+    let view = std::mem::take(workspace.simulation_mut());
+    workspace.replace_project(project);
+    workspace.set_simulation(view);
+    worker.synchronize(&mut workspace, true);
+    assert!(!workspace.simulation_mut().memories.contains_key(&ram));
+    worker.new_document();
+    worker.synchronize(&mut workspace, true);
+    assert!(workspace.simulation_mut().clocks.is_empty());
+}

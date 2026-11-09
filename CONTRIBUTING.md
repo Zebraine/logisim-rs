@@ -34,7 +34,7 @@ UI 文案集中于 `crates/logisim-ui/locales/`，使用 `tr` / `tf!`，控件 I
 Git 采用 `.gitignore` 白名单，仅包含：
 
 - 必要的 Rust 源码、Cargo/工具链文件、LICENSE 和 Git/构建配置。
-- `crates/logisim-ui/locales/` 中编译必需的英语、简体中文词条。
+- `crates/logisim-ui/locales/` 与自带插件 `locales/` 中编译必需的词条。
 - 根目录 `README.md`、`CONTRIBUTING.md`、`AGENTS.md`。
 - `examples/course/*.circ` 和 `plugins/{course,ttl}/*.wasm`。
 
