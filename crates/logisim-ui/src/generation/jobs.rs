@@ -11,9 +11,19 @@ pub struct Request {
 }
 #[derive(Clone)]
 enum Operation {
-    Mode { expressions: bool },
-    Minimize { output: usize, form: Form },
-    Build { name: String, basis: GateBasis },
+    Mode {
+        expressions: bool,
+    },
+    Minimize {
+        output: usize,
+        form: Form,
+        draft: Option<String>,
+        editing: bool,
+    },
+    Build {
+        name: String,
+        basis: GateBasis,
+    },
 }
 pub struct Reply {
     cache: logisim_core::generation::Minimizer,
@@ -24,8 +34,8 @@ enum Outcome {
         analysis: Analysis,
     },
     Minimized {
-        applied: Expression,
-        minimized: Expression,
+        expression: Expression,
+        editing: bool,
     },
     Built {
         name: String,
@@ -43,16 +53,34 @@ impl Request {
                     self.analysis.truth_table(&cancelled)?
                 },
             }),
-            Operation::Minimize { output, form } => {
-                let minimized = cache.minimized(&self.analysis, *output, *form, &cancelled)?;
-                let applied = match self.analysis.supplied_expression(*output) {
-                    Some(e) => e.clone(),
-                    None if *form == Form::SumOfProducts => minimized.clone(),
-                    None => {
-                        cache.minimized(&self.analysis, *output, Form::SumOfProducts, &cancelled)?
-                    }
-                };
-                Ok(Outcome::Minimized { applied, minimized })
+            Operation::Minimize {
+                output,
+                form,
+                draft,
+                editing,
+            } => {
+                // Simplify the current edit in isolation. Dense rows exist only in
+                // this bounded background job; the session mode stays unchanged.
+                let edited = draft
+                    .as_ref()
+                    .map(|draft| {
+                        let mut analysis = Analysis::expressions();
+                        for name in self.analysis.inputs() {
+                            analysis.add_input(name.clone())?;
+                        }
+                        analysis.add_output(self.analysis.outputs()[*output].name().to_owned())?;
+                        analysis.apply_expression(0, draft)?;
+                        analysis.truth_table(&cancelled)
+                    })
+                    .transpose()?;
+                let (analysis, output) = edited
+                    .as_ref()
+                    .map_or((&self.analysis, *output), |a| (a, 0));
+                let expression = cache.minimized(analysis, output, *form, &cancelled)?;
+                Ok(Outcome::Minimized {
+                    expression,
+                    editing: *editing,
+                })
             }
             Operation::Build { name, basis } => Ok(Outcome::Built {
                 name: name.clone(),
@@ -81,38 +109,46 @@ impl Generator {
             cache: self.cache.clone(),
         });
     }
+    fn receive_expression(&mut self, expression: Expression, editing: bool) {
+        self.draft = expression.text(self.analysis.inputs());
+        if !editing {
+            self.applied.clone_from(&self.draft);
+        }
+        self.error = None;
+    }
+    /// Populate the expression view when a table has no supplied expression.
     pub(super) fn request_minimize(&mut self) {
-        if self.analysis.is_expression_mode() || self.analysis.outputs().is_empty() {
+        self.minimize(false);
+    }
+    pub(super) fn request_simplify(&mut self) {
+        self.minimize(true);
+    }
+    fn minimize(&mut self, editing: bool) {
+        if self.analysis.outputs().is_empty() {
             return;
         }
-        if let Some(result) = self.cache.cached(&self.analysis, self.output, self.form) {
+        let form = if editing {
+            self.form
+        } else {
+            Form::SumOfProducts
+        };
+        let draft = (editing && (self.pending() || self.analysis.is_expression_mode()))
+            .then(|| self.draft.clone());
+        if draft.is_none()
+            && let Some(result) = self.cache.cached(&self.analysis, self.output, form)
+        {
+            self.cancel_computation();
             match result {
-                Ok(minimized) => {
-                    let applied = self
-                        .analysis
-                        .supplied_expression(self.output)
-                        .cloned()
-                        .map(Ok)
-                        .or_else(|| {
-                            self.cache
-                                .cached(&self.analysis, self.output, Form::SumOfProducts)
-                        });
-                    if let Some(Ok(applied)) = applied {
-                        self.applied = applied.text(self.analysis.inputs());
-                        self.draft.clone_from(&self.applied);
-                        self.minimized = minimized.text(self.analysis.inputs());
-                        return;
-                    }
-                }
-                Err(error) => {
-                    self.error = Some(error);
-                    return;
-                }
+                Ok(expression) => self.receive_expression(expression, editing),
+                Err(error) => self.error = Some(error),
             }
+            return;
         }
         self.request(Operation::Minimize {
             output: self.output,
-            form: self.form,
+            form,
+            draft,
+            editing,
         });
     }
     pub(super) fn request_mode(&mut self, expressions: bool) {
@@ -161,11 +197,11 @@ impl Workspace {
                 };
                 g.refresh();
             }
-            Ok(Outcome::Minimized { applied, minimized }) => {
-                g.applied = applied.text(g.analysis.inputs());
-                g.draft.clone_from(&g.applied);
-                g.minimized = minimized.text(g.analysis.inputs());
-                g.error = None;
+            Ok(Outcome::Minimized {
+                expression,
+                editing,
+            }) => {
+                g.receive_expression(expression, editing);
             }
             Ok(Outcome::Built { name, circuit }) => {
                 match self.editor.install_generated(name, circuit) {

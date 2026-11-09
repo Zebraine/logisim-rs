@@ -16,7 +16,6 @@ enum Tab {
     Outputs,
     Table,
     Expression,
-    Minimized,
 }
 
 #[derive(Default)]
@@ -39,7 +38,6 @@ pub(crate) struct Generator {
     output: usize,
     draft: String,
     applied: String,
-    minimized: String,
     form: Form,
     nand_only: bool,
     name: String,
@@ -66,7 +64,6 @@ impl Default for Generator {
             output: 0,
             draft: "0".into(),
             applied: "0".into(),
-            minimized: "0".into(),
             form: Form::default(),
             nand_only: false,
             name: "generated".into(),
@@ -100,9 +97,10 @@ impl Generator {
             .map(|e| e.text(self.analysis.inputs()))
             .unwrap_or_default();
         self.draft.clone_from(&self.applied);
-        self.minimized.clear();
         self.error = None;
-        self.request_minimize();
+        if self.applied.is_empty() {
+            self.request_minimize();
+        }
     }
     fn result(&mut self, result: Result<(), Error>) {
         match result {
@@ -131,7 +129,6 @@ impl Generator {
                     (Tab::Outputs, "Output variables"),
                     (Tab::Table, "Truth Table"),
                     (Tab::Expression, "Expression"),
-                    (Tab::Minimized, "Minimized"),
                 ] {
                     if ui
                         .add_enabled(
@@ -158,7 +155,6 @@ impl Generator {
                                 Tab::Inputs => self.variables(ui, true, height),
                                 Tab::Outputs => self.variables(ui, false, height),
                                 Tab::Expression => self.expression(ui),
-                                Tab::Minimized => self.minimized(ui),
                                 Tab::Table => unreachable!(),
                             }
                         });
@@ -446,6 +442,7 @@ impl Generator {
             return;
         }
         ui.label(tf!("Applied: {}", self.applied));
+        self.simplify_controls(ui);
         ui.add_enabled(
             !self.computing,
             egui::TextEdit::multiline(&mut self.draft)
@@ -487,53 +484,35 @@ impl Generator {
             }
         });
     }
-    fn minimized(&mut self, ui: &mut Ui) {
-        if self.analysis.is_expression_mode() {
-            self.unmaterialized_table(ui);
-            return;
-        }
-        if !self.output_selector(ui) {
-            return;
-        }
-        let before = self.form;
+    fn simplify_controls(&mut self, ui: &mut Ui) {
         ui.horizontal(|ui| {
-            ui.label(tr("Format"));
-            egui::ComboBox::from_id_salt("generator-form")
-                .selected_text(tr(match self.form {
-                    Form::SumOfProducts => "Sum of products",
-                    Form::ProductOfSums => "Product of sums",
-                }))
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.form, Form::SumOfProducts, tr("Sum of products"));
-                    ui.selectable_value(&mut self.form, Form::ProductOfSums, tr("Product of sums"));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.add_enabled_ui(!self.computing, |ui| {
+                    if ui.button(tr("Simplify")).clicked() {
+                        self.request_simplify();
+                    }
+                    egui::ComboBox::from_id_salt("generator-form")
+                        .width(150.0)
+                        .selected_text(tr(match self.form {
+                            Form::SumOfProducts => "Sum of products",
+                            Form::ProductOfSums => "Product of sums",
+                        }))
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(
+                                &mut self.form,
+                                Form::SumOfProducts,
+                                tr("Sum of products"),
+                            );
+                            ui.selectable_value(
+                                &mut self.form,
+                                Form::ProductOfSums,
+                                tr("Product of sums"),
+                            );
+                        });
+                    ui.label(tr("Format"));
                 });
+            });
         });
-        if self.form != before {
-            self.refresh();
-        }
-        ui.add_space(12.0);
-        ui.add(
-            egui::TextEdit::multiline(&mut self.minimized.as_str())
-                .code_editor()
-                .desired_rows(7)
-                .desired_width(f32::INFINITY),
-        );
-        if !self.computing && self.minimized.is_empty() && ui.button(tr("Compute")).clicked() {
-            self.request_minimize();
-        }
-        if ui
-            .add_enabled(
-                !self.computing && !self.minimized.is_empty(),
-                egui::Button::new(tr("Set As Expression")),
-            )
-            .clicked()
-        {
-            let result = self.analysis.apply_expression(self.output, &self.minimized);
-            if result.is_ok() {
-                self.tab = Tab::Expression;
-            }
-            self.result(result);
-        }
     }
 }
 impl Workspace {
