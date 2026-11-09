@@ -29,6 +29,7 @@ fn localized_dialog_applies_expressions_and_blocks_stale_generation() {
                 "Format",
                 "Sum of products",
                 "Simplify",
+                "Use two-input gates only",
                 "Use NAND gates only",
                 "Build Circuit",
                 "Close",
@@ -48,6 +49,9 @@ fn localized_dialog_applies_expressions_and_blocks_stale_generation() {
             }
         }
         let before = w.generator.analysis.clone();
+        assert!(!w.generator.two_input_only);
+        click(&ctx, &mut w, &label("Use two-input gates only"));
+        assert!(w.generator.two_input_only);
         assert!(!w.generator.nand_only);
         click(&ctx, &mut w, &label("Use NAND gates only"));
         assert!(w.generator.nand_only);
@@ -114,6 +118,7 @@ fn nand_budget_failure_is_atomic_and_can_be_retried_with_standard_gates() {
     w.generator.refresh();
     w.open_generator();
     let before = w.project().clone();
+    click(&ctx, &mut w, "Use two-input gates only");
     click(&ctx, &mut w, "Use NAND gates only");
     click(&ctx, &mut w, "Build Circuit");
     assert!(w.generator.open);
@@ -464,7 +469,7 @@ fn localized_expression_mode_builds_without_tables_and_materializes_on_request()
                 .iter()
                 .filter(|c| c.kind == Kind::Gate(logisim_core::Gate::Xor))
                 .count(),
-            31
+            5
         );
     }
 }

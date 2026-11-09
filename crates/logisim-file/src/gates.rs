@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 pub(crate) fn index(key: &str) -> Option<u8> {
     let suffix = key.strip_prefix("negate")?;
     let i = suffix.parse::<u8>().ok()?;
-    (i < 8 && suffix == i.to_string()).then_some(i)
+    (i < Gate::MAX_INPUTS && suffix == i.to_string()).then_some(i)
 }
 pub(crate) fn read(c: &mut Component, a: &BTreeMap<String, String>) -> Result<()> {
     let Kind::Gate(gate) = c.kind else {

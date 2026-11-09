@@ -7,7 +7,7 @@ impl Layout {
     fn nand(&mut self, a: Point, b: Point) -> Point {
         self.binary_gate(Gate::Nand, a, b)
     }
-    fn invert(&mut self, source: Point) -> Point {
+    pub(super) fn invert(&mut self, source: Point) -> Point {
         self.nand(source, source)
     }
     pub(super) fn nand_node(&mut self, node: &Node, inverted: bool) -> Result<Point> {
@@ -25,6 +25,9 @@ impl Layout {
             // Carry the requested polarity into the child rather than adding and
             // then cancelling inversions, especially for NAND-of-products covers.
             Node::Not(child) => self.nand_node(child, !inverted)?,
+            Node::Binary(op @ (Op::And | Op::Or), _, _) if !self.options.two_input_only => {
+                self.multi_terms(*op, &node.operands(*op), inverted)?
+            }
             Node::Binary(Op::And, a, b) => {
                 let a = self.nand_node(a, false)?;
                 let b = self.nand_node(b, false)?;

@@ -12,6 +12,9 @@ pub enum Gate {
     Xnor,
 }
 impl Gate {
+    /// Input counts whose port geometry is supported by ordinary logic gates.
+    pub const MAX_INPUTS: u8 = 8;
+
     pub const ALL: [Self; 8] = [
         Self::Not,
         Self::Buffer,
@@ -66,7 +69,7 @@ pub struct GateOptions {
 }
 impl Component {
     pub fn gate_negated(&self, input: u8) -> bool {
-        input < 8 && self.gate_options.negated & (1 << input) != 0
+        input < Gate::MAX_INPUTS && self.gate_options.negated & (1 << input) != 0
     }
 }
 

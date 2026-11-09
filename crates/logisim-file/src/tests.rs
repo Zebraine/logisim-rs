@@ -1115,3 +1115,43 @@ fn expression_only_generation_saves_thirty_two_inputs_without_analysis_metadata(
         31
     );
 }
+
+#[test]
+fn generated_multi_input_gates_roundtrip_with_parity_and_port_geometry() {
+    use logisim_core::generation::{Analysis, GateBasis, GenerationOptions};
+    let mut a = Analysis::expressions();
+    for i in 0..32 {
+        a.add_input(format!("I{i}")).unwrap();
+    }
+    for (name, operator) in [("Product", " & "), ("Sum", " | "), ("Parity", " ^ ")] {
+        a.add_output(name.into()).unwrap();
+        a.apply_expression(a.outputs().len() - 1, &a.inputs().join(operator))
+            .unwrap();
+    }
+    for basis in [GateBasis::Standard, GateBasis::Nand] {
+        let c = a
+            .generate_with_options(GenerationOptions {
+                basis,
+                two_input_only: false,
+            })
+            .unwrap();
+        let document = Document::single("multi", c);
+        let xml = serialize(&document).unwrap();
+        assert!(xml.contains("name=\"inputs\" val=\"8\""));
+        if basis == GateBasis::Standard {
+            assert!(xml.contains("name=\"xor\" val=\"odd\""));
+        }
+        let loaded = parse(&xml).unwrap();
+        assert!(loaded.warnings.is_empty());
+        assert_eq!(serialize(&loaded.document).unwrap(), xml);
+        let geometry = |p: &Document| {
+            p.main_circuit()
+                .circuit
+                .components
+                .iter()
+                .map(|c| (c.kind, c.ports(), c.gate_options))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(geometry(&loaded.document), geometry(&document));
+    }
+}

@@ -29,6 +29,21 @@ impl Node {
     pub(super) fn binary(op: Op, a: Self, b: Self) -> Self {
         Self::Binary(op, Box::new(a), Box::new(b))
     }
+    /// Flatten only a run of this operator, preserving the original operand order.
+    pub(super) fn operands(&self, op: Op) -> Vec<&Self> {
+        fn collect<'a>(node: &'a Node, op: Op, terms: &mut Vec<&'a Node>) {
+            match node {
+                Node::Binary(inner, a, b) if *inner == op => {
+                    collect(a, op, terms);
+                    collect(b, op, terms);
+                }
+                _ => terms.push(node),
+            }
+        }
+        let mut terms = Vec::new();
+        collect(self, op, &mut terms);
+        terms
+    }
     pub(super) fn combine(nodes: Vec<Node>, op: Op, empty: bool) -> Node {
         fn build(nodes: &mut impl Iterator<Item = Node>, count: usize, op: Op) -> Node {
             if count == 1 {
@@ -50,19 +65,9 @@ impl Node {
     /// Reassociate each run of the same associative operator for synthesis.
     /// NOT and different operators delimit runs; the stored expression is unchanged.
     pub(super) fn balanced(&self) -> Self {
-        fn collect(node: &Node, op: Op, terms: &mut Vec<Node>) {
-            match node {
-                Node::Binary(inner, a, b) if *inner == op => {
-                    collect(a, op, terms);
-                    collect(b, op, terms);
-                }
-                _ => terms.push(node.balanced()),
-            }
-        }
         match self {
             Self::Binary(op, _, _) => {
-                let mut terms = Vec::new();
-                collect(self, *op, &mut terms);
+                let terms = self.operands(*op).into_iter().map(Self::balanced).collect();
                 Self::combine(terms, *op, *op == Op::And)
             }
             Self::Not(a) => a.balanced().not(),

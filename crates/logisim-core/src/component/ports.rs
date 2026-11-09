@@ -7,7 +7,7 @@ impl Component {
     pub fn input_count(&self) -> u8 {
         match self.kind {
             Kind::Gate(g) if g.unary() => 1,
-            Kind::Gate(_) => self.inputs.clamp(2, 8),
+            Kind::Gate(_) => self.inputs.clamp(2, Gate::MAX_INPUTS),
             Kind::Parity(_) => self.inputs.clamp(2, 32),
             _ => 0,
         }

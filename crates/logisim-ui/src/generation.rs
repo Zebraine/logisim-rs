@@ -6,7 +6,9 @@ use crate::{Workspace, editor::Editor, i18n::tr, tf};
 use egui::{Color32, Ui};
 use logisim_core::{
     Circuit,
-    generation::{Analysis, Error, Form, GateBasis, MAX_EXPRESSION_BYTES, RebuildTarget},
+    generation::{
+        Analysis, Error, Form, GateBasis, GenerationOptions, MAX_EXPRESSION_BYTES, RebuildTarget,
+    },
 };
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -40,6 +42,7 @@ pub(crate) struct Generator {
     applied: String,
     form: Form,
     nand_only: bool,
+    two_input_only: bool,
     name: String,
     pub(super) target: Option<RebuildTarget>,
     pub(super) replace_target: bool,
@@ -68,6 +71,7 @@ impl Default for Generator {
             applied: "0".into(),
             form: Form::default(),
             nand_only: false,
+            two_input_only: false,
             name: "generated".into(),
             target: None,
             replace_target: false,
@@ -165,8 +169,13 @@ impl Generator {
                 }
             });
             ui.separator();
-            ui.checkbox(&mut self.nand_only, tr("Use NAND gates only"))
-                .on_hover_text(tr("Convert all logic gates, including XOR, to two-input NAND gates. Pins and constants are retained."));
+            ui.add_enabled_ui(!self.building, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    ui.checkbox(&mut self.two_input_only, tr("Use two-input gates only"));
+                    ui.checkbox(&mut self.nand_only, tr("Use NAND gates only"))
+                        .on_hover_text(tr("Convert all logic gates, including XOR, to NAND gates. Pins and constants are retained."));
+                });
+            });
             if pending {
                 ui.weak(tr("Apply or revert the expression before continuing."));
             }
@@ -605,3 +614,6 @@ mod tests;
 
 #[cfg(test)]
 mod rebuild_tests;
+
+#[cfg(test)]
+mod multi_tests;

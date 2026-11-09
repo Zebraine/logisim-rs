@@ -1,15 +1,16 @@
 //! Trees occupy disjoint vertical bands. Input rails are left of every gate;
 //! crossings have no endpoints, while actual fanout taps always have endpoints.
 use super::{
-    Analysis, Error, GateBasis, MAX_GENERATED_ITEMS, Result,
+    Analysis, Error, GateBasis, GenerationOptions, MAX_GENERATED_ITEMS, Result,
     expression::{Node, Op},
 };
 use crate::{Circuit, Component, Facing, Gate, Kind, Point};
 
+mod multi;
 mod nand;
 
 struct Layout {
-    basis: GateBasis,
+    options: GenerationOptions,
     circuit: Circuit,
     taps: Vec<Vec<Point>>,
     leaf_x: i32,
@@ -51,16 +52,39 @@ impl Layout {
     /// Sources are vertically ordered, or identical for a tied-input inverter.
     /// Disjoint trees and NAND expansion cells both use this same routing rule.
     fn binary_gate(&mut self, gate: Gate, a: Point, b: Point) -> Point {
-        let p = Point::new(a.x.max(b.x) + 140, ((a.y + b.y) / 20) * 10);
-        let c = Component::new(Kind::Gate(gate), p);
+        self.gate(gate, &[a, b])
+    }
+    fn gate(&mut self, gate: Gate, sources: &[Point]) -> Point {
+        debug_assert!((2..=usize::from(Gate::MAX_INPUTS)).contains(&sources.len()));
+        let p = Point::new(
+            sources.iter().map(|p| p.x).max().unwrap() + 140,
+            ((sources[0].y + sources.last().unwrap().y) / 20) * 10,
+        );
+        let mut c = Component::new(Kind::Gate(gate), p);
+        c.inputs = sources.len() as u8;
+        c.gate_options.xor_odd = gate == Gate::Xor && sources.len() > 2;
         let ports = c.ports();
-        self.route(a, ports[1], p.x - 70);
-        self.route(b, ports[2], p.x - 70);
+        for (i, (&source, &port)) in sources.iter().zip(&ports[1..]).enumerate() {
+            let elbow = if sources.len() == 2 {
+                p.x - 70
+            } else {
+                // Ordered sources and destinations need separate channels. Downward
+                // routes nest from right to left; upward routes nest the other way.
+                // A shared elbow column would short overlapping vertical segments.
+                let channel = if source.y < port.y {
+                    i
+                } else {
+                    sources.len() - 1 - i
+                };
+                p.x - c.gate_depth() - 20 - channel as i32 * 10
+            };
+            self.route(source, port, elbow);
+        }
         self.circuit.add_component(c);
         p
     }
     fn node(&mut self, node: &Node) -> Result<Point> {
-        if self.basis == GateBasis::Nand {
+        if self.options.basis == GateBasis::Nand {
             return self.nand_node(node, false);
         }
         self.check()?;
@@ -74,6 +98,9 @@ impl Layout {
                 self.circuit.add_wire(source, c.ports()[1]);
                 self.circuit.add_component(c);
                 p
+            }
+            Node::Binary(op, _, _) if !self.options.two_input_only => {
+                self.multi_terms(*op, &node.operands(*op), false)?
             }
             Node::Binary(op, a, b) => {
                 let a = self.node(a)?;
@@ -92,12 +119,12 @@ impl Layout {
 }
 pub(super) fn generate(
     analysis: &Analysis,
-    basis: GateBasis,
+    options: GenerationOptions,
     work: &mut super::work::Work<'_>,
     cache: &mut super::Minimizer,
 ) -> Result<Circuit> {
     let mut layout = Layout {
-        basis,
+        options,
         circuit: Circuit::default(),
         taps: vec![vec![]; analysis.inputs.len()],
         leaf_x: 300 + analysis.inputs.len() as i32 * 30,

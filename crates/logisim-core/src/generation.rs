@@ -10,6 +10,8 @@ mod mode;
 mod rebuild;
 pub use rebuild::{RebuildTarget, analysis_pins};
 #[cfg(test)]
+mod multi_tests;
+#[cfg(test)]
 mod tests;
 mod work;
 
@@ -64,6 +66,22 @@ pub enum GateBasis {
     #[default]
     Standard,
     Nand,
+}
+
+/// Synthesis choices. Multi-input gates use the existing supported gate geometry.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct GenerationOptions {
+    pub basis: GateBasis,
+    pub two_input_only: bool,
+}
+impl From<GateBasis> for GenerationOptions {
+    /// Preserve the two-input behavior of the original basis-only API.
+    fn from(basis: GateBasis) -> Self {
+        Self {
+            basis,
+            two_input_only: true,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -362,11 +380,14 @@ impl Analysis {
     pub fn generate_with_basis(&self, basis: GateBasis) -> Result<Circuit> {
         self.generate_cancellable(basis, || false)
     }
+    pub fn generate_with_options(&self, options: GenerationOptions) -> Result<Circuit> {
+        self.generate_cancellable(options, || false)
+    }
     pub fn generate_cancellable(
         &self,
-        basis: GateBasis,
+        options: impl Into<GenerationOptions>,
         cancelled: impl Fn() -> bool,
     ) -> Result<Circuit> {
-        Minimizer::default().generate(self, basis, cancelled)
+        Minimizer::default().generate(self, options, cancelled)
     }
 }

@@ -1,5 +1,7 @@
 //! Bounded session cache, independent of variable names and document state.
-use super::{Analysis, Cell, Circuit, Expression, Form, GateBasis, Result, layout, work::Work};
+use super::{
+    Analysis, Cell, Circuit, Expression, Form, GenerationOptions, Result, layout, work::Work,
+};
 use std::{collections::VecDeque, sync::Arc};
 
 struct Entry {
@@ -97,7 +99,7 @@ impl Minimizer {
     pub fn generate(
         &mut self,
         analysis: &Analysis,
-        basis: GateBasis,
+        options: impl Into<GenerationOptions>,
         cancelled: impl Fn() -> bool,
     ) -> Result<Circuit> {
         if analysis.outputs.is_empty() {
@@ -105,6 +107,6 @@ impl Minimizer {
                 "Add at least one output before building a circuit.",
             ));
         }
-        layout::generate(analysis, basis, &mut Work::new(&cancelled), self)
+        layout::generate(analysis, options.into(), &mut Work::new(&cancelled), self)
     }
 }

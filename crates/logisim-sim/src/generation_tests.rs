@@ -2,7 +2,7 @@
 use crate::Simulator;
 use logisim_core::{
     Circuit, Gate, Kind,
-    generation::{Analysis, Cell, Form, GateBasis},
+    generation::{Analysis, Cell, Form, GateBasis, GenerationOptions},
 };
 
 fn verify(analysis: &Analysis, circuit: &Circuit) {
@@ -116,8 +116,14 @@ fn generated_tables_and_both_simplification_forms_drive_the_specified_outputs() 
             .text(a.inputs());
         pos.apply_expression(0, &text).unwrap();
         for basis in [GateBasis::Standard, GateBasis::Nand] {
-            verify(&a, &a.generate_with_basis(basis).unwrap());
-            verify(&a, &pos.generate_with_basis(basis).unwrap());
+            for two_input_only in [false, true] {
+                let options = GenerationOptions {
+                    basis,
+                    two_input_only,
+                };
+                verify(&a, &a.generate_with_options(options).unwrap());
+                verify(&a, &pos.generate_with_options(options).unwrap());
+            }
         }
     }
 }
@@ -156,42 +162,87 @@ fn expression_only_thirty_two_input_xor_simulates_with_standard_and_nand_gates()
     a.add_output("Y".into()).unwrap();
     a.apply_expression(0, &a.inputs().join(" ^ ")).unwrap();
     for basis in [GateBasis::Standard, GateBasis::Nand] {
-        let circuit = a.generate_with_basis(basis).unwrap();
-        let inputs: Vec<_> = a
-            .inputs()
-            .iter()
-            .map(|name| {
-                circuit
-                    .components
-                    .iter()
-                    .find(|c| &c.label == name)
-                    .unwrap()
-                    .id
-            })
-            .collect();
-        let output = circuit
-            .components
-            .iter()
-            .find(|c| c.label == "Y")
-            .unwrap()
-            .id;
-        let mut sim = Simulator::default();
-        sim.synchronize(&circuit);
-        let mut patterns = vec![0u32, u32::MAX, 0x12345678, 0xAAAAAAAA, 0x55555555];
-        for bit in 0..32 {
-            patterns.extend([1 << bit, !(1 << bit)]);
-        }
-        for row in patterns {
-            for (i, id) in inputs.iter().enumerate() {
-                sim.set_input(*id, (row >> (31 - i)) & 1);
+        for two_input_only in [false, true] {
+            let circuit = a
+                .generate_with_options(GenerationOptions {
+                    basis,
+                    two_input_only,
+                })
+                .unwrap();
+            let inputs: Vec<_> = a
+                .inputs()
+                .iter()
+                .map(|name| {
+                    circuit
+                        .components
+                        .iter()
+                        .find(|c| &c.label == name)
+                        .unwrap()
+                        .id
+                })
+                .collect();
+            let output = circuit
+                .components
+                .iter()
+                .find(|c| c.label == "Y")
+                .unwrap()
+                .id;
+            let mut sim = Simulator::default();
+            sim.synchronize(&circuit);
+            let mut patterns = vec![0u32, u32::MAX, 0x12345678, 0xAAAAAAAA, 0x55555555];
+            for bit in 0..32 {
+                patterns.extend([1 << bit, !(1 << bit)]);
             }
-            sim.settle_compiled().unwrap();
-            assert!(sim.diagnostics().is_empty());
-            assert_eq!(
-                sim.port_value(output, 0).unwrap().number(),
-                Some(row.count_ones() % 2)
-            );
+            for row in patterns {
+                for (i, id) in inputs.iter().enumerate() {
+                    sim.set_input(*id, (row >> (31 - i)) & 1);
+                }
+                sim.settle_compiled().unwrap();
+                assert!(sim.diagnostics().is_empty());
+                assert_eq!(
+                    sim.port_value(output, 0).unwrap().number(),
+                    Some(row.count_ones() % 2)
+                );
+            }
         }
+    }
+}
+
+#[test]
+fn multi_input_routing_keeps_uneven_branches_and_repeated_inputs_separate() {
+    let mut a = Analysis::default();
+    for name in ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"] {
+        a.add_input(name.into()).unwrap();
+    }
+    for (name, text) in [
+        ("And", "A & B & C & D & E & F & G & H & I & J"),
+        ("Or", "A | B | C | D | E | F | G | H | I | J"),
+        ("Parity", "A ^ B ^ C ^ D ^ E ^ F ^ G ^ H ^ I ^ J"),
+        ("Inverted", "~(A | B | C | D | E | F | G | H | I | J)"),
+        (
+            "Uneven",
+            "A | B | (C & D & E & F & G & H & I & J) | C | D | E | F | G",
+        ),
+        (
+            "Mixed",
+            "~(A | B | C | D | E) ^ (F & G & H & I & J) ^ A ^ B ^ C ^ ~D ^ E",
+        ),
+        (
+            "Repeated",
+            "A & B & C & A & D & B & E & F & G & H & I & J & 1 & ~A & B & C & D",
+        ),
+    ] {
+        a.add_output(name.into()).unwrap();
+        a.apply_expression(a.outputs().len() - 1, text).unwrap();
+    }
+    for basis in [GateBasis::Standard, GateBasis::Nand] {
+        let c = a
+            .generate_with_options(GenerationOptions {
+                basis,
+                two_input_only: false,
+            })
+            .unwrap();
+        verify(&a, &c);
     }
 }
 

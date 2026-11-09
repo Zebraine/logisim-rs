@@ -27,7 +27,7 @@ enum Operation {
     },
     Build {
         destination: Destination,
-        basis: GateBasis,
+        options: GenerationOptions,
     },
 }
 pub struct Reply {
@@ -87,9 +87,12 @@ impl Request {
                     editing: *editing,
                 })
             }
-            Operation::Build { destination, basis } => Ok(Outcome::Built {
+            Operation::Build {
+                destination,
+                options,
+            } => Ok(Outcome::Built {
                 destination: destination.clone(),
-                circuit: cache.generate(&self.analysis, *basis, &cancelled)?,
+                circuit: cache.generate(&self.analysis, *options, &cancelled)?,
             }),
         })();
         Ok(Reply { cache, result })
@@ -167,10 +170,13 @@ impl Generator {
             } else {
                 Destination::New(self.name.trim().to_owned())
             },
-            basis: if self.nand_only {
-                GateBasis::Nand
-            } else {
-                GateBasis::Standard
+            options: GenerationOptions {
+                basis: if self.nand_only {
+                    GateBasis::Nand
+                } else {
+                    GateBasis::Standard
+                },
+                two_input_only: self.two_input_only,
             },
         });
     }

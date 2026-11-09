@@ -260,7 +260,7 @@ pub(crate) fn read(
     if matches!(kind, Kind::Parity(_)) {
         crate::parity::read(&mut c, &a)?;
     } else if kind != Kind::PlaRom {
-        c.inputs = number(&a, "inputs", 2, 2..=8)?;
+        c.inputs = number(&a, "inputs", 2, 2..=Gate::MAX_INPUTS)?;
     }
     c.output = boolean(&a, "output", false)?;
     if kind == Kind::Pin {

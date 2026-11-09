@@ -346,7 +346,7 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
         && !gate.unary()
     {
         ui.label(tr("Inputs"));
-        let r = ui.add(egui::DragValue::new(&mut c.inputs).range(2..=8));
+        let r = ui.add(egui::DragValue::new(&mut c.inputs).range(2..=Gate::MAX_INPUTS));
         active |= r.has_focus() || r.dragged();
         ui.end_row();
         if matches!(gate, Gate::Xor | Gate::Xnor) {
