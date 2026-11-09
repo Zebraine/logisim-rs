@@ -1,5 +1,6 @@
 //! Desktop host; editor presentation and navigation live in logisim-ui.
 mod analysis;
+mod background;
 mod clocks;
 mod file_picker;
 mod files;

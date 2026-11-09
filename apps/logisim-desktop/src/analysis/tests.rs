@@ -1,9 +1,7 @@
 use super::*;
+use crate::background::support::{block, wait_until};
+use crate::tests::support::workspace_shows;
 use logisim_core::{Component, Kind, Point, generation::Cell};
-use std::{
-    sync::Barrier,
-    time::{Duration, Instant},
-};
 fn workspace() -> Workspace {
     let mut a = Analysis::default();
     a.add_output("Y".into()).unwrap();
@@ -13,12 +11,10 @@ fn workspace() -> Workspace {
     w
 }
 fn wait(service: &mut Service, w: &mut Workspace) {
-    let start = Instant::now();
-    while service.job.is_some() || service.waiting.is_some() {
-        assert!(start.elapsed() < Duration::from_secs(10));
+    wait_until(|| {
         service.update(w, || {});
-        std::thread::sleep(Duration::from_millis(1));
-    }
+        service.jobs.is_idle()
+    });
 }
 #[test]
 fn isolated_worker_delivers_without_changing_document_and_shutdown_joins() {
@@ -27,7 +23,7 @@ fn isolated_worker_delivers_without_changing_document_and_shutdown_joins() {
     let mut service = Service::default();
     w.request_analysis();
     service.update(&mut w, || {});
-    assert!(service.job.is_some());
+    assert!(!service.jobs.is_idle());
     wait(&mut service, &mut w);
     assert_eq!(w.project(), &before);
     w.request_analysis();
@@ -50,7 +46,6 @@ fn worker_analyzes_the_explicit_target_while_a_stateful_parent_is_open() {
     let mut service = Service::default();
     w.request_circuit_analysis(child);
     service.update(&mut w, || {});
-    assert_eq!(service.job.as_ref().unwrap().request.root, child);
     wait(&mut service, &mut w);
     // A successful result opens the generator and requests its initial expression.
     assert!(w.take_generation_request().is_some());
@@ -68,16 +63,7 @@ fn stale_and_replaced_requests_are_discarded_without_blocking_the_gui() {
         root: w.active_circuit(),
         project: Arc::new(w.project().clone()),
     };
-    let barrier = Arc::new(Barrier::new(2));
-    let worker_barrier = barrier.clone();
-    service.job = Some(Job {
-        request,
-        cancelled: Arc::new(AtomicBool::new(false)),
-        thread: thread::spawn(move || {
-            worker_barrier.wait();
-            Ok(Analysis::default())
-        }),
-    });
+    let blocked = block(&mut service.jobs, request, |_| Ok(Analysis::default()));
     // Replacing a document, even with identical IDs, invalidates the UI request.
     let mut project = w.project().clone();
     project
@@ -87,16 +73,60 @@ fn stale_and_replaced_requests_are_discarded_without_blocking_the_gui() {
     w.replace_project(project);
     w.request_analysis();
     service.update(&mut w, || {});
-    assert!(service.waiting.is_some());
-    assert!(
-        service
-            .job
-            .as_ref()
-            .unwrap()
-            .cancelled
-            .load(Ordering::Relaxed)
-    );
-    barrier.wait();
+    assert!(!service.jobs.is_idle());
+    assert!(blocked.cancellation.is_cancelled());
+    drop(blocked);
     wait(&mut service, &mut w);
     assert!(!w.analysis_pending(serial));
+}
+
+#[test]
+fn changed_snapshot_is_rejected_even_while_the_request_is_pending() {
+    let mut w = workspace();
+    w.request_analysis();
+    let (serial, root) = w.take_analysis_request().unwrap();
+    let analysis = logisim_sim::analysis::analyze(w.project(), root).unwrap();
+    let mut snapshot = w.project().clone();
+    snapshot.main_circuit_mut().name = "old name".into();
+    let mut service = Service::default();
+    let blocked = block(
+        &mut service.jobs,
+        Request {
+            serial,
+            root,
+            project: Arc::new(snapshot),
+        },
+        move |_| Ok(analysis),
+    );
+    assert!(w.analysis_pending(serial));
+    drop(blocked);
+    wait(&mut service, &mut w);
+    assert!(!w.analysis_pending(serial));
+    assert!(w.take_generation_request().is_none());
+    assert!(workspace_shows(
+        &mut w,
+        "The circuit changed during analysis. Please analyze it again."
+    ));
+}
+
+#[test]
+fn worker_panic_is_reported_without_replacing_the_document() {
+    let mut w = workspace();
+    let before = w.project().clone();
+    w.request_analysis();
+    let (serial, root) = w.take_analysis_request().unwrap();
+    let mut service = Service::default();
+    let blocked = block(
+        &mut service.jobs,
+        Request {
+            serial,
+            root,
+            project: Arc::new(before.clone()),
+        },
+        |_| panic!("test analysis worker failure"),
+    );
+    drop(blocked);
+    wait(&mut service, &mut w);
+    assert_eq!(w.project(), &before);
+    assert!(workspace_shows(&mut w, "Circuit analysis worker stopped."));
 }

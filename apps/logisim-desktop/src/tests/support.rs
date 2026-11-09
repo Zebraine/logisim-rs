@@ -28,3 +28,32 @@ impl Drop for Temp {
 pub(crate) mod plugins;
 
 mod simulation;
+
+pub(crate) fn workspace_shows(workspace: &mut logisim_ui::Workspace, text: &str) -> bool {
+    use eframe::egui::{Context, Pos2, RawInput, Rect, Shape, vec2};
+    fn contains(shape: &Shape, text: &str) -> bool {
+        match shape {
+            Shape::Text(shape) => shape.galley.job.text.trim() == text,
+            Shape::Vec(shapes) => shapes.iter().any(|shape| contains(shape, text)),
+            _ => false,
+        }
+    }
+    let context = Context::default();
+    logisim_ui::configure(&context);
+    let mut found = false;
+    for _ in 0..3 {
+        let mut output = context.run_ui(
+            RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 820.0))),
+                ..Default::default()
+            },
+            |ui| workspace.show(ui),
+        );
+        output.textures_delta.clear();
+        found = output
+            .shapes
+            .iter()
+            .any(|shape| contains(&shape.shape, text));
+    }
+    found
+}
