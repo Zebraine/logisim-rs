@@ -10,6 +10,7 @@ members = [
     "plugins/course",
     "plugins/ttl",
     "plugins/ttl-combinational",
+    "plugins/ttl-sequential",
     "crates/logisim-sim",
     "crates/logisim-file",
     "crates/logisim-ui",

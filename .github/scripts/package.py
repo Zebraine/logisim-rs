@@ -55,8 +55,8 @@ def package(target, plugins):
     executable = ROOT / "target" / target / "release" / binary
     if not executable.is_file():
         raise FileNotFoundError(executable)
-    if set(plugins) != {"course", "ttl", "ttl-combinational"}:
-        raise ValueError("Provide the course, ttl and ttl-combinational plugins")
+    if set(plugins) != {"course", "ttl", "ttl-combinational", "ttl-sequential"}:
+        raise ValueError("Provide the course, ttl, ttl-combinational and ttl-sequential plugins")
     for plugin in plugins.values():
         if not plugin.read_bytes().startswith(b"\0asm\x01\0\0\0"):
             raise ValueError("Expected a built WebAssembly module")

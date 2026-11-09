@@ -29,6 +29,8 @@
 //!
 //! Each runtime instance starts with Reset, even if all inputs are unknown. A property
 //! edit or Reset creates a new VM; moves and rewiring retain the VM and explicit state.
+//! The optional [`reconfiguration`] policy can explicitly retain state across selected
+//! property edits; absent that policy, property edits start from Reset as before.
 //! Hosts may skip Propagate when the sampled inputs have not changed. Do not use the
 //! invocation count as a clock. Stateful edge detection belongs in explicit state.
 //! Action arguments are UTF-8, at most 1024 bytes; actions without an argument use "".
@@ -49,6 +51,7 @@
 //! receive the original StableSample request and use conservative cache invalidation.
 pub mod frame;
 pub mod presentation;
+pub mod reconfiguration;
 mod stable;
 mod validate;
 use serde::{Deserialize, Serialize};

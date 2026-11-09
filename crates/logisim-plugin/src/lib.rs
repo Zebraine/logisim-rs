@@ -1,6 +1,8 @@
 //! Sandboxed module loading. No filesystem access or implicit plugin discovery.
 mod frame;
+mod metadata;
 mod presentation;
+mod reconfiguration;
 mod stable;
 #[cfg(test)]
 mod tests;
@@ -24,6 +26,7 @@ pub struct Plugin {
     module: Module,
     manifest: Manifest,
     presentation: logisim_plugin_api::presentation::Presentation,
+    reconfiguration: logisim_plugin_api::reconfiguration::Policy,
 }
 impl Plugin {
     pub fn load(bytes: &[u8]) -> Result<Self> {
@@ -47,10 +50,14 @@ impl Plugin {
         }
         let presentation = instance.presentation()?;
         presentation.validate(&manifest)?;
+        let reconfiguration: logisim_plugin_api::reconfiguration::Policy =
+            instance.metadata(instance.reconfiguration)?;
+        reconfiguration.validate(&manifest)?;
         Ok(Self {
             module,
             manifest,
             presentation,
+            reconfiguration,
         })
     }
     pub fn library(&self) -> logisim_plugin_api::presentation::Library {
@@ -79,6 +86,7 @@ impl Plugin {
 }
 pub struct Instance {
     ui: Option<TypedFunc<(), u64>>,
+    reconfiguration: Option<TypedFunc<(), u64>>,
     frame: Option<frame::FrameApi>,
     abi: u32,
     store: Store<StoreLimits>,
@@ -112,6 +120,13 @@ impl Instance {
         let frame = frame::FrameApi::load(&instance, &mut store, abi)?;
         Ok(Self {
             ui: presentation::load(&instance, &mut store)?,
+            reconfiguration: metadata::load(
+                &instance,
+                &mut store,
+                "logisim_reconfiguration_version",
+                "logisim_reconfiguration",
+                logisim_plugin_api::reconfiguration::VERSION,
+            )?,
             frame,
             abi,
             memory: instance

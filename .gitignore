@@ -48,6 +48,8 @@
 !/plugins/ttl/ttl.wasm
 !/plugins/ttl-combinational/ttl-combinational.wasm
 !/plugins/ttl-combinational/locales/zh-CN.json
+!/plugins/ttl-sequential/ttl-sequential.wasm
+!/plugins/ttl-sequential/locales/zh-CN.json
 
 # Language catalogs are compile-time inputs, embedded in the application.
 !/crates/logisim-ui/locales/en.json

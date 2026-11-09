@@ -13,6 +13,38 @@ fn source() -> PluginSource {
     }
 }
 #[test]
+fn sequential_batch_routes_to_its_actual_definition_and_preserves_options() {
+    let api::Response::Manifest(manifest) =
+        logisim_ttl_sequential_plugin::handle(api::Request::Describe)
+    else {
+        panic!()
+    };
+    let source = PluginSource {
+        plugin: manifest.id.clone(),
+        version: manifest.version.clone(),
+        path: "ttl-sequential.wasm".into(),
+        fallback: String::new(),
+    };
+    for power in [false, true] {
+        let input = xml(
+            "74165",
+            &format!(
+                r#"<a name="VccGndPorts" val="{power}"/><a name="ShowInternalStructure" val="true"/><a name="facing" val="north"/>"#
+            ),
+        );
+        let out = convert(&input, &manifest, source.clone()).unwrap();
+        let project = logisim_file::parse(&out).unwrap().document;
+        let c = &project.main_circuit().circuit.components[0];
+        assert_eq!(c.facing, logisim_core::Facing::North);
+        let definition = c.plugin.as_ref().unwrap();
+        assert_eq!(definition.plugin, manifest.id);
+        assert!(manifest.tools.contains(&definition.tool));
+        assert_eq!(definition.properties["internal"], "true");
+        assert_eq!(c.ports().len(), if power { 16 } else { 14 });
+        assert_eq!(project.plugin_sources, vec![source.clone()]);
+    }
+}
+#[test]
 fn mixed_batches_use_their_own_definitions_and_reject_ambiguous_or_missing_modules() {
     let api::Response::Manifest(extra) =
         logisim_ttl_combinational_plugin::handle(api::Request::Describe)

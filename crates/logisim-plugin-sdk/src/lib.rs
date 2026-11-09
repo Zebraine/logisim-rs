@@ -39,8 +39,14 @@ pub fn call(length: u32, handler: fn(Request) -> Response) -> u64 {
     ((output.len() as u64) << 32) | u64::from(output.as_ptr() as u32)
 }
 pub fn presentation(value: api::presentation::Presentation) -> u64 {
+    metadata(&value)
+}
+pub fn reconfiguration(value: api::reconfiguration::Policy) -> u64 {
+    metadata(&value)
+}
+fn metadata(value: &impl serde::Serialize) -> u64 {
     let mut output = OUTPUT.lock().expect("response buffer");
-    *output = serde_json::to_vec(&value).expect("serializable UI metadata");
+    *output = serde_json::to_vec(value).expect("serializable metadata");
     if output.len() > MAX_MESSAGE {
         output.clear();
     }
@@ -50,6 +56,21 @@ pub fn presentation(value: api::presentation::Presentation) -> u64 {
 /// instance is reused for simulation. Each component has independent module memory.
 #[macro_export]
 macro_rules! export_plugin {
+    ($handler:path $(, stable = $stable:path)? $(, presentation = $ui:path)?, reconfiguration = $policy:path) => {
+        $crate::export_plugin!($handler $(, stable = $stable)? $(, presentation = $ui)?);
+        #[cfg(target_arch = "wasm32")]
+        #[allow(unsafe_code)]
+        #[unsafe(no_mangle)]
+        pub extern "C" fn logisim_reconfiguration_version() -> u32 {
+            $crate::api::reconfiguration::VERSION
+        }
+        #[cfg(target_arch = "wasm32")]
+        #[allow(unsafe_code)]
+        #[unsafe(no_mangle)]
+        pub extern "C" fn logisim_reconfiguration() -> u64 {
+            $crate::reconfiguration($policy())
+        }
+    };
     ($handler:path, stable = $stable:path, presentation = $ui:path) => {
         $crate::export_plugin!($handler, stable = $stable);
         $crate::export_plugin!(@presentation $ui);

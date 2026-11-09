@@ -106,11 +106,25 @@ impl Simulator {
             .filter(|c| c.kind == Kind::Plugin)
             .filter_map(|c| c.plugin.as_ref().map(|p| (c.id, p)))
             .map(|(id, p)| {
-                let state = self
-                    .plugin_states
-                    .remove(&id)
-                    .filter(|s| s.definition == *p && s.instance.is_some())
-                    .unwrap_or_else(|| State::new(p.clone(), &self.plugins));
+                let state = match self.plugin_states.remove(&id) {
+                    Some(s) if s.definition == *p && s.instance.is_some() => s,
+                    Some(mut s)
+                        if s.error.is_none()
+                            && s.instance.is_some()
+                            && self.plugins.preserves_state(&s.definition, p) =>
+                    {
+                        match self.plugins.instantiate(p) {
+                            Ok(instance) => {
+                                s.definition = p.clone();
+                                s.instance = Some(instance);
+                                s.event_dirty = true;
+                                s
+                            }
+                            Err(_) => State::new(p.clone(), &self.plugins),
+                        }
+                    }
+                    _ => State::new(p.clone(), &self.plugins),
+                };
                 (id, state)
             })
             .collect();
