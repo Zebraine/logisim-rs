@@ -186,6 +186,7 @@ impl Workspace {
         &self.editor.path
     }
     pub fn replace_project(&mut self, mut project: Project) {
+        self.generator = Default::default();
         self.libraries.clear();
         project.refresh_interfaces(false);
         let id = project.main;

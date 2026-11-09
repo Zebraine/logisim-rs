@@ -37,8 +37,7 @@ pub use write::serialize;
 
 pub const MAX_BYTES: usize = 8 * 1024 * 1024;
 /// Project-wide budget, independent of the per-circuit topology budget.
-pub const MAX_ITEMS: usize = 65_536;
-pub const MAX_CIRCUIT_ITEMS: usize = 4096;
+pub use logisim_core::{MAX_CIRCUIT_ITEMS, MAX_PROJECT_ITEMS as MAX_ITEMS};
 const MAX_XML_NODES: u32 = 1_000_000;
 
 #[derive(Debug)]

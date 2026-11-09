@@ -2,6 +2,61 @@ use super::*;
 use logisim_core::{
     Component, Facing, Gate, GateSize, HorizontalAlign, Kind, Point, VerticalAlign,
 };
+
+#[test]
+fn generated_circuits_save_as_ordinary_components_and_preserve_geometry() {
+    use logisim_core::generation::{Analysis, Cell};
+    let mut a = Analysis::default();
+    for name in ["A", "B", "Cin"] {
+        a.add_input(name.into()).unwrap();
+    }
+    for name in ["Sum", "Carry", "Enable"] {
+        a.add_output(name.into()).unwrap();
+    }
+    a.apply_expression(0, "A ^ B ^ Cin").unwrap();
+    a.apply_expression(1, "A & B | Cin & (A ^ B)").unwrap();
+    for row in 0..8 {
+        a.set_cell(
+            2,
+            row,
+            if row == 0 {
+                Cell::Zero
+            } else if row >= 4 {
+                Cell::One
+            } else {
+                Cell::DontCare
+            },
+        )
+        .unwrap();
+    }
+    let circuit = a.generate().unwrap();
+    let mut document = Document::default();
+    let id = document.add("adder".into()).unwrap();
+    document.circuit_mut(id).unwrap().circuit = circuit.clone();
+    document.refresh_interfaces(false);
+    let instance = document.instance(id, Point::new(400, 300)).unwrap();
+    let expected_ports = instance.ports();
+    document.main_circuit_mut().circuit.add_component(instance);
+    let xml = serialize(&document).unwrap();
+    let parsed = parse(&xml).unwrap();
+    assert!(parsed.warnings.is_empty(), "{:?}", parsed.warnings);
+    assert_eq!(serialize(&parsed.document).unwrap(), xml);
+    let loaded = &parsed.document.named("adder").unwrap().circuit;
+    assert_eq!(loaded.components.len(), circuit.components.len());
+    for (original, restored) in circuit.components.iter().zip(&loaded.components) {
+        assert_eq!(original.kind, restored.kind);
+        assert_eq!(original.ports(), restored.ports());
+        assert_eq!(original.label, restored.label);
+    }
+    assert_eq!(
+        circuit.wires.iter().map(|w| (w.a, w.b)).collect::<Vec<_>>(),
+        loaded.wires.iter().map(|w| (w.a, w.b)).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        parsed.document.main_circuit().circuit.components[0].ports(),
+        expected_ports
+    );
+}
 fn xml(body: &str) -> String {
     format!(
         r##"<project source="2.16.2.2.jar" version="1.0"><lib name="w" desc="#Wiring"/><lib name="g" desc="#Gates"/><lib name="b" desc="#Base"/><main name="main"/><circuit name="main">{body}</circuit></project>"##

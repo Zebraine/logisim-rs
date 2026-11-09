@@ -21,6 +21,7 @@ impl Workspace {
             self.editor.appearance_mode,
         );
         let modal = self.editor.memory_target.is_some()
+            || self.generator.open
             || self.editor.simulation.tick_rate_draft.is_some()
             || self.editor.pla_target.is_some()
             || self.settings_open
@@ -46,6 +47,7 @@ impl Workspace {
             self.memory_editor
                 .show(ui.ctx(), &mut self.editor, &mut self.file_actions);
             self.pla_editor.show(ui.ctx(), &mut self.editor);
+            self.generator.show(ui.ctx(), &mut self.editor);
         }
         if let Some(id) = self.editor.open_instance.take() {
             self.editor.enter_instance(id);

@@ -9,6 +9,7 @@
 ## 功能
 
 - 电路编辑、子电路、自定义外观与封装设计。
+- 从真值表或布尔表达式生成组合电路，单比特输入、输出各最多 8 个。
 - 门电路、布线、算术、Plexers、时序、存储器、输入/输出及基础 TTL 元件。
 - 四态与层级仿真，可选择稳定态或事件传播模式。
 - 已实现内容的 `.circ` 读写、ROM/RAM 的 `v2.0 raw` 格式 `.hex` 导入。
@@ -42,6 +43,7 @@ cargo run -p logisim-rs --release --locked -- examples/course/redirect-pipeline.
 - 自动时钟默认 4 Hz，可在 Simulate 菜单设置 1–4096 Hz；一个 tick 不等于完整时钟周期。
 - 在 File → Settings 切换语言与仿真模式；默认英语、稳定态。
 - 在 Project 菜单添加子电路、编辑封装、加载 `.circ` 库或 Wasm 插件。
+- Project → Generate Circuit 可编辑真值表或表达式，化简后生成可继续编辑的新电路。
 - ROM/RAM 的内容编辑器提供 `.hex` 导入；ROM 内容随电路保存，RAM 内容复位后清零。
 
 ## CPU 示例

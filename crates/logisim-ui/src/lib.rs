@@ -7,6 +7,7 @@ mod bus;
 mod canvas;
 mod document;
 mod fonts;
+mod generation;
 mod latches;
 mod parity;
 mod transistors;
@@ -74,6 +75,7 @@ pub fn configure(ctx: &egui::Context) {
 /// Circuit editing and viewport state. Signal simulation is not part of this layer.
 #[derive(Default)]
 pub struct Workspace {
+    generator: generation::Generator,
     plugins: Vec<logisim_core::plugin::api::Manifest>,
     libraries: Vec<libraries::LibraryGroup>,
     memory_editor: memory::MemoryEditor,

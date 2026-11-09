@@ -3,6 +3,8 @@ pub mod combinational;
 mod engine;
 mod execution;
 mod gates;
+#[cfg(test)]
+mod generation_tests;
 mod hierarchy;
 mod progress;
 pub mod stable;

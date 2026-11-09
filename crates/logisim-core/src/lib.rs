@@ -1,5 +1,6 @@
 //! Circuit geometry and signal values. No GUI, file format or simulation runtime dependencies.
 
+pub mod generation;
 pub mod plugin;
 mod signal;
 pub use signal::{Bit, Value};
@@ -65,3 +66,7 @@ pub use geometry::{Facing, GRID, Point, Wire};
 pub use kind::Kind;
 
 pub type Id = u64;
+
+/// Portable document budgets shared by generators and the file boundary.
+pub const MAX_CIRCUIT_ITEMS: usize = 4096;
+pub const MAX_PROJECT_ITEMS: usize = 65_536;

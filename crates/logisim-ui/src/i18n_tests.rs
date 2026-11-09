@@ -2,10 +2,10 @@ use crate::{editor::Tool, *};
 use egui::{Context, Event, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, Shape};
 use logisim_core::{Component, Kind, Point};
 
-fn frame(ctx: &Context, app: &mut Workspace, events: Vec<Event>) -> Vec<(String, Rect)> {
+pub(crate) fn frame(ctx: &Context, app: &mut Workspace, events: Vec<Event>) -> Vec<(String, Rect)> {
     frame_at_size(ctx, app, events, egui::vec2(1200.0, 820.0))
 }
-fn frame_at_size(
+pub(crate) fn frame_at_size(
     ctx: &Context,
     app: &mut Workspace,
     events: Vec<Event>,
@@ -40,7 +40,7 @@ fn frame_at_size(
     }
     out
 }
-fn click(ctx: &Context, app: &mut Workspace, text: &str) {
+pub(crate) fn click(ctx: &Context, app: &mut Workspace, text: &str) {
     let mut labels = frame(ctx, app, vec![]);
     for _ in 0..2 {
         labels = frame(ctx, app, vec![]);

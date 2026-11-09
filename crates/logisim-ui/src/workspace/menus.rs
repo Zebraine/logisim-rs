@@ -101,6 +101,11 @@ impl Workspace {
                 }
             });
             ui.menu_button(tr("Project"), |ui| {
+                if ui.button(tr("Generate Circuit…")).clicked() {
+                    self.open_generator();
+                    ui.close();
+                }
+                ui.separator();
                 if ui.button(tr("Load Wasm Plugin…")).clicked() {
                     self.file_actions.push(FileAction::LoadPlugin);
                     ui.close();
