@@ -106,7 +106,7 @@ impl PlaEditor {
         let target = if placing {
             Some(&editor.template)
         } else {
-            editor.circuit.component(id)
+            editor.session.circuit.component(id)
         };
         let Some(c) = target
             .filter(|c| c.id == id && c.kind == Kind::PlaRom)
@@ -116,7 +116,12 @@ impl PlaEditor {
             self.context = None;
             return;
         };
-        let context = (editor.active, editor.path.clone(), placing, id);
+        let context = (
+            editor.session.context.active,
+            editor.session.context.path.clone(),
+            placing,
+            id,
+        );
         if let Some(previous) = &self.context {
             if *previous != context || self.original != c.pla {
                 editor.pla_target = None;

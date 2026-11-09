@@ -16,6 +16,7 @@ fn character_terminal_properties_translate_and_edit_without_moving_wires() {
             app.editor.place(Point::new(300, 300));
             let id = app.circuit().components[0].id;
             app.editor
+                .session
                 .circuit
                 .add_wire(Point::new(200, 300), Point::new(300, 300));
             let before = app.circuit().clone();

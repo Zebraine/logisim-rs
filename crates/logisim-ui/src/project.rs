@@ -22,105 +22,44 @@ pub(crate) struct NameDialog {
 }
 impl Editor {
     pub fn sync_project(&mut self) {
-        let changed = self
-            .project
-            .circuit(self.active)
-            .is_some_and(|d| d.circuit != self.circuit);
-        if changed {
-            self.project.circuit_mut(self.active).unwrap().circuit = self.circuit.clone();
-            self.project.refresh_interfaces(true);
-            self.circuit = self.project.circuit(self.active).unwrap().circuit.clone();
-        }
+        self.session.synchronize();
         if let Kind::Subcircuit(id) = self.template.kind
-            && let Some(definition) = self.project.circuit(id)
+            && let Some(definition) = self.session.project.circuit(id)
         {
             self.template.interface = definition.interface();
         }
     }
     pub fn context_label(&self) -> String {
-        let mut definition = self.root;
-        let mut names = vec![
-            self.project
-                .circuit(definition)
-                .map(|d| d.name.clone())
-                .unwrap_or_default(),
-        ];
-        for id in &self.path {
-            if let Some(c) = self
-                .project
-                .circuit(definition)
-                .and_then(|d| d.circuit.component(*id))
-                && let Kind::Subcircuit(target) = c.kind
-            {
-                names.push(if c.label.is_empty() {
-                    format!("{} #{}", c.interface.name, c.id)
-                } else {
-                    c.label.clone()
-                });
-                definition = target;
-            }
-        }
-        names.join(" / ")
+        self.session.context_label()
     }
-    pub fn switch_circuit(&mut self, id: Id) {
-        self.appearance_mode = false;
+    fn prepare_navigation(&mut self) {
+        self.session.context.appearance_mode = false;
         self.cancel_gesture();
         self.commit_properties();
         self.sync_project();
-        if let Some(definition) = self.project.circuit(id) {
-            self.active = id;
-            self.root = id;
-            self.path.clear();
-            self.circuit = definition.circuit.clone();
-            self.selection.clear();
-            self.set_tool(Tool::Select);
-            self.simulation.view = Default::default();
-            self.simulation.plugin_arguments.clear();
-        }
     }
-    pub fn enter_instance(&mut self, id: Id) {
-        self.appearance_mode = false;
-        self.cancel_gesture();
-        self.commit_properties();
-        self.sync_project();
-        if let Some(c) = self.circuit.component(id)
-            && let Kind::Subcircuit(target) = c.kind
-            && let Some(definition) = self.project.circuit(target)
-        {
-            self.path.push(id);
-            self.active = target;
-            self.circuit = definition.circuit.clone();
-            self.selection.clear();
-            self.set_tool(Tool::Select);
-            self.simulation.view = Default::default();
-            self.simulation.plugin_arguments.clear();
-        }
-    }
-    pub fn leave_instance(&mut self) {
-        self.appearance_mode = false;
-        self.cancel_gesture();
-        self.commit_properties();
-        self.sync_project();
-        if self.path.pop().is_none() {
-            return;
-        }
-        let mut id = self.root;
-        for instance in &self.path {
-            if let Some(c) = self
-                .project
-                .circuit(id)
-                .and_then(|d| d.circuit.component(*instance))
-                && let Kind::Subcircuit(target) = c.kind
-            {
-                id = target;
-            }
-        }
-        self.active = id;
-        self.circuit = self.project.circuit(id).unwrap().circuit.clone();
-        self.selection.clear();
+    fn finish_navigation(&mut self) {
         self.set_tool(Tool::Select);
         self.simulation.view = Default::default();
         self.simulation.plugin_arguments.clear();
+    }
+    pub fn switch_circuit(&mut self, id: Id) {
+        self.prepare_navigation();
+        if self.session.switch_circuit(id) {
+            self.finish_navigation();
+        }
+    }
+    pub fn enter_instance(&mut self, id: Id) {
+        self.prepare_navigation();
+        if self.session.enter_instance(id) {
+            self.finish_navigation();
+        }
+    }
+    pub fn leave_instance(&mut self) {
+        self.prepare_navigation();
+        if self.session.leave_instance() {
+            self.finish_navigation();
+        }
     }
     pub fn edit_project(&mut self, command: CircuitCommand, name: String) -> Result<(), String> {
         self.cancel_gesture();
@@ -129,61 +68,66 @@ impl Editor {
         let before = self.snapshot();
         match command {
             CircuitCommand::Add => {
-                let id = self.project.add(name)?;
+                let id = self.session.project.add(name)?;
                 self.switch_circuit(id);
             }
-            CircuitCommand::Rename => self.project.rename(self.active, name)?,
+            CircuitCommand::Rename => self
+                .session
+                .project
+                .rename(self.session.context.active, name)?,
             CircuitCommand::Remove => {
-                self.project.remove(self.active)?;
-                let id = self.project.main;
-                self.active = id;
-                self.root = id;
-                self.path.clear();
-                self.selection.clear();
+                self.session.project.remove(self.session.context.active)?;
+                let id = self.session.project.main;
+                self.session.context.active = id;
+                self.session.context.root = id;
+                self.session.context.path.clear();
+                self.session.selection.clear();
             }
-            CircuitCommand::Main => self.project.main = self.active,
+            CircuitCommand::Main => self.session.project.main = self.session.context.active,
             CircuitCommand::Up | CircuitCommand::Down => {
                 let index = self
+                    .session
                     .project
                     .circuits
                     .iter()
-                    .position(|c| c.id == self.active)
+                    .position(|c| c.id == self.session.context.active)
                     .unwrap();
                 let other = if matches!(command, CircuitCommand::Up) {
                     index.checked_sub(1)
                 } else {
-                    Some(index + 1).filter(|i| *i < self.project.circuits.len())
+                    Some(index + 1).filter(|i| *i < self.session.project.circuits.len())
                 };
                 if let Some(other) = other {
-                    self.project.circuits.swap(index, other);
+                    self.session.project.circuits.swap(index, other);
                 }
             }
         }
-        self.circuit = self.project.circuit(self.active).unwrap().circuit.clone();
+        self.session.reload();
         self.record(before);
         Ok(())
     }
 }
 impl Workspace {
     pub fn project(&self) -> &Project {
-        &self.editor.project
+        &self.editor.session.project
     }
     pub fn active_circuit(&self) -> Id {
-        self.editor.active
+        self.editor.session.context.active
     }
     pub fn circuit_name(&self) -> &str {
         &self
             .editor
+            .session
             .project
-            .circuit(self.editor.active)
+            .circuit(self.editor.session.context.active)
             .unwrap()
             .name
     }
     pub fn simulation_root(&self) -> Id {
-        self.editor.root
+        self.editor.session.context.root
     }
     pub fn simulation_path(&self) -> &[Id] {
-        &self.editor.path
+        &self.editor.session.context.path
     }
     pub fn replace_project(&mut self, mut project: Project) {
         self.analysis.cancel();
@@ -194,13 +138,8 @@ impl Workspace {
         self.generated_expressions = Default::default();
         self.libraries.clear();
         project.refresh_interfaces(false);
-        let id = project.main;
-        self.editor = Editor::default();
+        self.editor = Editor::new(project);
         self.pla_editor = crate::pla::PlaEditor::default();
-        self.editor.active = id;
-        self.editor.root = id;
-        self.editor.circuit = project.main_circuit().circuit.clone();
-        self.editor.project = project;
         self.appearance.reset_context();
         self.name_dialog = None;
         self.remove_dialog = false;

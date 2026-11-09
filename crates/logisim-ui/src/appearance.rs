@@ -105,8 +105,13 @@ pub(crate) struct AppearanceEditor {
 }
 impl AppearanceEditor {
     pub fn current(editor: &Editor) -> Appearance {
-        let mut definition = editor.project.circuit(editor.active).unwrap().clone();
-        definition.circuit = editor.circuit.clone();
+        let mut definition = editor
+            .session
+            .project
+            .circuit(editor.session.context.active)
+            .unwrap()
+            .clone();
+        definition.circuit = editor.session.circuit.clone();
         definition.editable_appearance()
     }
     pub fn reset_context(&mut self) {
@@ -124,7 +129,7 @@ impl AppearanceEditor {
         self.cancel();
         editor.commit_properties();
         let before = editor.snapshot();
-        editor.circuit.appearance = None;
+        editor.session.circuit.appearance = None;
         editor.record(before);
         self.selected.clear();
         self.vertex = None;
@@ -133,7 +138,7 @@ impl AppearanceEditor {
         if appearance == Self::current(editor) {
             return;
         }
-        editor.circuit.appearance = Some(appearance);
+        editor.session.circuit.appearance = Some(appearance);
         editor.record(before);
     }
     pub fn toolbar(&mut self, ui: &mut Ui, editor: &mut Editor) {
@@ -172,9 +177,9 @@ impl AppearanceEditor {
             if ui.button(tr("Circuit layout")).clicked() {
                 self.cancel();
                 editor.commit_properties();
-                editor.appearance_mode = false;
+                editor.session.context.appearance_mode = false;
             }
-            ui.weak(if editor.circuit.appearance.is_some() {
+            ui.weak(if editor.session.circuit.appearance.is_some() {
                 tr("Custom appearance")
             } else {
                 tr("Default appearance")
@@ -567,7 +572,7 @@ impl AppearanceEditor {
         {
             self.shortcuts(ui, editor);
         }
-        if !editor.appearance_mode {
+        if !editor.session.context.appearance_mode {
             return;
         }
         let space = ui.input(|i| i.key_down(Key::Space));
@@ -780,7 +785,11 @@ impl AppearanceEditor {
             artwork::paint(&painter, canvas, shape, |p| p, 0.0);
         }
         for (id, at) in &preview.ports {
-            let output = editor.circuit.component(*id).is_some_and(|p| p.output);
+            let output = editor
+                .session
+                .circuit
+                .component(*id)
+                .is_some_and(|p| p.output);
             let center = canvas.screen(*at);
             let radius = if output { 5.0 } else { 4.0 } * canvas.camera.zoom;
             let stroke = Stroke::new(1.5, ACCENT);
@@ -890,7 +899,7 @@ impl AppearanceEditor {
         if response.hovered()
             && let Some(world) = world
             && let Some(Target::Port(id)) = Self::hit(&preview, world, 4.0 / canvas.camera.zoom)
-            && let Some(pin) = editor.circuit.component(id)
+            && let Some(pin) = editor.session.circuit.component(id)
         {
             response.clone().on_hover_text(tf!(
                 "{} · {} · {} bit(s) · Pin ({}, {})",

@@ -71,7 +71,7 @@ fn arithmetic_library_and_modes_edit_in_both_languages_with_undo() {
         app.editor.place(Point::new(300, 300));
         app.editor.set_tool(Tool::Select);
         let id = app.circuit().components[0].id;
-        app.editor.selection.insert(id);
+        app.editor.session.selection.insert(id);
         click(&ctx, &mut app, &translated("Unsigned"));
         click(&ctx, &mut app, &translated("Two's complement"));
         assert!(app.circuit().component(id).unwrap().arithmetic.signed);
@@ -146,7 +146,7 @@ fn bit_search_and_input_count_edits_use_translated_widgets_and_undo() {
         app.editor.place(Point::new(300, 200));
         app.editor.set_tool(Tool::Select);
         let id = app.circuit().components[0].id;
-        app.editor.selection.insert(id);
+        app.editor.session.selection.insert(id);
         click(&ctx, &mut app, &translated(BitSearch::HighestZero.name()));
         click(&ctx, &mut app, &translated(BitSearch::LowestOne.name()));
         assert_eq!(
@@ -172,9 +172,12 @@ fn bit_search_and_input_count_edits_use_translated_widgets_and_undo() {
         app.editor.place(Point::new(300, 400));
         app.editor.set_tool(Tool::Select);
         let c = app.circuit().components.last().unwrap().clone();
-        app.editor.selection.insert(c.id);
+        app.editor.session.selection.insert(c.id);
         for port in [c.ports()[1], c.ports()[4]] {
-            app.editor.circuit.add_wire(port - Point::new(80, 0), port);
+            app.editor
+                .session
+                .circuit
+                .add_wire(port - Point::new(80, 0), port);
         }
         let before = app.circuit().clone();
         number(&ctx, &mut app, "4", "2");

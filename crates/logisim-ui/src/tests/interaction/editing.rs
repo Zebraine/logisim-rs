@@ -9,6 +9,7 @@ use super::support::*;
 fn text_focus_keeps_delete_arrows_and_clipboard_out_of_circuit_commands() {
     let (ctx, mut app) = setup();
     app.editor
+        .session
         .circuit
         .add_component(Component::new(Kind::Pin, Point::new(100, 100)));
     app.editor.set_tool(Tool::Place(Kind::Text));
@@ -22,16 +23,16 @@ fn text_focus_keeps_delete_arrows_and_clipboard_out_of_circuit_commands() {
         vec![Event::Text("memo".into())],
         Modifiers::NONE,
     );
-    assert_eq!(app.editor.circuit.components[1].label, "memo");
+    assert_eq!(app.editor.session.circuit.components[1].label, "memo");
     key(&ctx, &mut app, Key::ArrowLeft, Modifiers::NONE);
     key(&ctx, &mut app, Key::Delete, Modifiers::NONE);
     frame(&ctx, &mut app, vec![Event::Copy], Modifiers::COMMAND);
-    assert_eq!(app.editor.circuit.components.len(), 2);
+    assert_eq!(app.editor.session.circuit.components.len(), 2);
     assert_eq!(
-        app.editor.circuit.components[1].position,
+        app.editor.session.circuit.components[1].position,
         Point::new(300, 300)
     );
-    assert_eq!(app.editor.selection.len(), 1);
+    assert_eq!(app.editor.session.selection.len(), 1);
 }
 
 #[test]
@@ -49,9 +50,9 @@ fn platform_clipboard_events_copy_and_paste_the_selection() {
         )],
         Modifiers::COMMAND,
     );
-    assert_eq!(app.editor.circuit.components.len(), 2);
+    assert_eq!(app.editor.session.circuit.components.len(), 2);
     assert_eq!(
-        app.editor.circuit.components[1].position,
+        app.editor.session.circuit.components[1].position,
         Point::new(110, 110)
     );
 }
@@ -60,21 +61,24 @@ fn platform_clipboard_events_copy_and_paste_the_selection() {
 fn marquee_selects_components_and_wires_and_delete_is_undoable() {
     let (ctx, mut app) = setup();
     app.editor
+        .session
         .circuit
         .add_component(Component::new(Kind::Pin, Point::new(100, 100)));
     app.editor
+        .session
         .circuit
         .add_component(Component::new(Kind::Gate(Gate::Not), Point::new(240, 100)));
     app.editor
+        .session
         .circuit
         .add_wire(Point::new(100, 100), Point::new(180, 100));
-    let before = app.editor.circuit.clone();
+    let before = app.editor.session.circuit.clone();
     let a = app.canvas.screen(Point::new(50, 50));
     let b = app.canvas.screen(Point::new(280, 140));
     drag(&ctx, &mut app, a, b);
-    assert_eq!(app.editor.selection.len(), 3);
+    assert_eq!(app.editor.session.selection.len(), 3);
     key(&ctx, &mut app, Key::Delete, Modifiers::NONE);
-    assert!(app.editor.circuit.ids().is_empty());
+    assert!(app.editor.session.circuit.ids().is_empty());
     key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
-    assert_eq!(app.editor.circuit, before);
+    assert_eq!(app.editor.session.circuit, before);
 }

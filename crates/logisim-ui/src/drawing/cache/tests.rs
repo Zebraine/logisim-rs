@@ -16,26 +16,28 @@ fn markers(c: &Circuit) -> Vec<(Point, Option<Id>)> {
 fn geometry_tracks_gestures_history_replacement_and_tunnel_renaming() {
     let mut editor = Editor::default();
     let a = editor
+        .session
         .circuit
         .add_wire(Point::ZERO, Point::new(100, 0))
         .unwrap();
     let b = editor
+        .session
         .circuit
         .add_wire(Point::new(300, 0), Point::new(400, 0))
         .unwrap();
     for x in [0, 300] {
         let mut tunnel = Component::new(Kind::Tunnel, Point::new(x, 0));
         tunnel.label = "bus".into();
-        editor.circuit.add_component(tunnel);
+        editor.session.circuit.add_component(tunnel);
     }
     let mut cache = CircuitCache::default();
     let selected = BTreeSet::from([a]);
-    cache.synchronize(&editor.circuit, &selected);
-    assert_eq!(cache.markers, markers(&editor.circuit));
+    cache.synchronize(&editor.session.circuit, &selected);
+    assert_eq!(cache.markers, markers(&editor.session.circuit));
     assert!(cache.selected_net.contains(&b));
     let marker_allocation = cache.markers.as_ptr();
-    editor.circuit.components[1].label = "separate".into();
-    cache.synchronize(&editor.circuit, &selected);
+    editor.session.circuit.components[1].label = "separate".into();
+    cache.synchronize(&editor.session.circuit, &selected);
     assert_eq!(
         cache.markers.as_ptr(),
         marker_allocation,
@@ -43,21 +45,21 @@ fn geometry_tracks_gestures_history_replacement_and_tunnel_renaming() {
     );
     assert!(!cache.selected_net.contains(&b));
     let before = editor.snapshot();
-    editor.circuit.components[0].position = Point::new(50, 0);
-    cache.synchronize(&editor.circuit, &selected); // before gesture commit
-    assert_eq!(cache.markers, markers(&editor.circuit));
+    editor.session.circuit.components[0].position = Point::new(50, 0);
+    cache.synchronize(&editor.session.circuit, &selected); // before gesture commit
+    assert_eq!(cache.markers, markers(&editor.session.circuit));
     assert!(cache.markers.iter().any(|(p, _)| *p == Point::new(50, 0)));
     editor.record(before);
     editor.undo();
-    cache.synchronize(&editor.circuit, &selected);
-    assert_eq!(cache.markers, markers(&editor.circuit));
+    cache.synchronize(&editor.session.circuit, &selected);
+    assert_eq!(cache.markers, markers(&editor.session.circuit));
     assert!(!cache.markers.iter().any(|(p, _)| *p == Point::new(50, 0)));
     editor.redo();
-    cache.synchronize(&editor.circuit, &selected);
-    assert_eq!(cache.markers, markers(&editor.circuit));
-    editor.circuit.remove(&BTreeSet::from([a]));
-    cache.synchronize(&editor.circuit, &selected);
-    assert_eq!(cache.markers, markers(&editor.circuit));
+    cache.synchronize(&editor.session.circuit, &selected);
+    assert_eq!(cache.markers, markers(&editor.session.circuit));
+    editor.session.circuit.remove(&BTreeSet::from([a]));
+    cache.synchronize(&editor.session.circuit, &selected);
+    assert_eq!(cache.markers, markers(&editor.session.circuit));
     let mut replacement = Circuit::default();
     replacement.add_wire(Point::new(50, 300), Point::new(100, 300));
     cache.synchronize(&replacement, &selected); // reuses ID, different circuit

@@ -89,7 +89,7 @@ fn font(ui: &mut Ui, font: &mut ArtworkFont, anchor: &mut TextAnchor) {
 impl AppearanceEditor {
     pub fn properties(&mut self, ui: &mut Ui, editor: &mut Editor) {
         ScrollArea::vertical().show(ui,|ui| { Frame::NONE.inner_margin(12).show(ui,|ui|{
-            ui.strong(tf!("Appearance: {}", editor.project.circuit(editor.active).unwrap().name));
+            ui.strong(tf!("Appearance: {}", editor.session.project.circuit(editor.session.context.active).unwrap().name));
             ui.weak(tr("Changes update every instance. Wires keep their positions; reconnect moved ports in the circuit layout."));ui.separator();
             let mut a=Self::current(editor);let original=a.clone();
             let selection=(self.selected.len()==1).then(||*self.selected.first().unwrap());
@@ -118,7 +118,7 @@ impl AppearanceEditor {
                             }
                         }
                     },
-                    Target::Port(id)=>if let Some(pin)=editor.circuit.component(id) {
+                    Target::Port(id)=>if let Some(pin)=editor.session.circuit.component(id) {
                         ui.strong(if pin.label.is_empty(){tf!("Pin ({}, {})", pin.position.x, pin.position.y)}else{pin.label.clone()});
                         ui.label(tf!("{} · {} bit(s)", tr(if pin.output{"Output"}else{"Input"}), pin.bits));
                         ui.label(tf!("Internal Pin: ({}, {})", pin.position.x, pin.position.y));
@@ -157,13 +157,13 @@ impl AppearanceEditor {
                 if ui.button(tr("Generate package")).on_hover_text(tr("Replace the artwork with a labeled package. You can undo this change.")).clicked(){self.generate_package(editor);}
             });
             egui::CollapsingHeader::new(tr("Ports")).id_salt("appearance-ports").show(ui,|ui|{
-                for pin in editor.circuit.components.clone().iter().filter(|p|p.kind==Kind::Pin) {
+                for pin in editor.session.circuit.components.clone().iter().filter(|p|p.kind==Kind::Pin) {
                     let label=if pin.label.is_empty(){tf!("Pin ({}, {})", pin.position.x, pin.position.y)}else{pin.label.clone()};
                     if ui.selectable_label(self.selected.contains(&Target::Port(pin.id)),format!("{} {} [{}]",if pin.output{"OUT"}else{"IN"},label,pin.bits)).clicked(){editor.commit_properties();self.selected=BTreeSet::from([Target::Port(pin.id)]);self.tool=Tool::Select;}
                 }
                 if ui.selectable_label(self.selected.contains(&Target::Anchor),tr("Anchor")).clicked(){editor.commit_properties();self.selected=BTreeSet::from([Target::Anchor]);self.tool=Tool::Select;}
             });
-            if ui.add_enabled(editor.circuit.appearance.is_some(),egui::Button::new(tr("Revert to default appearance"))).clicked(){self.revert(editor);}
+            if ui.add_enabled(editor.session.circuit.appearance.is_some(),egui::Button::new(tr("Revert to default appearance"))).clicked(){self.revert(editor);}
         });
         });
     }
@@ -175,12 +175,14 @@ impl AppearanceEditor {
         let width = self.package_width.max(80);
         let pitch = self.package_pitch.max(10);
         let mut inputs: Vec<_> = editor
+            .session
             .circuit
             .components
             .iter()
             .filter(|p| p.kind == Kind::Pin && !p.output)
             .collect();
         let mut outputs: Vec<_> = editor
+            .session
             .circuit
             .components
             .iter()
@@ -212,7 +214,13 @@ impl AppearanceEditor {
             fill: Some([51, 65, 85]),
             width: 1,
         };
-        let title = editor.project.circuit(editor.active).unwrap().name.clone();
+        let title = editor
+            .session
+            .project
+            .circuit(editor.session.context.active)
+            .unwrap()
+            .name
+            .clone();
         a.add(
             Geometry::Text {
                 at: Point::new(width / 2, 20),
@@ -254,7 +262,7 @@ impl AppearanceEditor {
                 }
             }
         }
-        editor.circuit.appearance = Some(a);
+        editor.session.circuit.appearance = Some(a);
         editor.record(before);
         self.selected.clear();
         self.tool = Tool::Select;

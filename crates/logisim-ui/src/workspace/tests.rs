@@ -204,7 +204,7 @@ fn loading_resets_history_selection_and_fits_negative_coordinates() {
     app.replace_circuit(circuit.clone());
     frame(&ctx, &mut app, vec2(1200.0, 820.0), vec![]);
     assert!(!app.editor.can_undo());
-    assert!(app.editor.selection.is_empty());
+    assert!(app.editor.session.selection.is_empty());
     assert_eq!(app.circuit(), &circuit);
     assert!(
         app.canvas

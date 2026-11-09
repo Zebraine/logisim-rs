@@ -69,7 +69,7 @@ fn settings_click_switches_languages_without_touching_document_history_or_simula
     app.editor.simulation.view.pending = 2;
     app.editor.simulation.view.steps = 7;
     let document = app.project().clone();
-    let selection = app.editor.selection.clone();
+    let selection = app.editor.session.selection.clone();
     assert!(app.editor.can_undo());
     click(&ctx, &mut app, "File");
     click(&ctx, &mut app, "Settings");
@@ -82,7 +82,7 @@ fn settings_click_switches_languages_without_touching_document_history_or_simula
     assert!(has(&labels, "文件"));
     assert!(has(&labels, "已暂停 · 2 项待传播"));
     assert_eq!(app.project(), &document);
-    assert_eq!(app.editor.selection, selection);
+    assert_eq!(app.editor.session.selection, selection);
     assert_eq!(app.editor.simulation.view.steps, 7);
     assert!(app.editor.can_undo());
     assert!(!app.editor.can_redo());

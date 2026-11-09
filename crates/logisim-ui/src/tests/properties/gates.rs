@@ -21,7 +21,7 @@ fn parity_properties_and_library_tools_work_in_both_languages() {
         circuit.add_wire(port, port + Point::new(-100, 0));
         circuit.normalize_wires();
         app.replace_circuit(circuit);
-        app.editor.selection.insert(gate);
+        app.editor.session.selection.insert(gate);
         for _ in 0..3 {
             frame(&ctx, &mut app, vec![]);
         }
@@ -182,9 +182,12 @@ fn ttl_library_properties_power_internal_view_and_undo_in_both_languages() {
         app.editor.place(Point::new(300, 200));
         app.editor.set_tool(Tool::Select);
         let c = app.circuit().components[0].clone();
-        app.editor.selection.insert(c.id);
+        app.editor.session.selection.insert(c.id);
         let p = c.ports()[0];
-        app.editor.circuit.add_wire(p, p + Point::new(0, 100));
+        app.editor
+            .session
+            .circuit
+            .add_wire(p, p + Point::new(0, 100));
         let before = app.circuit().clone();
         toggle(&ctx, &mut app, &t("Include Vcc/Gnd pins"));
         assert_eq!(app.circuit().component(c.id).unwrap().ports().len(), 12);
@@ -228,7 +231,10 @@ fn ordinary_gate_xor_mode_and_input_inversion_edit_with_undo_in_both_languages()
         let c = &app.circuit().components[0];
         let id = c.id;
         let port = c.ports()[1];
-        app.editor.circuit.add_wire(port, port + Point::new(-40, 0));
+        app.editor
+            .session
+            .circuit
+            .add_wire(port, port + Point::new(-40, 0));
         let geometry = |c: &logisim_core::Circuit| {
             c.wires
                 .iter()

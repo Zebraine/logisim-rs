@@ -22,7 +22,7 @@ fn bus_control_properties_use_translated_widgets_and_keep_wires_with_undo() {
         let p = circuit.component(gate).unwrap().ports()[2];
         circuit.add_wire(p, p + Point::new(0, 80));
         app.replace_circuit(circuit);
-        app.editor.selection.insert(gate);
+        app.editor.session.selection.insert(gate);
         for _ in 0..3 {
             frame(&ctx, &mut app, vec![]);
         }
@@ -77,8 +77,8 @@ fn bus_control_properties_use_translated_widgets_and_keep_wires_with_undo() {
         assert!(app.circuit().component(gate).unwrap().bus.negate_control);
         app.editor.undo();
         assert!(!app.circuit().component(gate).unwrap().bus.negate_control);
-        app.editor.selection.clear();
-        app.editor.selection.insert(resistor);
+        app.editor.session.selection.clear();
+        app.editor.session.selection.insert(resistor);
         for _ in 0..3 {
             frame(&ctx, &mut app, vec![]);
         }
@@ -142,7 +142,7 @@ fn transistor_properties_and_library_tools_work_in_both_languages() {
         circuit.add_wire(port, port + Point::new(0, -80));
         circuit.normalize_wires();
         app.replace_circuit(circuit);
-        app.editor.selection.insert(transistor);
+        app.editor.session.selection.insert(transistor);
         for _ in 0..3 {
             frame(&ctx, &mut app, vec![]);
         }
@@ -181,8 +181,8 @@ fn transistor_properties_and_library_tools_work_in_both_languages() {
                 .gate_bottom_right
         );
         app.editor.redo();
-        app.editor.selection.clear();
-        app.editor.selection.insert(transmission);
+        app.editor.session.selection.clear();
+        app.editor.session.selection.insert(transmission);
         for _ in 0..3 {
             frame(&ctx, &mut app, vec![]);
         }
@@ -233,6 +233,7 @@ fn pin_pull_label_and_tristate_properties_edit_in_both_languages() {
         app.editor.place(Point::new(300, 300));
         let id = app.circuit().components[0].id;
         app.editor
+            .session
             .circuit
             .add_wire(Point::new(300, 300), Point::new(400, 300));
         let wires = app.circuit().wires.clone();

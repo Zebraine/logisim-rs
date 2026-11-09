@@ -16,7 +16,7 @@ fn display_properties_edit_real_widgets_with_localization_undo_and_stable_ids() 
         let matrix = circuit.add_component(Component::new(Kind::DotMatrix, Point::new(300, 300)));
         let rgb = circuit.add_component(Component::new(Kind::RgbLed, Point::new(100, 200)));
         app.replace_circuit(circuit);
-        app.editor.selection.insert(matrix);
+        app.editor.session.selection.insert(matrix);
         for _ in 0..3 {
             frame(&ctx, &mut app, vec![]);
         }
@@ -34,6 +34,7 @@ fn display_properties_edit_real_widgets_with_localization_undo_and_stable_ids() 
         click(&ctx, &mut app, &translated("Select rows/columns"));
         assert_eq!(
             app.editor
+                .session
                 .circuit
                 .component(matrix)
                 .unwrap()
@@ -45,6 +46,7 @@ fn display_properties_edit_real_widgets_with_localization_undo_and_stable_ids() 
         click(&ctx, &mut app, &translated("Circular"));
         assert!(
             app.editor
+                .session
                 .circuit
                 .component(matrix)
                 .unwrap()
@@ -54,6 +56,7 @@ fn display_properties_edit_real_widgets_with_localization_undo_and_stable_ids() 
         app.editor.undo();
         assert!(
             !app.editor
+                .session
                 .circuit
                 .component(matrix)
                 .unwrap()
@@ -63,14 +66,15 @@ fn display_properties_edit_real_widgets_with_localization_undo_and_stable_ids() 
         app.editor.redo();
         assert!(
             app.editor
+                .session
                 .circuit
                 .component(matrix)
                 .unwrap()
                 .io
                 .matrix_circular
         );
-        app.editor.selection.clear();
-        app.editor.selection.insert(rgb);
+        app.editor.session.selection.clear();
+        app.editor.session.selection.insert(rgb);
         for _ in 0..3 {
             frame(&ctx, &mut app, vec![]);
         }
@@ -103,14 +107,32 @@ fn display_properties_edit_real_widgets_with_localization_undo_and_stable_ids() 
                 ],
             );
         }
-        assert!(app.editor.circuit.component(rgb).unwrap().io.rgb_multibit);
+        assert!(
+            app.editor
+                .session
+                .circuit
+                .component(rgb)
+                .unwrap()
+                .io
+                .rgb_multibit
+        );
         assert_eq!(
-            app.editor.circuit.component(rgb).unwrap().port_width(0),
+            app.editor
+                .session
+                .circuit
+                .component(rgb)
+                .unwrap()
+                .port_width(0),
             Some(8)
         );
         app.editor.undo();
         assert_eq!(
-            app.editor.circuit.component(rgb).unwrap().port_width(0),
+            app.editor
+                .session
+                .circuit
+                .component(rgb)
+                .unwrap()
+                .port_width(0),
             Some(1)
         );
     }

@@ -38,8 +38,9 @@ fn joystick_library_properties_and_rotation_undo_in_both_languages() {
         app.editor.place(Point::new(300, 200));
         app.editor.set_tool(Tool::Select);
         let id = app.circuit().components[0].id;
-        app.editor.selection.insert(id);
+        app.editor.session.selection.insert(id);
         app.editor
+            .session
             .circuit
             .add_wire(Point::new(300, 210), Point::new(400, 210));
         let before = app.circuit().clone();
@@ -163,7 +164,7 @@ fn io_library_properties_and_momentary_inspector_work_in_both_languages() {
         let mut circuit = logisim_core::Circuit::default();
         let id = circuit.add_component(Component::new(Kind::Button, Point::new(200, 200)));
         app.replace_circuit(circuit);
-        app.editor.selection.insert(id);
+        app.editor.session.selection.insert(id);
         let before = app.project().clone();
         let mut labels = frame(&ctx, &mut app, vec![]);
         for _ in 0..2 {
@@ -225,8 +226,8 @@ fn centered_button_label_is_editable_and_drawn_inside_the_button_in_both_languag
         let t = |s| i18n::with_language(language, || i18n::tr(s).to_owned());
         app.editor.set_tool(Tool::Place(Kind::Button));
         app.editor.place(Point::new(300, 300));
-        app.editor.circuit.components[0].label = "C".into();
-        let id = app.editor.circuit.components[0].id;
+        app.editor.session.circuit.components[0].label = "C".into();
+        let id = app.editor.session.circuit.components[0].id;
         click(&ctx, &mut app, &t("North"));
         click(&ctx, &mut app, &t("Center"));
         assert!(app.circuit().component(id).unwrap().label_center);

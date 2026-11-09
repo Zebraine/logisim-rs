@@ -115,7 +115,7 @@ impl Workspace {
         self.replace_project(logisim_core::Project::single("main", circuit));
     }
     pub fn circuit(&self) -> &logisim_core::Circuit {
-        &self.editor.circuit
+        &self.editor.session.circuit
     }
     pub fn set_simulation(&mut self, view: SimulationView) {
         self.editor.simulation.view = view;

@@ -624,14 +624,12 @@ impl Editor {
             message: "Could not create circuit:",
             detail: tr(&message).to_owned(),
         })?;
-        self.project = project;
-        // Synchronize the active copy before navigation/recording can write it back.
-        self.circuit = self.project.circuit(self.active).unwrap().circuit.clone();
-        if self.active != id {
+        self.session.replace_project(project);
+        if self.session.context.active != id {
             self.switch_circuit(id);
         } else {
-            self.appearance_mode = false;
-            self.selection.clear();
+            self.session.context.appearance_mode = false;
+            self.session.selection.clear();
             self.set_tool(crate::editor::Tool::Select);
             self.simulation.view = Default::default();
             self.simulation.plugin_arguments.clear();

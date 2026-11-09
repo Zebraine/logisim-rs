@@ -85,10 +85,17 @@ fn generic_plugin_palette_properties_actions_and_strings_in_both_languages() {
             );
         }
         app.editor.set_tool(Tool::Select);
-        let c = app.editor.circuit.components.last().unwrap().clone();
+        let c = app
+            .editor
+            .session
+            .circuit
+            .components
+            .last()
+            .unwrap()
+            .clone();
         assert_eq!(c.plugin.as_ref().unwrap().tool.id, "second");
         assert_eq!(c.ports(), vec![c.position + Point::new(20, 0)]);
-        app.editor.selection = [c.id].into();
+        app.editor.session.selection = [c.id].into();
         let labels = frame(&ctx, &mut app, vec![]);
         assert!(has(&labels, "Address")); // Plugin-owned text is never translated.
         assert!(has(&labels, "Pin"));
@@ -97,6 +104,7 @@ fn generic_plugin_palette_properties_actions_and_strings_in_both_languages() {
         app.finish_edit();
         assert_eq!(
             app.editor
+                .session
                 .circuit
                 .component(c.id)
                 .unwrap()
@@ -109,6 +117,7 @@ fn generic_plugin_palette_properties_actions_and_strings_in_both_languages() {
         app.editor.undo();
         assert_eq!(
             app.editor
+                .session
                 .circuit
                 .component(c.id)
                 .unwrap()
@@ -118,7 +127,7 @@ fn generic_plugin_palette_properties_actions_and_strings_in_both_languages() {
                 .properties["mode"],
             "first"
         );
-        app.editor.selection = [c.id].into();
+        app.editor.session.selection = [c.id].into();
         click(&ctx, &mut app, "User action");
         assert!(app.editor.simulation.actions.iter().any(|a| matches!(a, SimulationAction::PluginAction { id, action, argument } if *id==c.id && action=="go" && argument.is_empty())));
         app.editor.simulation.view.plugin_error_count = 1;

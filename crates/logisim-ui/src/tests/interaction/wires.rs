@@ -14,30 +14,34 @@ fn place_connect_move_and_undo_through_canvas_input() {
     let point = Point::new(300, 200);
     let at = app.canvas.screen(point);
     click(&ctx, &mut app, at);
-    assert_eq!(app.editor.circuit.components.len(), 1);
-    let gate = app.editor.circuit.components[0].id;
+    assert_eq!(app.editor.session.circuit.components.len(), 1);
+    let gate = app.editor.session.circuit.components[0].id;
     app.editor.set_tool(Tool::Wire);
     click(&ctx, &mut app, at);
     let end = app.canvas.screen(Point::new(500, 200));
     click(&ctx, &mut app, end);
-    assert_eq!(app.editor.circuit.wires.len(), 1);
+    assert_eq!(app.editor.session.circuit.wires.len(), 1);
     app.editor.set_tool(Tool::Select);
     let body = app.canvas.screen(Point::new(270, 200));
     drag(&ctx, &mut app, body, body + vec2(80.0, 50.0));
     assert_eq!(
-        app.editor.circuit.component(gate).unwrap().position,
+        app.editor.session.circuit.component(gate).unwrap().position,
         Point::new(380, 250)
     );
     assert!(
         app.editor
+            .session
             .circuit
             .wires
             .iter()
             .any(|w| w.contains(Point::new(380, 250)))
     );
     key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
-    assert_eq!(app.editor.circuit.component(gate).unwrap().position, point);
-    assert_eq!(app.editor.circuit.wires.len(), 1);
+    assert_eq!(
+        app.editor.session.circuit.component(gate).unwrap().position,
+        point
+    );
+    assert_eq!(app.editor.session.circuit.wires.len(), 1);
 }
 
 #[test]
@@ -45,16 +49,18 @@ fn endpoint_drag_changes_wire_without_creating_a_component() {
     let (ctx, mut app) = setup();
     let id = app
         .editor
+        .session
         .circuit
         .add_wire(Point::new(100, 100), Point::new(300, 100))
         .unwrap();
-    app.editor.selection.insert(id);
+    app.editor.session.selection.insert(id);
     let start = app.canvas.screen(Point::new(300, 100));
     let end = app.canvas.screen(Point::new(350, 170));
     drag(&ctx, &mut app, start, end);
-    assert!(app.editor.circuit.components.is_empty());
+    assert!(app.editor.session.circuit.components.is_empty());
     assert!(
         app.editor
+            .session
             .circuit
             .wires
             .iter()
@@ -62,14 +68,15 @@ fn endpoint_drag_changes_wire_without_creating_a_component() {
     );
     assert!(
         app.editor
+            .session
             .circuit
             .wires
             .iter()
             .all(|w| w.a.x == w.b.x || w.a.y == w.b.y)
     );
     key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
-    assert_eq!(app.editor.circuit.wires.len(), 1);
-    assert_eq!(app.editor.circuit.wires[0].b, Point::new(300, 100));
+    assert_eq!(app.editor.session.circuit.wires.len(), 1);
+    assert_eq!(app.editor.session.circuit.wires[0].b, Point::new(300, 100));
 }
 
 #[test]
@@ -79,10 +86,10 @@ fn escape_cancels_partial_wire_and_move() {
     let at = app.canvas.screen(Point::new(100, 100));
     click(&ctx, &mut app, at);
     key(&ctx, &mut app, Key::Escape, Modifiers::NONE);
-    assert!(app.editor.circuit.wires.is_empty());
+    assert!(app.editor.session.circuit.wires.is_empty());
     app.editor.set_tool(Tool::Place(Kind::Pin));
     click(&ctx, &mut app, at);
-    let before = app.editor.circuit.clone();
+    let before = app.editor.session.circuit.clone();
     let body = at - vec2(20.0, 0.0);
     button(&ctx, &mut app, body, true);
     frame(
@@ -91,10 +98,10 @@ fn escape_cancels_partial_wire_and_move() {
         vec![Event::PointerMoved(body + vec2(40.0, 40.0))],
         Modifiers::NONE,
     );
-    assert_ne!(app.editor.circuit, before);
+    assert_ne!(app.editor.session.circuit, before);
     key(&ctx, &mut app, Key::Escape, Modifiers::NONE);
     button(&ctx, &mut app, body + vec2(40.0, 40.0), false);
-    assert_eq!(app.editor.circuit, before);
+    assert_eq!(app.editor.session.circuit, before);
 }
 
 #[test]
@@ -108,7 +115,7 @@ fn drawn_extensions_merge_with_selection_undo_redo_and_cancelled_moves() {
         click(&ctx, &mut app, end);
         assert_eq!(app.circuit().wires.len(), 1);
         assert_eq!(
-            app.editor.selection,
+            app.editor.session.selection,
             BTreeSet::from([app.circuit().wires[0].id])
         );
     }
@@ -148,9 +155,11 @@ fn drawn_extensions_merge_with_selection_undo_redo_and_cancelled_moves() {
 fn endpoint_drag_join_merges_both_wires_and_undo_restores_the_gap() {
     let (ctx, mut app) = setup();
     app.editor
+        .session
         .circuit
         .add_wire(Point::new(100, 100), Point::new(200, 100));
     app.editor
+        .session
         .circuit
         .add_wire(Point::new(300, 100), Point::new(400, 100));
     let at = app.canvas.screen(Point::new(150, 100));
@@ -165,7 +174,7 @@ fn endpoint_drag_join_merges_both_wires_and_undo_restores_the_gap() {
         (Point::new(100, 100), Point::new(400, 100))
     );
     assert_eq!(
-        app.editor.selection,
+        app.editor.session.selection,
         BTreeSet::from([app.circuit().wires[0].id])
     );
     key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
@@ -190,12 +199,16 @@ fn plain_wire_drags_branch_on_selected_and_unselected_imported_wires_at_every_zo
                 };
                 let original = app
                     .editor
+                    .session
                     .circuit
                     .add_wire(xy(100, 103), xy(300, 103))
                     .unwrap();
-                app.editor.circuit.add_wire(xy(100, 207), xy(300, 207));
+                app.editor
+                    .session
+                    .circuit
+                    .add_wire(xy(100, 207), xy(300, 207));
                 if selected {
-                    app.editor.selection.insert(original);
+                    app.editor.session.selection.insert(original);
                 }
                 for _ in 0..2 {
                     frame(&ctx, &mut app, vec![], Modifiers::NONE);
@@ -225,6 +238,7 @@ fn plain_wire_drags_branch_on_selected_and_unselected_imported_wires_at_every_zo
 fn clicking_a_wire_starts_a_branch_with_cancel_preview_and_single_undo() {
     let (ctx, mut app) = setup();
     app.editor
+        .session
         .circuit
         .add_wire(Point::new(100, 100), Point::new(300, 100));
     let before = app.circuit().clone();
@@ -257,15 +271,17 @@ fn ctrl_wire_drags_move_selection_and_cancel_or_undo_without_leaving_branches() 
         let (ctx, mut app) = setup();
         let id = app
             .editor
+            .session
             .circuit
             .add_wire(Point::new(100, 100), Point::new(300, 100))
             .unwrap();
         let pin = app
             .editor
+            .session
             .circuit
             .add_component(Component::new(Kind::Pin, Point::new(450, 100)));
         if selected {
-            app.editor.selection.extend([id, pin]);
+            app.editor.session.selection.extend([id, pin]);
         }
         for _ in 0..2 {
             frame(&ctx, &mut app, vec![], Modifiers::NONE);

@@ -10,7 +10,7 @@ use logisim_core::{Gate, Kind};
 
 impl Workspace {
     pub(super) fn toolbar(&mut self, ui: &mut Ui) {
-        if self.editor.appearance_mode {
+        if self.editor.session.context.appearance_mode {
             self.appearance.toolbar(ui, &mut self.editor);
             return;
         }

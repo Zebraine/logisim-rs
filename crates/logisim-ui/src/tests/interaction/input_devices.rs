@@ -85,7 +85,7 @@ fn joystick_releases_on_focus_modal_escape_tool_and_instance_changes() {
             2 => key(&ctx, &mut app, Key::Escape, Modifiers::NONE),
             3 => app.editor.set_tool(Tool::Select),
             _ => {
-                app.editor.appearance_mode = true;
+                app.editor.session.context.appearance_mode = true;
                 frame(&ctx, &mut app, vec![], Modifiers::NONE);
             }
         }

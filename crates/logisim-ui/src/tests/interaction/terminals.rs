@@ -11,6 +11,7 @@ fn keyboard_poke_routes_text_and_controls_without_editor_shortcuts_or_history() 
     let (ctx, mut app) = setup();
     let k = app
         .editor
+        .session
         .circuit
         .add_component(Component::new(Kind::Keyboard, Point::new(200, 200)));
     app.editor.set_tool(Tool::Poke);
@@ -18,7 +19,7 @@ fn keyboard_poke_routes_text_and_controls_without_editor_shortcuts_or_history() 
     let pos = app.canvas.screen(Point::new(250, 200));
     click(&ctx, &mut app, pos);
     assert_eq!(app.editor.simulation.keyboard_focus, Some(k));
-    let before = app.editor.circuit.clone();
+    let before = app.editor.session.circuit.clone();
     let camera = app.canvas.camera.offset;
     for (key, text) in [
         (Key::W, "w"),
@@ -67,7 +68,7 @@ fn keyboard_poke_routes_text_and_controls_without_editor_shortcuts_or_history() 
     let expected = [119, 114, 118, 49, 32, 0xe9, 0x4e2d, 0xf600, 65, 66, 10, 8]
         .map(|value| SimulationAction::TypeCharacter { id: k, value });
     assert_eq!(app.take_simulation_actions(), expected);
-    assert_eq!(app.editor.circuit, before);
+    assert_eq!(app.editor.session.circuit, before);
     assert_eq!(app.canvas.camera.offset, camera);
     assert_eq!(app.editor.tool, Tool::Poke);
     key(&ctx, &mut app, Key::R, Modifiers::COMMAND);
@@ -84,6 +85,7 @@ fn keyboard_focus_does_not_survive_modal_window_tool_or_context_changes() {
         let (ctx, mut app) = setup();
         let k = app
             .editor
+            .session
             .circuit
             .add_component(Component::new(Kind::Keyboard, Point::new(200, 200)));
         app.editor.set_tool(Tool::Poke);
@@ -134,7 +136,7 @@ fn pla_modal_blocks_canvas_and_file_shortcuts_and_escape_cancels() {
     app.editor.place(Point::new(300, 200));
     app.editor.set_tool(Tool::Select);
     let id = app.circuit().components[0].id;
-    app.editor.selection.insert(id);
+    app.editor.session.selection.insert(id);
     let original = app.circuit().clone();
     app.editor.pla_target = Some((false, id));
     frame(&ctx, &mut app, vec![], Modifiers::NONE);

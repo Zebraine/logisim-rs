@@ -58,19 +58,19 @@ fn build_is_one_edit_and_failure_does_not_change_project_or_history() {
     w.editor.install_generated("xor".into(), circuit).unwrap();
     let id = w.active_circuit();
     let built = w.circuit().clone();
-    assert_ne!(id, before.active);
+    assert_ne!(id, before.context.active);
     assert_eq!(w.project().main, before.project.main);
     w.editor.undo();
-    assert_eq!(w.active_circuit(), before.active);
+    assert_eq!(w.active_circuit(), before.context.active);
     assert_eq!(w.project().circuits, before.project.circuits);
     w.editor.redo();
     assert_eq!(w.active_circuit(), id);
     assert_eq!(w.circuit(), &built);
     // The result remains an ordinary editable subcircuit, including its Pin interface.
-    w.editor.switch_circuit(before.active);
+    w.editor.switch_circuit(before.context.active);
     let instance = w.project().instance(id, Point::new(400, 400)).unwrap();
     assert_eq!(instance.interface.ports.len(), 3);
-    w.editor.circuit.add_component(instance);
+    w.editor.session.circuit.add_component(instance);
     w.finish_edit();
     w.project().validate().unwrap();
 }

@@ -184,8 +184,8 @@ fn canvas_analysis_keeps_the_right_clicked_instance_as_the_pointer_moves() {
             .collect();
         let t = |key| i18n::with_language(language, || tr(key).to_owned());
         for (i, target) in [(0, child), (1, other)] {
-            w.editor.selection.clear();
-            w.editor.selection.insert(instances[1 - i].id);
+            w.editor.session.selection.clear();
+            w.editor.session.selection.insert(instances[1 - i].id);
             let pos = w.canvas.screen(instances[i].position);
             right_click(&ctx, &mut w, pos);
             let other_pos = w.canvas.screen(instances[1 - i].position);
@@ -210,7 +210,7 @@ fn missing_or_removed_analysis_targets_preserve_the_document_and_draft() {
     w.request_circuit_analysis(child);
     let (serial, target) = w.take_analysis_request().unwrap();
     assert_eq!(target, child);
-    w.editor.project.remove(child).unwrap();
+    w.editor.session.project.remove(child).unwrap();
     let before = w.project().clone();
     w.receive_analysis(serial, Ok(a));
     assert_eq!(w.generator.draft, "unfinished &");

@@ -16,9 +16,9 @@ impl Workspace {
     }
     fn show_localized(&mut self, ui: &mut Ui) {
         let before = (
-            self.editor.active,
-            self.editor.path.clone(),
-            self.editor.appearance_mode,
+            self.editor.session.context.active,
+            self.editor.session.context.path.clone(),
+            self.editor.session.context.appearance_mode,
         );
         let modal = self.editor.memory_target.is_some()
             || self.analysis.open()
@@ -34,7 +34,7 @@ impl Workspace {
             self.editor.simulation.keyboard_focus = None;
         }
         if modal
-            || self.editor.appearance_mode
+            || self.editor.session.context.appearance_mode
             || !ui.is_enabled()
             || ui.input(|i| !i.focused || !i.pointer.primary_down())
         {
@@ -61,9 +61,9 @@ impl Workspace {
         self.editor.sync_project();
         if before
             != (
-                self.editor.active,
-                self.editor.path.clone(),
-                self.editor.appearance_mode,
+                self.editor.session.context.active,
+                self.editor.session.context.path.clone(),
+                self.editor.session.context.appearance_mode,
             )
         {
             self.editor.simulation.release_momentary();
@@ -85,7 +85,8 @@ impl Workspace {
             })
         {
             self.finish_edit();
-            self.editor.appearance_mode = !self.editor.appearance_mode;
+            self.editor.session.context.appearance_mode =
+                !self.editor.session.context.appearance_mode;
         }
         if ui.is_enabled() && !ui.ctx().any_popup_open() {
             if ui.input_mut(|i| {
@@ -150,14 +151,14 @@ impl Workspace {
                 }
                 if self.fit_pending {
                     let mut bounds = egui::Rect::NOTHING;
-                    for c in &self.editor.circuit.components {
+                    for c in &self.editor.session.circuit.components {
                         bounds = bounds.union(drawing::bounds(c));
                     }
-                    for w in &self.editor.circuit.wires {
+                    for w in &self.editor.session.circuit.wires {
                         bounds.extend_with(drawing::pos(w.a));
                         bounds.extend_with(drawing::pos(w.b));
                     }
-                    if self.editor.appearance_mode {
+                    if self.editor.session.context.appearance_mode {
                         let (a, b) = appearance::AppearanceEditor::current(&self.editor).bounds();
                         bounds =
                             egui::Rect::from_two_pos(drawing::pos(a), drawing::pos(b)).expand(20.0);
@@ -169,7 +170,7 @@ impl Workspace {
                             .min(available.y / bounds.height().max(1.0))
                             .clamp(
                                 MIN_ZOOM,
-                                if self.editor.appearance_mode {
+                                if self.editor.session.context.appearance_mode {
                                     3.0
                                 } else {
                                     1.0
@@ -183,7 +184,7 @@ impl Workspace {
                 self.canvas.typing = self.editor.simulation.keyboard_focus.is_some()
                     && self.editor.tool == Tool::Poke;
                 let response = self.canvas.show(ui);
-                if self.editor.appearance_mode {
+                if self.editor.session.context.appearance_mode {
                     self.appearance
                         .show(ui, &mut self.editor, &mut self.canvas, &response);
                 } else {

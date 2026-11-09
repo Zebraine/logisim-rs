@@ -15,7 +15,7 @@ fn appearance_draw_cancel_undo_redo_and_mode_shortcut_use_real_canvas_input() {
         Key::E,
         Modifiers::COMMAND.plus(Modifiers::SHIFT),
     );
-    assert!(app.editor.appearance_mode);
+    assert!(app.editor.session.context.appearance_mode);
     assert!(app.take_simulation_actions().is_empty());
     frame(&ctx, &mut app, vec![], Modifiers::NONE);
     app.appearance.tool = ArtTool::Rect;
@@ -62,10 +62,11 @@ fn appearance_port_overlapping_anchor_can_move_independently_and_undo() {
     let (ctx, mut app) = setup();
     let pin = app
         .editor
+        .session
         .circuit
         .add_component(Component::new(Kind::Pin, Point::new(100, 100)));
     app.editor.sync_project();
-    app.editor.appearance_mode = true;
+    app.editor.session.context.appearance_mode = true;
     frame(&ctx, &mut app, vec![], Modifiers::NONE);
     let before = AppearanceEditor::current(&app.editor);
     let anchor = before.anchor;
@@ -94,7 +95,7 @@ fn appearance_port_overlapping_anchor_can_move_independently_and_undo() {
 fn appearance_clipboard_events_do_not_duplicate_paste_and_keep_ports_protected() {
     use crate::appearance::{Command, Target};
     let (ctx, mut app) = setup();
-    app.editor.appearance_mode = true;
+    app.editor.session.context.appearance_mode = true;
     frame(&ctx, &mut app, vec![], Modifiers::NONE);
     app.appearance.generate_package(&mut app.editor);
     app.appearance.command(&mut app.editor, Command::All);
@@ -142,7 +143,7 @@ fn appearance_clipboard_events_do_not_duplicate_paste_and_keep_ports_protected()
 fn appearance_text_focus_keeps_edit_keys_out_of_artwork_commands() {
     use crate::appearance::Tool as ArtTool;
     let (ctx, mut app) = setup();
-    app.editor.appearance_mode = true;
+    app.editor.session.context.appearance_mode = true;
     frame(&ctx, &mut app, vec![], Modifiers::NONE);
     app.appearance.tool = ArtTool::Text;
     let at = app.canvas.screen(Point::new(200, 80));
@@ -178,11 +179,12 @@ fn generated_package_fits_the_viewport_and_revert_is_undoable() {
     let (ctx, mut app) = setup();
     for y in [100, 200] {
         app.editor
+            .session
             .circuit
             .add_component(Component::new(Kind::Pin, Point::new(100, y)));
     }
     app.editor.sync_project();
-    app.editor.appearance_mode = true;
+    app.editor.session.context.appearance_mode = true;
     frame(&ctx, &mut app, vec![], Modifiers::NONE);
     app.appearance.generate_package(&mut app.editor);
     frame(&ctx, &mut app, vec![], Modifiers::NONE);
@@ -201,7 +203,7 @@ fn appearance_curve_polygon_handles_and_layer_order_use_canvas_events() {
     use crate::appearance::{Command, Target, Tool as ArtTool};
     use logisim_core::Geometry;
     let (ctx, mut app) = setup();
-    app.editor.appearance_mode = true;
+    app.editor.session.context.appearance_mode = true;
     frame(&ctx, &mut app, vec![], Modifiers::NONE);
     app.appearance.tool = ArtTool::Curve;
     let a = app.canvas.screen(Point::new(160, 140));
@@ -282,10 +284,11 @@ fn appearance_grid_coordinate_typing_waits_for_enter_before_snapping() {
     let (ctx, mut app) = setup();
     let pin = app
         .editor
+        .session
         .circuit
         .add_component(Component::new(Kind::Pin, Point::new(100, 100)));
     app.editor.sync_project();
-    app.editor.appearance_mode = true;
+    app.editor.session.context.appearance_mode = true;
     frame(&ctx, &mut app, vec![], Modifiers::NONE);
     app.appearance.selected.insert(Target::Port(pin));
     frame(&ctx, &mut app, vec![], Modifiers::NONE);

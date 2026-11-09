@@ -8,18 +8,19 @@ use logisim_core::{
 
 pub(crate) fn show(ui: &mut Ui, editor: &mut Editor, circuit_name: &str) {
     let placing = matches!(editor.tool, Tool::Place(_));
-    if !editor.path.is_empty() {
+    if !editor.session.context.path.is_empty() {
         ui.weak(tr(
             "Instance inputs are driven by the parent circuit. Edits apply to all instances.",
         ));
     }
     let target = if placing {
         Some(editor.template.clone())
-    } else if editor.selection.len() == 1 {
+    } else if editor.session.selection.len() == 1 {
         editor
+            .session
             .selection
             .first()
-            .and_then(|id| editor.circuit.component(*id))
+            .and_then(|id| editor.session.circuit.component(*id))
             .cloned()
     } else {
         None
@@ -30,8 +31,8 @@ pub(crate) fn show(ui: &mut Ui, editor: &mut Editor, circuit_name: &str) {
         tf!("Tool: {}", tr(editor.tool.name()))
     } else if let Some(c) = &target {
         tf!("Selection: {}", tr(c.kind.name()))
-    } else if !editor.selection.is_empty() {
-        tf!("Selection: {} item(s)", editor.selection.len())
+    } else if !editor.session.selection.is_empty() {
+        tf!("Selection: {} item(s)", editor.session.selection.len())
     } else {
         tf!("Circuit: {}", circuit_name)
     };
@@ -67,7 +68,7 @@ pub(crate) fn show(ui: &mut Ui, editor: &mut Editor, circuit_name: &str) {
                                 .on_hover_text(tr("Select affected components and wires"))
                                 .clicked()
                             {
-                                editor.selection = issue.targets.clone();
+                                editor.session.selection = issue.targets.clone();
                             }
                         }
                         if editor.simulation.view.issues.len() > 32 {
@@ -80,7 +81,7 @@ pub(crate) fn show(ui: &mut Ui, editor: &mut Editor, circuit_name: &str) {
 }
 
 fn selection_info(ui: &mut Ui, editor: &mut Editor) {
-    if !editor.selection.is_empty() {
+    if !editor.session.selection.is_empty() {
         editor.commit_properties();
         ui.horizontal(|ui| {
             if ui
@@ -93,18 +94,19 @@ fn selection_info(ui: &mut Ui, editor: &mut Editor) {
                 editor.delete();
             }
         });
-        if editor.selection.len() == 1
+        if editor.session.selection.len() == 1
             && let Some(w) = editor
+                .session
                 .circuit
                 .wires
                 .iter()
-                .find(|w| editor.selection.contains(&w.id))
+                .find(|w| editor.session.selection.contains(&w.id))
         {
             ui.label(tf!("Start: {}, {}", w.a.x, w.a.y));
             ui.label(tf!("End: {}, {}", w.b.x, w.b.y));
             ui.label(tf!(
                 "Connected wires: {}",
-                editor.circuit.connected_wires(w.id).len()
+                editor.session.circuit.connected_wires(w.id).len()
             ));
             ui.weak(tr("Click or drag the wire to branch. Ctrl-drag moves; drag blue endpoint handles to reshape."));
             if let Some(signal) = editor.simulation.view.wires.get(&w.id) {
@@ -117,7 +119,7 @@ fn selection_info(ui: &mut Ui, editor: &mut Editor) {
         }
         return;
     }
-    let mut label = editor.circuit.label.clone();
+    let mut label = editor.session.circuit.label.clone();
     ui.label(tr("Circuit label"));
     let mut active = ui.text_edit_singleline(&mut label.text).has_focus();
     egui::Grid::new("circuit_label_properties")
@@ -144,8 +146,8 @@ fn selection_info(ui: &mut Ui, editor: &mut Editor) {
     ui.separator();
     ui.label(tf!(
         "{} components · {} wires",
-        editor.circuit.components.len(),
-        editor.circuit.wires.len()
+        editor.session.circuit.components.len(),
+        editor.session.circuit.wires.len()
     ));
     ui.add_space(10.0);
     if editor.tool == Tool::Wire {

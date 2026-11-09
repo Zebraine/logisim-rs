@@ -237,7 +237,11 @@ impl Workspace {
                 match result {
                     Ok(()) => {
                         self.generated_expressions.remember(
-                            self.editor.project.circuit(self.editor.active).unwrap(),
+                            self.editor
+                                .session
+                                .project
+                                .circuit(self.editor.session.context.active)
+                                .unwrap(),
                             expressions,
                         );
                         // Host replies arrive before show() captures the current

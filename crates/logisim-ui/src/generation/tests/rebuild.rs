@@ -53,22 +53,22 @@ fn localized_build_replaces_the_analysis_target_and_restores_context_with_one_un
         click(&ctx, &mut w, &label("Build Circuit"));
         assert!(!w.generator.open);
         assert_eq!(w.active_circuit(), child);
-        assert_eq!(w.editor.path, [instance]);
-        assert_eq!(w.editor.root, before.root);
+        assert_eq!(w.editor.session.context.path, [instance]);
+        assert_eq!(w.editor.session.context.root, before.context.root);
         assert_eq!(w.project().circuits.len(), 2);
         assert_eq!(
-            w.project().circuit(before.root),
-            before.project.circuit(before.root)
+            w.project().circuit(before.context.root),
+            before.project.circuit(before.context.root)
         );
-        assert_eq!(w.circuit().appearance, before.circuit.appearance);
+        assert_eq!(w.circuit().appearance, before.circuit().appearance);
         let built = w.editor.snapshot();
-        assert_ne!(built.circuit, before.circuit);
+        assert_ne!(built.circuit(), before.circuit());
         w.editor.undo();
         assert_eq!(w.project(), &before.project);
-        assert_eq!(w.editor.path, before.path);
+        assert_eq!(w.editor.session.context.path, before.context.path);
         w.editor.redo();
         assert_eq!(w.project(), &built.project);
-        assert_eq!(w.editor.path, built.path);
+        assert_eq!(w.editor.session.context.path, built.context.path);
     }
 }
 
@@ -91,7 +91,7 @@ fn opting_out_creates_a_copy_without_replacing_the_source() {
 #[test]
 fn changed_or_removed_targets_fail_atomically_instead_of_overwriting_another_circuit() {
     let (mut w, child, _) = workspace(Language::English);
-    w.editor.circuit.label.text = "changed after analysis".into();
+    w.editor.session.circuit.label.text = "changed after analysis".into();
     w.editor.sync_project();
     let before = w.editor.snapshot();
     w.generator.request_build();
@@ -106,13 +106,13 @@ fn changed_or_removed_targets_fail_atomically_instead_of_overwriting_another_cir
             .contains("changed")
     );
     assert_eq!(w.project(), &before.project);
-    assert_eq!(w.editor.circuit, before.circuit);
+    assert_eq!(&w.editor.session.circuit, before.circuit());
     assert!(!w.editor.can_undo());
-    let parent = w.editor.root;
+    let parent = w.editor.session.context.root;
     w.editor.switch_circuit(parent);
-    w.editor.circuit.components.clear();
+    w.editor.session.circuit.components.clear();
     w.editor.sync_project();
-    w.editor.project.remove(child).unwrap();
+    w.editor.session.project.remove(child).unwrap();
     let before = w.editor.snapshot();
     w.generator.request_build();
     finish_jobs(&mut w);

@@ -11,6 +11,7 @@ fn poke_and_simulation_shortcuts_emit_commands_without_editing_the_circuit() {
     let (ctx, mut app) = setup();
     let id = app
         .editor
+        .session
         .circuit
         .add_component(Component::new(Kind::Pin, Point::new(200, 100)));
     app.editor.simulation.view.inputs.insert(
@@ -21,7 +22,7 @@ fn poke_and_simulation_shortcuts_emit_commands_without_editing_the_circuit() {
             ..Default::default()
         },
     );
-    let before = app.editor.circuit.clone();
+    let before = app.editor.session.circuit.clone();
     let body = app.canvas.screen(Point::new(180, 100));
     click(&ctx, &mut app, body);
     key(&ctx, &mut app, Key::P, Modifiers::NONE);
@@ -41,10 +42,10 @@ fn poke_and_simulation_shortcuts_emit_commands_without_editing_the_circuit() {
             SimulationAction::Reset,
         ]
     );
-    assert_eq!(app.editor.circuit, before);
+    assert_eq!(app.editor.session.circuit, before);
     assert!(!app.editor.can_undo());
     drag(&ctx, &mut app, body, body + vec2(70.0, 30.0));
-    assert_eq!(app.editor.circuit, before);
+    assert_eq!(app.editor.session.circuit, before);
     app.editor.simulation.view.enabled = true;
     key(&ctx, &mut app, Key::I, Modifiers::COMMAND);
     assert!(app.take_simulation_actions().is_empty());
@@ -72,7 +73,7 @@ fn multibit_poke_focuses_hex_input_and_enter_applies_without_global_commands() {
     let (ctx, mut app) = setup();
     let mut pin = Component::new(Kind::Pin, Point::new(200, 100));
     pin.bits = 4;
-    let id = app.editor.circuit.add_component(pin);
+    let id = app.editor.session.circuit.add_component(pin);
     app.editor.simulation.view.inputs.insert(
         id,
         InputValue {
@@ -123,9 +124,9 @@ fn sequential_placement_poke_and_tick_shortcuts_preserve_edit_history() {
         }
         let at = app.canvas.screen(point);
         click(&ctx, &mut app, at);
-        ids.push(app.editor.circuit.components.last().unwrap().id);
+        ids.push(app.editor.session.circuit.components.last().unwrap().id);
     }
-    let before = app.editor.circuit.clone();
+    let before = app.editor.session.circuit.clone();
     app.editor.simulation.view.has_clocks = true;
     app.editor.simulation.view.clocks.insert(ids[0]);
     key(&ctx, &mut app, Key::P, Modifiers::NONE);
@@ -148,13 +149,13 @@ fn sequential_placement_poke_and_tick_shortcuts_preserve_edit_history() {
             SimulationAction::ToggleTicks,
         ]
     );
-    assert_eq!(app.editor.circuit, before);
+    assert_eq!(app.editor.session.circuit, before);
     app.editor.simulation.view.pending = 1;
     key(&ctx, &mut app, Key::T, Modifiers::COMMAND);
     assert!(app.take_simulation_actions().is_empty());
     key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
-    assert_eq!(app.editor.circuit.components.len(), 2);
-    assert!(app.editor.circuit.component(ids[2]).is_none());
+    assert_eq!(app.editor.session.circuit.components.len(), 2);
+    assert!(app.editor.session.circuit.component(ids[2]).is_none());
 }
 
 #[test]

@@ -59,7 +59,7 @@ fn plexers_library_and_output_properties_work_in_both_languages() {
         app.editor.place(Point::new(300, 300));
         app.editor.set_tool(Tool::Select);
         let id = app.circuit().components[0].id;
-        app.editor.selection.insert(id);
+        app.editor.session.selection.insert(id);
         click(&ctx, &mut app, &translated("Zero output"));
         click(&ctx, &mut app, &translated("Floating"));
         assert!(!app.circuit().component(id).unwrap().plexing.disabled_zero);
@@ -135,8 +135,9 @@ fn extra_plexer_property_widgets_edit_groups_and_formats_with_undo_in_both_langu
         app.editor.place(Point::new(300, 400));
         app.editor.set_tool(Tool::Select);
         let c = app.circuit().components.last().unwrap().clone();
-        app.editor.selection.insert(c.id);
+        app.editor.session.selection.insert(c.id);
         app.editor
+            .session
             .circuit
             .add_wire(Point::new(160, 400), Point::new(260, 400));
         let before = app.circuit().clone();

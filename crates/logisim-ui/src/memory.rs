@@ -33,9 +33,9 @@ impl crate::Workspace {
             return None;
         }
         Some(MemoryImportTarget {
-            circuit: self.editor.active,
-            root: self.editor.root,
-            path: self.editor.path.clone(),
+            circuit: self.editor.session.context.active,
+            root: self.editor.session.context.root,
+            path: self.editor.session.context.path.clone(),
             placing,
             component: c.clone(),
         })
@@ -260,14 +260,19 @@ impl MemoryEditor {
         let target = if placing {
             Some(editor.template.clone())
         } else {
-            editor.circuit.component(id).cloned()
+            editor.session.circuit.component(id).cloned()
         };
         let Some(c) = target.filter(|c| c.kind.is_memory() && c.id == id) else {
             editor.memory_target = None;
             return;
         };
         editor.commit_properties();
-        let context = (editor.active, editor.path.clone(), placing, id);
+        let context = (
+            editor.session.context.active,
+            editor.session.context.path.clone(),
+            placing,
+            id,
+        );
         if self.context.as_ref() != Some(&context) {
             self.context = Some(context);
             self.address = 0;

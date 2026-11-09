@@ -43,10 +43,10 @@ impl Workspace {
                                 (Icon::Down, "Move down", CircuitCommand::Down),
                                 (Icon::Trash, "Remove circuit", CircuitCommand::Remove),
                             ] {
-                                let enabled = !matches!(command,CircuitCommand::Remove) || self.editor.project.can_remove(self.editor.active);
+                                let enabled = !matches!(command,CircuitCommand::Remove) || self.editor.session.project.can_remove(self.editor.session.context.active);
                                 if icons::button(ui, icon, false, enabled, name).clicked() { self.circuit_command(command); }
                             }
-                            if !self.editor.path.is_empty() && ui.small_button(tr("Back")).on_hover_text(tr("Return to parent instance · Alt+Left")).clicked() { self.editor.leave_instance(); }
+                            if !self.editor.session.context.path.is_empty() && ui.small_button(tr("Back")).on_hover_text(tr("Return to parent instance · Alt+Left")).clicked() { self.editor.leave_instance(); }
 
                         });
                     });
@@ -58,23 +58,23 @@ impl Workspace {
                             .id_salt("document-tree")
                             .default_open(true)
                             .show(ui, |ui| {
-                                let definitions: Vec<_> = self.editor.project.circuits.iter().map(|c|(c.id,c.name.clone())).collect();
+                                let definitions: Vec<_> = self.editor.session.project.circuits.iter().map(|c|(c.id,c.name.clone())).collect();
                                 for (id,name) in definitions {
-                                    let allowed = self.editor.project.can_instantiate(self.editor.active,id);
-                                    let label = format!("{}{}",name,if id == self.editor.project.main { tr("  (main)") } else { "" });
-                                    let response = ui.selectable_label(self.editor.active == id, label)
+                                    let allowed = self.editor.session.project.can_instantiate(self.editor.session.context.active,id);
+                                    let label = format!("{}{}",name,if id == self.editor.session.project.main { tr("  (main)") } else { "" });
+                                    let response = ui.selectable_label(self.editor.session.context.active == id, label)
                                         .on_hover_text(tr("Double-click to edit; single-click another circuit to place an instance."));
                                     if response.double_clicked() { self.editor.switch_circuit(id); }
-                                    else if response.clicked() && allowed { self.editor.appearance_mode=false; self.editor.set_tool(Tool::Place(Kind::Subcircuit(id))); }
+                                    else if response.clicked() && allowed { self.editor.session.context.appearance_mode=false; self.editor.set_tool(Tool::Place(Kind::Subcircuit(id))); }
                                     response.context_menu(|ui| {
                                         if ui.button(tr("Open circuit")).clicked() { self.editor.switch_circuit(id); ui.close(); }
                                         if ui.button(tr("Analyze Circuit…")).clicked() { self.request_circuit_analysis(id); ui.close(); }
                                         if ui.add_enabled(allowed,egui::Button::new(tr("Place instance"))).clicked() { self.editor.set_tool(Tool::Place(Kind::Subcircuit(id))); ui.close(); }
-                                        if ui.button(tr("Edit appearance")).clicked(){self.finish_edit();self.editor.switch_circuit(id);self.editor.appearance_mode=true;ui.close();}
+                                        if ui.button(tr("Edit appearance")).clicked(){self.finish_edit();self.editor.switch_circuit(id);self.editor.session.context.appearance_mode=true;ui.close();}
                                         if ui.button(tr("Rename…")).clicked() { self.editor.switch_circuit(id); self.circuit_command(CircuitCommand::Rename); ui.close(); }
                                     });
                                 }
-                                if !self.editor.path.is_empty() {
+                                if !self.editor.session.context.path.is_empty() {
                                     ui.weak(self.editor.context_label()).on_hover_text(tr("Viewing this instance. Edits change the shared circuit definition."));
                                 }
                                 self.library_groups(ui);
@@ -96,7 +96,7 @@ impl Workspace {
             .frame(Frame::NONE.fill(CHROME))
             .show(ui, |ui| {
                 let name = self.circuit_name().to_owned();
-                if self.editor.appearance_mode {
+                if self.editor.session.context.appearance_mode {
                     self.appearance.properties(ui, &mut self.editor);
                 } else {
                     properties::show(ui, &mut self.editor, &name);
@@ -113,7 +113,7 @@ impl Workspace {
             response
         };
         if response.clicked() {
-            self.editor.appearance_mode = false;
+            self.editor.session.context.appearance_mode = false;
             self.editor.set_tool(tool);
         }
     }

@@ -32,15 +32,15 @@ fn wiring_tools_place_duplicate_and_undo_and_fixed_extender_rejects_rotation() {
     key(&ctx, &mut app, Key::Escape, Modifiers::NONE);
     key(&ctx, &mut app, Key::R, Modifiers::NONE);
     assert_eq!(
-        app.editor.circuit.components.last().unwrap().facing,
+        app.editor.session.circuit.components.last().unwrap().facing,
         logisim_core::Facing::East
     );
     key(&ctx, &mut app, Key::A, Modifiers::COMMAND);
     key(&ctx, &mut app, Key::D, Modifiers::COMMAND);
-    assert_eq!(app.editor.circuit.components.len(), 12);
-    assert_eq!(app.editor.circuit.ids().len(), 12);
+    assert_eq!(app.editor.session.circuit.components.len(), 12);
+    assert_eq!(app.editor.session.circuit.ids().len(), 12);
     key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
-    assert_eq!(app.editor.circuit.components.len(), 6);
+    assert_eq!(app.editor.session.circuit.components.len(), 6);
 }
 
 #[test]
@@ -69,7 +69,7 @@ fn plexers_place_connect_rotate_and_undo_using_canvas_events() {
     let end = app.canvas.screen(out + Point::new(50, 0));
     click(&ctx, &mut app, end);
     app.editor.set_tool(Tool::Select);
-    app.editor.selection = BTreeSet::from([c.id]);
+    app.editor.session.selection = BTreeSet::from([c.id]);
     let before = app.circuit().clone();
     key(&ctx, &mut app, Key::R, Modifiers::NONE);
     assert_eq!(
@@ -111,7 +111,7 @@ fn arithmetic_canvas_places_wires_and_keeps_fixed_orientation() {
     let end = app.canvas.screen(c.ports()[4] + Point::new(0, 60));
     click(&ctx, &mut app, end);
     app.editor.set_tool(Tool::Select);
-    app.editor.selection = BTreeSet::from([c.id]);
+    app.editor.session.selection = BTreeSet::from([c.id]);
     let before = app.circuit().clone();
     key(&ctx, &mut app, Key::R, Modifiers::NONE);
     assert_eq!(app.circuit(), &before);
@@ -294,7 +294,7 @@ fn ttl_canvas_placement_wiring_rotation_move_duplicate_and_undo() {
     frame(&ctx, &mut app, vec![], Modifiers::NONE);
     let body = app.canvas.screen(Point::new(270, 200));
     click(&ctx, &mut app, body);
-    assert!(app.editor.selection.contains(&id));
+    assert!(app.editor.session.selection.contains(&id));
     let before = app.circuit().clone();
     key(&ctx, &mut app, Key::R, Modifiers::NONE);
     assert_ne!(app.circuit().component(id).unwrap().facing, Facing::East);

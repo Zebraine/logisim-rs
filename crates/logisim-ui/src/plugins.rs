@@ -16,9 +16,9 @@ impl Workspace {
     /// Dependency edits are part of the document and participate in Undo.
     pub fn set_plugin_sources(&mut self, sources: Vec<logisim_core::plugin::PluginSource>) {
         self.finish_edit();
-        if self.editor.project.plugin_sources != sources {
+        if self.editor.session.project.plugin_sources != sources {
             let before = self.editor.snapshot();
-            self.editor.project.plugin_sources = sources;
+            self.editor.session.project.plugin_sources = sources;
             self.editor.record(before);
         }
     }
@@ -43,7 +43,7 @@ impl Workspace {
                                 .selectable_label(selected, &component.tool.name)
                                 .clicked()
                             {
-                                self.editor.appearance_mode = false;
+                                self.editor.session.context.appearance_mode = false;
                                 self.editor.set_tool(Tool::Place(Kind::Plugin));
                                 self.editor.template =
                                     Component::from_plugin(component.clone(), Point::ZERO);

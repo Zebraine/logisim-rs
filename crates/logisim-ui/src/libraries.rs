@@ -13,14 +13,7 @@ impl Workspace {
     pub fn apply_library_import(&mut self, import: LibraryImport) {
         self.finish_edit();
         let before = self.editor.snapshot();
-        self.editor.project = import.project;
-        self.editor.circuit = self
-            .editor
-            .project
-            .circuit(self.editor.active)
-            .unwrap()
-            .circuit
-            .clone();
+        self.editor.session.replace_project(import.project);
         self.editor.record(before);
         self.libraries.push(LibraryGroup {
             name: import.name,
@@ -33,7 +26,7 @@ impl Workspace {
             let definitions: Vec<_> = group
                 .circuits
                 .iter()
-                .filter_map(|id| self.editor.project.circuit(*id))
+                .filter_map(|id| self.editor.session.project.circuit(*id))
                 .map(|d| (d.id, d.name.clone()))
                 .collect();
             if definitions.is_empty() {
@@ -46,13 +39,13 @@ impl Workspace {
                     ui.weak(tr("Embedded library snapshot"));
                     for (id, name) in definitions {
                         let tool = Tool::Place(Kind::Subcircuit(id));
-                        let allowed = self.editor.project.can_instantiate(self.editor.active, id);
+                        let allowed = self.editor.session.project.can_instantiate(self.editor.session.context.active, id);
                         let response = ui.add_enabled(allowed, egui::Button::selectable(self.editor.tool == tool, name))
                             .on_hover_text(tr("Double-click to edit; single-click another circuit to place an instance."));
                         if response.double_clicked() {
                             self.editor.switch_circuit(id);
                         } else if response.clicked() {
-                            self.editor.appearance_mode = false;
+                            self.editor.session.context.appearance_mode = false;
                             self.editor.set_tool(tool);
                         }
                     }

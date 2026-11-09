@@ -70,6 +70,7 @@ fn edits_invalidate_memory_undo_restores_it_and_old_analysis_results_are_rejecte
     build(&mut w, original.clone(), "xor");
     let before = w.editor.snapshot();
     w.editor
+        .session
         .circuit
         .components
         .iter_mut()
@@ -90,6 +91,7 @@ fn edits_invalidate_memory_undo_restores_it_and_old_analysis_results_are_rejecte
     assert!(w.take_analysis_request().is_some());
     w.editor.undo();
     w.editor
+        .session
         .circuit
         .components
         .iter_mut()

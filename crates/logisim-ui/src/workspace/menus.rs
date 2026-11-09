@@ -31,7 +31,7 @@ impl Workspace {
                 }
             });
             ui.menu_button(tr("Edit"), |ui| {
-                if self.editor.appearance_mode {
+                if self.editor.session.context.appearance_mode {
                     self.appearance.edit_menu(ui, &mut self.editor);
                     return;
                 }
@@ -56,7 +56,7 @@ impl Workspace {
                     ui.close();
                 }
                 ui.separator();
-                let selected = !self.editor.selection.is_empty();
+                let selected = !self.editor.session.selection.is_empty();
                 if ui
                     .add_enabled(selected, egui::Button::new(tr("Cut · Ctrl+X")))
                     .clicked()
@@ -121,14 +121,17 @@ impl Workspace {
                     (
                         "Set as Main Circuit",
                         CircuitCommand::Main,
-                        self.editor.active != self.editor.project.main,
+                        self.editor.session.context.active != self.editor.session.project.main,
                     ),
                     ("Move Circuit Up", CircuitCommand::Up, true),
                     ("Move Circuit Down", CircuitCommand::Down, true),
                     (
                         "Remove Circuit…",
                         CircuitCommand::Remove,
-                        self.editor.project.can_remove(self.editor.active),
+                        self.editor
+                            .session
+                            .project
+                            .can_remove(self.editor.session.context.active),
                     ),
                 ] {
                     if ui
@@ -142,7 +145,7 @@ impl Workspace {
                 ui.separator();
                 if ui
                     .add_enabled(
-                        !self.editor.path.is_empty(),
+                        !self.editor.session.context.path.is_empty(),
                         egui::Button::new(tr("Return to Parent · Alt+Left")),
                     )
                     .clicked()
@@ -152,27 +155,30 @@ impl Workspace {
                 }
                 ui.separator();
                 if ui
-                    .selectable_label(!self.editor.appearance_mode, tr("Edit Circuit Layout"))
+                    .selectable_label(
+                        !self.editor.session.context.appearance_mode,
+                        tr("Edit Circuit Layout"),
+                    )
                     .clicked()
                 {
                     self.finish_edit();
-                    self.editor.appearance_mode = false;
+                    self.editor.session.context.appearance_mode = false;
                     ui.close();
                 }
                 if ui
                     .selectable_label(
-                        self.editor.appearance_mode,
+                        self.editor.session.context.appearance_mode,
                         tr("Edit Circuit Appearance · Ctrl+Shift+E"),
                     )
                     .clicked()
                 {
                     self.finish_edit();
-                    self.editor.appearance_mode = true;
+                    self.editor.session.context.appearance_mode = true;
                     ui.close();
                 }
                 if ui
                     .add_enabled(
-                        self.editor.circuit.appearance.is_some(),
+                        self.editor.session.circuit.appearance.is_some(),
                         egui::Button::new(tr("Revert to Default Appearance")),
                     )
                     .clicked()

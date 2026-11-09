@@ -28,8 +28,9 @@ fn latch_library_modes_layout_controls_and_undo_work_in_both_languages() {
         app.editor.place(Point::new(300, 200));
         app.editor.set_tool(Tool::Select);
         let id = app.circuit().components[0].id;
-        app.editor.selection.insert(id);
+        app.editor.session.selection.insert(id);
         app.editor
+            .session
             .circuit
             .add_wire(Point::new(100, 200), Point::new(240, 200));
         let before = app.circuit().clone();
@@ -230,8 +231,9 @@ fn counter_shift_widgets_edit_modes_width_and_undo_in_both_languages() {
         app.editor.place(Point::new(300, 200));
         app.editor.set_tool(Tool::Select);
         let id = app.circuit().components[0].id;
-        app.editor.selection.insert(id);
+        app.editor.session.selection.insert(id);
         app.editor
+            .session
             .circuit
             .add_wire(Point::new(100, 210), Point::new(270, 210));
         let before = app.circuit().clone();
@@ -341,8 +343,9 @@ fn random_library_seed_trigger_and_undo_are_available_in_both_languages() {
         app.editor.place(Point::new(300, 200));
         app.editor.set_tool(Tool::Select);
         let c = app.circuit().components[0].clone();
-        app.editor.selection.insert(c.id);
+        app.editor.session.selection.insert(c.id);
         app.editor
+            .session
             .circuit
             .add_wire(c.ports()[0], c.ports()[0] + Point::new(100, 0));
         let before = app.circuit().clone();

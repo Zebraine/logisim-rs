@@ -11,6 +11,11 @@ use egui::{Key, Modifiers, PointerButton, Pos2, Rect, Response, Ui, Vec2};
 use logisim_core::{Circuit, Component, GRID, Gate, Id, Kind, Point, Project};
 use std::collections::BTreeSet;
 
+mod history;
+mod session;
+use history::History;
+pub(crate) use session::{EditSession, Snapshot};
+
 const CLIPBOARD_MARKER: &str = "logisim-rs selection (paste into the same window)";
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -30,20 +35,6 @@ impl Tool {
             Self::Place(kind) => kind.name(),
         }
     }
-}
-#[derive(Clone)]
-pub(crate) struct Snapshot {
-    pub appearance_mode: bool,
-    pub project: Project,
-    pub active: Id,
-    pub root: Id,
-    pub path: Vec<Id>,
-    pub circuit: Circuit,
-    pub selection: BTreeSet<Id>,
-}
-struct Edit {
-    before: Snapshot,
-    after: Snapshot,
 }
 enum Gesture {
     Slider {
@@ -73,169 +64,103 @@ enum Gesture {
 }
 
 pub(crate) struct Editor {
-    pub appearance_mode: bool,
-    pub project: Project,
-    pub active: Id,
-    pub root: Id,
-    pub path: Vec<Id>,
+    pub session: EditSession,
+    history: History,
     pub open_instance: Option<Id>,
     pub analyze_circuit: Option<Id>,
     context_instance: Option<Id>,
     pub project_error: Option<String>,
-    pub circuit: Circuit,
-    pub selection: BTreeSet<Id>,
     pub tool: Tool,
     pub template: Component,
     pub memory_target: Option<(bool, Id)>,
     pub pla_target: Option<(bool, Id)>,
     pub focus_text: bool,
     pub simulation: SimulationUi,
-    undo: Vec<Edit>,
-    redo: Vec<Edit>,
     clipboard: Option<Circuit>,
     publish_clipboard: bool,
     paste_count: i32,
     gesture: Option<Gesture>,
     wire_start: Option<Point>,
-    property_before: Option<Snapshot>,
     drawing_cache: drawing::CircuitCache,
 }
 impl Default for Editor {
     fn default() -> Self {
+        Self::new(Project::default())
+    }
+}
+impl Editor {
+    pub fn new(project: Project) -> Self {
         Self {
-            appearance_mode: false,
-            project: Project::default(),
-            active: 1,
-            root: 1,
-            path: vec![],
+            session: EditSession::new(project),
+            history: History::default(),
             open_instance: None,
             analyze_circuit: None,
             context_instance: None,
             project_error: None,
-            circuit: Circuit::default(),
-            selection: BTreeSet::new(),
             tool: Tool::Select,
             template: Component::new(Kind::Gate(Gate::And), Point::ZERO),
             memory_target: None,
             pla_target: None,
             focus_text: false,
             simulation: SimulationUi::default(),
-            undo: vec![],
-            redo: vec![],
             clipboard: None,
             publish_clipboard: false,
             paste_count: 0,
             gesture: None,
             wire_start: None,
-            property_before: None,
             drawing_cache: drawing::CircuitCache::default(),
         }
     }
-}
-impl Editor {
     pub fn snapshot(&self) -> Snapshot {
-        let mut project = self.project.clone();
-        if let Some(definition) = project.circuit_mut(self.active) {
-            definition.circuit = self.circuit.clone();
-        }
-        Snapshot {
-            appearance_mode: self.appearance_mode,
-            project,
-            active: self.active,
-            root: self.root,
-            path: self.path.clone(),
-            circuit: self.circuit.clone(),
-            selection: self.selection.clone(),
-        }
+        self.session.snapshot()
     }
-    fn restore(&mut self, mut state: Snapshot) {
-        self.appearance_mode = state.appearance_mode;
-        state.project.preserve_allocations(&self.project);
-        self.project = state.project;
-        self.active = state.active;
-        self.root = state.root;
-        self.path = state.path;
-        self.circuit = state.circuit;
-        self.selection = state.selection;
+    fn restore(&mut self, state: Snapshot) {
+        self.session.restore(state);
         if let Tool::Place(Kind::Subcircuit(id)) = self.tool
-            && !self.project.can_instantiate(self.active, id)
+            && !self
+                .session
+                .project
+                .can_instantiate(self.session.context.active, id)
         {
             self.tool = Tool::Select;
         }
     }
     pub fn record(&mut self, before: Snapshot) {
         self.sync_project();
-        for definition in &mut self.project.circuits {
-            if before.project.circuit(definition.id).map(|d| &d.circuit)
-                != Some(&definition.circuit)
-            {
-                let mapped = definition.circuit.normalize_wires();
-                if definition.id == self.active {
-                    self.selection = self
-                        .selection
-                        .iter()
-                        .flat_map(|id| {
-                            mapped.get(id).cloned().unwrap_or_else(|| {
-                                if definition.circuit.component(*id).is_some() {
-                                    BTreeSet::from([*id])
-                                } else {
-                                    BTreeSet::new()
-                                }
-                            })
-                        })
-                        .collect();
-                }
-            }
-        }
-        self.circuit = self.project.circuit(self.active).unwrap().circuit.clone();
-        if before.project != self.project || before.circuit != self.circuit {
-            self.undo.push(Edit {
-                before,
-                after: self.snapshot(),
-            });
-            if self.undo.len() > 100 {
-                self.undo.remove(0);
-            }
-            self.redo.clear();
-        }
+        self.session.normalize_wires_since(&before);
+        self.history.record(before, &self.session);
     }
     pub fn commit_properties(&mut self) {
-        if let Some(before) = self.property_before.take() {
+        if let Some(before) = self.history.take_properties() {
             self.record(before);
         }
     }
     pub fn update_circuit_label(&mut self, label: logisim_core::CircuitLabel) {
-        if self.circuit.label == label {
+        if self.session.circuit.label == label {
             return;
         }
-        if self.property_before.is_none() {
-            self.property_before = Some(self.snapshot());
-        }
-        self.circuit.label = label;
+        self.history.begin_properties(&self.session);
+        self.session.circuit.label = label;
     }
     pub fn update_appearance(&mut self, appearance: logisim_core::Appearance) {
-        if self.circuit.appearance.as_ref() == Some(&appearance) {
+        if self.session.circuit.appearance.as_ref() == Some(&appearance) {
             return;
         }
-        if self.property_before.is_none() {
-            self.property_before = Some(self.snapshot());
-        }
-        self.circuit.appearance = Some(appearance);
+        self.history.begin_properties(&self.session);
+        self.session.circuit.appearance = Some(appearance);
     }
     pub fn update_property(&mut self, component: Component) {
-        if self.circuit.component(component.id) == Some(&component) {
+        if self.session.circuit.component(component.id) == Some(&component) {
             return;
         }
-        if self.property_before.is_none() {
-            self.property_before = Some(self.snapshot());
-        }
-        self.circuit.replace_component(component);
+        self.history.begin_properties(&self.session);
+        self.session.circuit.replace_component(component);
     }
     pub fn can_undo(&self) -> bool {
-        !self.undo.is_empty() || self.property_before.is_some()
+        self.history.can_undo()
     }
     pub fn can_redo(&self) -> bool {
-        !self.redo.is_empty() && self.property_before.is_none()
+        self.history.can_redo()
     }
     pub fn can_paste(&self) -> bool {
         self.clipboard
@@ -243,32 +168,31 @@ impl Editor {
             .is_some_and(|c| self.allowed_components(c))
     }
     fn allowed_components(&self, circuit: &Circuit) -> bool {
-        circuit.components.iter().all(|c| !matches!(c.kind,Kind::Subcircuit(id) if !self.project.can_instantiate(self.active,id)))
+        circuit.components.iter().all(|c| !matches!(c.kind,Kind::Subcircuit(id) if !self.session.project.can_instantiate(self.session.context.active,id)))
     }
     pub fn can_rotate(&self) -> bool {
         if let Tool::Place(kind) = self.tool {
             kind.rotatable()
         } else {
-            self.circuit
+            self.session
+                .circuit
                 .components
                 .iter()
-                .any(|c| self.selection.contains(&c.id) && c.kind.rotatable())
+                .any(|c| self.session.selection.contains(&c.id) && c.kind.rotatable())
         }
     }
     pub fn undo(&mut self) {
         self.cancel_gesture();
         self.commit_properties();
-        if let Some(edit) = self.undo.pop() {
-            self.restore(edit.before.clone());
-            self.redo.push(edit);
+        if let Some(snapshot) = self.history.undo() {
+            self.restore(snapshot);
         }
     }
     pub fn redo(&mut self) {
         self.cancel_gesture();
         self.commit_properties();
-        if let Some(edit) = self.redo.pop() {
-            self.restore(edit.after.clone());
-            self.undo.push(edit);
+        if let Some(snapshot) = self.history.redo() {
+            self.restore(snapshot);
         }
     }
     pub fn cancel_slider(&mut self) {
@@ -296,38 +220,41 @@ impl Editor {
         if let Tool::Place(kind) = tool {
             if self.template.kind != kind {
                 self.template = if let Kind::Subcircuit(id) = kind {
-                    self.project
+                    self.session
+                        .project
                         .instance(id, Point::ZERO)
                         .unwrap_or_else(|| Component::new(kind, Point::ZERO))
                 } else {
                     Component::new(kind, Point::ZERO)
                 };
             }
-            self.selection.clear();
+            self.session.selection.clear();
         }
     }
     pub fn delete(&mut self) {
         self.cancel_gesture();
         self.commit_properties();
         let before = self.snapshot();
-        self.circuit.remove(&self.selection);
-        self.selection.clear();
+        self.session.circuit.remove(&self.session.selection);
+        self.session.selection.clear();
         self.record(before);
     }
     pub fn select_all(&mut self) {
         self.cancel_gesture();
-        self.selection = self.circuit.ids();
+        self.session.selection = self.session.circuit.ids();
         self.tool = Tool::Select;
     }
     fn selected_copy(&self) -> Circuit {
-        let mut clip = self.circuit.clone();
-        clip.components.retain(|c| self.selection.contains(&c.id));
-        clip.wires.retain(|w| self.selection.contains(&w.id));
+        let mut clip = self.session.circuit.clone();
+        clip.components
+            .retain(|c| self.session.selection.contains(&c.id));
+        clip.wires
+            .retain(|w| self.session.selection.contains(&w.id));
         clip
     }
     pub fn copy(&mut self) {
         self.commit_properties();
-        if !self.selection.is_empty() {
+        if !self.session.selection.is_empty() {
             self.clipboard = Some(self.selected_copy());
             self.publish_clipboard = true;
             self.paste_count = 0;
@@ -346,14 +273,16 @@ impl Editor {
         self.cancel_gesture();
         self.commit_properties();
         let before = self.snapshot();
-        self.selection.clear();
+        self.session.selection.clear();
         for mut c in clip.components {
             c.position = c.position + offset;
-            self.selection.insert(self.circuit.add_component(c));
+            self.session
+                .selection
+                .insert(self.session.circuit.add_component(c));
         }
         for w in clip.wires {
-            if let Some(id) = self.circuit.add_wire(w.a + offset, w.b + offset) {
-                self.selection.insert(id);
+            if let Some(id) = self.session.circuit.add_wire(w.a + offset, w.b + offset) {
+                self.session.selection.insert(id);
             }
         }
         self.tool = Tool::Select;
@@ -369,7 +298,7 @@ impl Editor {
         }
     }
     pub fn duplicate(&mut self) {
-        if !self.selection.is_empty() {
+        if !self.session.selection.is_empty() {
             self.paste_circuit(self.selected_copy(), Point::new(GRID, GRID));
         }
     }
@@ -385,27 +314,33 @@ impl Editor {
         self.commit_properties();
         let before = self.snapshot();
         let changes: Vec<_> = self
+            .session
             .circuit
             .components
             .iter()
-            .filter(|c| self.selection.contains(&c.id) && c.kind.rotatable())
+            .filter(|c| self.session.selection.contains(&c.id) && c.kind.rotatable())
             .cloned()
             .collect();
         for mut c in changes {
             c.facing = c.facing.next();
-            self.circuit.replace_component(c);
+            self.session.circuit.replace_component(c);
         }
         self.record(before);
     }
     fn nudge(&mut self, delta: Point) {
         self.commit_properties();
         let before = self.snapshot();
-        self.circuit.move_selection(&self.selection, delta);
+        self.session
+            .circuit
+            .move_selection(&self.session.selection, delta);
         self.record(before);
     }
     pub fn place(&mut self, at: Point) {
         if let Kind::Subcircuit(id) = self.template.kind
-            && !self.project.can_instantiate(self.active, id)
+            && !self
+                .session
+                .project
+                .can_instantiate(self.session.context.active, id)
         {
             self.project_error =
                 Some("A circuit cannot contain itself, directly or indirectly.".into());
@@ -416,13 +351,14 @@ impl Editor {
         let mut c = self.template.clone();
         c.position = at;
         self.focus_text = c.kind == Kind::Text;
-        self.selection = BTreeSet::from([self.circuit.add_component(c)]);
+        self.session.selection = BTreeSet::from([self.session.circuit.add_component(c)]);
         self.tool = Tool::Select;
         self.record(before);
     }
     fn add_route(&mut self, a: Point, b: Point, horizontal: bool) {
         let before = self.snapshot();
-        self.selection = self
+        self.session.selection = self
+            .session
             .circuit
             .add_route(a, b, horizontal)
             .into_iter()
@@ -430,7 +366,8 @@ impl Editor {
         self.record(before);
     }
     fn port_at(&self, world: Vec2, tolerance: f32) -> Option<Point> {
-        self.circuit
+        self.session
+            .circuit
             .components
             .iter()
             .flat_map(Component::ports)
@@ -441,7 +378,8 @@ impl Editor {
             })
     }
     fn wire_at(&self, world: Vec2, tolerance: f32) -> Option<Id> {
-        self.circuit
+        self.session
+            .circuit
             .wires
             .iter()
             .rev()
@@ -449,7 +387,8 @@ impl Editor {
             .map(|w| w.id)
     }
     fn hit(&self, world: Vec2, tolerance: f32) -> Option<Id> {
-        self.circuit
+        self.session
+            .circuit
             .components
             .iter()
             .rev()
@@ -471,7 +410,7 @@ impl Editor {
         }
         let grid = Point::snapped(world.x, world.y);
         if let Some(id) = self.wire_at(world, tolerance)
-            && let Some(w) = self.circuit.wires.iter().find(|w| w.id == id)
+            && let Some(w) = self.session.circuit.wires.iter().find(|w| w.id == id)
         {
             // Imported wires need not lie on the grid. Keep the anchor on the actual wire.
             if w.horizontal() {
@@ -492,6 +431,7 @@ impl Editor {
             || ui.input(|i| !i.focused)
             || self.simulation.keyboard_focus.is_some_and(|id| {
                 !self
+                    .session
                     .circuit
                     .component(id)
                     .is_some_and(|c| c.kind == Kind::Keyboard)
@@ -526,12 +466,13 @@ impl Editor {
                 && let Some(pos) = pointer
                 && let Some(id) = self.hit(canvas.world(pos), tolerance)
                 && self
+                    .session
                     .circuit
                     .component(id)
                     .is_some_and(|c| c.kind == Kind::Button)
             {
-                self.selection.clear();
-                self.selection.insert(id);
+                self.session.selection.clear();
+                self.session.selection.insert(id);
                 self.simulation.press_button(id);
             }
             if self.tool == Tool::Poke
@@ -539,18 +480,18 @@ impl Editor {
                 && ui.input(|i| i.focused && i.pointer.primary_pressed())
                 && let Some(pos) = pointer
                 && let Some(id) = self.hit(canvas.world(pos), tolerance)
-                && self.circuit.component(id).is_some_and(|c| {
+                && self.session.circuit.component(id).is_some_and(|c| {
                     c.kind == Kind::Joystick
                         && crate::drawing::bounds(c).contains(canvas.world(pos).to_pos2())
                 })
             {
-                self.selection.clear();
-                self.selection.insert(id);
+                self.session.selection.clear();
+                self.session.selection.insert(id);
                 self.simulation.press_joystick(id);
             }
             if ui.input(|i| i.focused && i.pointer.primary_down())
                 && let Some(id) = self.simulation.held_joystick()
-                && let Some(c) = self.circuit.component(id)
+                && let Some(c) = self.session.circuit.component(id)
                 && let Some(pos) = pointer
             {
                 let world = canvas.world(pos);
@@ -567,12 +508,14 @@ impl Editor {
                     let snap = self.snap(world, tolerance);
                     let hit = self.hit(world, tolerance);
                     let ctrl = ui.input(|i| i.modifiers.ctrl);
-                    let hit_wire = hit.is_some_and(|id| self.circuit.component(id).is_none());
+                    let hit_wire =
+                        hit.is_some_and(|id| self.session.circuit.component(id).is_none());
                     let selected_endpoint = self
+                        .session
                         .circuit
                         .wires
                         .iter()
-                        .filter(|w| self.selection.contains(&w.id))
+                        .filter(|w| self.session.selection.contains(&w.id))
                         .find_map(|w| {
                             if (canvas.screen(w.a) - start).length() <= 7.0 {
                                 Some((*w, w.b))
@@ -584,12 +527,12 @@ impl Editor {
                         });
                     if self.tool == Tool::Poke {
                         if let Some(id) = hit
-                            && let Some(c) = self.circuit.component(id)
+                            && let Some(c) = self.session.circuit.component(id)
                             && c.kind == Kind::Slider
                             && (crate::io::slider_knob(c) - world).length() <= tolerance
                         {
-                            self.selection.clear();
-                            self.selection.insert(id);
+                            self.session.selection.clear();
+                            self.session.selection.insert(id);
                             self.gesture = Some(Gesture::Slider {
                                 id,
                                 before: self.snapshot(),
@@ -621,11 +564,11 @@ impl Editor {
                                 horizontal: wire.horizontal(),
                             });
                         } else if let Some(id) = hit {
-                            if !self.selection.contains(&id) {
+                            if !self.session.selection.contains(&id) {
                                 if !ui.input(|i| i.modifiers.shift) {
-                                    self.selection.clear();
+                                    self.session.selection.clear();
                                 }
-                                self.selection.insert(id);
+                                self.session.selection.insert(id);
                             }
                             self.gesture = Some(Gesture::Move {
                                 start: snap,
@@ -636,7 +579,7 @@ impl Editor {
                                 start: world.to_pos2(),
                                 current: world.to_pos2(),
                                 previous: if ui.input(|i| i.modifiers.shift) {
-                                    self.selection.clone()
+                                    self.session.selection.clone()
                                 } else {
                                     BTreeSet::new()
                                 },
@@ -651,16 +594,20 @@ impl Editor {
                 if let Some(gesture) = &mut self.gesture {
                     match gesture {
                         Gesture::Slider { id, .. } => {
-                            if let Some(c) =
-                                self.circuit.components.iter_mut().find(|c| c.id == *id)
+                            if let Some(c) = self
+                                .session
+                                .circuit
+                                .components
+                                .iter_mut()
+                                .find(|c| c.id == *id)
                             {
                                 crate::io::move_slider(c, world);
                             }
                         }
                         Gesture::Move { start, before } => {
-                            self.circuit = before.circuit.clone();
+                            self.session.circuit = before.circuit().clone();
                             // Movement snaps to the grid, never to the component being moved.
-                            self.circuit.move_selection(
+                            self.session.circuit.move_selection(
                                 &before.selection,
                                 Point::snapped(world.x, world.y) - *start,
                             );
@@ -672,16 +619,18 @@ impl Editor {
                         } => {
                             *current = world.to_pos2();
                             let rect = Rect::from_two_pos(*start, *current);
-                            self.selection = previous.clone();
-                            self.selection.extend(
-                                self.circuit
+                            self.session.selection = previous.clone();
+                            self.session.selection.extend(
+                                self.session
+                                    .circuit
                                     .components
                                     .iter()
                                     .filter(|c| rect.intersects(drawing::bounds(c)))
                                     .map(|c| c.id),
                             );
-                            self.selection.extend(
-                                self.circuit
+                            self.session.selection.extend(
+                                self.session
+                                    .circuit
                                     .wires
                                     .iter()
                                     .filter(|w| {
@@ -708,9 +657,10 @@ impl Editor {
                             id,
                             horizontal,
                         } => {
-                            self.circuit = before.circuit.clone();
-                            self.circuit.wires.retain(|w| w.id != *id);
-                            self.selection = self
+                            self.session.circuit = before.circuit().clone();
+                            self.session.circuit.wires.retain(|w| w.id != *id);
+                            self.session.selection = self
+                                .session
                                 .circuit
                                 .add_route(*fixed, snap, *horizontal)
                                 .into_iter()
@@ -744,10 +694,11 @@ impl Editor {
                 match self.tool {
                     Tool::Poke => {
                         self.simulation.keyboard_focus = None;
-                        self.selection.clear();
+                        self.session.selection.clear();
                         if let Some(id) = self.hit(world, tolerance) {
-                            self.selection.insert(id);
+                            self.session.selection.insert(id);
                             if self
+                                .session
                                 .circuit
                                 .component(id)
                                 .is_some_and(|c| c.kind == Kind::Keyboard)
@@ -759,7 +710,7 @@ impl Editor {
                                 self.simulation
                                     .actions
                                     .push(SimulationAction::PokeClock { id });
-                            } else if self.circuit.component(id).is_some_and(|c| {
+                            } else if self.session.circuit.component(id).is_some_and(|c| {
                                 matches!(c.kind, Kind::FlipFlop(_) | Kind::Latch(_))
                             }) {
                                 self.simulation
@@ -767,11 +718,13 @@ impl Editor {
                                     .push(SimulationAction::ToggleStored { id });
                             }
                             if self
+                                .session
                                 .circuit
                                 .component(id)
                                 .is_some_and(|c| c.kind == Kind::DipSwitch)
                             {
                                 if let Some(bit) = self
+                                    .session
                                     .circuit
                                     .component(id)
                                     .and_then(|c| crate::io::dip_bit(c, world))
@@ -803,7 +756,8 @@ impl Editor {
                     Tool::Select => {
                         let modifiers = ui.input(|i| i.modifiers);
                         let hit = self.hit(world, tolerance);
-                        let wire = hit.is_some_and(|id| self.circuit.component(id).is_none());
+                        let wire =
+                            hit.is_some_and(|id| self.session.circuit.component(id).is_none());
                         if !modifiers.ctrl && self.wire_start.is_some() {
                             let start = self.wire_start.take().unwrap();
                             self.add_route(
@@ -814,20 +768,21 @@ impl Editor {
                         } else if !modifiers.ctrl && !modifiers.shift && wire {
                             self.commit_properties();
                             self.wire_start = Some(self.connection_point(world, tolerance));
-                            self.selection.clear();
+                            self.session.selection.clear();
                         } else {
                             self.wire_start = None;
                             if !modifiers.shift {
-                                self.selection.clear();
+                                self.session.selection.clear();
                             }
                             if let Some(id) = hit {
-                                if !self.selection.insert(id) {
-                                    self.selection.remove(&id);
+                                if !self.session.selection.insert(id) {
+                                    self.session.selection.remove(&id);
                                 }
-                                if response.double_clicked() && self.circuit.component(id).is_some()
+                                if response.double_clicked()
+                                    && self.session.circuit.component(id).is_some()
                                 {
                                     if matches!(
-                                        self.circuit.component(id).map(|c| c.kind),
+                                        self.session.circuit.component(id).map(|c| c.kind),
                                         Some(Kind::Subcircuit(_))
                                     ) {
                                         self.open_instance = Some(id);
@@ -845,7 +800,7 @@ impl Editor {
             && let Some(pointer) = pointer
         {
             let world = canvas.world(pointer);
-            for c in self.circuit.components.iter().filter(|c| {
+            for c in self.session.circuit.components.iter().filter(|c| {
                 c.kind == Kind::Plugin
                     || c.kind.is_io()
                     || c.kind.is_controlled()
@@ -906,6 +861,7 @@ impl Editor {
                 }
             }
             for c in self
+                .session
                 .circuit
                 .components
                 .iter()
@@ -951,11 +907,11 @@ impl Editor {
         if response.secondary_clicked() {
             self.context_instance = pointer
                 .and_then(|p| self.hit(canvas.world(p), tolerance))
-                .or_else(|| self.selection.first().copied());
+                .or_else(|| self.session.selection.first().copied());
         }
         response.context_menu(|ui| {
             if let Some(id) = self.context_instance
-                && let Some(c) = self.circuit.component(id)
+                && let Some(c) = self.session.circuit.component(id)
                 && let Kind::Subcircuit(target) = c.kind
             {
                 if ui.button(tf!("View {}", c.interface.name)).clicked() {
@@ -977,7 +933,7 @@ impl Editor {
             }
             if ui
                 .add_enabled(
-                    !self.selection.is_empty(),
+                    !self.session.selection.is_empty(),
                     egui::Button::new(tr("Duplicate · Ctrl+D")),
                 )
                 .clicked()
@@ -986,7 +942,10 @@ impl Editor {
                 ui.close();
             }
             if ui
-                .add_enabled(!self.selection.is_empty(), egui::Button::new(tr("Delete")))
+                .add_enabled(
+                    !self.session.selection.is_empty(),
+                    egui::Button::new(tr("Delete")),
+                )
                 .clicked()
             {
                 self.delete();
@@ -1012,8 +971,8 @@ impl Editor {
         drawing::circuit(
             &painter,
             canvas,
-            &self.circuit,
-            &self.selection,
+            &self.session.circuit,
+            &self.session.selection,
             &self.simulation.view,
             &mut self.drawing_cache,
         );
@@ -1092,7 +1051,7 @@ impl Editor {
         }
     }
     fn shortcuts(&mut self, ui: &mut Ui) {
-        self.simulation.shortcuts(ui, &self.selection);
+        self.simulation.shortcuts(ui, &self.session.selection);
         let consume = |key, modifiers| ui.input_mut(|i| i.consume_key(modifiers, key));
         if consume(Key::Escape, Modifiers::NONE) {
             self.simulation.release_momentary();

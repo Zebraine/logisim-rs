@@ -15,7 +15,7 @@ fn memory_editor_real_input_keeps_rom_history_and_ram_instance_commands_separate
         let rom = circuit.add_component(Component::new(Kind::Rom, Point::new(200, 100)));
         let ram = circuit.add_component(Component::new(Kind::Ram, Point::new(400, 100)));
         app.replace_circuit(circuit);
-        app.editor.selection.insert(rom);
+        app.editor.session.selection.insert(rom);
         click(&ctx, &mut app, &translated("Edit contents…"));
         let labels = frame(&ctx, &mut app, vec![]);
         assert!(has(&labels, &translated("ROM contents")));
@@ -72,8 +72,8 @@ fn memory_editor_real_input_keeps_rom_history_and_ram_instance_commands_separate
             0xa5
         );
         let before = app.project().clone();
-        app.editor.selection.clear();
-        app.editor.selection.insert(ram);
+        app.editor.session.selection.clear();
+        app.editor.session.selection.insert(ram);
         let mut contents = logisim_core::MemoryContents::default();
         contents.set(0, 0x5a);
         app.editor.simulation.view.memories.insert(ram, contents);
@@ -151,8 +151,9 @@ fn pla_table_apply_cancel_clear_history_and_document_replacement_in_both_languag
         app.editor.place(Point::new(300, 200));
         app.editor.set_tool(Tool::Select);
         let id = app.circuit().components[0].id;
-        app.editor.selection.insert(id);
+        app.editor.session.selection.insert(id);
         app.editor
+            .session
             .circuit
             .add_wire(Point::new(100, 200), Point::new(300, 200));
         let original = app.circuit().clone();
@@ -196,7 +197,7 @@ fn memory_import_button_history_template_and_stale_target_are_safe() {
         let rom = circuit.add_component(component);
         let ram = circuit.add_component(Component::new(Kind::Ram, Point::new(400, 100)));
         app.replace_circuit(circuit);
-        app.editor.selection.insert(rom);
+        app.editor.session.selection.insert(rom);
         click(&ctx, &mut app, &t("Edit contents…"));
         let before = app.project().clone();
         click(&ctx, &mut app, &t("Import .hex…"));
@@ -232,8 +233,8 @@ fn memory_import_button_history_template_and_stale_target_are_safe() {
             0xff
         );
 
-        app.editor.selection.clear();
-        app.editor.selection.insert(ram);
+        app.editor.session.selection.clear();
+        app.editor.session.selection.insert(ram);
         click(&ctx, &mut app, &t("Edit contents…"));
         click(&ctx, &mut app, &t("Import .hex…"));
         assert_eq!(app.take_file_actions(), [crate::FileAction::ImportMemory]);
@@ -241,9 +242,9 @@ fn memory_import_button_history_template_and_stale_target_are_safe() {
         let before = app.project().clone();
         assert!(app.complete_memory_import(&target, contents.clone()));
         assert_eq!(app.project(), &before, "RAM image is runtime data");
-        app.editor.path.push(999);
+        app.editor.session.context.path.push(999);
         assert!(!app.memory_import_is_current(&target));
-        app.editor.path.clear();
+        app.editor.session.context.path.clear();
         click(&ctx, &mut app, &t("Close"));
         assert!(!app.complete_memory_import(&target, contents.clone()));
 

@@ -15,7 +15,7 @@ fn translated_properties_and_appearance_preserve_user_names_and_shortcuts() {
         let id = circuit.add_component(text);
         app.replace_project(logisim_core::Project::single("File", circuit));
         app.set_language(language);
-        app.editor.selection.insert(id);
+        app.editor.session.selection.insert(id);
         let project = app.project().clone();
         let labels = frame(&ctx, &mut app, vec![]);
         assert!(has(&labels, "Save · 中文标签 {}"));
@@ -32,7 +32,7 @@ fn translated_properties_and_appearance_preserve_user_names_and_shortcuts() {
                 modifiers: Modifiers::COMMAND.plus(Modifiers::SHIFT),
             }],
         );
-        assert!(app.editor.appearance_mode);
+        assert!(app.editor.session.context.appearance_mode);
         let labels = frame(&ctx, &mut app, vec![]);
         let expected = i18n::with_language(language, || tf!("Appearance: {}", "File"));
         assert!(has(&labels, &expected));
