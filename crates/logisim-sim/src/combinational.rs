@@ -237,13 +237,13 @@ fn node(c: &Component, network: &Network, barriers: &mut Vec<Boundary>) -> Optio
     (barriers.len() == before).then_some(node)
 }
 
-enum Classification {
+pub(crate) enum Classification {
     Pure,
     Passive,
     Boundary(BoundaryReason),
 }
 
-fn classify(c: &Component) -> Classification {
+pub(crate) fn classify(c: &Component) -> Classification {
     use BoundaryReason as B;
     use Classification::{Boundary, Passive, Pure};
     match c.kind {

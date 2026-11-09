@@ -101,6 +101,10 @@ impl Workspace {
                 }
             });
             ui.menu_button(tr("Project"), |ui| {
+                if ui.button(tr("Analyze Circuit…")).clicked() {
+                    self.request_analysis();
+                    ui.close();
+                }
                 if ui.button(tr("Generate Circuit…")).clicked() {
                     self.open_generator();
                     ui.close();

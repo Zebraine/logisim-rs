@@ -1,4 +1,5 @@
 //! Bounded signal propagation and sequential state, independent of the GUI.
+pub mod analysis;
 pub mod combinational;
 mod engine;
 mod execution;

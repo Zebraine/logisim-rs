@@ -62,6 +62,15 @@ impl Default for Generator {
     }
 }
 impl Generator {
+    pub(crate) fn load_analysis(&mut self, analysis: Analysis) {
+        *self = Self {
+            analysis,
+            tab: Tab::Table,
+            name: "analyzed".into(),
+            ..Self::default()
+        };
+        self.refresh();
+    }
     fn pending(&self) -> bool {
         self.draft != self.applied
     }

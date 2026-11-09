@@ -1,5 +1,6 @@
 //! Editor layout based on runtime observation, with an independent canvas viewport.
 
+mod analysis;
 mod appearance;
 mod appearance_properties;
 mod artwork;
@@ -75,6 +76,7 @@ pub fn configure(ctx: &egui::Context) {
 /// Circuit editing and viewport state. Signal simulation is not part of this layer.
 #[derive(Default)]
 pub struct Workspace {
+    analysis: analysis::AnalysisUi,
     generator: generation::Generator,
     plugins: Vec<logisim_core::plugin::api::Manifest>,
     libraries: Vec<libraries::LibraryGroup>,

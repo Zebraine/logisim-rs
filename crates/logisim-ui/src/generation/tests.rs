@@ -204,3 +204,93 @@ fn project_budget_failure_preserves_selection_and_draft_can_be_retried() {
     assert!(!w.generator.open);
     assert!(!w.generator.pending());
 }
+
+#[test]
+fn circuit_analysis_success_loads_table_and_builds_as_one_edit() {
+    use crate::i18n_tests::click;
+    let ctx = egui::Context::default();
+    crate::configure(&ctx);
+    let mut w = Workspace::default();
+    let mut analysis = Generator::default().analysis;
+    analysis.apply_expression(0, "A ^ B").unwrap();
+    let before = w.project().clone();
+    w.request_analysis();
+    let serial = w.take_analysis_request().unwrap();
+    w.receive_analysis(serial, Ok(analysis.clone()));
+    assert!(w.generator.open);
+    assert_eq!(w.generator.tab, Tab::Table);
+    assert_eq!(w.generator.analysis, analysis);
+    assert_eq!(w.project(), &before);
+    assert!(!w.editor.can_undo());
+    click(&ctx, &mut w, "Use NAND gates only");
+    click(&ctx, &mut w, "Build Circuit");
+    assert_eq!(w.circuit_name(), "analyzed");
+    assert_eq!(w.project().circuits.len(), 2);
+    w.editor.undo();
+    assert_eq!(w.project().circuits, before.circuits);
+    w.editor.redo();
+    assert_eq!(w.circuit_name(), "analyzed");
+}
+
+#[test]
+fn circuit_analysis_cancel_error_stale_results_and_partial_import_preserve_draft() {
+    use crate::{
+        Language, i18n,
+        i18n_tests::{click, frame_at_size},
+    };
+    for language in Language::ALL {
+        let ctx = egui::Context::default();
+        crate::configure(&ctx);
+        let mut w = Workspace::default();
+        w.set_language(language);
+        w.generator.draft = "unfinished &".into();
+        let before = w.project().clone();
+        w.request_analysis();
+        let serial = w.take_analysis_request().unwrap();
+        let label = |key: &str| i18n::with_language(language, || tr(key).to_owned());
+        for _ in 0..3 {
+            frame_at_size(&ctx, &mut w, vec![], egui::vec2(720.0, 480.0));
+        }
+        click(&ctx, &mut w, &label("Cancel"));
+        w.receive_analysis(serial, Ok(Analysis::default()));
+        assert_eq!(w.generator.draft, "unfinished &");
+        assert!(!w.generator.open);
+        w.request_analysis();
+        let serial = w.take_analysis_request().unwrap();
+        w.receive_analysis(
+            serial,
+            Err(Error {
+                message: "Circuit analysis does not support timing or stateful components:",
+                detail: "child / register".into(),
+            }),
+        );
+        let mut labels = vec![];
+        for _ in 0..3 {
+            labels = frame_at_size(&ctx, &mut w, vec![], egui::vec2(720.0, 480.0));
+        }
+        let rect = labels
+            .iter()
+            .find(|(text, _)| *text == label("Close"))
+            .unwrap()
+            .1;
+        assert!(rect.bottom() <= 480.0);
+        assert!(labels.iter().any(|(text, _)| *text == "child / register"));
+        click(&ctx, &mut w, &label("Close"));
+        assert_eq!(w.generator.draft, "unfinished &");
+        assert_eq!(w.project(), &before);
+        assert!(!w.editor.can_undo());
+        w.request_analysis();
+        let old = w.take_analysis_request().unwrap();
+        w.replace_project(Project::default());
+        w.request_analysis();
+        let new = w.take_analysis_request().unwrap();
+        assert_ne!(old, new);
+        w.receive_analysis(old, Ok(Analysis::default()));
+        assert!(w.analysis_pending(new));
+        assert!(!w.generator.open);
+        click(&ctx, &mut w, &label("Cancel"));
+        w.document.partial = true;
+        w.request_analysis();
+        assert!(w.take_analysis_request().is_none());
+    }
+}

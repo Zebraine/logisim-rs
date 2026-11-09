@@ -133,6 +133,21 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Address", "地址"),
     ("Address (hex)", "地址（十六进制）"),
     ("Address bits", "地址位宽"),
+    (
+        "An output is unknown or erroneous; analysis requires 0 or 1 for every input row:",
+        "输出存在未知值或错误；分析要求每一行输出均为 0 或 1：",
+    ),
+    (
+        "Analysis requires at least one output Pin.",
+        "分析需要至少一个输出引脚。",
+    ),
+    (
+        "Analysis requires single-bit input and output Pins.",
+        "分析仅支持单比特输入和输出引脚。",
+    ),
+    ("Analyze Circuit", "分析电路"),
+    ("Analyze Circuit…", "分析电路…"),
+    ("Analyzing circuit…", "正在分析电路…"),
     ("Anchor", "锚点"),
     ("Appearance", "外观"),
     ("Appearance: {}", "外观：{}"),
@@ -270,6 +285,60 @@ const MESSAGES: &[(&str, &str)] = &[
         "Choose missing plugin locations. Confirm can continue with static graphics for unresolved components.",
         "请选择缺失插件的位置。可直接确认，未解决的元件将仅显示静态图形。",
     ),
+    ("Circuit analysis cancelled.", "电路分析已取消。"),
+    (
+        "Circuit analysis cannot verify that a plugin is stateless:",
+        "电路分析无法确认插件无状态：",
+    ),
+    (
+        "Circuit analysis could not evaluate this circuit.",
+        "无法求值此电路。",
+    ),
+    (
+        "Circuit analysis does not support feedback connections.",
+        "电路分析不支持反馈连接。",
+    ),
+    (
+        "Circuit analysis does not support interactive inputs; use input Pins:",
+        "电路分析不支持交互输入，请使用输入引脚：",
+    ),
+    (
+        "Circuit analysis does not support this component:",
+        "电路分析尚不支持此元件：",
+    ),
+    (
+        "Circuit analysis does not support timing or stateful components:",
+        "电路分析不支持时序或有状态的元件：",
+    ),
+    (
+        "Circuit analysis exceeded the settling limit.",
+        "电路分析超出稳定态收敛上限。",
+    ),
+    (
+        "Circuit analysis exceeds the hierarchy limit.",
+        "电路分析超出层级或实例数量上限。",
+    ),
+    (
+        "Circuit analysis exceeds the item limit.",
+        "电路分析超出元件和导线数量上限。",
+    ),
+    (
+        "Circuit analysis found an electrical error at input row:",
+        "电路分析发现电气错误，输入行：",
+    ),
+    (
+        "Circuit analysis found incompatible signal widths.",
+        "电路分析发现不兼容的信号位宽。",
+    ),
+    (
+        "Circuit analysis is unavailable for an import with omitted content.",
+        "导入时省略了部分内容，无法分析该电路。",
+    ),
+    (
+        "Circuit analysis requires complete, valid subcircuit interfaces:",
+        "电路分析需要完整、有效的子电路接口：",
+    ),
+    ("Circuit analysis worker stopped.", "电路分析线程已停止。"),
     ("Circuit label", "封装标签"),
     ("Circuit layout", "电路布局"),
     ("Circuit name", "电路名称"),
@@ -351,6 +420,7 @@ const MESSAGES: &[(&str, &str)] = &[
         "无法创建临时保存文件",
     ),
     ("Could not create circuit:", "无法创建电路："),
+    ("Could not start circuit analysis:", "无法启动电路分析："),
     (
         "Count: 0 holds or loads; otherwise counts",
         "计数：0 时保持或加载，其余值允许计数",
@@ -555,6 +625,7 @@ const MESSAGES: &[(&str, &str)] = &[
     ),
     ("Instruction", "指令"),
     ("Internal Pin: ({}, {})", "内部引脚：（{}, {}）"),
+    ("Invalid circuit project:", "电路项目无效："),
     ("Invalid library name.", "库名称无效。"),
     ("Invert input {}", "输入 {} 取反"),
     ("Italic", "斜体"),
@@ -646,6 +717,7 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Minimize", "最小化"),
     ("Minimized", "化简"),
     ("Missing circuit", "缺少电路"),
+    ("Missing circuit to analyze.", "找不到待分析的电路。"),
     ("Missing file name", "缺少文件名"),
     ("Missing parent directory", "缺少父文件夹"),
     ("Missing simulation root.", "缺少仿真根电路。"),
@@ -701,6 +773,10 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Old behavior", "旧行为"),
     ("On color", "点亮颜色"),
     ("One", "补一"),
+    (
+        "Only stateless combinational circuits are supported. The current simulation is unchanged.",
+        "仅支持无状态的组合电路。分析不改变当前仿真。",
+    ),
     ("Open", "打开"),
     ("Open circuit", "打开电路"),
     ("Open… · Ctrl+O", "打开… · Ctrl+O"),
@@ -1008,6 +1084,10 @@ const MESSAGES: &[(&str, &str)] = &[
     (
         "The anchor sets the placement origin and the artwork's original facing.",
         "锚点决定放置原点与外观的原始朝向。",
+    ),
+    (
+        "The circuit changed during analysis. Please analyze it again.",
+        "分析期间电路发生变化，请重新分析。",
     ),
     (
         "The destination changed, cannot be read, or needs overwrite confirmation. Use Save As and choose the file again.",

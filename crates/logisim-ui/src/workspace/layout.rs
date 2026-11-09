@@ -21,6 +21,7 @@ impl Workspace {
             self.editor.appearance_mode,
         );
         let modal = self.editor.memory_target.is_some()
+            || self.analysis.open()
             || self.generator.open
             || self.editor.simulation.tick_rate_draft.is_some()
             || self.editor.pla_target.is_some()
@@ -42,6 +43,7 @@ impl Workspace {
         ui.add_enabled_ui(!modal, |ui| self.show_inner(ui));
         if ui.is_enabled() {
             self.project_dialogs(ui.ctx());
+            self.analysis_dialog(ui.ctx());
             self.settings(ui.ctx());
             self.editor.simulation.frequency_dialog(ui.ctx());
             self.memory_editor

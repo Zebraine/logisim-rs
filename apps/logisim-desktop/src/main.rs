@@ -1,4 +1,5 @@
 //! Desktop host; editor presentation and navigation live in logisim-ui.
+mod analysis;
 mod clocks;
 mod file_picker;
 #[cfg(test)]
@@ -27,6 +28,7 @@ fn main() -> eframe::Result {
             let mut workspace = logisim_ui::Workspace::default();
             let preferences = preferences::Preferences::load(&mut workspace);
             let mut app = DesktopApp {
+                analysis: Default::default(),
                 workspace,
                 preferences,
                 simulator: simulation::worker::Worker::new({
@@ -52,6 +54,7 @@ fn main() -> eframe::Result {
 }
 
 struct DesktopApp {
+    analysis: analysis::Service,
     preferences: preferences::Preferences,
     workspace: logisim_ui::Workspace,
     simulator: simulation::worker::Worker,
@@ -97,6 +100,9 @@ impl DesktopApp {
         self.files
             .show(ui.ctx(), &mut self.workspace, &mut self.simulator);
         self.preferences.synchronize(&mut self.workspace);
+        let context = ui.ctx().clone();
+        self.analysis
+            .update(&mut self.workspace, move || context.request_repaint());
         let view = self.files.present(&self.workspace);
         let title = format!(
             "Logisim rs — {} · {}{}{}",
