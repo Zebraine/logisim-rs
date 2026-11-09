@@ -7,7 +7,6 @@ fn localized_dialog_applies_expressions_and_blocks_stale_generation() {
         Language, i18n,
         i18n_tests::{frame, frame_at_size},
     };
-    use logisim_core::generation::Cell;
     for language in Language::ALL {
         let ctx = egui::Context::default();
         crate::configure(&ctx);
@@ -60,10 +59,9 @@ fn localized_dialog_applies_expressions_and_blocks_stale_generation() {
         click(&ctx, &mut w, &label("Build Circuit"));
         assert_eq!(w.project().circuits.len(), 1);
         click(&ctx, &mut w, &label("Apply"));
-        assert_eq!(
-            w.generator.analysis.outputs()[0].values(),
-            [Cell::Zero, Cell::One, Cell::One, Cell::Zero]
-        );
+        assert!(w.generator.analysis.is_expression_mode());
+        assert_eq!(w.generator.analysis.rows(), 0);
+        assert_eq!(w.generator.applied, "A ^ B");
         w.generator.draft = "A &".into();
         click(&ctx, &mut w, &label("Apply"));
         assert!(w.generator.error.is_some());
@@ -213,19 +211,20 @@ fn project_budget_failure_preserves_selection_and_draft_can_be_retried() {
 }
 
 #[test]
-fn circuit_analysis_success_loads_table_and_builds_as_one_edit() {
+fn circuit_analysis_success_opens_expression_and_builds_as_one_edit() {
     let ctx = egui::Context::default();
     crate::configure(&ctx);
     let mut w = Workspace::default();
     let mut analysis = Generator::default().analysis;
     analysis.apply_expression(0, "A ^ B").unwrap();
+    let analysis = analysis.truth_table(|| false).unwrap();
     w.replace_circuit(analysis.generate().unwrap());
     let before = w.project().clone();
     w.request_analysis();
     let serial = w.take_analysis_request().unwrap();
     w.receive_analysis(serial, Ok(analysis.clone()));
     assert!(w.generator.open);
-    assert_eq!(w.generator.tab, Tab::Table);
+    assert_eq!(w.generator.tab, Tab::Expression);
     assert_eq!(w.generator.analysis, analysis);
     assert_eq!(w.project(), &before);
     assert!(!w.editor.can_undo());
@@ -311,6 +310,82 @@ pub(super) fn click(ctx: &egui::Context, w: &mut Workspace, label: &str) {
 }
 
 #[test]
+fn optional_truth_table_controls_preserve_the_table_and_unapplied_draft() {
+    use crate::{Language, i18n, i18n_tests::frame_at_size};
+    for language in Language::ALL {
+        let ctx = egui::Context::default();
+        crate::configure(&ctx);
+        let mut w = Workspace::default();
+        w.set_language(language);
+        w.open_generator();
+        assert!(!w.truth_table_generation());
+        assert!(w.generator.analysis.is_expression_mode());
+        let label = |key: &str| i18n::with_language(language, || tr(key).to_owned());
+        for size in [egui::vec2(1200.0, 820.0), egui::vec2(720.0, 480.0)] {
+            let labels = frame_at_size(&ctx, &mut w, vec![], size);
+            for key in ["Truth Table", "Create Truth Table", "Expression mode"] {
+                assert!(!labels.iter().any(|(text, _)| *text == label(key)));
+            }
+        }
+        w.set_truth_table_generation(true);
+        click(&ctx, &mut w, &label("Truth Table"));
+        click(&ctx, &mut w, &label("Create Truth Table"));
+        assert_eq!(w.generator.analysis.rows(), 4);
+        w.generator.draft = "A &".into();
+        let analysis = w.generator.analysis.clone();
+        let applied = w.generator.applied.clone();
+        let serial = w.generator.serial;
+        w.set_truth_table_generation(false);
+        assert_eq!(w.generator.tab, Tab::Expression);
+        let labels = frame_at_size(&ctx, &mut w, vec![], egui::vec2(720.0, 480.0));
+        for key in ["Truth Table", "Create Truth Table", "Expression mode"] {
+            assert!(!labels.iter().any(|(text, _)| *text == label(key)));
+        }
+        w.set_truth_table_generation(true);
+        assert_eq!(w.generator.analysis, analysis);
+        assert_eq!(w.generator.draft, "A &");
+        assert_eq!(w.generator.applied, applied);
+        assert_eq!(w.generator.serial, serial);
+        assert!(!w.editor.can_undo());
+        click(&ctx, &mut w, &label("Revert"));
+        click(&ctx, &mut w, &label("Truth Table"));
+        assert_eq!(w.generator.tab, Tab::Table);
+        assert_eq!(w.generator.analysis, analysis);
+    }
+}
+
+#[test]
+fn analysis_and_inflight_table_conversion_use_the_current_visibility_preference() {
+    let mut analysis = Generator::default().analysis;
+    analysis.apply_expression(0, "A ^ B").unwrap();
+    let analysis = analysis.truth_table(|| false).unwrap();
+    for enabled in [false, true] {
+        let mut w = Workspace::default();
+        w.set_truth_table_generation(enabled);
+        w.replace_circuit(analysis.generate().unwrap());
+        w.request_analysis();
+        let serial = w.take_analysis_request().unwrap();
+        w.receive_analysis(serial, Ok(analysis.clone()));
+        assert_eq!(w.generator.analysis, analysis);
+        assert_eq!(
+            w.generator.tab,
+            if enabled { Tab::Table } else { Tab::Expression }
+        );
+    }
+    let mut w = Workspace::default();
+    w.set_truth_table_generation(true);
+    w.open_generator();
+    w.generator.request_mode(false);
+    let request = w.take_generation_request().unwrap();
+    w.set_truth_table_generation(false);
+    assert!(w.generation_pending(request.serial));
+    w.receive_generation(request.serial, request.execute(|| false));
+    assert_eq!(w.generator.analysis.rows(), 4);
+    assert_eq!(w.generator.tab, Tab::Expression);
+    assert!(!w.editor.can_undo());
+}
+
+#[test]
 fn cancelled_and_replaced_generation_results_never_change_the_draft_or_document() {
     let mut w = Workspace::default();
     w.open_generator();
@@ -382,6 +457,10 @@ fn work_budget_failure_keeps_the_table_and_expression_generation_available() {
 fn cached_forms_survive_output_switches_rename_and_restore_but_not_table_changes() {
     use logisim_core::generation::Cell;
     let mut w = Workspace::default();
+    w.generator.analysis = Analysis::default();
+    w.generator.analysis.add_input("A".into()).unwrap();
+    w.generator.analysis.add_input("B".into()).unwrap();
+    w.generator.analysis.add_output("Y".into()).unwrap();
     w.open_generator();
     w.generator.analysis.set_cell(0, 3, Cell::One).unwrap();
     w.generator.refresh();
@@ -421,9 +500,10 @@ fn localized_expression_mode_builds_without_tables_and_materializes_on_request()
         crate::configure(&ctx);
         let mut w = Workspace::default();
         w.set_language(language);
+        w.set_truth_table_generation(true);
         w.open_generator();
         let label = |key: &str| i18n::with_language(language, || tr(key).to_owned());
-        click(&ctx, &mut w, &label("Expression mode"));
+        click(&ctx, &mut w, &label("Expression"));
         assert!(w.generator.analysis.is_expression_mode());
         w.generator.draft = "A ^ B".into();
         click(&ctx, &mut w, &label("Apply"));
@@ -479,6 +559,8 @@ fn variable_add_controls_follow_table_expression_and_output_limits() {
     let ctx = egui::Context::default();
     crate::configure(&ctx);
     let mut w = Workspace::default();
+    w.set_truth_table_generation(true);
+    w.generator.analysis = w.generator.analysis.truth_table(|| false).unwrap();
     w.open_generator();
     for i in 2..12 {
         w.generator.inputs.name = format!("I{i}");

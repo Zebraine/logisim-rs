@@ -2435,7 +2435,7 @@ fn tick_frequency_presets_custom_validation_cancel_and_modal_shortcuts_in_both_l
 }
 
 #[test]
-fn simulation_mode_settings_are_localized_and_separate_from_document_and_runtime_state() {
+fn settings_are_localized_and_separate_from_document_and_runtime_state() {
     for language in Language::ALL {
         let ctx = Context::default();
         configure(&ctx);
@@ -2448,6 +2448,7 @@ fn simulation_mode_settings_are_localized_and_separate_from_document_and_runtime
         app.simulation_mut().pending = 2;
         let document = app.project().clone();
         let t = |key| i18n::with_language(language, || i18n::tr(key).to_owned());
+        assert!(!app.truth_table_generation());
         for mode in [
             SimulationMode::Event,
             SimulationMode::Stable,
@@ -2457,6 +2458,9 @@ fn simulation_mode_settings_are_localized_and_separate_from_document_and_runtime
             let new = i18n::with_language(language, || mode.name().to_owned());
             click(&ctx, &mut app, &old);
             click(&ctx, &mut app, &new);
+            let was_enabled = app.truth_table_generation();
+            click(&ctx, &mut app, &t("Enable truth table generation"));
+            assert_eq!(app.truth_table_generation(), !was_enabled);
             assert_eq!(app.simulation_mode(), mode);
             assert_eq!(app.project(), &document);
             assert!(!app.editor.can_undo());
@@ -2472,11 +2476,16 @@ fn simulation_mode_settings_are_localized_and_separate_from_document_and_runtime
         for _ in 0..3 {
             labels = frame_at_size(&small, &mut app, vec![], size);
         }
-        for text in [t("Simulation mode"), t("Event propagation")] {
+        for text in [
+            t("Simulation mode"),
+            t("Event propagation"),
+            t("Enable truth table generation"),
+        ] {
             let rect = labels.iter().find(|(label, _)| label == &text).unwrap().1;
             assert!(rect.min.x >= 0.0 && rect.max.x <= size.x && rect.max.y <= size.y);
         }
         app.replace_project(document);
         assert_eq!(app.simulation_mode(), SimulationMode::Event);
+        assert!(app.truth_table_generation());
     }
 }

@@ -206,7 +206,7 @@ impl Workspace {
         match result {
             Ok(Outcome::Converted { analysis }) => {
                 g.analysis = analysis;
-                g.tab = if g.analysis.is_expression_mode() {
+                g.tab = if g.analysis.is_expression_mode() || !self.truth_table_generation {
                     Tab::Expression
                 } else {
                     Tab::Table

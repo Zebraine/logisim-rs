@@ -9,12 +9,14 @@ use std::{
 struct Values {
     language: Language,
     simulation_mode: SimulationMode,
+    truth_table_generation: bool,
 }
 impl Values {
     fn from_workspace(workspace: &Workspace) -> Self {
         Self {
             language: workspace.language(),
             simulation_mode: workspace.simulation_mode(),
+            truth_table_generation: workspace.truth_table_generation(),
         }
     }
 }
@@ -44,6 +46,7 @@ impl Preferences {
         };
         workspace.set_language(values.language);
         workspace.set_simulation_mode(values.simulation_mode);
+        workspace.set_truth_table_generation(values.truth_table_generation);
         Self {
             path,
             attempted: values,
@@ -67,6 +70,7 @@ impl Preferences {
 fn decode(text: &str) -> Option<Values> {
     let mut language = None;
     let mut mode = None;
+    let mut truth_table_generation = None;
     for line in text.lines().map(str::trim).filter(|line| !line.is_empty()) {
         let (key, value) = line.split_once('=')?;
         match key.trim() {
@@ -74,12 +78,16 @@ fn decode(text: &str) -> Option<Values> {
             "simulation_mode" if mode.is_none() => {
                 mode = Some(SimulationMode::from_code(value.trim())?)
             }
+            "truth_table_generation" if truth_table_generation.is_none() => {
+                truth_table_generation = Some(value.trim().parse::<bool>().ok()?)
+            }
             _ => return None,
         }
     }
     Some(Values {
         language: language?,
         simulation_mode: mode.unwrap_or_default(),
+        truth_table_generation: truth_table_generation.unwrap_or_default(),
     })
 }
 fn save(path: &Path, values: Values) -> Result<(), String> {
@@ -93,9 +101,10 @@ fn save(path: &Path, values: Values) -> Result<(), String> {
     crate::storage::atomic_write(
         path,
         format!(
-            "language={}\nsimulation_mode={}\n",
+            "language={}\nsimulation_mode={}\ntruth_table_generation={}\n",
             values.language.code(),
-            values.simulation_mode.code()
+            values.simulation_mode.code(),
+            values.truth_table_generation
         )
         .as_bytes(),
         expected.as_deref(),
@@ -142,27 +151,32 @@ mod tests {
         }
     }
     #[test]
-    fn language_persists_in_both_directions_without_dirtying_or_reserializing_the_project() {
+    fn preferences_persist_in_both_directions_without_dirtying_or_reserializing_the_project() {
         let temp = Temp::new();
         let path = temp.0.join("settings/preferences");
         let mut workspace = Workspace::default();
         let mut prefs = Preferences::at(Some(path.clone()), &mut workspace);
         assert_eq!(workspace.language(), Language::English);
+        assert!(!workspace.truth_table_generation());
         assert!(!path.exists());
         let before = logisim_file::serialize(workspace.project()).unwrap();
-        for (language, mode) in [
-            (Language::SimplifiedChinese, SimulationMode::Stable),
-            (Language::SimplifiedChinese, SimulationMode::Event),
-            (Language::English, SimulationMode::Event),
-            (Language::English, SimulationMode::Stable),
+        for (language, mode, truth_table) in [
+            (Language::English, SimulationMode::Stable, true),
+            (Language::English, SimulationMode::Stable, false),
+            (Language::SimplifiedChinese, SimulationMode::Stable, true),
+            (Language::SimplifiedChinese, SimulationMode::Event, true),
+            (Language::English, SimulationMode::Event, false),
+            (Language::English, SimulationMode::Stable, false),
         ] {
             workspace.set_language(language);
             workspace.set_simulation_mode(mode);
+            workspace.set_truth_table_generation(truth_table);
             prefs.synchronize(&mut workspace);
             let mut restarted = Workspace::default();
             Preferences::at(Some(path.clone()), &mut restarted);
             assert_eq!(restarted.language(), language);
             assert_eq!(restarted.simulation_mode(), mode);
+            assert_eq!(restarted.truth_table_generation(), truth_table);
             assert_eq!(
                 before,
                 logisim_file::serialize(workspace.project()).unwrap()
@@ -203,7 +217,7 @@ mod tests {
         );
     }
     #[test]
-    fn language_only_preferences_keep_their_language_and_invalid_modes_are_not_overwritten() {
+    fn older_preferences_keep_defaults_and_invalid_settings_are_not_overwritten() {
         let temp = Temp::new();
         let path = temp.0.join("preferences");
         fs::write(&path, "language=zh-CN\n").unwrap();
@@ -211,8 +225,17 @@ mod tests {
         let mut prefs = Preferences::at(Some(path.clone()), &mut workspace);
         assert_eq!(workspace.language(), Language::SimplifiedChinese);
         assert_eq!(workspace.simulation_mode(), SimulationMode::Stable);
+        assert!(!workspace.truth_table_generation());
         prefs.synchronize(&mut workspace);
         assert_eq!(fs::read_to_string(&path).unwrap(), "language=zh-CN\n");
+        fs::write(&path, "language=zh-CN\nsimulation_mode=stable\n").unwrap();
+        let mut prefs = Preferences::at(Some(path.clone()), &mut workspace);
+        assert!(!workspace.truth_table_generation());
+        prefs.synchronize(&mut workspace);
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            "language=zh-CN\nsimulation_mode=stable\n"
+        );
         workspace.set_simulation_mode(SimulationMode::Event);
         prefs.synchronize(&mut workspace);
         assert_eq!(
@@ -220,15 +243,19 @@ mod tests {
             Some(Values {
                 language: Language::SimplifiedChinese,
                 simulation_mode: SimulationMode::Event,
+                ..Values::default()
             })
         );
         for text in [
             "language=en\nsimulation_mode=invalid\n",
             "language=en\nsimulation_mode=event\nsimulation_mode=stable\n",
+            "language=en\ntruth_table_generation=yes\n",
+            "language=en\ntruth_table_generation=true\ntruth_table_generation=false\n",
         ] {
             fs::write(&path, text).unwrap();
             let mut prefs = Preferences::at(Some(path.clone()), &mut workspace);
             assert_eq!(workspace.simulation_mode(), SimulationMode::Stable);
+            assert!(!workspace.truth_table_generation());
             prefs.synchronize(&mut workspace);
             assert_eq!(fs::read_to_string(&path).unwrap(), text);
         }

@@ -27,6 +27,15 @@ impl SimulationMode {
 }
 
 impl Workspace {
+    pub fn truth_table_generation(&self) -> bool {
+        self.truth_table_generation
+    }
+    pub fn set_truth_table_generation(&mut self, enabled: bool) {
+        self.truth_table_generation = enabled;
+        if !enabled {
+            self.generator.hide_truth_table();
+        }
+    }
     pub fn simulation_mode(&self) -> SimulationMode {
         self.simulation_mode
     }
@@ -46,6 +55,7 @@ impl Workspace {
         std::mem::take(&mut self.retry_settings)
     }
     pub(crate) fn settings(&mut self, ctx: &egui::Context) {
+        let mut truth_table_generation = self.truth_table_generation;
         egui::Window::new(tr("Settings"))
             .id(egui::Id::unique("settings-window"))
             .open(&mut self.settings_open)
@@ -86,6 +96,8 @@ impl Workspace {
                 });
                 ui.label(tr("Stable state settles combinational logic before sampling state. Unsupported circuits use event propagation."));
                 ui.label(tr("Changes apply without resetting the circuit and are saved for the next launch. Manual propagation steps always use events."));
+                ui.separator();
+                ui.checkbox(&mut truth_table_generation, tr("Enable truth table generation"));
                 if let Some(error) = &self.settings_error {
                     ui.separator();
                     ui.colored_label(egui::Color32::DARK_RED, tr("Settings need attention."));
@@ -94,5 +106,8 @@ impl Workspace {
                     if ui.button(tr("Retry")).clicked() { self.retry_settings = true; }
                 }
             });
+        if truth_table_generation != self.truth_table_generation {
+            self.set_truth_table_generation(truth_table_generation);
+        }
     }
 }

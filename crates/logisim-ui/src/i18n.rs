@@ -518,6 +518,7 @@ const MESSAGES: &[(&str, &str)] = &[
     ),
     ("Enable Simulation · Ctrl+E", "启用仿真 · Ctrl+E"),
     ("Enable output", "级联使能输出"),
+    ("Enable truth table generation", "启用真值表生成"),
     ("Enable: 0 holds data", "写使能：0 时保持数据"),
     ("Enable: 0 stops counting", "使能：0 时停止计数"),
     ("End", "终点"),
@@ -644,6 +645,7 @@ const MESSAGES: &[(&str, &str)] = &[
         "Inputs have pending changes. Step or Run to propagate.",
         "输入有待传播的变化，请单步或运行。",
     ),
+    ("Inputs: {} · Outputs: {}", "输入：{} · 输出：{}"),
     (
         "Instance inputs are driven by the parent circuit. Edits apply to all instances.",
         "实例输入由父电路驱动。编辑会应用到所有实例。",

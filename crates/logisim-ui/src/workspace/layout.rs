@@ -49,7 +49,7 @@ impl Workspace {
             self.memory_editor
                 .show(ui.ctx(), &mut self.editor, &mut self.file_actions);
             self.pla_editor.show(ui.ctx(), &mut self.editor);
-            self.generator.show(ui.ctx(), &mut self.editor);
+            self.generator.show(ui.ctx(), self.truth_table_generation);
         }
         if let Some(id) = self.editor.open_instance.take() {
             self.editor.enter_instance(id);

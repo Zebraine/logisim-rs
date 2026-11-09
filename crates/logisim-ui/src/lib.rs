@@ -84,6 +84,7 @@ pub struct Workspace {
     pla_editor: pla::PlaEditor,
     language: Language,
     simulation_mode: SimulationMode,
+    truth_table_generation: bool,
     settings_open: bool,
     settings_error: Option<String>,
     retry_settings: bool,

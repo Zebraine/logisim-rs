@@ -50,7 +50,7 @@ pub(crate) struct Generator {
 }
 impl Default for Generator {
     fn default() -> Self {
-        let mut analysis = Analysis::default();
+        let mut analysis = Analysis::expressions();
         for name in ["A", "B"] {
             analysis.add_input(name.into()).unwrap();
         }
@@ -80,6 +80,12 @@ impl Default for Generator {
     }
 }
 impl Generator {
+    /// Hide the table without converting or discarding its contents or a pending draft.
+    pub(super) fn hide_truth_table(&mut self) {
+        if self.tab == Tab::Table {
+            self.tab = Tab::Expression;
+        }
+    }
     pub(crate) fn load_analysis(&mut self, analysis: Analysis) {
         self.cancel_computation();
         *self = Self {
@@ -116,19 +122,31 @@ impl Generator {
             Err(error) => self.error = Some(error),
         }
     }
-    pub fn show(&mut self, ctx: &egui::Context, _editor: &mut Editor) {
+    pub fn show(&mut self, ctx: &egui::Context, truth_table_generation: bool) {
         if !self.open {
             return;
+        }
+        if !truth_table_generation {
+            self.hide_truth_table();
         }
         let mut close = false;
         let modal = egui::Modal::new(egui::Id::unique("circuit-generator")).show(ctx, |ui| {
             let available = ctx.content_rect().size();
             ui.set_width((available.x - 80.0).clamp(280.0, 760.0));
             ui.heading(tr("Combinational Circuit Generator"));
-            ui.weak(tr("Truth tables: 12 inputs · Expressions: 32 inputs · Outputs: 32"));
+            if truth_table_generation {
+                ui.weak(tr("Truth tables: 12 inputs · Expressions: 32 inputs · Outputs: 32"));
+            } else {
+                let inputs = if self.analysis.is_expression_mode() {
+                    logisim_core::generation::MAX_INPUTS
+                } else {
+                    logisim_core::generation::MAX_TABLE_INPUTS
+                };
+                ui.weak(tf!("Inputs: {} · Outputs: {}", inputs, logisim_core::generation::MAX_OUTPUTS));
+            }
             let pending = self.pending();
             let mut expression_mode = self.analysis.is_expression_mode();
-            if ui.add_enabled(!pending && !self.computing, egui::Checkbox::new(&mut expression_mode, tr("Expression mode"))).on_hover_text(tr("Switching to expressions resolves all x entries to 0 or 1.")).changed() {
+            if truth_table_generation && ui.add_enabled(!pending && !self.computing, egui::Checkbox::new(&mut expression_mode, tr("Expression mode"))).on_hover_text(tr("Switching to expressions resolves all x entries to 0 or 1.")).changed() {
                 self.request_mode(expression_mode);
             }
             ui.horizontal_wrapped(|ui| {
@@ -138,6 +156,9 @@ impl Generator {
                     (Tab::Table, "Truth Table"),
                     (Tab::Expression, "Expression"),
                 ] {
+                    if tab == Tab::Table && !truth_table_generation {
+                        continue;
+                    }
                     if ui
                         .add_enabled(
                             !pending || tab == Tab::Expression,
@@ -538,6 +559,9 @@ impl Generator {
 impl Workspace {
     pub(crate) fn open_generator(&mut self) {
         self.finish_edit();
+        if !self.truth_table_generation {
+            self.generator.hide_truth_table();
+        }
         if self.project().named(&self.generator.name).is_some() {
             let mut i = 2;
             while self.project().named(&format!("generated{i}")).is_some() {
