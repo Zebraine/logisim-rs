@@ -122,7 +122,7 @@ pub(super) fn generate(
     options: GenerationOptions,
     work: &mut super::work::Work<'_>,
     cache: &mut super::Minimizer,
-) -> Result<Circuit> {
+) -> Result<(Circuit, Analysis)> {
     let mut layout = Layout {
         options,
         circuit: Circuit::default(),
@@ -131,9 +131,16 @@ pub(super) fn generate(
         next_y: 120 + analysis.inputs.len() as i32 * 60,
     };
     let mut roots = Vec::new();
+    let mut expressions = Analysis::expressions();
+    expressions.inputs.clone_from(&analysis.inputs);
     for i in 0..analysis.outputs.len() {
         let expression = cache.expression_with(analysis, i, work)?;
         roots.push(layout.node(&expression.0.balanced())?);
+        expressions.outputs.push(super::Output {
+            name: analysis.outputs[i].name.clone(),
+            values: Vec::new(),
+            expression: Some(expression),
+        });
         layout.next_y += 80;
     }
     let output_x = roots.iter().map(|p| p.x).max().unwrap() + 100;
@@ -163,5 +170,5 @@ pub(super) fn generate(
     }
     layout.circuit.normalize_wires();
     layout.check()?;
-    Ok(layout.circuit)
+    Ok((layout.circuit, expressions))
 }

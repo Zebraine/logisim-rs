@@ -1,6 +1,8 @@
 //! The analyzer is a session draft. Only Build commits an editable circuit.
 mod jobs;
+mod memory;
 pub use jobs::{Reply, Request};
+pub(crate) use memory::Memory;
 
 use crate::{Workspace, editor::Editor, i18n::tr, tf};
 use egui::{Color32, Ui};
@@ -90,8 +92,12 @@ impl Generator {
         self.cancel_computation();
         *self = Self {
             serial: self.serial,
+            tab: if analysis.is_expression_mode() {
+                Tab::Expression
+            } else {
+                Tab::Table
+            },
             analysis,
-            tab: Tab::Table,
             name: "analyzed".into(),
             ..Self::default()
         };
@@ -641,3 +647,6 @@ mod rebuild_tests;
 
 #[cfg(test)]
 mod multi_tests;
+
+#[cfg(test)]
+mod memory_tests;

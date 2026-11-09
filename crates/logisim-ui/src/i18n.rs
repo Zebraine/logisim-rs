@@ -889,7 +889,7 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Probe", "探针"),
     ("Product high", "乘积高位"),
     ("Product low", "乘积低位"),
-    ("Product of sums", "和之积"),
+    ("Product of sums", "或与"),
     ("Project", "项目"),
     ("Project Options…", "项目选项…"),
     ("Propagate one batch · Ctrl+I", "传播一个批次 · Ctrl+I"),
@@ -1091,7 +1091,7 @@ const MESSAGES: &[(&str, &str)] = &[
         "Successful clock ticks per second, measured over about one second. Includes manual ticks; not full clock cycles or propagation steps.",
         "按约一秒内成功推进的时钟步数统计，包含手动步进；不表示完整时钟周期数或信号传播步骤数。",
     ),
-    ("Sum of products", "积之和"),
+    ("Sum of products", "与或"),
     ("Switch", "开关"),
     (
         "Switching to expressions resolves all x entries to 0 or 1.",

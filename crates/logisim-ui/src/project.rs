@@ -191,6 +191,7 @@ impl Workspace {
         let serial = self.generator.serial;
         self.generator = Default::default();
         self.generator.serial = serial;
+        self.generated_expressions = Default::default();
         self.libraries.clear();
         project.refresh_interfaces(false);
         let id = project.main;

@@ -102,6 +102,17 @@ impl Minimizer {
         options: impl Into<GenerationOptions>,
         cancelled: impl Fn() -> bool,
     ) -> Result<Circuit> {
+        self.generate_with_expressions(analysis, options, cancelled)
+            .map(|(circuit, _)| circuit)
+    }
+    /// Return the exact expressions used by this build, before layout balancing
+    /// and gate conversion. Resolve tables only once under the same work budget.
+    pub fn generate_with_expressions(
+        &mut self,
+        analysis: &Analysis,
+        options: impl Into<GenerationOptions>,
+        cancelled: impl Fn() -> bool,
+    ) -> Result<(Circuit, Analysis)> {
         if analysis.outputs.is_empty() {
             return Err(super::Error::new(
                 "Add at least one output before building a circuit.",

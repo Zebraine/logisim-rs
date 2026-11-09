@@ -44,7 +44,8 @@ enum Outcome {
     },
     Built {
         destination: Destination,
-        circuit: Circuit,
+        circuit: Box<Circuit>,
+        expressions: Analysis,
     },
 }
 impl Request {
@@ -90,10 +91,15 @@ impl Request {
             Operation::Build {
                 destination,
                 options,
-            } => Ok(Outcome::Built {
-                destination: destination.clone(),
-                circuit: cache.generate(&self.analysis, *options, &cancelled)?,
-            }),
+            } => {
+                let (circuit, expressions) =
+                    cache.generate_with_expressions(&self.analysis, *options, &cancelled)?;
+                Ok(Outcome::Built {
+                    destination: destination.clone(),
+                    circuit: Box::new(circuit),
+                    expressions,
+                })
+            }
         })();
         Ok(Reply { cache, result })
     }
@@ -222,13 +228,18 @@ impl Workspace {
             Ok(Outcome::Built {
                 destination,
                 circuit,
+                expressions,
             }) => {
                 let result = match destination {
-                    Destination::New(name) => self.editor.install_generated(name, circuit),
-                    Destination::Replace(target) => self.editor.install_rebuilt(target, circuit),
+                    Destination::New(name) => self.editor.install_generated(name, *circuit),
+                    Destination::Replace(target) => self.editor.install_rebuilt(target, *circuit),
                 };
                 match result {
                     Ok(()) => {
+                        self.generated_expressions.remember(
+                            self.editor.project.circuit(self.editor.active).unwrap(),
+                            expressions,
+                        );
                         g.cancel_computation();
                         g.open = false;
                     }

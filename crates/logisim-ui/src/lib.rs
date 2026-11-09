@@ -78,6 +78,7 @@ pub fn configure(ctx: &egui::Context) {
 pub struct Workspace {
     analysis: analysis::AnalysisUi,
     generator: generation::Generator,
+    generated_expressions: generation::Memory,
     plugins: Vec<logisim_core::plugin::api::Manifest>,
     libraries: Vec<libraries::LibraryGroup>,
     memory_editor: memory::MemoryEditor,

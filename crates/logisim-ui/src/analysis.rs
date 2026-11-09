@@ -30,6 +30,11 @@ impl Workspace {
                 message: "Circuit analysis is unavailable for an import with omitted content.",
                 detail: String::new(),
             });
+        } else if let Some(expressions) = self
+            .generated_expressions
+            .recall(self.project().circuit(self.active_circuit()).unwrap())
+        {
+            self.receive_analysis(self.analysis.serial, Ok(expressions));
         } else {
             self.analysis.requested = true;
         }
