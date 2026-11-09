@@ -4,5 +4,6 @@ mod configurations;
 mod failures;
 mod hierarchy;
 mod memory;
+mod rom;
 mod sampling;
 mod support;

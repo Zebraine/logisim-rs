@@ -157,13 +157,14 @@ impl Simulator {
             .collect();
         for (index, ports) in samples {
             let c = &self.circuit.components[index];
+            let config = c.memory_logic().expect("memory configuration");
             let output = if c.kind == Kind::Rom {
-                memory::rom(c, &ports)
+                memory::rom(&config, &c.memory.contents, &ports)
             } else {
                 self.memories
                     .get_mut(&c.id)
                     .expect("RAM state")
-                    .evaluate(c, &ports)
+                    .evaluate(&config, &ports)
             };
             self.drive_port((c.id, 0), output);
         }

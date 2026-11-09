@@ -188,7 +188,7 @@ impl Component {
                 2 => Some(1),
                 _ => None,
             },
-            Kind::Rom | Kind::Ram => self.memory_terminals().get(index).map(|p| p.bits),
+            Kind::Rom | Kind::Ram => self.memory_logic()?.port(index).map(|p| p.bits),
             Kind::Random => (index < 4).then_some(if index == 0 {
                 self.bits.clamp(1, 32)
             } else {

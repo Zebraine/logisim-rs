@@ -65,11 +65,12 @@ impl Simulator {
             .iter()
             .filter(|c| c.kind == Kind::Ram)
             .map(|c| {
+                let config = c.memory_logic().expect("RAM configuration");
                 let state = self
                     .memories
                     .remove(&c.id)
-                    .map(|s| s.adapt(c))
-                    .unwrap_or_else(|| memory::State::new(c));
+                    .map(|s| s.adapt(&config))
+                    .unwrap_or_else(|| memory::State::new(&config));
                 (c.id, state)
             })
             .collect();
@@ -131,7 +132,12 @@ impl Simulator {
             .components
             .iter()
             .filter(|c| c.kind == Kind::Ram)
-            .map(|c| (c.id, memory::State::new(c)))
+            .map(|c| {
+                (
+                    c.id,
+                    memory::State::new(&c.memory_logic().expect("RAM configuration")),
+                )
+            })
             .collect();
         self.initialize(BTreeMap::new());
     }
@@ -190,7 +196,10 @@ fn electrically_equal(a: &Circuit, b: &Circuit) -> bool {
                 matches!(c.kind, Kind::Latch(_)).then_some(c.latch_enable),
                 c.plexer_logic(),
                 c.arithmetic_logic(),
-                c.kind.is_memory().then_some(c.memory.clone()),
+                (
+                    c.memory_logic(),
+                    (c.kind == Kind::Rom).then(|| c.memory.contents.clone()),
+                ),
                 (c.kind == Kind::PlaRom).then_some(c.pla.clone()),
                 c.kind.is_terminal().then_some(c.terminal),
                 (c.kind == Kind::Slider).then_some(c.io.slider_value),

@@ -48,17 +48,12 @@ impl Simulator {
         }
     }
     pub fn fill_memory(&mut self, id: Id, start: u32, end: u32, value: u32) {
-        let Some(c) = self.circuit.component(id) else {
-            return;
-        };
-        if start >= end || end > c.memory_capacity() {
-            return;
-        }
-        let mask = u32::MAX >> (32 - c.bits.clamp(1, 32));
         let Some(state) = self.memories.get_mut(&id) else {
             return;
         };
-        state.contents.fill(start, end, value & mask);
+        if !state.fill(start, end, value) {
+            return;
+        }
         self.invalidate_stable_values();
         self.limited = false;
         self.progress.restart();
@@ -68,22 +63,18 @@ impl Simulator {
         let Some(state) = self.memories.get_mut(&id) else {
             return;
         };
-        state.contents.clear();
+        state.clear();
         self.invalidate_stable_values();
         self.limited = false;
         self.progress.restart();
         self.schedule_components(false, None);
     }
     /// Replace a RAM image atomically, then schedule one propagation pass.
-    pub fn replace_memory(&mut self, id: Id, mut contents: logisim_core::MemoryContents) -> bool {
-        let Some(c) = self.circuit.component(id) else {
-            return false;
-        };
+    pub fn replace_memory(&mut self, id: Id, contents: logisim_core::MemoryContents) -> bool {
         let Some(state) = self.memories.get_mut(&id) else {
             return false;
         };
-        contents.resize(c.memory.address_bits, c.bits);
-        state.contents = contents;
+        state.replace_contents(contents);
         self.invalidate_stable_values();
         self.limited = false;
         self.progress.restart();

@@ -1,20 +1,20 @@
 use super::super::Node;
 use crate::{Bit, Value, arithmetic, bus, gates, memory, parity, pla, plexers};
 use logisim_core::{
-    ArithmeticLogic, Component, ControlledLogic, Extension, GateLogic, Kind, ParityLogic,
-    PlexerLogic,
+    ArithmeticLogic, Component, ControlledLogic, Extension, GateLogic, Kind, MemoryContents,
+    MemoryLogic, ParityLogic, PlexerLogic,
 };
 
 /// Snapshots reuse the engine's observed pure kernels, including their attributes.
-/// Logic families keep only electrical configuration; memory snapshots are cloned
-/// at compile time, never per evaluation. No stateful kernel enters
+/// Logic families keep only electrical configuration; ROM images share immutable
+/// contents with the document until an edit. No stateful kernel enters
 /// this plan; in particular the output-holding display decoder is not a plexer here.
 pub(super) enum Operation {
     Gate(GateLogic, Box<[bool]>),
     Parity(ParityLogic, Box<[bool]>),
     Arithmetic(ArithmeticLogic),
     Plexer(PlexerLogic),
-    Rom(Box<Component>),
+    Rom(MemoryLogic, MemoryContents),
     Pla(Box<logisim_core::Pla>),
     Constant(Value),
     Controlled(ControlledLogic),
@@ -41,7 +41,10 @@ impl Operation {
             Kind::Plexer(kind) if kind != logisim_core::Plexer::DisplayDecoder => {
                 Self::Plexer(c.plexer_logic().expect("matched component kind"))
             }
-            Kind::Rom => Self::Rom(Box::new(c.clone())),
+            Kind::Rom => Self::Rom(
+                c.memory_logic().expect("ROM configuration"),
+                c.memory.contents.clone(),
+            ),
             Kind::PlaRom => Self::Pla(Box::new(c.pla.clone())),
             Kind::Constant => Self::Constant(Value::known(c.bits, c.constant)),
             Kind::Power => Self::Constant(Value::filled(c.bits, Bit::One)),
@@ -84,7 +87,7 @@ impl Operation {
                 }
                 return;
             }
-            Self::Rom(c) => memory::rom(c, ports),
+            Self::Rom(config, contents) => memory::rom(config, contents, ports),
             Self::Pla(p) => pla::evaluate(p, ports[1], ports[2].bit(0)),
             Self::Constant(value) => *value,
             Self::Controlled(c) => bus::evaluate(c, ports[1], ports[2].bit(0)),

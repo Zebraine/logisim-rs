@@ -1,7 +1,7 @@
 use super::*;
-use logisim_core::{Kind, Point};
+use logisim_core::{Component, Kind, MemoryInterface, Point};
 const FOUR: [Bit; 4] = [Bit::Zero, Bit::One, Bit::Unknown, Bit::Error];
-fn fixture(interface: MemoryInterface, simple: bool) -> (Component, Vec<Value>) {
+fn fixture(interface: MemoryInterface, simple: bool) -> (MemoryLogic, Vec<Value>) {
     let mut c = Component::new(Kind::Ram, Point::ZERO);
     c.bits = 4;
     c.memory.address_bits = 2;
@@ -12,10 +12,10 @@ fn fixture(interface: MemoryInterface, simple: bool) -> (Component, Vec<Value>) 
         .iter()
         .map(|p| Value::known(p.bits, 0))
         .collect();
-    (c, ports)
+    (c.memory_logic().unwrap(), ports)
 }
-fn set(c: &Component, p: &mut [Value], role: MemoryRole, value: Value) {
-    if let Some(i) = c.memory_port(role) {
+fn set(c: &MemoryLogic, p: &mut [Value], role: MemoryRole, value: Value) {
+    if let Some(i) = c.port_index(role) {
         p[i] = value;
     }
 }
@@ -35,7 +35,7 @@ fn observed_select_store_load_and_four_state_data_matrix() {
                             ),
                         ] {
                             let (mut c, mut p) = fixture(interface, simple);
-                            c.memory.select_high = high;
+                            c.select_high = high;
                             set(&c, &mut p, MemoryRole::Select, Value::filled(1, select));
                             set(&c, &mut p, MemoryRole::Store, Value::filled(1, control));
                             set(&c, &mut p, MemoryRole::Load, Value::filled(1, control));
@@ -93,7 +93,7 @@ fn unknown_addresses_clear_priority_startup_and_word_boundaries() {
         for bits in [1, 32] {
             let (mut c, mut p) = fixture(interface, false);
             c.bits = bits;
-            c.memory.address_bits = 24;
+            c.address_bits = 24;
             p[0] = Value::known(bits, 0x8000_0001);
             p[1] = Value::known(24, 0xff_ffff);
             set(
@@ -154,7 +154,7 @@ fn rom_read_select_and_invalid_address_match_runtime() {
                     Value::filled(1, select),
                 ];
                 assert_eq!(
-                    rom(&c, &p),
+                    rom(&c.memory_logic().unwrap(), &c.memory.contents, &p),
                     if select == if high { Bit::Zero } else { Bit::One } {
                         Value::filled(32, Bit::Unknown)
                     } else {
@@ -163,9 +163,63 @@ fn rom_read_select_and_invalid_address_match_runtime() {
                 );
                 for bit in [Bit::Unknown, Bit::Error] {
                     p[1] = Value::filled(24, bit);
-                    assert_eq!(rom(&c, &p), Value::filled(32, Bit::Unknown));
+                    assert_eq!(
+                        rom(&c.memory_logic().unwrap(), &c.memory.contents, &p),
+                        Value::filled(32, Bit::Unknown)
+                    );
                 }
             }
         }
     }
+}
+
+#[test]
+fn ram_image_edits_and_dimension_changes_preserve_clock_history_and_isolation() {
+    let (mut config, mut ports) = fixture(MemoryInterface::Separate, false);
+    let mut state = State::new(&config);
+    set(&config, &mut ports, MemoryRole::Store, Value::known(1, 1));
+    set(&config, &mut ports, MemoryRole::Input, Value::known(4, 9));
+    state.evaluate(&config, &ports);
+    set(&config, &mut ports, MemoryRole::Clock, Value::known(1, 1));
+    assert_eq!(state.evaluate(&config, &ports), Value::known(4, 9));
+    let sibling = state.clone();
+
+    assert!(!state.fill(0, 5, 7));
+    assert!(!state.fill(3, 2, 7));
+    assert!(!state.fill(4, 4, 7));
+    assert_eq!(state.contents().get(0), 9);
+    assert!(state.fill(0, 4, 0x12));
+    assert_eq!(state.contents().get(0), 2);
+    assert_eq!(state.contents().get(3), 2);
+    assert_eq!(sibling.contents().get(0), 9);
+
+    let mut image = MemoryContents::default();
+    image.fill(0, 16, 0x1b);
+    state.replace_contents(image);
+    assert_eq!(state.contents().get(0), 11);
+    assert_eq!(state.contents().get(4), 0);
+    // Neither image replacement nor a configuration edit creates a rising edge.
+    assert_eq!(state.evaluate(&config, &ports), Value::known(4, 11));
+    for bits in [1, 32] {
+        config.bits = bits;
+        state = state.adapt(&config);
+        assert_eq!(state.evaluate(&config, &ports), Value::known(bits, 1));
+    }
+    config.address_bits = 4;
+    state = state.adapt(&config);
+    assert_eq!(state.contents().get(4), 0);
+    assert!(state.fill(8, 16, 5));
+    for address_bits in [2, 4] {
+        config.address_bits = address_bits;
+        state = state.adapt(&config);
+        assert_eq!(state.contents().get(8), 0);
+    }
+    set(&config, &mut ports, MemoryRole::Input, Value::known(32, 7));
+    set(&config, &mut ports, MemoryRole::Clock, Value::known(1, 0));
+    assert_eq!(state.evaluate(&config, &ports), Value::known(32, 1));
+    set(&config, &mut ports, MemoryRole::Clock, Value::known(1, 1));
+    assert_eq!(state.evaluate(&config, &ports), Value::known(32, 7));
+    state.clear();
+    assert_eq!(state.evaluate(&config, &ports), Value::known(32, 0));
+    assert_eq!(sibling.contents().get(0), 9);
 }

@@ -18,7 +18,7 @@ impl Simulator {
     }
 
     pub fn memory_contents(&self, id: Id) -> Option<&logisim_core::MemoryContents> {
-        self.memories.get(&id).map(|s| &s.contents)
+        self.memories.get(&id).map(|s| s.contents())
     }
     pub fn stored_value(&self, id: Id) -> Option<Value> {
         self.storage

@@ -48,7 +48,10 @@ pub use terminal::TerminalOptions;
 mod pla;
 pub use pla::{Pla, PlaInput};
 mod memory;
-pub use memory::{Memory, MemoryContents, MemoryInterface, MemoryRole, MemoryTerminal};
+pub use memory::{
+    Memory, MemoryContents, MemoryInterface, MemoryKind, MemoryLogic, MemoryPort, MemoryRole,
+    MemoryTerminal,
+};
 
 mod wiring;
 pub use wiring::{Extension, Radix, SplitAppearance, Splitter};

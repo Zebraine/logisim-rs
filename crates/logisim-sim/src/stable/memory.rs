@@ -61,7 +61,8 @@ impl Simulator {
                 continue;
             }
             let ports = entry.sample(&self.values);
-            let value = self.memories[&c.id].read(c, &ports);
+            let value =
+                self.memories[&c.id].read(&c.memory_logic().expect("RAM configuration"), &ports);
             read.inputs = Some(read.read_ports.iter().map(|&port| ports[port]).collect());
             drives.push(((c.id, 0), value));
         }
@@ -86,12 +87,10 @@ impl Simulator {
                 continue;
             }
             sampled += 1;
-            if self
-                .memories
-                .get_mut(&c.id)
-                .unwrap()
-                .sample(c, &entry.sample(&self.values))
-            {
+            if self.memories.get_mut(&c.id).unwrap().sample(
+                &c.memory_logic().expect("RAM configuration"),
+                &entry.sample(&self.values),
+            ) {
                 read.invalidate();
                 changed = true;
             }
