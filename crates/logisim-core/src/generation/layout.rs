@@ -105,7 +105,8 @@ pub(super) fn generate(
     };
     let mut roots = Vec::new();
     for i in 0..analysis.outputs.len() {
-        roots.push(layout.node(&cache.expression_with(analysis, i, work)?.0)?);
+        let expression = cache.expression_with(analysis, i, work)?;
+        roots.push(layout.node(&expression.0.balanced_and())?);
         layout.next_y += 80;
     }
     let output_x = roots.iter().map(|p| p.x).max().unwrap() + 100;

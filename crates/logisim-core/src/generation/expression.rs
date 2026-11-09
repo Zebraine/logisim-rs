@@ -29,6 +29,48 @@ impl Node {
     pub(super) fn binary(op: Op, a: Self, b: Self) -> Self {
         Self::Binary(op, Box::new(a), Box::new(b))
     }
+    pub(super) fn combine(mut nodes: Vec<Node>, op: Op, empty: bool) -> Node {
+        if nodes.is_empty() {
+            return Node::Constant(empty);
+        }
+        // Balanced trees bound both layout depth and gate propagation depth.
+        while nodes.len() > 1 {
+            let mut next = Vec::with_capacity(nodes.len().div_ceil(2));
+            let mut iter = nodes.into_iter();
+            while let Some(a) = iter.next() {
+                next.push(if let Some(b) = iter.next() {
+                    Node::binary(op, a, b)
+                } else {
+                    a
+                });
+            }
+            nodes = next;
+        }
+        nodes.pop().unwrap()
+    }
+    /// Reassociate AND runs for synthesis without changing the stored expression.
+    /// Other operators delimit a run; their own operands may contain further runs.
+    pub(super) fn balanced_and(&self) -> Self {
+        fn collect(node: &Node, terms: &mut Vec<Node>) {
+            match node {
+                Node::Binary(Op::And, a, b) => {
+                    collect(a, terms);
+                    collect(b, terms);
+                }
+                _ => terms.push(node.balanced_and()),
+            }
+        }
+        match self {
+            Self::Binary(Op::And, _, _) => {
+                let mut terms = Vec::new();
+                collect(self, &mut terms);
+                Self::combine(terms, Op::And, true)
+            }
+            Self::Binary(op, a, b) => Self::binary(*op, a.balanced_and(), b.balanced_and()),
+            Self::Not(a) => a.balanced_and().not(),
+            _ => self.clone(),
+        }
+    }
     pub(super) fn not(self) -> Self {
         Self::Not(Box::new(self))
     }

@@ -286,3 +286,45 @@ fn reduced_inputs_constants_and_cached_columns_keep_exact_semantics() {
     a.swap(true, 3, 0).unwrap();
     assert!(cache.cached(&a, 0, Form::SumOfProducts).is_none());
 }
+
+#[test]
+fn and_chains_use_logarithmic_gate_depth_without_extra_gates() {
+    use crate::{Gate, Kind};
+    for count in 1usize..=32 {
+        let mut a = Analysis::expressions();
+        for i in 0..count {
+            a.add_input(format!("I{i}")).unwrap();
+        }
+        a.add_output("Y".into()).unwrap();
+        a.apply_expression(0, &a.inputs().join(" & ")).unwrap();
+        let before = a.clone();
+        let depth = count.next_power_of_two().ilog2() as i32;
+        for (basis, gate, expansion) in [
+            (GateBasis::Standard, Gate::And, 1),
+            (GateBasis::Nand, Gate::Nand, 2),
+        ] {
+            let c = a.generate_with_basis(basis).unwrap();
+            assert_eq!(
+                c.components
+                    .iter()
+                    .filter(|c| c.kind == Kind::Gate(gate))
+                    .count(),
+                (count - 1) * expansion as usize
+            );
+            assert!(
+                c.components
+                    .iter()
+                    .filter(|c| matches!(c.kind, Kind::Gate(_)))
+                    .all(|c| c.input_count() == 2)
+            );
+            // Each binary gate advances its deepest source by 140 units.
+            let output = c.components.iter().find(|c| c.label == "Y").unwrap();
+            assert_eq!(
+                output.position.x,
+                300 + count as i32 * 30 + depth * expansion * 140 + 100
+            );
+            assert!(c.dangling_ends().is_empty());
+        }
+        assert_eq!(a, before);
+    }
+}

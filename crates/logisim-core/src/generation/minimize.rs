@@ -226,32 +226,12 @@ fn minimize_reduced(
                     })
                 })
                 .collect();
-            combine(literals, if sop { Op::And } else { Op::Or }, sop)
+            Node::combine(literals, if sop { Op::And } else { Op::Or }, sop)
         })
         .collect();
-    Ok(Expression(combine(
+    Ok(Expression(Node::combine(
         terms,
         if sop { Op::Or } else { Op::And },
         !sop,
     )))
-}
-
-fn combine(mut nodes: Vec<Node>, op: Op, empty: bool) -> Node {
-    if nodes.is_empty() {
-        return Node::Constant(empty);
-    }
-    // Balanced trees bound both layout depth and gate propagation depth.
-    while nodes.len() > 1 {
-        let mut next = Vec::with_capacity(nodes.len().div_ceil(2));
-        let mut iter = nodes.into_iter();
-        while let Some(a) = iter.next() {
-            next.push(if let Some(b) = iter.next() {
-                Node::binary(op, a, b)
-            } else {
-                a
-            });
-        }
-        nodes = next;
-    }
-    nodes.pop().unwrap()
 }
