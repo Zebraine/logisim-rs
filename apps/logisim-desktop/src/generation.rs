@@ -126,7 +126,7 @@ mod tests {
         a.add_output("Y".into()).unwrap();
         w.replace_circuit(a.generate().unwrap());
         w.request_analysis();
-        let serial = w.take_analysis_request().unwrap();
+        let (serial, _) = w.take_analysis_request().unwrap();
         w.receive_analysis(serial, Ok(a));
         w
     }

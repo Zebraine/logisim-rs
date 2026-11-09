@@ -26,7 +26,7 @@ fn workspace(language: Language) -> (Workspace, Id, Id) {
     w.replace_project(project);
     w.editor.enter_instance(instance);
     w.request_analysis();
-    let serial = w.take_analysis_request().unwrap();
+    let (serial, _) = w.take_analysis_request().unwrap();
     w.receive_analysis(serial, Ok(analysis));
     finish_jobs(&mut w);
     (w, child, instance)

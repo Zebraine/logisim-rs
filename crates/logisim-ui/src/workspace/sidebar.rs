@@ -68,6 +68,7 @@ impl Workspace {
                                     else if response.clicked() && allowed { self.editor.appearance_mode=false; self.editor.set_tool(Tool::Place(Kind::Subcircuit(id))); }
                                     response.context_menu(|ui| {
                                         if ui.button(tr("Open circuit")).clicked() { self.editor.switch_circuit(id); ui.close(); }
+                                        if ui.button(tr("Analyze Circuit…")).clicked() { self.request_circuit_analysis(id); ui.close(); }
                                         if ui.add_enabled(allowed,egui::Button::new(tr("Place instance"))).clicked() { self.editor.set_tool(Tool::Place(Kind::Subcircuit(id))); ui.close(); }
                                         if ui.button(tr("Edit appearance")).clicked(){self.finish_edit();self.editor.switch_circuit(id);self.editor.appearance_mode=true;ui.close();}
                                         if ui.button(tr("Rename…")).clicked() { self.editor.switch_circuit(id); self.circuit_command(CircuitCommand::Rename); ui.close(); }

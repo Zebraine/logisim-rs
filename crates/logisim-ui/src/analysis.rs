@@ -1,11 +1,15 @@
 //! Analysis presentation and host requests; evaluation belongs to logisim-sim.
 use crate::{Workspace, i18n::tr};
-use logisim_core::generation::{Analysis, Error};
+use logisim_core::{
+    Id,
+    generation::{Analysis, Error},
+};
 
 #[derive(Default)]
 pub(crate) struct AnalysisUi {
     serial: u64,
     requested: bool,
+    target: Option<Id>,
     open: bool,
     error: Option<Error>,
 }
@@ -17,30 +21,46 @@ impl AnalysisUi {
         self.serial = self.serial.wrapping_add(1);
         self.open = false;
         self.requested = false;
+        self.target = None;
         self.error = None;
     }
 }
 impl Workspace {
     pub fn request_analysis(&mut self) {
+        self.request_circuit_analysis(self.active_circuit());
+    }
+    /// Analyze a definition without changing the circuit currently on the canvas.
+    pub fn request_circuit_analysis(&mut self, id: Id) {
         self.finish_edit();
         self.analysis.cancel();
         self.analysis.open = true;
+        self.analysis.target = Some(id);
         if self.document.partial {
             self.analysis.error = Some(Error {
                 message: "Circuit analysis is unavailable for an import with omitted content.",
                 detail: String::new(),
             });
-        } else if let Some(expressions) = self
-            .generated_expressions
-            .recall(self.project().circuit(self.active_circuit()).unwrap())
-        {
+            return;
+        }
+        let Some(definition) = self.project().circuit(id) else {
+            self.analysis.error = Some(Error {
+                message: "The circuit changed during analysis. Please analyze it again.",
+                detail: String::new(),
+            });
+            return;
+        };
+        if let Some(expressions) = self.generated_expressions.recall(definition) {
             self.receive_analysis(self.analysis.serial, Ok(expressions));
+        } else if definition.circuit.components.is_empty() && definition.circuit.wires.is_empty() {
+            self.receive_analysis(self.analysis.serial, Ok(Analysis::expressions()));
         } else {
             self.analysis.requested = true;
         }
     }
-    pub fn take_analysis_request(&mut self) -> Option<u64> {
-        std::mem::take(&mut self.analysis.requested).then_some(self.analysis.serial)
+    /// Take the request serial and its target circuit definition together.
+    pub fn take_analysis_request(&mut self) -> Option<(u64, Id)> {
+        std::mem::take(&mut self.analysis.requested)
+            .then(|| (self.analysis.serial, self.analysis.target.unwrap()))
     }
     pub fn analysis_pending(&self, serial: u64) -> bool {
         self.analysis.open && self.analysis.error.is_none() && self.analysis.serial == serial
@@ -51,10 +71,15 @@ impl Workspace {
             return;
         }
         let result = result.and_then(|analysis| {
-            let target = logisim_core::generation::RebuildTarget::bind(
-                self.project().circuit(self.active_circuit()).unwrap(),
-                &analysis,
-            )?;
+            let definition = self
+                .analysis
+                .target
+                .and_then(|id| self.project().circuit(id))
+                .ok_or_else(|| Error {
+                    message: "The circuit changed during analysis. Please analyze it again.",
+                    detail: String::new(),
+                })?;
+            let target = logisim_core::generation::RebuildTarget::bind(definition, &analysis)?;
             Ok((analysis, target))
         });
         match result {

@@ -34,12 +34,35 @@ fn isolated_worker_delivers_without_changing_document_and_shutdown_joins() {
     service.update(&mut w, || {});
     drop(service);
 }
+
+#[test]
+fn worker_analyzes_the_explicit_target_while_a_stateful_parent_is_open() {
+    let mut w = workspace();
+    let mut project = w.project().clone();
+    let child = project.main;
+    let parent = project.add("parent".into()).unwrap();
+    project.main = parent;
+    let instance = project.instance(child, Point::new(200, 200)).unwrap();
+    let circuit = &mut project.circuit_mut(parent).unwrap().circuit;
+    circuit.add_component(instance);
+    circuit.add_component(Component::new(Kind::Register, Point::new(400, 200)));
+    w.replace_project(project.clone());
+    let mut service = Service::default();
+    w.request_circuit_analysis(child);
+    service.update(&mut w, || {});
+    assert_eq!(service.job.as_ref().unwrap().request.root, child);
+    wait(&mut service, &mut w);
+    // A successful result opens the generator and requests its initial expression.
+    assert!(w.take_generation_request().is_some());
+    assert_eq!(w.active_circuit(), parent);
+    assert_eq!(w.project(), &project);
+}
 #[test]
 fn stale_and_replaced_requests_are_discarded_without_blocking_the_gui() {
     let mut w = workspace();
     let mut service = Service::default();
     w.request_analysis();
-    let serial = w.take_analysis_request().unwrap();
+    let (serial, _) = w.take_analysis_request().unwrap();
     let request = Request {
         serial,
         root: w.active_circuit(),

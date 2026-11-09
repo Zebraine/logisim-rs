@@ -77,7 +77,7 @@ fn edits_invalidate_memory_undo_restores_it_and_old_analysis_results_are_rejecte
         .kind = Kind::Gate(Gate::Or);
     w.editor.record(before);
     w.request_analysis();
-    let old = w.take_analysis_request().unwrap();
+    let (old, _) = w.take_analysis_request().unwrap();
     w.editor.undo();
     w.request_analysis();
     assert!(w.take_analysis_request().is_none());

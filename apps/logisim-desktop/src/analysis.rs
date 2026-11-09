@@ -30,10 +30,10 @@ pub(crate) struct Service {
 }
 impl Service {
     pub fn update(&mut self, workspace: &mut Workspace, repaint: impl FnOnce() + Send + 'static) {
-        if let Some(serial) = workspace.take_analysis_request() {
+        if let Some((serial, root)) = workspace.take_analysis_request() {
             self.waiting = Some(Request {
                 serial,
-                root: workspace.active_circuit(),
+                root,
                 project: Arc::new(workspace.project().clone()),
             });
         }
@@ -49,8 +49,7 @@ impl Service {
                 .join()
                 .unwrap_or_else(|_| Err(error("Circuit analysis worker stopped.")));
             if !job.cancelled.load(Ordering::Relaxed) {
-                let current = workspace.active_circuit() == job.request.root
-                    && workspace.project() == job.request.project.as_ref();
+                let current = workspace.project() == job.request.project.as_ref();
                 workspace.receive_analysis(
                     job.request.serial,
                     if current {

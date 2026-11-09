@@ -589,7 +589,6 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Gate location", "栅极位置"),
     ("Gate size", "门尺寸"),
     ("Gates", "逻辑门"),
-    ("Generate Circuit…", "生成电路…"),
     ("Generate package", "生成封装"),
     (
         "Generated circuit exceeds the 4096-item limit. Simplify the logic or split the outputs.",

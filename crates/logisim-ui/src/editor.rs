@@ -79,6 +79,8 @@ pub(crate) struct Editor {
     pub root: Id,
     pub path: Vec<Id>,
     pub open_instance: Option<Id>,
+    pub analyze_circuit: Option<Id>,
+    context_instance: Option<Id>,
     pub project_error: Option<String>,
     pub circuit: Circuit,
     pub selection: BTreeSet<Id>,
@@ -107,6 +109,8 @@ impl Default for Editor {
             root: 1,
             path: vec![],
             open_instance: None,
+            analyze_circuit: None,
+            context_instance: None,
             project_error: None,
             circuit: Circuit::default(),
             selection: BTreeSet::new(),
@@ -944,17 +948,24 @@ impl Editor {
                 ui.weak(tf!("{} bit", signal.binary.len()));
             });
         }
-        response.context_menu(|ui| {
-            let instance = pointer
+        if response.secondary_clicked() {
+            self.context_instance = pointer
                 .and_then(|p| self.hit(canvas.world(p), tolerance))
                 .or_else(|| self.selection.first().copied());
-            if let Some(id) = instance
+        }
+        response.context_menu(|ui| {
+            if let Some(id) = self.context_instance
                 && let Some(c) = self.circuit.component(id)
-                && matches!(c.kind, Kind::Subcircuit(_))
-                && ui.button(tf!("View {}", c.interface.name)).clicked()
+                && let Kind::Subcircuit(target) = c.kind
             {
-                self.open_instance = Some(id);
-                ui.close();
+                if ui.button(tf!("View {}", c.interface.name)).clicked() {
+                    self.open_instance = Some(id);
+                    ui.close();
+                }
+                if ui.button(tr("Analyze Circuit…")).clicked() {
+                    self.analyze_circuit = Some(target);
+                    ui.close();
+                }
             }
 
             if ui

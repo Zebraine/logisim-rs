@@ -92,7 +92,9 @@ impl Generator {
         self.cancel_computation();
         *self = Self {
             serial: self.serial,
-            tab: if analysis.is_expression_mode() {
+            tab: if analysis.outputs().is_empty() {
+                Tab::Inputs
+            } else if analysis.is_expression_mode() {
                 Tab::Expression
             } else {
                 Tab::Table
@@ -650,3 +652,6 @@ mod multi_tests;
 
 #[cfg(test)]
 mod memory_tests;
+
+#[cfg(test)]
+mod entry_tests;

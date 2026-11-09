@@ -221,7 +221,7 @@ fn circuit_analysis_success_opens_expression_and_builds_as_one_edit() {
     w.replace_circuit(analysis.generate().unwrap());
     let before = w.project().clone();
     w.request_analysis();
-    let serial = w.take_analysis_request().unwrap();
+    let (serial, _) = w.take_analysis_request().unwrap();
     w.receive_analysis(serial, Ok(analysis.clone()));
     assert!(w.generator.open);
     assert_eq!(w.generator.tab, Tab::Expression);
@@ -246,10 +246,11 @@ fn circuit_analysis_cancel_error_stale_results_and_partial_import_preserve_draft
         crate::configure(&ctx);
         let mut w = Workspace::default();
         w.set_language(language);
+        w.replace_circuit(Generator::default().analysis.generate().unwrap());
         w.generator.draft = "unfinished &".into();
         let before = w.project().clone();
         w.request_analysis();
-        let serial = w.take_analysis_request().unwrap();
+        let (serial, _) = w.take_analysis_request().unwrap();
         let label = |key: &str| i18n::with_language(language, || tr(key).to_owned());
         for _ in 0..3 {
             frame_at_size(&ctx, &mut w, vec![], egui::vec2(720.0, 480.0));
@@ -259,7 +260,7 @@ fn circuit_analysis_cancel_error_stale_results_and_partial_import_preserve_draft
         assert_eq!(w.generator.draft, "unfinished &");
         assert!(!w.generator.open);
         w.request_analysis();
-        let serial = w.take_analysis_request().unwrap();
+        let (serial, _) = w.take_analysis_request().unwrap();
         w.receive_analysis(
             serial,
             Err(Error {
@@ -283,10 +284,10 @@ fn circuit_analysis_cancel_error_stale_results_and_partial_import_preserve_draft
         assert_eq!(w.project(), &before);
         assert!(!w.editor.can_undo());
         w.request_analysis();
-        let old = w.take_analysis_request().unwrap();
-        w.replace_project(Project::default());
+        let (old, _) = w.take_analysis_request().unwrap();
+        w.replace_project(before.clone());
         w.request_analysis();
-        let new = w.take_analysis_request().unwrap();
+        let (new, _) = w.take_analysis_request().unwrap();
         assert_ne!(old, new);
         w.receive_analysis(old, Ok(Analysis::default()));
         assert!(w.analysis_pending(new));
@@ -364,7 +365,7 @@ fn analysis_and_inflight_table_conversion_use_the_current_visibility_preference(
         w.set_truth_table_generation(enabled);
         w.replace_circuit(analysis.generate().unwrap());
         w.request_analysis();
-        let serial = w.take_analysis_request().unwrap();
+        let (serial, _) = w.take_analysis_request().unwrap();
         w.receive_analysis(serial, Ok(analysis.clone()));
         assert_eq!(w.generator.analysis, analysis);
         assert_eq!(

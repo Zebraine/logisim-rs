@@ -54,6 +54,10 @@ impl Workspace {
         if let Some(id) = self.editor.open_instance.take() {
             self.editor.enter_instance(id);
         }
+        if let Some(id) = self.editor.analyze_circuit.take() {
+            self.request_circuit_analysis(id);
+            ui.ctx().request_repaint();
+        }
         self.editor.sync_project();
         if before
             != (

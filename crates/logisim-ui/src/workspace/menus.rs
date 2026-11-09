@@ -105,10 +105,6 @@ impl Workspace {
                     self.request_analysis();
                     ui.close();
                 }
-                if ui.button(tr("Generate Circuit…")).clicked() {
-                    self.open_generator();
-                    ui.close();
-                }
                 ui.separator();
                 if ui.button(tr("Load Wasm Plugin…")).clicked() {
                     self.file_actions.push(FileAction::LoadPlugin);

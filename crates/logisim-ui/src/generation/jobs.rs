@@ -240,6 +240,11 @@ impl Workspace {
                             self.editor.project.circuit(self.editor.active).unwrap(),
                             expressions,
                         );
+                        // Host replies arrive before show() captures the current
+                        // view; explicitly fit the newly installed geometry.
+                        self.appearance.reset_context();
+                        self.canvas.reset();
+                        self.fit_pending = true;
                         g.cancel_computation();
                         g.open = false;
                     }
