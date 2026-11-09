@@ -1,10 +1,8 @@
 use crate::{Bit, Value};
-use logisim_core::{Arithmetic, Component, Kind, Shift};
+use logisim_core::{Arithmetic, ArithmeticLogic, Shift};
 
-pub(crate) fn evaluate(c: &Component, ports: &[Value]) -> Vec<(usize, Value)> {
-    let Kind::Arithmetic(kind) = c.kind else {
-        return vec![];
-    };
+pub(crate) fn evaluate(c: &ArithmeticLogic, ports: &[Value]) -> Vec<(usize, Value)> {
+    let kind = c.kind;
     let a = ports[1];
     let width = c.bits.clamp(1, 32);
     if kind == Arithmetic::BitAdder {
@@ -22,7 +20,7 @@ pub(crate) fn evaluate(c: &Component, ports: &[Value]) -> Vec<(usize, Value)> {
         let maximum = minimum + uncertain;
         // All possible counts form an interval; only its common high prefix is known.
         let uncertain_bits = 32 - (minimum ^ maximum).leading_zeros();
-        let count = Value::from_bits((0..c.arithmetic_output_bits()).map(|i| {
+        let count = Value::from_bits((0..c.output_bits()).map(|i| {
             if u32::from(i) < uncertain_bits {
                 Bit::Error
             } else if minimum & (1 << i) != 0 {
@@ -34,14 +32,14 @@ pub(crate) fn evaluate(c: &Component, ports: &[Value]) -> Vec<(usize, Value)> {
         return vec![(0, count)];
     }
     if kind == Arithmetic::BitFinder {
-        let result_width = c.arithmetic_output_bits();
-        let target = if c.arithmetic.search.find_one() {
+        let result_width = c.output_bits();
+        let target = if c.options.search.find_one() {
             Bit::One
         } else {
             Bit::Zero
         };
         for offset in 0..width {
-            let i = if c.arithmetic.search.from_high() {
+            let i = if c.options.search.from_high() {
                 width - 1 - offset
             } else {
                 offset
@@ -134,7 +132,7 @@ pub(crate) fn evaluate(c: &Component, ports: &[Value]) -> Vec<(usize, Value)> {
                     break;
                 }
                 relation = (a == Bit::One).cmp(&(b == Bit::One));
-                if c.arithmetic.signed && i == width - 1 {
+                if c.options.signed && i == width - 1 {
                     relation = relation.reverse();
                 }
                 if relation != std::cmp::Ordering::Equal {
@@ -165,7 +163,7 @@ pub(crate) fn evaluate(c: &Component, ports: &[Value]) -> Vec<(usize, Value)> {
             let distance = distance as i32;
             let w = i32::from(width);
             let result = Value::from_bits((0..w).map(|i| {
-                let source = match c.arithmetic.shift {
+                let source = match c.options.shift {
                     Shift::LogicalLeft => i - distance,
                     Shift::LogicalRight | Shift::ArithmeticRight => i + distance,
                     Shift::RotateLeft => (i - distance).rem_euclid(w),
@@ -173,7 +171,7 @@ pub(crate) fn evaluate(c: &Component, ports: &[Value]) -> Vec<(usize, Value)> {
                 };
                 if (0..w).contains(&source) {
                     a.bit(source as u8)
-                } else if c.arithmetic.shift == Shift::ArithmeticRight {
+                } else if c.options.shift == Shift::ArithmeticRight {
                     a.bit(width - 1)
                 } else {
                     Bit::Zero

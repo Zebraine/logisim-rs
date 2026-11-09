@@ -1,16 +1,19 @@
 use super::super::Node;
 use crate::{Bit, Value, arithmetic, bus, gates, memory, parity, pla, plexers};
-use logisim_core::{Component, ControlledLogic, Extension, GateLogic, Kind, ParityLogic};
+use logisim_core::{
+    ArithmeticLogic, Component, ControlledLogic, Extension, GateLogic, Kind, ParityLogic,
+    PlexerLogic,
+};
 
 /// Snapshots reuse the engine's observed pure kernels, including their attributes.
-/// Gate families keep only electrical configuration; other snapshots are cloned
+/// Logic families keep only electrical configuration; memory snapshots are cloned
 /// at compile time, never per evaluation. No stateful kernel enters
 /// this plan; in particular the output-holding display decoder is not a plexer here.
 pub(super) enum Operation {
     Gate(GateLogic, Box<[bool]>),
     Parity(ParityLogic, Box<[bool]>),
-    Arithmetic(Box<Component>),
-    Plexer(Box<Component>),
+    Arithmetic(ArithmeticLogic),
+    Plexer(PlexerLogic),
     Rom(Box<Component>),
     Pla(Box<logisim_core::Pla>),
     Constant(Value),
@@ -32,9 +35,11 @@ impl Operation {
                 c.parity_logic().expect("matched component kind"),
                 node.inputs.iter().map(|i| i.connected).collect(),
             ),
-            Kind::Arithmetic(_) => Self::Arithmetic(Box::new(c.clone())),
+            Kind::Arithmetic(_) => {
+                Self::Arithmetic(c.arithmetic_logic().expect("matched component kind"))
+            }
             Kind::Plexer(kind) if kind != logisim_core::Plexer::DisplayDecoder => {
-                Self::Plexer(Box::new(c.clone()))
+                Self::Plexer(c.plexer_logic().expect("matched component kind"))
             }
             Kind::Rom => Self::Rom(Box::new(c.clone())),
             Kind::PlaRom => Self::Pla(Box::new(c.pla.clone())),
@@ -67,13 +72,14 @@ impl Operation {
         let output = match self {
             Self::Gate(config, _) => gates::evaluate(config, optional),
             Self::Parity(config, _) => parity::evaluate(config, optional),
-            Self::Arithmetic(c) | Self::Plexer(c) => {
-                let outputs = if matches!(self, Self::Arithmetic(_)) {
-                    arithmetic::evaluate(c, ports)
-                } else {
-                    plexers::evaluate(c, ports)
-                };
-                for (index, value) in outputs {
+            Self::Arithmetic(config) => {
+                for (index, value) in arithmetic::evaluate(config, ports) {
+                    emit(index, value);
+                }
+                return;
+            }
+            Self::Plexer(config) => {
+                for (index, value) in plexers::evaluate(config, ports) {
                     emit(index, value);
                 }
                 return;

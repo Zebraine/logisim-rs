@@ -121,9 +121,15 @@ impl Simulator {
                 let c = &self.circuit.components[entry.component];
                 let ports = entry.sample(&self.values);
                 let outputs = match c.kind {
-                    Kind::Arithmetic(_) => arithmetic::evaluate(c, &ports),
+                    Kind::Arithmetic(_) => arithmetic::evaluate(
+                        &c.arithmetic_logic().expect("matched component kind"),
+                        &ports,
+                    ),
                     Kind::Ttl(_) => ttl::evaluate(c, &ports),
-                    _ => plexers::evaluate(c, &ports),
+                    _ => plexers::evaluate(
+                        &c.plexer_logic().expect("matched component kind"),
+                        &ports,
+                    ),
                 };
                 outputs
                     .into_iter()

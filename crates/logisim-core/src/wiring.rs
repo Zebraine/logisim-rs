@@ -159,7 +159,10 @@ impl Component {
                     }
                 })
             }
-            Kind::Plexer(_) => self.plexer_terminals().get(index).map(|p| p.bits),
+            Kind::Plexer(_) => self
+                .plexer_logic()
+                .and_then(|logic| logic.port(index))
+                .map(|p| p.bits),
             Kind::Arithmetic(kind) => Some(if index == 0 {
                 self.arithmetic_output_bits()
             } else if kind == crate::Arithmetic::BitAdder {

@@ -221,7 +221,10 @@ impl Component {
                 || (index == 3 && kind == crate::Arithmetic::Comparator);
         }
         if matches!(self.kind, Kind::Plexer(_)) {
-            return self.plexer_terminals().get(index).is_some_and(|p| p.output);
+            return self
+                .plexer_logic()
+                .and_then(|logic| logic.port(index))
+                .is_some_and(|p| p.role.is_output());
         }
         if let Kind::Subcircuit(_) = self.kind {
             return self.interface.ports.get(index).is_some_and(|p| p.output);

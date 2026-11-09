@@ -1,22 +1,14 @@
 use crate::{Bit, Value};
-use logisim_core::{Component, Kind, Plexer, PlexerRole};
+use logisim_core::{Plexer, PlexerLogic, PlexerRole};
 
-pub(crate) fn evaluate(c: &Component, values: &[Value]) -> Vec<(usize, Value)> {
+pub(crate) fn evaluate(c: &PlexerLogic, values: &[Value]) -> Vec<(usize, Value)> {
     use PlexerRole::*;
-    let Kind::Plexer(kind) = c.kind else {
-        return vec![];
-    };
-    let terminals = c.plexer_terminals();
-    let read = |role| {
-        terminals
-            .iter()
-            .position(|p| p.role == role)
-            .map(|i| values[i])
-    };
+    let kind = c.kind;
+    let read = |role| c.port_index(role).map(|i| values[i]);
     let enable = read(Enable).map_or(Bit::One, |v| v.bit(0));
     let selected = read(Select);
     if kind == Plexer::BitSelector {
-        let width = c.plexing.group_bits.clamp(1, 32);
+        let width = c.group_bits.clamp(1, 32);
         let input = read(Input(0)).expect("selector data");
         let value = selected.and_then(Value::number).map_or_else(
             || Value::filled(width, Bit::Unknown),
@@ -39,7 +31,7 @@ pub(crate) fn evaluate(c: &Component, values: &[Value]) -> Vec<(usize, Value)> {
         if enable == Bit::Zero {
             return vec![];
         }
-        let data = if c.plexing.multibit {
+        let data = if c.multibit {
             read(Input(0)).and_then(Value::number)
         } else {
             (0..4).try_fold(0_u32, |value, i| {
@@ -77,19 +69,22 @@ pub(crate) fn evaluate(c: &Component, values: &[Value]) -> Vec<(usize, Value)> {
             })
             .collect();
     }
-    let highest = (0..c.plexer_count())
-        .rev()
-        .find(|i| read(Input(*i)).is_some_and(|v| v.bit(0) == Bit::One));
-    terminals
-        .iter()
+    let highest = if kind == Plexer::PriorityEncoder {
+        (0..c.count())
+            .rev()
+            .find(|i| read(Input(*i)).is_some_and(|v| v.bit(0) == Bit::One))
+    } else {
+        None
+    };
+    c.ports()
         .enumerate()
-        .filter(|(_, p)| p.output)
+        .filter(|(_, p)| p.role.is_output())
         .map(|(index, p)| {
             let fill = |bit| Value::filled(p.bits, bit);
             let zero = || Value::known(p.bits, 0);
             let value = if kind == Plexer::PriorityEncoder {
                 if enable == Bit::Zero {
-                    if p.role == Output(0) && !c.plexing.disabled_zero {
+                    if p.role == Output(0) && !c.disabled_zero {
                         fill(Bit::Unknown)
                     } else {
                         zero()
@@ -100,7 +95,7 @@ pub(crate) fn evaluate(c: &Component, values: &[Value]) -> Vec<(usize, Value)> {
                         EnableOut => Value::known(1, u32::from(highest.is_none())),
                         _ => highest.map_or_else(
                             || {
-                                if c.plexing.no_input_zero {
+                                if c.no_input_zero {
                                     zero()
                                 } else {
                                     fill(Bit::Unknown)
@@ -111,7 +106,7 @@ pub(crate) fn evaluate(c: &Component, values: &[Value]) -> Vec<(usize, Value)> {
                     }
                 }
             } else if enable == Bit::Zero {
-                if c.plexing.disabled_zero {
+                if c.disabled_zero {
                     zero()
                 } else {
                     fill(Bit::Unknown)
@@ -130,7 +125,7 @@ pub(crate) fn evaluate(c: &Component, values: &[Value]) -> Vec<(usize, Value)> {
                             } else {
                                 read(Input(0)).expect("demux data")
                             }
-                        } else if c.plexing.three_state {
+                        } else if c.three_state {
                             fill(Bit::Unknown)
                         } else {
                             zero()

@@ -1,5 +1,5 @@
 use super::super::*;
-use crate::Circuit;
+use crate::{Circuit, Component, Facing, Kind};
 #[test]
 fn selector_group_widths_and_screen_sides_match_runtime_connections() {
     let mut c = Component::new(Kind::Plexer(Plexer::BitSelector), Point::ZERO);

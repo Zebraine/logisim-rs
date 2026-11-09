@@ -1,5 +1,5 @@
 use super::super::*;
-use crate::Circuit;
+use crate::{Circuit, Component, Facing, Kind};
 fn terminal(c: &Component, role: PlexerRole) -> Point {
     c.position
         + c.facing.transform(

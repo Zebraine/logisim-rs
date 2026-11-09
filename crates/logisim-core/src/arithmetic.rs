@@ -1,5 +1,7 @@
 //! Fixed arithmetic terminals and editable options, measured from runtime behavior.
 use crate::{Component, Kind, Point};
+mod logic;
+pub use logic::ArithmeticLogic;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Arithmetic {
@@ -126,19 +128,11 @@ impl Default for ArithmeticOptions {
 
 impl Component {
     pub fn bit_adder_inputs(&self) -> u8 {
-        self.arithmetic.bit_inputs.clamp(1, 32)
+        self.arithmetic.input_count()
     }
     pub fn arithmetic_output_bits(&self) -> u8 {
-        match self.kind {
-            Kind::Arithmetic(Arithmetic::BitAdder) => {
-                let maximum =
-                    u32::from(self.bits.clamp(1, 32)) * u32::from(self.bit_adder_inputs());
-                (32 - maximum.leading_zeros()) as u8
-            }
-            Kind::Arithmetic(Arithmetic::BitFinder) => self.shift_amount_bits(),
-            Kind::Arithmetic(Arithmetic::Comparator) => 1,
-            _ => self.bits.clamp(1, 32),
-        }
+        self.arithmetic_logic()
+            .map_or(self.bits.clamp(1, 32), |logic| logic.output_bits())
     }
     pub fn arithmetic_body(&self) -> [Point; 2] {
         let n = self.bit_adder_inputs();
@@ -150,7 +144,7 @@ impl Component {
         }
     }
     pub fn shift_amount_bits(&self) -> u8 {
-        (8 - (self.bits.clamp(1, 32) - 1).leading_zeros() as u8).max(1)
+        logic::index_bits(self.bits)
     }
     /// 0 = result/equal; 1,2 = operands; 3,4 = auxiliary in/out or greater/less.
     pub fn arithmetic_ports(&self) -> Option<Vec<Point>> {

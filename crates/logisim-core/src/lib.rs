@@ -25,7 +25,7 @@ mod parity;
 mod pins;
 mod transistors;
 mod ttl;
-pub use arithmetic::{Arithmetic, ArithmeticOptions, BitSearch, Shift};
+pub use arithmetic::{Arithmetic, ArithmeticLogic, ArithmeticOptions, BitSearch, Shift};
 pub use bus::{BusControl, ControlledLogic, Pull};
 pub use gates::{Gate, GateLogic, GateOptions, GateSize};
 pub use latches::{Latch, LatchEnable, LatchRole};
@@ -35,7 +35,7 @@ pub use transistors::{TransistorOptions, TransistorType};
 pub use ttl::{Ttl, TtlOptions};
 
 mod plexers;
-pub use plexers::{Plexer, PlexerRole, PlexerTerminal, Plexing};
+pub use plexers::{Plexer, PlexerLogic, PlexerPort, PlexerRole, PlexerTerminal, Plexing};
 
 mod sequential;
 pub use sequential::{ControlPosition, CounterOverflow, FlipFlop, Sequential, Trigger};
