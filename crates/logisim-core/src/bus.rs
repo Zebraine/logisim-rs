@@ -1,5 +1,5 @@
 //! Bus control attributes and terminal geometry, independent of signal evaluation.
-use crate::{Component, Kind, Point};
+use crate::{Component, GateSize, Kind, Point};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Pull {
@@ -21,9 +21,18 @@ impl Pull {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct BusControl {
+    pub size: GateSize,
     pub control_left: bool,
     pub negate_control: bool,
     pub pull: Pull,
+}
+
+/// Controlled gate behavior, independent of control placement and symbol size.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ControlledLogic {
+    pub inverted: bool,
+    pub bits: u8,
+    pub negate_control: bool,
 }
 impl Kind {
     pub fn is_controlled(self) -> bool {
@@ -31,6 +40,13 @@ impl Kind {
     }
 }
 impl Component {
+    pub fn controlled_logic(&self) -> Option<ControlledLogic> {
+        self.kind.is_controlled().then_some(ControlledLogic {
+            inverted: self.kind == Kind::ControlledInverter,
+            bits: self.bits,
+            negate_control: self.bus.negate_control,
+        })
+    }
     pub fn controlled_ports(&self) -> Vec<Point> {
         let depth = self.gate_width();
         vec![

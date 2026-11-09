@@ -16,15 +16,15 @@ pub(crate) fn fields(ui: &mut Ui, c: &mut Component) -> bool {
         return false;
     }
     ui.label(tr("Inputs"));
-    let response = ui.add(egui::DragValue::new(&mut c.inputs).range(2..=32));
+    let response = ui.add(egui::DragValue::new(&mut c.parity.inputs).range(2..=32));
     let active = response.has_focus() || response.dragged();
     ui.end_row();
     ui.label(tr("Gate size"));
     egui::ComboBox::from_id_salt("parity_gate_size")
-        .selected_text(tr(c.gate_size.name()))
+        .selected_text(tr(c.parity.size.name()))
         .show_ui(ui, |ui| {
             for size in [GateSize::Narrow, GateSize::Medium, GateSize::Wide] {
-                ui.selectable_value(&mut c.gate_size, size, tr(size.name()));
+                ui.selectable_value(&mut c.parity.size, size, tr(size.name()));
             }
         });
     ui.end_row();

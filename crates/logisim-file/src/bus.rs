@@ -32,7 +32,7 @@ pub(crate) fn read(c: &mut Component, a: &BTreeMap<String, String>) -> Result<()
             Some("true") => true,
             _ => return Err(Error("Invalid control inversion".into())),
         };
-        c.gate_size = match a.get("size").map(String::as_str) {
+        c.bus.size = match a.get("size").map(String::as_str) {
             None | Some("20") => GateSize::Narrow,
             Some("30") if c.kind == Kind::ControlledInverter => GateSize::Wide,
             _ => return Err(Error("Unsupported controlled gate size".into())),
@@ -61,7 +61,7 @@ pub(crate) fn write(out: &mut String, c: &Component) -> Result<()> {
         )?;
         a(out, "negatecontrol", c.bus.negate_control)?;
         if c.kind == Kind::ControlledInverter {
-            if c.gate_size == GateSize::Medium {
+            if c.bus.size == GateSize::Medium {
                 return Err(Error("Unsupported controlled gate size".into()));
             }
             a(out, "size", c.gate_width())?;

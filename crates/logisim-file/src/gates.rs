@@ -1,5 +1,5 @@
 use crate::{Error, Result};
-use logisim_core::{Component, Gate, Kind};
+use logisim_core::{Component, Gate, GateSize, Kind};
 use std::collections::BTreeMap;
 
 pub(crate) fn index(key: &str) -> Option<u8> {
@@ -10,6 +10,18 @@ pub(crate) fn index(key: &str) -> Option<u8> {
 pub(crate) fn read(c: &mut Component, a: &BTreeMap<String, String>) -> Result<()> {
     let Kind::Gate(gate) = c.kind else {
         return Ok(());
+    };
+    c.gate_options.inputs = crate::attributes::number(a, "inputs", 2, 2..=Gate::MAX_INPUTS)?;
+    c.gate_options.size = match (
+        gate,
+        crate::attributes::value(a, "size", if gate.unary() { "20" } else { "30" }),
+    ) {
+        (Gate::Not | Gate::Buffer, "20") => GateSize::Narrow,
+        (_, "30") if !gate.unary() => GateSize::Narrow,
+        (Gate::Not, "30") => GateSize::Wide,
+        (_, "50") if !gate.unary() => GateSize::Medium,
+        (_, "70") if !gate.unary() => GateSize::Wide,
+        _ => return Err(Error("Unsupported gate size".into())),
     };
     if matches!(gate, Gate::Xor | Gate::Xnor) {
         c.gate_options.xor_odd = match a.get("xor").map(String::as_str) {
@@ -37,6 +49,9 @@ pub(crate) fn write(out: &mut String, c: &Component) -> Result<()> {
     let Kind::Gate(gate) = c.kind else {
         return Ok(());
     };
+    if !(2..=Gate::MAX_INPUTS).contains(&c.gate_options.inputs) {
+        return Err(Error("Invalid gate input count".into()));
+    }
     if matches!(gate, Gate::Xor | Gate::Xnor) && c.gate_options.xor_odd {
         attribute(out, "xor", "odd")?;
     }

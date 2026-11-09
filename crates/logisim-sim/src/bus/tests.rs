@@ -1,6 +1,7 @@
 use super::*;
 use crate::{Problem, Simulator};
 use logisim_core::{Circuit, Facing, GateSize, Id, Point};
+use logisim_core::{Component, Kind};
 fn pin(c: &mut Circuit, at: Point, bits: u8) -> Id {
     let mut p = Component::new(Kind::Pin, at);
     p.bits = bits;
@@ -30,7 +31,7 @@ fn controlled_four_state_matrix_and_full_width_rotated_buses() {
                     gate.facing = facing;
                     gate.bus.negate_control = negated;
                     gate.bus.control_left = negated;
-                    gate.gate_size = GateSize::Wide;
+                    gate.bus.size = GateSize::Wide;
                     let ports = gate.ports();
                     let id = c.add_component(gate);
                     let data = pin(&mut c, ports[1], bits);

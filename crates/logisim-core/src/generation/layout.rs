@@ -61,7 +61,7 @@ impl Layout {
             ((sources[0].y + sources.last().unwrap().y) / 20) * 10,
         );
         let mut c = Component::new(Kind::Gate(gate), p);
-        c.inputs = sources.len() as u8;
+        c.gate_options.inputs = sources.len() as u8;
         c.gate_options.xor_odd = gate == Gate::Xor && sources.len() > 2;
         let ports = c.ports();
         for (i, (&source, &port)) in sources.iter().zip(&ports[1..]).enumerate() {

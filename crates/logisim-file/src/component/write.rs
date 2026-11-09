@@ -9,12 +9,6 @@ use std::fmt::Write;
 pub(crate) fn write(out: &mut String, c: &Component, document: &Document) -> Result<()> {
     if !valid_point(c.position)
         || !(1..=32).contains(&c.bits)
-        || !(2..=if matches!(c.kind, Kind::Parity(_)) {
-            32
-        } else {
-            8
-        })
-            .contains(&c.inputs)
         || c.font.size == 0
         || c.label.len() > 65_536
         || (c.kind != Kind::Text && c.color_alpha != 255)
@@ -149,7 +143,7 @@ pub(crate) fn write(out: &mut String, c: &Component, document: &Document) -> Res
             attribute(out, "size", c.gate_width())?;
         }
         if !g.unary() {
-            attribute(out, "inputs", c.inputs)?;
+            attribute(out, "inputs", c.gate_options.inputs)?;
         }
     }
     if c.kind == Kind::Pin {

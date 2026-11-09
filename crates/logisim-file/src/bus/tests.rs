@@ -41,7 +41,7 @@ fn bus_defaults_and_observed_attributes_roundtrip() {
                                     c.label = "总线 & Bus".into();
                                     c.color = [12, 34, 56];
                                     if kind == Kind::ControlledInverter {
-                                        c.gate_size = size;
+                                        c.bus.size = size;
                                     }
                                 } else {
                                     c.bus.pull = pull;

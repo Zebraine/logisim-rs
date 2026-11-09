@@ -3,9 +3,9 @@ mod connections;
 mod ports;
 
 use crate::{
-    ArithmeticOptions, ArtworkFont, BusControl, Extension, Facing, GateOptions, GateSize, Id,
-    Interface, Io, Kind, LatchEnable, Memory, ParityOptions, PinOptions, Pla, Plexer, Plexing,
-    Point, Radix, Sequential, Splitter, TerminalOptions, TransistorOptions, TtlOptions,
+    ArithmeticOptions, ArtworkFont, BusControl, Extension, Facing, GateOptions, Id, Interface, Io,
+    Kind, LatchEnable, Memory, ParityOptions, PinOptions, Pla, Plexer, Plexing, Point, Radix,
+    Sequential, Splitter, TerminalOptions, TransistorOptions, TtlOptions,
 };
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -35,14 +35,12 @@ pub struct Component {
     pub kind: Kind,
     pub facing: Facing,
     pub bits: u8,
-    pub inputs: u8,
     pub output: bool,
     pub pin: PinOptions,
     pub label: String,
     pub font: ArtworkFont,
     pub color: [u8; 3],
     pub color_alpha: u8,
-    pub gate_size: GateSize,
     pub gate_options: GateOptions,
     pub text_horizontal: HorizontalAlign,
     pub text_vertical: VerticalAlign,
@@ -95,7 +93,6 @@ impl Component {
                 | Kind::Plexer(Plexer::BitSelector) => 8,
                 _ => 1,
             },
-            inputs: 2,
             output: false,
             pin: PinOptions::default(),
             label: if kind == Kind::Tunnel {
@@ -122,7 +119,6 @@ impl Component {
                 [51, 65, 85]
             },
             color_alpha: 255,
-            gate_size: GateSize::Narrow,
             gate_options: GateOptions::default(),
             text_horizontal: HorizontalAlign::Left,
             text_vertical: VerticalAlign::Top,

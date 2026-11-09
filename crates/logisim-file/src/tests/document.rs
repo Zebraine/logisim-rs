@@ -40,9 +40,9 @@ fn full_supported_roundtrip_preserves_attributes_ports_and_wires() {
                 }
                 let mut c = Component::new(Kind::Gate(g), Point::new(i as i32 * 100, 200));
                 c.facing = facing;
-                c.gate_size = size;
+                c.gate_options.size = size;
                 c.bits = 32;
-                c.inputs = 8;
+                c.gate_options.inputs = 8;
                 c.label = "<&\" > 线\nnext\tend".into();
                 c.font.size = 24;
                 c.color = [1, 2, 255];
@@ -82,7 +82,7 @@ fn full_supported_roundtrip_preserves_attributes_ports_and_wires() {
         a.id = b.id;
         // Unary input count is not a persistent attribute.
         if matches!(a.kind,Kind::Gate(g) if g.unary()) {
-            a.inputs = 2;
+            a.gate_options.inputs = 2;
         }
         assert_eq!(&a, b);
     }

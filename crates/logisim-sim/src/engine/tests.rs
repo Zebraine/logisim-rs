@@ -185,6 +185,50 @@ fn unchanged_networks_do_not_schedule_unrelated_readers() {
 }
 
 #[test]
+fn unrelated_family_attributes_preserve_pending_gate_propagation() {
+    for kind in [
+        Kind::Gate(Gate::And),
+        Kind::Parity(logisim_core::Parity::Odd),
+        Kind::ControlledBuffer,
+    ] {
+        let mut circuit = Circuit::default();
+        let gate = Component::new(kind, Point::new(300, 300));
+        let inputs: Vec<_> = gate
+            .ports()
+            .into_iter()
+            .skip(1)
+            .map(|at| circuit.add_component(Component::new(Kind::Pin, at)))
+            .collect();
+        let id = circuit.add_component(gate);
+        let mut a = Simulator::default();
+        let mut b = Simulator::default();
+        for sim in [&mut a, &mut b] {
+            sim.synchronize(&circuit);
+            sim.advance(32);
+            for &input in &inputs {
+                sim.set_input(input, 1);
+            }
+            assert!(sim.pending_count() > 0);
+        }
+        let mut edited = circuit.component(id).unwrap().clone();
+        edited.label = "keep pending propagation".into();
+        match kind {
+            Kind::Gate(_) => {
+                edited.parity.inputs = 32;
+                edited.parity.negated = u32::MAX;
+            }
+            _ => {
+                edited.gate_options.inputs = 8;
+                edited.gate_options.negated = u8::MAX;
+            }
+        }
+        circuit.replace_component(edited);
+        assert!(!a.synchronize(&circuit));
+        settle(&mut a, &mut b);
+    }
+}
+
+#[test]
 fn rebuilding_held_outputs_samples_even_when_only_unrelated_nets_change() {
     let mut circuit = Circuit::default();
     let decoder = Component::new(Kind::Plexer(Plexer::DisplayDecoder), Point::ZERO);

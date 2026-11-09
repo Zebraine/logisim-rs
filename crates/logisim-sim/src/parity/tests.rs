@@ -1,6 +1,7 @@
 use super::*;
 use crate::Simulator;
 use logisim_core::{Circuit, Facing, Id, Point};
+use logisim_core::{Component, Kind};
 fn connected(c: &Component, values: &[Option<Value>]) -> (Circuit, Id, Vec<Option<Id>>, Simulator) {
     let mut circuit = Circuit::default();
     let ports = c.ports();
@@ -105,7 +106,7 @@ fn parity_counts_ones_instead_of_testing_exactly_one_and_supports_32_inputs() {
             ] {
                 let mut c = Component::new(Kind::Parity(kind), Point::new(400, 400));
                 c.facing = facing;
-                c.inputs = count;
+                c.parity.inputs = count;
                 c.bits = bits;
                 let inputs: Vec<_> = values
                     .iter()
@@ -122,7 +123,7 @@ fn parity_counts_ones_instead_of_testing_exactly_one_and_supports_32_inputs() {
             }
             let mut c = Component::new(Kind::Parity(kind), Point::new(400, 400));
             c.facing = facing;
-            c.inputs = 3;
+            c.parity.inputs = 3;
             c.bits = 4;
             c.parity.negated = 1;
             let (_, id, _, sim) = connected(

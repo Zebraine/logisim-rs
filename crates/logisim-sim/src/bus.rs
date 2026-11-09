@@ -1,5 +1,5 @@
 use crate::{Bit, Value};
-use logisim_core::{Component, Gate, Kind, Pull};
+use logisim_core::{ControlledLogic, Gate, Pull};
 pub(crate) fn pull_bit(pull: Pull) -> Bit {
     match pull {
         Pull::Zero => Bit::Zero,
@@ -7,8 +7,8 @@ pub(crate) fn pull_bit(pull: Pull) -> Bit {
         Pull::Error => Bit::Error,
     }
 }
-pub(crate) fn evaluate(c: &Component, input: Value, enable: Bit) -> Value {
-    let active = if c.bus.negate_control {
+pub(crate) fn evaluate(c: &ControlledLogic, input: Value, enable: Bit) -> Value {
+    let active = if c.negate_control {
         Bit::Zero
     } else {
         Bit::One
@@ -17,7 +17,7 @@ pub(crate) fn evaluate(c: &Component, input: Value, enable: Bit) -> Value {
         Value::filled(c.bits, Bit::Error)
     } else if enable != active {
         Value::filled(c.bits, Bit::Unknown)
-    } else if c.kind == Kind::ControlledInverter {
+    } else if c.inverted {
         crate::value::evaluate(Gate::Not, c.bits, &[input])
     } else {
         input

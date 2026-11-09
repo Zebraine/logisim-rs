@@ -35,7 +35,7 @@ fn gates_have_grid_aligned_ports_in_all_orientations() {
             for inputs in 2..=8 {
                 let mut c = Component::new(Kind::Gate(gate), Point::new(120, 80));
                 c.facing = facing;
-                c.inputs = inputs;
+                c.gate_options.inputs = inputs;
                 let ports = c.ports();
                 assert_eq!(ports.len(), usize::from(c.input_count()) + 1);
                 assert_eq!(

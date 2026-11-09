@@ -11,7 +11,7 @@ pub(super) fn fixture(gate: Gate, count: u8, bits: u8) -> (Circuit, Id, Vec<Id>)
     let mut circuit = Circuit::default();
     let mut c = Component::new(Kind::Gate(gate), Point::new(200, 100));
     c.bits = bits;
-    c.inputs = count;
+    c.gate_options.inputs = count;
     let ports = c.ports();
     let gate = circuit.add_component(c);
     let inputs = ports

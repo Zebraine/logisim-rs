@@ -50,7 +50,7 @@ fn parity_properties_and_library_tools_work_in_both_languages() {
         click(&ctx, &mut app, &translated("Narrow"));
         click(&ctx, &mut app, &translated("Wide"));
         assert_eq!(
-            app.circuit().component(gate).unwrap().gate_size,
+            app.circuit().component(gate).unwrap().parity.size,
             GateSize::Wide
         );
         assert_eq!(app.circuit().wires, wires);

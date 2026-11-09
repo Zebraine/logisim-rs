@@ -15,14 +15,14 @@ fn native_parity_defaults_and_full_attributes_roundtrip() {
         let c = &default.document.main_circuit().circuit.components[0];
         assert_eq!(c.parity, Default::default());
         assert_eq!(c.bits, 1);
-        assert_eq!(c.inputs, 2);
-        assert_eq!(c.gate_size, GateSize::Narrow);
+        assert_eq!(c.parity.inputs, 2);
+        assert_eq!(c.parity.size, GateSize::Narrow);
         let parsed=parse(&xml(kind,r#"<a name="inputs" val="32"/><a name="width" val="32"/><a name="size" val="70"/><a name="facing" val="south"/><a name="negate0" val="true"/><a name="negate31" val="true"/><a name="out" val="0Z"/>"#)).unwrap();
         assert!(parsed.warnings.is_empty());
         let c = &parsed.document.main_circuit().circuit.components[0];
         assert_eq!(c.parity.negated, 0x80000001);
         assert_eq!(c.parity.output, ParityOutput::ZeroFloating);
-        assert_eq!(c.inputs, 32);
+        assert_eq!(c.parity.inputs, 32);
         assert_eq!(c.bits, 32);
         assert_eq!(c.facing, Facing::South);
         for facing in Facing::ALL {
@@ -31,8 +31,8 @@ fn native_parity_defaults_and_full_attributes_roundtrip() {
                     for mode in ParityOutput::ALL {
                         let mut c = c.clone();
                         c.facing = facing;
-                        c.inputs = count;
-                        c.gate_size = size;
+                        c.parity.inputs = count;
+                        c.parity.size = size;
                         c.parity.output = mode;
                         c.parity.negated = 1 | (1 << (count - 1));
                         c.label = "校验 & parity".into();
@@ -57,7 +57,9 @@ fn native_parity_defaults_and_full_attributes_roundtrip() {
 #[test]
 fn parity_serializes_only_current_inputs_and_rejects_unobserved_fields() {
     let mut parsed=parse(&xml(Parity::Odd,r#"<a name="inputs" val="32"/><a name="negate0" val="true"/><a name="negate31" val="true"/>"#)).unwrap();
-    parsed.document.circuits[0].circuit.components[0].inputs = 2;
+    parsed.document.circuits[0].circuit.components[0]
+        .parity
+        .inputs = 2;
     let out = serialize(&parsed.document).unwrap();
     assert!(out.contains("negate0"));
     assert!(!out.contains("negate31"));

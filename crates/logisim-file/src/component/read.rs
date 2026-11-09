@@ -4,7 +4,7 @@ use crate::{
     attributes::{boolean, number, value},
     xml::{attr, attributes, point},
 };
-use logisim_core::{Component, Facing, Gate, GateSize, HorizontalAlign, Kind, VerticalAlign};
+use logisim_core::{Component, Facing, Gate, HorizontalAlign, Kind, VerticalAlign};
 use roxmltree::Node;
 use std::collections::BTreeMap;
 
@@ -259,8 +259,6 @@ pub(crate) fn read(
     }
     if matches!(kind, Kind::Parity(_)) {
         crate::parity::read(&mut c, &a)?;
-    } else if kind != Kind::PlaRom {
-        c.inputs = number(&a, "inputs", 2, 2..=Gate::MAX_INPUTS)?;
     }
     c.output = boolean(&a, "output", false)?;
     if kind == Kind::Pin {
@@ -270,16 +268,6 @@ pub(crate) fn read(
             "up" => logisim_core::PinPull::Up,
             "down" => logisim_core::PinPull::Down,
             _ => return Err(Error("Invalid pin pull behavior".into())),
-        };
-    }
-    if let Kind::Gate(g) = kind {
-        c.gate_size = match (g, value(&a, "size", if g.unary() { "20" } else { "30" })) {
-            (Gate::Not | Gate::Buffer, "20") => GateSize::Narrow,
-            (_, "30") if !g.unary() => GateSize::Narrow,
-            (Gate::Not, "30") => GateSize::Wide,
-            (_, "50") if !g.unary() => GateSize::Medium,
-            (_, "70") if !g.unary() => GateSize::Wide,
-            _ => return Err(Error("Unsupported gate size".into())),
         };
     }
     crate::gates::read(&mut c, &a)?;

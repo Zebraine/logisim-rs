@@ -32,10 +32,10 @@ pub(crate) fn fields(ui: &mut Ui, c: &mut Component) {
     if c.kind == Kind::ControlledInverter {
         ui.label(tr("Gate size"));
         egui::ComboBox::from_id_salt("bus_gate_size")
-            .selected_text(tr(c.gate_size.name()))
+            .selected_text(tr(c.bus.size.name()))
             .show_ui(ui, |ui| {
                 for size in [GateSize::Narrow, GateSize::Wide] {
-                    ui.selectable_value(&mut c.gate_size, size, tr(size.name()));
+                    ui.selectable_value(&mut c.bus.size, size, tr(size.name()));
                 }
             });
         ui.end_row();

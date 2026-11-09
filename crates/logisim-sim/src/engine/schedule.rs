@@ -53,17 +53,22 @@ impl Simulator {
                         let inputs: Vec<_> = (1..=usize::from(c.input_count()))
                             .map(|i| entry.connected(i).then(|| read(i)))
                             .collect();
-                        parity::evaluate(c, &inputs)
+                        parity::evaluate(
+                            &c.parity_logic().expect("matched component kind"),
+                            &inputs,
+                        )
                     }
                     Kind::Gate(gate) => {
                         let inputs: Vec<_> = (1..=usize::from(c.input_count()))
                             .map(|i| (gate.unary() || entry.connected(i)).then(|| read(i)))
                             .collect();
-                        gates::evaluate(c, &inputs)
+                        gates::evaluate(&c.gate_logic().expect("matched component kind"), &inputs)
                     }
-                    Kind::ControlledBuffer | Kind::ControlledInverter => {
-                        bus::evaluate(c, read(1), read(2).bit(0))
-                    }
+                    Kind::ControlledBuffer | Kind::ControlledInverter => bus::evaluate(
+                        &c.controlled_logic().expect("matched component kind"),
+                        read(1),
+                        read(2).bit(0),
+                    ),
                     Kind::Transistor | Kind::TransmissionGate => transistors::evaluate(
                         c,
                         read(1),

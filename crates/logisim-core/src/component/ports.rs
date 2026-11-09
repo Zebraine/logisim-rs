@@ -1,14 +1,12 @@
 //! Common port dispatch and world-coordinate transforms. Family modules own their layouts.
-use crate::{
-    Component, Extension, Facing, GRID, Gate, GateSize, Kind, Point, SplitAppearance, Ttl,
-};
+use crate::{Component, Extension, Facing, Gate, GateSize, Kind, Point, SplitAppearance, Ttl};
 
 impl Component {
     pub fn input_count(&self) -> u8 {
         match self.kind {
             Kind::Gate(g) if g.unary() => 1,
-            Kind::Gate(_) => self.inputs.clamp(2, Gate::MAX_INPUTS),
-            Kind::Parity(_) => self.inputs.clamp(2, 32),
+            Kind::Gate(_) => self.gate_options.inputs.clamp(2, Gate::MAX_INPUTS),
+            Kind::Parity(_) => self.parity.inputs.clamp(2, 32),
             _ => 0,
         }
     }
@@ -95,29 +93,7 @@ impl Component {
         let count = self.input_count();
         let mut ports = vec![Point::ZERO];
         for i in 0..count {
-            let y = if count == 1 {
-                0
-            } else {
-                // Positions measured from the running reference for 2–8 inputs.
-                let half = i32::from(count / 2);
-                let index = i32::from(i) - half;
-                let index = if count.is_multiple_of(2) && index >= 0 {
-                    index + 1
-                } else {
-                    index
-                };
-                match (self.gate_size, count) {
-                    (GateSize::Medium | GateSize::Wide, 2) | (GateSize::Medium, 3) => index * 20,
-                    (GateSize::Wide, 3) => index * 30,
-                    (GateSize::Wide, 4) => [-30, -10, 10, 30][usize::from(i)],
-                    _ => index * GRID,
-                }
-            };
-            let y = if matches!(self.facing, Facing::South | Facing::West) {
-                -y
-            } else {
-                y
-            };
+            let y = self.gate_options.size.input_y(count, i, self.facing);
             ports.push(Point::new(
                 -self.gate_depth() - if self.gate_negated(i) { 10 } else { 0 },
                 y,
@@ -128,18 +104,22 @@ impl Component {
     pub fn gate_width(&self) -> i32 {
         match self.kind {
             Kind::Gate(Gate::Buffer) | Kind::ControlledBuffer => 20,
-            Kind::Gate(Gate::Not) | Kind::ControlledInverter => {
-                if self.gate_size == GateSize::Wide {
+            Kind::Gate(Gate::Not) => {
+                if self.gate_options.size == GateSize::Wide {
                     30
                 } else {
                     20
                 }
             }
-            Kind::Gate(_) | Kind::Parity(_) => match self.gate_size {
-                GateSize::Narrow => 30,
-                GateSize::Medium => 50,
-                GateSize::Wide => 70,
-            },
+            Kind::ControlledInverter => {
+                if self.bus.size == GateSize::Wide {
+                    30
+                } else {
+                    20
+                }
+            }
+            Kind::Gate(_) => self.gate_options.size.width(),
+            Kind::Parity(_) => self.parity.size.width(),
             _ => 0,
         }
     }

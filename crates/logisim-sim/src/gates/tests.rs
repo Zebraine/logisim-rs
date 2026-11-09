@@ -1,6 +1,7 @@
 use super::*;
 use crate::Simulator;
 use logisim_core::{Circuit, Facing, Point};
+use logisim_core::{Component, Kind};
 
 #[test]
 fn negated_inputs_match_reference_four_state_and_disconnected_matrix() {
@@ -105,7 +106,7 @@ fn xor_mode_changes_recompute_and_match_all_three_input_vectors() {
     for gate in [Gate::Xor, Gate::Xnor] {
         let mut circuit = Circuit::default();
         let mut component = Component::new(Kind::Gate(gate), Point::new(300, 300));
-        component.inputs = 3;
+        component.gate_options.inputs = 3;
         component.bits = 8;
         let ports = component.ports();
         let id = circuit.add_component(component);

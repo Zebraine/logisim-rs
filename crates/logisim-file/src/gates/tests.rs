@@ -13,7 +13,9 @@ fn gate_negations_and_xor_modes_roundtrip_without_saving_inactive_inputs() {
     assert!(c.gate_options.xor_odd);
     let out = serialize(&imported.document).unwrap();
     assert_eq!(parse(&out).unwrap().document, imported.document);
-    imported.document.main_circuit_mut().circuit.components[0].inputs = 2;
+    imported.document.main_circuit_mut().circuit.components[0]
+        .gate_options
+        .inputs = 2;
     let out = serialize(&imported.document).unwrap();
     assert!(out.contains("negate0"));
     assert!(!out.contains("negate7"));

@@ -4,6 +4,93 @@ use logisim_core::{Circuit, Component, FlipFlop, Gate, Point};
 use super::support::*;
 
 #[test]
+fn gate_family_edits_invalidate_compiled_behavior_and_geometry_separately() {
+    use logisim_core::{GateSize, Parity, ParityOutput};
+    for (kind, before, after) in [
+        (Kind::Gate(Gate::Xor), Bit::Zero, Bit::One),
+        (Kind::Parity(Parity::Odd), Bit::One, Bit::Unknown),
+        (Kind::ControlledInverter, Bit::Zero, Bit::Unknown),
+    ] {
+        let mut c = Circuit::default();
+        let mut gate = Component::new(kind, Point::new(300, 300));
+        gate.bits = 4;
+        gate.gate_options.inputs = 3;
+        gate.parity.inputs = 3;
+        for (index, at) in gate.ports().into_iter().enumerate().skip(1) {
+            let mut source = Component::new(Kind::Constant, at);
+            source.bits = gate.port_width(index).unwrap();
+            source.constant = (1 << source.bits) - 1;
+            c.add_component(source);
+        }
+        let id = c.add_component(gate);
+        let mut event = Simulator::default();
+        let mut compiled = Simulator::default();
+        for sim in [&mut event, &mut compiled] {
+            sim.synchronize(&c);
+        }
+        event.advance(32);
+        compiled.settle_compiled().unwrap();
+        assert_eq!(compiled.port_value(id, 0), Some(Value::filled(4, before)));
+
+        let mut edited = c.component(id).unwrap().clone();
+        edited.label = "visual edit".into();
+        edited.font.size = 24;
+        match kind {
+            Kind::Gate(_) => edited.parity.inputs = 32,
+            _ => edited.gate_options.inputs = 8,
+        }
+        c.replace_component(edited.clone());
+        assert!(!event.synchronize(&c));
+        assert!(!compiled.synchronize(&c));
+        assert_eq!(
+            compiled.settle_compiled().unwrap().evaluated_instructions,
+            0
+        );
+
+        match kind {
+            Kind::Gate(_) => edited.gate_options.xor_odd = true,
+            Kind::Parity(_) => edited.parity.output = ParityOutput::ZeroFloating,
+            _ => edited.bus.negate_control = true,
+        }
+        c.replace_component(edited.clone());
+        assert!(event.synchronize(&c));
+        assert!(compiled.synchronize(&c));
+        event.advance(32);
+        compiled.settle_compiled().unwrap();
+        assert_eq!(event.port_value(id, 0), Some(Value::filled(4, after)));
+        assert_eq!(compiled.port_value(id, 0), event.port_value(id, 0));
+
+        let logic = (
+            edited.gate_logic(),
+            edited.parity_logic(),
+            edited.controlled_logic(),
+        );
+        let ports = edited.ports();
+        match kind {
+            Kind::Gate(_) => edited.gate_options.size = GateSize::Wide,
+            Kind::Parity(_) => edited.parity.size = GateSize::Wide,
+            _ => edited.bus.size = GateSize::Wide,
+        }
+        assert_eq!(
+            logic,
+            (
+                edited.gate_logic(),
+                edited.parity_logic(),
+                edited.controlled_logic()
+            )
+        );
+        assert_ne!(ports, edited.ports());
+        c.replace_component(edited);
+        // Unchanged logic still needs a new topology when terminals move.
+        assert!(event.synchronize(&c));
+        assert!(compiled.synchronize(&c));
+        event.advance(32);
+        compiled.settle_compiled().unwrap();
+        assert_eq!(compiled.port_value(id, 0), event.port_value(id, 0));
+    }
+}
+
+#[test]
 fn electrical_edits_invalidate_plans_while_visual_edits_preserve_state() {
     let mut c = Circuit::default();
     let input = add(&mut c, Kind::Pin, 4);

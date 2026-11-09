@@ -1,16 +1,14 @@
 use crate::{Bit, Value};
-use logisim_core::{Component, Gate, Kind};
+use logisim_core::{Gate, GateLogic};
 
-pub(crate) fn evaluate(c: &Component, inputs: &[Option<Value>]) -> Value {
-    let Kind::Gate(gate) = c.kind else {
-        unreachable!("gate component");
-    };
+pub(crate) fn evaluate(c: &GateLogic, inputs: &[Option<Value>]) -> Value {
+    let gate = c.gate;
     let inputs: Vec<_> = inputs
         .iter()
         .enumerate()
         .filter_map(|(i, value)| {
             value.map(|v| {
-                if c.gate_negated(i as u8) {
+                if c.input_negated(i as u8) {
                     crate::value::evaluate(Gate::Not, c.bits, &[v])
                 } else {
                     v
@@ -22,7 +20,7 @@ pub(crate) fn evaluate(c: &Component, inputs: &[Option<Value>]) -> Value {
     if matches!(gate, Gate::And | Gate::Or) && inputs.len() == 1 {
         return inputs[0];
     }
-    if matches!(gate, Gate::Xor | Gate::Xnor) && c.gate_options.xor_odd {
+    if matches!(gate, Gate::Xor | Gate::Xnor) && c.xor_odd {
         return Value::from_bits((0..c.bits).map(|i| {
             let mut bits = inputs.iter().map(|v| v.bit(i));
             let mut result = bits.next().unwrap_or(Bit::Error);

@@ -1,5 +1,5 @@
 use super::*;
-use crate::{Circuit, Kind};
+use crate::{Circuit, Facing, Kind};
 #[test]
 fn parity_ports_follow_world_input_order_and_negation_for_all_sizes() {
     for kind in Parity::ALL {
@@ -8,8 +8,8 @@ fn parity_ports_follow_world_input_order_and_negation_for_all_sizes() {
                 for count in 2..=32 {
                     let mut c = Component::new(Kind::Parity(kind), Point::new(400, 400));
                     c.facing = facing;
-                    c.gate_size = size;
-                    c.inputs = count;
+                    c.parity.size = size;
+                    c.parity.inputs = count;
                     c.bits = 32;
                     let plain = c.ports();
                     assert_eq!(plain.len(), usize::from(count) + 1);
@@ -38,8 +38,8 @@ fn parity_ports_follow_world_input_order_and_negation_for_all_sizes() {
         }
     }
     let mut c = Component::new(Kind::Parity(Parity::Odd), Point::ZERO);
-    c.gate_size = GateSize::Wide;
-    c.inputs = 4;
+    c.parity.size = GateSize::Wide;
+    c.parity.inputs = 4;
     assert_eq!(
         c.ports()[1..],
         [
@@ -49,7 +49,7 @@ fn parity_ports_follow_world_input_order_and_negation_for_all_sizes() {
             Point::new(-70, 30)
         ]
     );
-    c.inputs = 32;
+    c.parity.inputs = 32;
     assert_eq!(c.ports()[1], Point::new(-70, -160));
     assert_eq!(c.ports()[32], Point::new(-70, 160));
 }
@@ -57,7 +57,7 @@ fn parity_ports_follow_world_input_order_and_negation_for_all_sizes() {
 fn parity_attribute_edits_keep_wire_geometry_and_hidden_inversions() {
     let mut circuit = Circuit::default();
     let mut c = Component::new(Kind::Parity(Parity::Even), Point::new(300, 300));
-    c.inputs = 32;
+    c.parity.inputs = 32;
     c.parity.negated = 0x80000001;
     let ports = c.ports();
     let id = circuit.add_component(c.clone());
@@ -78,8 +78,8 @@ fn parity_attribute_edits_keep_wire_geometry_and_hidden_inversions() {
         (32, GateSize::Narrow, Facing::West),
     ] {
         c = circuit.component(id).unwrap().clone();
-        c.inputs = count;
-        c.gate_size = size;
+        c.parity.inputs = count;
+        c.parity.size = size;
         c.facing = facing;
         circuit.replace_component(c);
         assert_eq!(geometry(&circuit), before);

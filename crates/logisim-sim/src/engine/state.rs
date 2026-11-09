@@ -173,7 +173,7 @@ fn electrically_equal(a: &Circuit, b: &Circuit) -> bool {
                 .collect::<Vec<_>>(),
             (
                 (c.kind == Kind::Pin).then_some((c.output, c.pin)),
-                matches!(c.kind, Kind::Gate(_)).then_some(c.gate_options),
+                c.gate_logic(),
                 c.plugin.clone(),
             ),
             (c.kind == Kind::Constant).then_some(c.constant),
@@ -181,9 +181,12 @@ fn electrically_equal(a: &Circuit, b: &Circuit) -> bool {
             (c.kind == Kind::BitExtender).then_some((c.input_bits, c.extension)),
             c.kind.is_sequential().then_some(c.sequential),
             (
-                (c.kind.is_controlled() || c.kind == Kind::PullResistor).then_some(c.bus),
+                (
+                    c.controlled_logic(),
+                    (c.kind == Kind::PullResistor).then_some(c.bus.pull),
+                ),
                 c.kind.is_transistor().then_some(c.transistor),
-                matches!(c.kind, Kind::Parity(_)).then_some((c.inputs, c.parity)),
+                c.parity_logic(),
                 matches!(c.kind, Kind::Latch(_)).then_some(c.latch_enable),
                 matches!(c.kind, Kind::Plexer(_)).then_some(c.plexing),
                 matches!(c.kind, Kind::Arithmetic(_)).then_some(c.arithmetic),

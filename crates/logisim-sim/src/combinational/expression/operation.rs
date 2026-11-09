@@ -1,19 +1,20 @@
 use super::super::Node;
 use crate::{Bit, Value, arithmetic, bus, gates, memory, parity, pla, plexers};
-use logisim_core::{Component, Extension, Kind};
+use logisim_core::{Component, ControlledLogic, Extension, GateLogic, Kind, ParityLogic};
 
 /// Snapshots reuse the engine's observed pure kernels, including their attributes.
-/// They are cloned at compile time, never per evaluation. No stateful kernel enters
+/// Gate families keep only electrical configuration; other snapshots are cloned
+/// at compile time, never per evaluation. No stateful kernel enters
 /// this plan; in particular the output-holding display decoder is not a plexer here.
 pub(super) enum Operation {
-    Gate(Box<Component>, Box<[bool]>),
-    Parity(Box<Component>, Box<[bool]>),
+    Gate(GateLogic, Box<[bool]>),
+    Parity(ParityLogic, Box<[bool]>),
     Arithmetic(Box<Component>),
     Plexer(Box<Component>),
     Rom(Box<Component>),
     Pla(Box<logisim_core::Pla>),
     Constant(Value),
-    Controlled(Box<Component>),
+    Controlled(ControlledLogic),
     Extend(u8, Extension),
 }
 
@@ -21,14 +22,14 @@ impl Operation {
     pub(super) fn new(c: &Component, node: &Node) -> Self {
         match c.kind {
             Kind::Gate(gate) => Self::Gate(
-                Box::new(c.clone()),
+                c.gate_logic().expect("matched component kind"),
                 node.inputs
                     .iter()
                     .map(|i| gate.unary() || i.connected)
                     .collect(),
             ),
             Kind::Parity(_) => Self::Parity(
-                Box::new(c.clone()),
+                c.parity_logic().expect("matched component kind"),
                 node.inputs.iter().map(|i| i.connected).collect(),
             ),
             Kind::Arithmetic(_) => Self::Arithmetic(Box::new(c.clone())),
@@ -41,7 +42,7 @@ impl Operation {
             Kind::Power => Self::Constant(Value::filled(c.bits, Bit::One)),
             Kind::Ground => Self::Constant(Value::known(c.bits, 0)),
             Kind::ControlledBuffer | Kind::ControlledInverter => {
-                Self::Controlled(Box::new(c.clone()))
+                Self::Controlled(c.controlled_logic().expect("matched component kind"))
             }
             Kind::BitExtender => Self::Extend(c.bits.clamp(1, 32), c.extension),
             _ => unreachable!("analysis admits only supported pure operations"),
@@ -54,21 +55,18 @@ impl Operation {
         optional: &mut Vec<Option<Value>>,
         mut emit: impl FnMut(usize, Value),
     ) {
+        if let Self::Gate(_, present) | Self::Parity(_, present) = self {
+            optional.clear();
+            optional.extend(
+                present
+                    .iter()
+                    .zip(&ports[1..])
+                    .map(|(&p, &v)| p.then_some(v)),
+            );
+        }
         let output = match self {
-            Self::Gate(c, present) | Self::Parity(c, present) => {
-                optional.clear();
-                optional.extend(
-                    present
-                        .iter()
-                        .zip(&ports[1..])
-                        .map(|(&p, &v)| p.then_some(v)),
-                );
-                if matches!(self, Self::Gate(..)) {
-                    gates::evaluate(c, optional)
-                } else {
-                    parity::evaluate(c, optional)
-                }
-            }
+            Self::Gate(config, _) => gates::evaluate(config, optional),
+            Self::Parity(config, _) => parity::evaluate(config, optional),
             Self::Arithmetic(c) | Self::Plexer(c) => {
                 let outputs = if matches!(self, Self::Arithmetic(_)) {
                     arithmetic::evaluate(c, ports)

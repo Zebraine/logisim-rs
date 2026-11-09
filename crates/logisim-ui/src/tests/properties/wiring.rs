@@ -37,13 +37,13 @@ fn bus_control_properties_use_translated_widgets_and_keep_wires_with_undo() {
         click(&ctx, &mut app, &translated("Narrow"));
         click(&ctx, &mut app, &translated("Wide"));
         assert_eq!(
-            app.circuit().component(gate).unwrap().gate_size,
+            app.circuit().component(gate).unwrap().bus.size,
             GateSize::Wide
         );
         assert_eq!(app.circuit().wires, wires);
         app.editor.undo();
         assert_eq!(
-            app.circuit().component(gate).unwrap().gate_size,
+            app.circuit().component(gate).unwrap().bus.size,
             GateSize::Narrow
         );
         app.editor.redo();

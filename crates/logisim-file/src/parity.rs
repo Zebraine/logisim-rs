@@ -17,8 +17,8 @@ pub(crate) fn read(c: &mut Component, a: &BTreeMap<String, String>) -> Result<()
     if !matches!(c.kind, Kind::Parity(_)) {
         return Ok(());
     }
-    c.inputs = crate::attributes::number(a, "inputs", 2, 2..=32)?;
-    c.gate_size = match a.get("size").map(String::as_str) {
+    c.parity.inputs = crate::attributes::number(a, "inputs", 2, 2..=32)?;
+    c.parity.size = match a.get("size").map(String::as_str) {
         None | Some("30") => GateSize::Narrow,
         Some("50") => GateSize::Medium,
         Some("70") => GateSize::Wide,
@@ -32,7 +32,7 @@ pub(crate) fn read(c: &mut Component, a: &BTreeMap<String, String>) -> Result<()
     };
     for (key, value) in a {
         if let Some(i) = negated_index(key) {
-            if i >= c.inputs {
+            if i >= c.parity.inputs {
                 return Err(Error("Inversion refers to an inactive parity input".into()));
             }
             match value.as_str() {
@@ -49,8 +49,11 @@ pub(crate) fn write(out: &mut String, c: &Component) -> Result<()> {
     if !matches!(c.kind, Kind::Parity(_)) {
         return Ok(());
     }
+    if !(2..=32).contains(&c.parity.inputs) {
+        return Err(Error("Invalid parity input count".into()));
+    }
     a(out, "size", c.gate_width())?;
-    a(out, "inputs", c.inputs)?;
+    a(out, "inputs", c.parity.inputs)?;
     match c.parity.output {
         ParityOutput::Normal => {}
         ParityOutput::ZeroFloating => a(out, "out", "0Z")?,

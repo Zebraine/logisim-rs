@@ -111,7 +111,7 @@ fn variants(width: u8) -> Vec<Component> {
         for output in ParityOutput::ALL {
             for inputs in [2, 32] {
                 let mut c = component(Kind::Parity(parity), width);
-                c.inputs = inputs;
+                c.parity.inputs = inputs;
                 c.parity.output = output;
                 c.parity.negated = 0xaaaa_aaaa;
                 result.push(c);
@@ -277,7 +277,7 @@ fn constant_folding_retains_internal_values_and_non_boolean_rules() {
     let invert = c.add_component(invert);
     link(&mut c, (absent, 0), (invert, 1), "error");
     let mut xor = component(Kind::Gate(Gate::Xor), 4);
-    xor.inputs = 3;
+    xor.gate_options.inputs = 3;
     xor.position.y += 400;
     let ports = xor.ports();
     let xor = c.add_component(xor);

@@ -18,7 +18,7 @@ impl Component {
                     && old.gate_options.negated != replacement.gate_options.negated)
                 || (old.kind.is_controlled()
                     && (old.bus.control_left != replacement.bus.control_left
-                        || old.gate_size != replacement.gate_size))
+                        || old.bus.size != replacement.bus.size))
                 || (old.kind == Kind::Arithmetic(Arithmetic::BitAdder)
                     && old.bit_adder_inputs() != replacement.bit_adder_inputs())
                 || (old.kind == Kind::Plexer(Plexer::DisplayDecoder)

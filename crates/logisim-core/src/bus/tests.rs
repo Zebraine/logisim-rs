@@ -12,7 +12,7 @@ fn controlled_terminal_roles_widths_and_layout_edits_match_observation() {
             for facing in Facing::ALL {
                 for left in [false, true] {
                     let mut c = Component::new(kind, Point::new(200, 100));
-                    c.gate_size = size;
+                    c.bus.size = size;
                     c.bits = 32;
                     c.facing = facing;
                     c.bus.control_left = left;
@@ -38,7 +38,7 @@ fn controlled_terminal_roles_widths_and_layout_edits_match_observation() {
                     let wires = circuit.wires.clone();
                     let mut edited = old;
                     edited.bus.control_left = !left;
-                    edited.gate_size = GateSize::Wide;
+                    edited.bus.size = GateSize::Wide;
                     circuit.replace_component(edited);
                     assert_eq!(circuit.wires, wires);
                 }
