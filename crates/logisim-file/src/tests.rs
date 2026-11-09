@@ -5,7 +5,7 @@ use logisim_core::{
 
 #[test]
 fn generated_circuits_save_as_ordinary_components_and_preserve_geometry() {
-    use logisim_core::generation::{Analysis, Cell};
+    use logisim_core::generation::{Analysis, Cell, GateBasis};
     let mut a = Analysis::default();
     for name in ["A", "B", "Cin"] {
         a.add_input(name.into()).unwrap();
@@ -29,33 +29,35 @@ fn generated_circuits_save_as_ordinary_components_and_preserve_geometry() {
         )
         .unwrap();
     }
-    let circuit = a.generate().unwrap();
-    let mut document = Document::default();
-    let id = document.add("adder".into()).unwrap();
-    document.circuit_mut(id).unwrap().circuit = circuit.clone();
-    document.refresh_interfaces(false);
-    let instance = document.instance(id, Point::new(400, 300)).unwrap();
-    let expected_ports = instance.ports();
-    document.main_circuit_mut().circuit.add_component(instance);
-    let xml = serialize(&document).unwrap();
-    let parsed = parse(&xml).unwrap();
-    assert!(parsed.warnings.is_empty(), "{:?}", parsed.warnings);
-    assert_eq!(serialize(&parsed.document).unwrap(), xml);
-    let loaded = &parsed.document.named("adder").unwrap().circuit;
-    assert_eq!(loaded.components.len(), circuit.components.len());
-    for (original, restored) in circuit.components.iter().zip(&loaded.components) {
-        assert_eq!(original.kind, restored.kind);
-        assert_eq!(original.ports(), restored.ports());
-        assert_eq!(original.label, restored.label);
+    for basis in [GateBasis::Standard, GateBasis::Nand] {
+        let circuit = a.generate_with_basis(basis).unwrap();
+        let mut document = Document::default();
+        let id = document.add("adder".into()).unwrap();
+        document.circuit_mut(id).unwrap().circuit = circuit.clone();
+        document.refresh_interfaces(false);
+        let instance = document.instance(id, Point::new(400, 300)).unwrap();
+        let expected_ports = instance.ports();
+        document.main_circuit_mut().circuit.add_component(instance);
+        let xml = serialize(&document).unwrap();
+        let parsed = parse(&xml).unwrap();
+        assert!(parsed.warnings.is_empty(), "{:?}", parsed.warnings);
+        assert_eq!(serialize(&parsed.document).unwrap(), xml);
+        let loaded = &parsed.document.named("adder").unwrap().circuit;
+        assert_eq!(loaded.components.len(), circuit.components.len());
+        for (original, restored) in circuit.components.iter().zip(&loaded.components) {
+            assert_eq!(original.kind, restored.kind);
+            assert_eq!(original.ports(), restored.ports());
+            assert_eq!(original.label, restored.label);
+        }
+        assert_eq!(
+            circuit.wires.iter().map(|w| (w.a, w.b)).collect::<Vec<_>>(),
+            loaded.wires.iter().map(|w| (w.a, w.b)).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            parsed.document.main_circuit().circuit.components[0].ports(),
+            expected_ports
+        );
     }
-    assert_eq!(
-        circuit.wires.iter().map(|w| (w.a, w.b)).collect::<Vec<_>>(),
-        loaded.wires.iter().map(|w| (w.a, w.b)).collect::<Vec<_>>()
-    );
-    assert_eq!(
-        parsed.document.main_circuit().circuit.components[0].ports(),
-        expected_ports
-    );
 }
 fn xml(body: &str) -> String {
     format!(

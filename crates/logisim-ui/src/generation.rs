@@ -3,7 +3,7 @@ use crate::{Workspace, editor::Editor, i18n::tr, tf};
 use egui::{Color32, Ui};
 use logisim_core::{
     Circuit,
-    generation::{Analysis, Error, Form, MAX_EXPRESSION_BYTES},
+    generation::{Analysis, Error, Form, GateBasis, MAX_EXPRESSION_BYTES},
 };
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -33,6 +33,7 @@ pub(crate) struct Generator {
     applied: String,
     minimized: String,
     form: Form,
+    nand_only: bool,
     name: String,
     error: Option<Error>,
 }
@@ -54,6 +55,7 @@ impl Default for Generator {
             applied: "0".into(),
             minimized: "0".into(),
             form: Form::default(),
+            nand_only: false,
             name: "generated".into(),
             error: None,
         }
@@ -134,6 +136,8 @@ impl Generator {
                     }
                 });
             ui.separator();
+            ui.checkbox(&mut self.nand_only, tr("Use NAND gates only"))
+                .on_hover_text(tr("Convert all logic gates, including XOR, to two-input NAND gates. Pins and constants are retained."));
             if pending {
                 ui.weak(tr("Apply or revert the expression before continuing."));
             }
@@ -158,7 +162,8 @@ impl Generator {
                     )
                     .clicked()
                 {
-                    let result = self.analysis.generate().and_then(|circuit| {
+                    let basis = if self.nand_only { GateBasis::Nand } else { GateBasis::Standard };
+                    let result = self.analysis.generate_with_basis(basis).and_then(|circuit| {
                         editor.install_generated(self.name.trim().to_owned(), circuit)
                     });
                     match result {

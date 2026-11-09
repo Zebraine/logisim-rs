@@ -51,6 +51,14 @@ pub enum Form {
     ProductOfSums,
 }
 
+/// Logic gates used by synthesis. Pins and constants are retained in either basis.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum GateBasis {
+    #[default]
+    Standard,
+    Nand,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Error {
     /// Application-owned message, separate from user names for localization.
@@ -279,11 +287,16 @@ impl Analysis {
         }
     }
     pub fn generate(&self) -> Result<Circuit> {
+        self.generate_with_basis(GateBasis::Standard)
+    }
+    /// Generate an independent document without changing the table or expressions.
+    /// Equivalence is binary and settled; gate delays and four-state behavior can differ.
+    pub fn generate_with_basis(&self, basis: GateBasis) -> Result<Circuit> {
         if self.outputs.is_empty() {
             return Err(Error::new(
                 "Add at least one output before building a circuit.",
             ));
         }
-        layout::generate(self)
+        layout::generate(self, basis)
     }
 }

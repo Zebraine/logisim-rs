@@ -26,13 +26,14 @@ fn localized_dialog_applies_expressions_and_blocks_stale_generation() {
                 "Input variables",
                 "Output variables",
                 "Clear",
+                "Use NAND gates only",
                 "Build Circuit",
                 "Close",
             ] {
                 let rect = labels
                     .iter()
                     .find(|(text, _)| *text == label(key))
-                    .unwrap()
+                    .unwrap_or_else(|| panic!("Missing {key} at {size:?}: {labels:?}"))
                     .1;
                 assert!(
                     rect.left() >= 0.0
@@ -43,6 +44,11 @@ fn localized_dialog_applies_expressions_and_blocks_stale_generation() {
                 );
             }
         }
+        let before = w.generator.analysis.clone();
+        assert!(!w.generator.nand_only);
+        click(&ctx, &mut w, &label("Use NAND gates only"));
+        assert!(w.generator.nand_only);
+        assert_eq!(w.generator.analysis, before);
         w.generator.draft = "A ^ B".into();
         click(&ctx, &mut w, &label("Build Circuit"));
         assert_eq!(w.project().circuits.len(), 1);
@@ -73,7 +79,57 @@ fn localized_dialog_applies_expressions_and_blocks_stale_generation() {
         assert!(!w.generator.open);
         assert_eq!(w.circuit_name(), "generated");
         assert_eq!(w.project().circuits.len(), 2);
+        assert_eq!(
+            w.circuit()
+                .components
+                .iter()
+                .filter(|c| c.kind == Kind::Gate(logisim_core::Gate::Nand))
+                .count(),
+            4
+        );
+        let built = w.circuit().clone();
+        w.editor.undo();
+        assert_eq!(w.project().circuits.len(), 1);
+        w.editor.redo();
+        assert_eq!(w.circuit(), &built);
     }
+}
+
+#[test]
+fn nand_budget_failure_is_atomic_and_can_be_retried_with_standard_gates() {
+    use crate::i18n_tests::click;
+    let ctx = egui::Context::default();
+    crate::configure(&ctx);
+    let mut w = Workspace::default();
+    let mut expression = "A".to_owned();
+    for _ in 0..8 {
+        expression = format!("({expression}) | ({expression})");
+    }
+    w.generator
+        .analysis
+        .apply_expression(0, &expression)
+        .unwrap();
+    w.generator.refresh();
+    w.open_generator();
+    let before = w.project().clone();
+    click(&ctx, &mut w, "Use NAND gates only");
+    click(&ctx, &mut w, "Build Circuit");
+    assert!(w.generator.open);
+    assert!(w.generator.error.is_some());
+    assert_eq!(w.project(), &before);
+    assert!(!w.editor.can_undo());
+    click(&ctx, &mut w, "Use NAND gates only");
+    click(&ctx, &mut w, "Build Circuit");
+    assert!(!w.generator.open);
+    assert_eq!(w.project().circuits.len(), 2);
+    assert!(
+        w.circuit()
+            .components
+            .iter()
+            .any(|c| c.kind == Kind::Gate(logisim_core::Gate::Or))
+    );
+    w.replace_project(Project::default());
+    assert!(!w.generator.nand_only);
 }
 
 #[test]

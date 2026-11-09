@@ -1,8 +1,8 @@
 //! Verify generated geometry through the real net resolver, not an AST evaluator.
 use crate::Simulator;
 use logisim_core::{
-    Circuit, Kind,
-    generation::{Analysis, Cell, Form},
+    Circuit, Gate, Kind,
+    generation::{Analysis, Cell, Form, GateBasis},
 };
 
 fn verify(analysis: &Analysis, circuit: &Circuit) {
@@ -30,33 +30,39 @@ fn verify(analysis: &Analysis, circuit: &Circuit) {
                 .id
         })
         .collect();
-    let mut sim = Simulator::default();
-    sim.synchronize(circuit);
-    // Reverse traversal exercises both rising and falling inputs after initial settle.
-    for row in (0..analysis.rows()).rev() {
-        for (i, id) in input_ids.iter().enumerate() {
-            sim.set_input(*id, u32::from(analysis.input_value(row, i).unwrap()));
-        }
-        sim.advance(1024);
-        assert!(
-            sim.diagnostics().is_empty(),
-            "row {row}: {:?}",
-            sim.diagnostics()
-        );
-        for (output, id) in analysis.outputs().iter().zip(&output_ids) {
-            let actual = sim
-                .port_value(*id, 0)
-                .unwrap()
-                .number()
-                .expect("generated output must be binary");
-            let expected = output.values()[row];
-            if expected != Cell::DontCare {
-                assert_eq!(
-                    Cell::from(actual == 1),
-                    expected,
-                    "{} row {row}",
-                    output.name()
-                );
+    for compiled in [false, true] {
+        let mut sim = Simulator::default();
+        sim.synchronize(circuit);
+        // Reverse traversal exercises both rising and falling inputs after initial settle.
+        for row in (0..analysis.rows()).rev() {
+            for (i, id) in input_ids.iter().enumerate() {
+                sim.set_input(*id, u32::from(analysis.input_value(row, i).unwrap()));
+            }
+            if compiled {
+                sim.settle_compiled().unwrap();
+            } else {
+                sim.advance(1024);
+            }
+            assert!(
+                sim.diagnostics().is_empty(),
+                "row {row}: {:?}",
+                sim.diagnostics()
+            );
+            for (output, id) in analysis.outputs().iter().zip(&output_ids) {
+                let actual = sim
+                    .port_value(*id, 0)
+                    .unwrap()
+                    .number()
+                    .expect("generated output must be binary");
+                let expected = output.values()[row];
+                if expected != Cell::DontCare {
+                    assert_eq!(
+                        Cell::from(actual == 1),
+                        expected,
+                        "{} row {row}",
+                        output.name()
+                    );
+                }
             }
         }
     }
@@ -80,9 +86,11 @@ fn generated_expressions_handle_fanout_crossings_constants_and_uneven_trees() {
         a.apply_expression(a.outputs().len() - 1, expression)
             .unwrap();
     }
-    let c = a.generate().unwrap();
-    assert_eq!(c, a.generate().unwrap());
-    verify(&a, &c);
+    for basis in [GateBasis::Standard, GateBasis::Nand] {
+        let c = a.generate_with_basis(basis).unwrap();
+        assert_eq!(c, a.generate_with_basis(basis).unwrap());
+        verify(&a, &c);
+    }
 }
 
 #[test]
@@ -101,14 +109,40 @@ fn generated_tables_and_both_simplification_forms_drive_the_specified_outputs() 
         if pattern % 3 == 0 {
             a.set_cell(0, pattern % 8, Cell::DontCare).unwrap();
         }
-        let c = a.generate().unwrap();
-        verify(&a, &c);
         let mut pos = a.clone();
         let text = a
             .minimized(0, Form::ProductOfSums)
             .unwrap()
             .text(a.inputs());
         pos.apply_expression(0, &text).unwrap();
-        verify(&a, &pos.generate().unwrap());
+        for basis in [GateBasis::Standard, GateBasis::Nand] {
+            verify(&a, &a.generate_with_basis(basis).unwrap());
+            verify(&a, &pos.generate_with_basis(basis).unwrap());
+        }
     }
+}
+
+#[test]
+fn nested_nand_xor_reuses_subtrees_and_preserves_all_eight_input_rows() {
+    let mut a = Analysis::default();
+    for name in ["A", "B", "C", "D", "E", "F", "G", "H"] {
+        a.add_input(name.into()).unwrap();
+    }
+    a.add_output("Parity".into()).unwrap();
+    a.apply_expression(0, "A ^ B ^ C ^ D ^ E ^ F ^ G ^ H")
+        .unwrap();
+    let circuit = a.generate_with_basis(GateBasis::Nand).unwrap();
+    assert_eq!(
+        circuit
+            .components
+            .iter()
+            .filter(|c| c.kind == Kind::Gate(Gate::Nand))
+            .count(),
+        4 * 7
+    );
+    verify(&a, &circuit);
+    a.add_output("Inverted".into()).unwrap();
+    a.apply_expression(1, "~((A ^ B) ^ (C ^ (D ^ (E ^ F)))) | ~(G & ~H)")
+        .unwrap();
+    verify(&a, &a.generate_with_basis(GateBasis::Nand).unwrap());
 }

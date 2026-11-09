@@ -12,6 +12,70 @@ fn analysis(inputs: &[&str], outputs: &[&str]) -> Analysis {
 }
 
 #[test]
+fn nand_basis_uses_only_tied_or_binary_nand_gates_and_keeps_the_specification() {
+    use crate::{Gate, Kind};
+    let mut a = analysis(&["A", "B", "C"], &["Y"]);
+    for (text, gates) in [
+        ("~A", 1),
+        ("A & B", 2),
+        ("A | B", 3),
+        ("~(A & B)", 1),
+        ("A & B & C", 4),
+        ("~(A | B)", 4),
+        ("~~A", 0),
+        ("A ^ B", 4),
+        ("~(A ^ B)", 5),
+        ("A", 0),
+        ("0", 0),
+        ("~0", 0),
+    ] {
+        a.apply_expression(0, text).unwrap();
+        let before = a.clone();
+        let circuit = a.generate_with_basis(GateBasis::Nand).unwrap();
+        assert_eq!(a, before);
+        assert_eq!(
+            circuit
+                .components
+                .iter()
+                .filter(|c| matches!(c.kind, Kind::Gate(_)))
+                .count(),
+            gates,
+            "{text}"
+        );
+        for component in &circuit.components {
+            assert!(matches!(
+                component.kind,
+                Kind::Gate(Gate::Nand) | Kind::Pin | Kind::Constant
+            ));
+            if component.kind == Kind::Gate(Gate::Nand) {
+                assert_eq!(component.input_count(), 2);
+                assert_eq!(component.gate_options.negated, 0);
+            }
+        }
+        assert!(circuit.dangling_ends().is_empty(), "{text}");
+        assert_eq!(
+            a.generate().unwrap(),
+            a.generate_with_basis(GateBasis::Standard).unwrap()
+        );
+    }
+}
+
+#[test]
+fn nand_expansion_obeys_the_final_geometry_budget_without_changing_the_model() {
+    let mut a = analysis(&["A"], &["Y"]);
+    let mut expression = "A".to_owned();
+    for _ in 0..8 {
+        expression = format!("({expression}) | ({expression})");
+    }
+    a.apply_expression(0, &expression).unwrap();
+    let before = a.clone();
+    let standard = a.generate().unwrap();
+    assert!(a.generate_with_basis(GateBasis::Nand).is_err());
+    assert_eq!(a, before);
+    assert_eq!(a.generate().unwrap(), standard);
+}
+
+#[test]
 fn observed_expression_syntax_precedence_and_errors_are_atomic() {
     let mut a = analysis(&["A", "B"], &["Y"]);
     for (text, expected) in [

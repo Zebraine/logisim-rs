@@ -340,6 +340,10 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Control location", "控制端位置"),
     ("Controlled Buffer", "受控缓冲器"),
     ("Controlled Inverter", "受控反相器"),
+    (
+        "Convert all logic gates, including XOR, to two-input NAND gates. Pins and constants are retained.",
+        "将所有逻辑门（含异或）转换为双输入 NAND 门，保留引脚与常量。",
+    ),
     ("Copy · Ctrl+C", "复制 · Ctrl+C"),
     ("Corner radius ", "圆角半径 "),
     (
@@ -1106,6 +1110,7 @@ const MESSAGES: &[(&str, &str)] = &[
         "Use File to open or save the supported .circ subset.",
         "使用文件菜单打开或保存支持的 .circ 文件。",
     ),
+    ("Use NAND gates only", "仅使用 NAND 门"),
     (
         "Use a letter followed by letters, digits or underscores (up to 32 characters).",
         "名称须以字母开头，仅含字母、数字或下划线（最多 32 个字符）。",

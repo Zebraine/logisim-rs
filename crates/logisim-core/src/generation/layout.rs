@@ -1,12 +1,15 @@
 //! Trees occupy disjoint vertical bands. Input rails are left of every gate;
 //! crossings have no endpoints, while actual fanout taps always have endpoints.
 use super::{
-    Analysis, Error, MAX_GENERATED_ITEMS, Result,
+    Analysis, Error, GateBasis, MAX_GENERATED_ITEMS, Result,
     expression::{Node, Op},
 };
 use crate::{Circuit, Component, Facing, Gate, Kind, Point};
 
+mod nand;
+
 struct Layout {
+    basis: GateBasis,
     circuit: Circuit,
     taps: Vec<Vec<Point>>,
     leaf_x: i32,
@@ -33,21 +36,37 @@ impl Layout {
             .add_wire(Point::new(elbow, from.y), Point::new(elbow, to.y));
         self.circuit.add_wire(Point::new(elbow, to.y), to);
     }
+    fn input(&mut self, index: usize) -> Point {
+        let p = self.leaf();
+        self.taps[index].push(p);
+        p
+    }
+    fn constant(&mut self, value: bool) -> Point {
+        let p = self.leaf();
+        let mut c = Component::new(Kind::Constant, p);
+        c.constant = u32::from(value);
+        self.circuit.add_component(c);
+        p
+    }
+    /// Sources are vertically ordered, or identical for a tied-input inverter.
+    /// Disjoint trees and NAND expansion cells both use this same routing rule.
+    fn binary_gate(&mut self, gate: Gate, a: Point, b: Point) -> Point {
+        let p = Point::new(a.x.max(b.x) + 140, ((a.y + b.y) / 20) * 10);
+        let c = Component::new(Kind::Gate(gate), p);
+        let ports = c.ports();
+        self.route(a, ports[1], p.x - 70);
+        self.route(b, ports[2], p.x - 70);
+        self.circuit.add_component(c);
+        p
+    }
     fn node(&mut self, node: &Node) -> Result<Point> {
+        if self.basis == GateBasis::Nand {
+            return self.nand_node(node, false);
+        }
         self.check()?;
         let point = match node {
-            Node::Input(i) => {
-                let p = self.leaf();
-                self.taps[*i].push(p);
-                p
-            }
-            Node::Constant(value) => {
-                let p = self.leaf();
-                let mut c = Component::new(Kind::Constant, p);
-                c.constant = u32::from(*value);
-                self.circuit.add_component(c);
-                p
-            }
+            Node::Input(i) => self.input(*i),
+            Node::Constant(value) => self.constant(*value),
             Node::Not(a) => {
                 let source = self.node(a)?;
                 let p = source + Point::new(100, 0);
@@ -59,26 +78,21 @@ impl Layout {
             Node::Binary(op, a, b) => {
                 let a = self.node(a)?;
                 let b = self.node(b)?;
-                let p = Point::new(a.x.max(b.x) + 140, ((a.y + b.y) / 20) * 10);
                 let gate = match op {
                     Op::And => Gate::And,
                     Op::Or => Gate::Or,
                     Op::Xor => Gate::Xor,
                 };
-                let c = Component::new(Kind::Gate(gate), p);
-                let ports = c.ports();
-                self.route(a, ports[1], p.x - 70);
-                self.route(b, ports[2], p.x - 70);
-                self.circuit.add_component(c);
-                p
+                self.binary_gate(gate, a, b)
             }
         };
         self.check()?;
         Ok(point)
     }
 }
-pub(super) fn generate(analysis: &Analysis) -> Result<Circuit> {
+pub(super) fn generate(analysis: &Analysis, basis: GateBasis) -> Result<Circuit> {
     let mut layout = Layout {
+        basis,
         circuit: Circuit::default(),
         taps: vec![vec![]; analysis.inputs.len()],
         leaf_x: 300 + analysis.inputs.len() as i32 * 30,
