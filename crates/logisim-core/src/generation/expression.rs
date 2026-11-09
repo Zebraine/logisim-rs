@@ -29,45 +29,43 @@ impl Node {
     pub(super) fn binary(op: Op, a: Self, b: Self) -> Self {
         Self::Binary(op, Box::new(a), Box::new(b))
     }
-    pub(super) fn combine(mut nodes: Vec<Node>, op: Op, empty: bool) -> Node {
-        if nodes.is_empty() {
-            return Node::Constant(empty);
-        }
-        // Balanced trees bound both layout depth and gate propagation depth.
-        while nodes.len() > 1 {
-            let mut next = Vec::with_capacity(nodes.len().div_ceil(2));
-            let mut iter = nodes.into_iter();
-            while let Some(a) = iter.next() {
-                next.push(if let Some(b) = iter.next() {
-                    Node::binary(op, a, b)
-                } else {
-                    a
-                });
+    pub(super) fn combine(nodes: Vec<Node>, op: Op, empty: bool) -> Node {
+        fn build(nodes: &mut impl Iterator<Item = Node>, count: usize, op: Op) -> Node {
+            if count == 1 {
+                return nodes.next().unwrap();
             }
-            nodes = next;
+            // Split by leaf count, so odd runs also have balanced branches
+            // (e.g. five operands become 3 + 2, rather than 4 + 1).
+            let left = build(nodes, count.div_ceil(2), op);
+            let right = build(nodes, count / 2, op);
+            Node::binary(op, left, right)
         }
-        nodes.pop().unwrap()
+        let count = nodes.len();
+        if count == 0 {
+            Node::Constant(empty)
+        } else {
+            build(&mut nodes.into_iter(), count, op)
+        }
     }
-    /// Reassociate AND runs for synthesis without changing the stored expression.
-    /// Other operators delimit a run; their own operands may contain further runs.
-    pub(super) fn balanced_and(&self) -> Self {
-        fn collect(node: &Node, terms: &mut Vec<Node>) {
+    /// Reassociate each run of the same associative operator for synthesis.
+    /// NOT and different operators delimit runs; the stored expression is unchanged.
+    pub(super) fn balanced(&self) -> Self {
+        fn collect(node: &Node, op: Op, terms: &mut Vec<Node>) {
             match node {
-                Node::Binary(Op::And, a, b) => {
-                    collect(a, terms);
-                    collect(b, terms);
+                Node::Binary(inner, a, b) if *inner == op => {
+                    collect(a, op, terms);
+                    collect(b, op, terms);
                 }
-                _ => terms.push(node.balanced_and()),
+                _ => terms.push(node.balanced()),
             }
         }
         match self {
-            Self::Binary(Op::And, _, _) => {
+            Self::Binary(op, _, _) => {
                 let mut terms = Vec::new();
-                collect(self, &mut terms);
-                Self::combine(terms, Op::And, true)
+                collect(self, *op, &mut terms);
+                Self::combine(terms, *op, *op == Op::And)
             }
-            Self::Binary(op, a, b) => Self::binary(*op, a.balanced_and(), b.balanced_and()),
-            Self::Not(a) => a.balanced_and().not(),
+            Self::Not(a) => a.balanced().not(),
             _ => self.clone(),
         }
     }

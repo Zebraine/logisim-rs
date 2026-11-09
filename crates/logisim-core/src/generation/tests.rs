@@ -288,43 +288,120 @@ fn reduced_inputs_constants_and_cached_columns_keep_exact_semantics() {
 }
 
 #[test]
-fn and_chains_use_logarithmic_gate_depth_without_extra_gates() {
+fn associative_chains_use_logarithmic_gate_depth_without_extra_gates() {
     use crate::{Gate, Kind};
-    for count in 1usize..=32 {
-        let mut a = Analysis::expressions();
-        for i in 0..count {
-            a.add_input(format!("I{i}")).unwrap();
+    for (operator, standard_gate, nand_count, nand_depth) in [
+        (" & ", Gate::And, 2, 2),
+        (" | ", Gate::Or, 3, 2),
+        (" ^ ", Gate::Xor, 4, 3),
+    ] {
+        for count in 1usize..=32 {
+            let mut a = Analysis::expressions();
+            for i in 0..count {
+                a.add_input(format!("I{i}")).unwrap();
+            }
+            a.add_output("Y".into()).unwrap();
+            a.apply_expression(0, &a.inputs().join(operator)).unwrap();
+            let before = a.clone();
+            let depth = count.next_power_of_two().ilog2() as i32;
+            for (basis, gate, expansion, levels) in [
+                (GateBasis::Standard, standard_gate, 1, 1),
+                (GateBasis::Nand, Gate::Nand, nand_count, nand_depth),
+            ] {
+                let c = a.generate_with_basis(basis).unwrap();
+                assert_eq!(
+                    c.components
+                        .iter()
+                        .filter(|c| c.kind == Kind::Gate(gate))
+                        .count(),
+                    (count - 1) * expansion as usize
+                );
+                assert!(
+                    c.components
+                        .iter()
+                        .filter(|c| matches!(c.kind, Kind::Gate(_)))
+                        .all(|c| c.input_count() == 2)
+                );
+                // Each binary gate advances its deepest source by 140 units.
+                let output = c.components.iter().find(|c| c.label == "Y").unwrap();
+                assert_eq!(
+                    output.position.x,
+                    300 + count as i32 * 30 + depth * levels * 140 + 100,
+                    "{operator:?}, {count} inputs, {basis:?}"
+                );
+                assert!(c.dangling_ends().is_empty());
+            }
+            assert_eq!(a, before);
         }
-        a.add_output("Y".into()).unwrap();
-        a.apply_expression(0, &a.inputs().join(" & ")).unwrap();
-        let before = a.clone();
-        let depth = count.next_power_of_two().ilog2() as i32;
-        for (basis, gate, expansion) in [
-            (GateBasis::Standard, Gate::And, 1),
-            (GateBasis::Nand, Gate::Nand, 2),
-        ] {
-            let c = a.generate_with_basis(basis).unwrap();
-            assert_eq!(
-                c.components
-                    .iter()
-                    .filter(|c| c.kind == Kind::Gate(gate))
-                    .count(),
-                (count - 1) * expansion as usize
-            );
-            assert!(
-                c.components
-                    .iter()
-                    .filter(|c| matches!(c.kind, Kind::Gate(_)))
-                    .all(|c| c.input_count() == 2)
-            );
-            // Each binary gate advances its deepest source by 140 units.
-            let output = c.components.iter().find(|c| c.label == "Y").unwrap();
-            assert_eq!(
-                output.position.x,
-                300 + count as i32 * 30 + depth * expansion * 140 + 100
-            );
-            assert!(c.dangling_ends().is_empty());
+    }
+}
+
+#[test]
+fn applying_minimized_text_keeps_the_generated_tree_balanced() {
+    let names = ["A", "B", "C", "D", "E", "F", "G", "H"];
+    for text in [
+        "A | B | C | D | E | F | G | H",
+        "(A & B) | (C & D) | (E & F) | (G & H)",
+        "(A | B | C | D) & (E | F | G | H)",
+    ] {
+        let mut a = analysis(&names, &["Y"]);
+        a.apply_expression(0, text).unwrap();
+        let mut table = analysis(&names, &["Y"]);
+        for (row, value) in a.outputs()[0].values().iter().enumerate() {
+            table.set_cell(0, row, *value).unwrap();
         }
-        assert_eq!(a, before);
+        for form in [Form::SumOfProducts, Form::ProductOfSums] {
+            let expression = table.minimized(0, form).unwrap();
+            let mut from_ast = table.clone();
+            from_ast.outputs[0].expression = Some(expression.clone());
+            let mut from_text = table.clone();
+            from_text
+                .apply_expression(0, &expression.text(&names.map(String::from)))
+                .unwrap();
+            for basis in [GateBasis::Standard, GateBasis::Nand] {
+                assert_eq!(
+                    from_ast.generate_with_basis(basis).unwrap(),
+                    from_text.generate_with_basis(basis).unwrap(),
+                    "{text}, {form:?}, {basis:?}"
+                );
+                if form == Form::SumOfProducts {
+                    assert_eq!(
+                        table.generate_with_basis(basis).unwrap(),
+                        from_text.generate_with_basis(basis).unwrap()
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn associative_branches_split_evenly_and_keep_operand_order() {
+    use super::expression::{Node, Op};
+    fn leaves(node: &Node, op: Op, order: &mut Vec<usize>) -> usize {
+        match node {
+            Node::Input(i) => {
+                order.push(*i);
+                1
+            }
+            Node::Binary(inner, a, b) => {
+                assert_eq!(*inner, op);
+                let left = leaves(a, op, order);
+                let right = leaves(b, op, order);
+                assert!(left.abs_diff(right) <= 1, "{left} + {right}");
+                left + right
+            }
+            _ => panic!("unexpected node: {node:?}"),
+        }
+    }
+    for count in 2..=32 {
+        let inputs: Vec<_> = (0..count).map(|i| format!("I{i}")).collect();
+        for (operator, op) in [(" & ", Op::And), (" | ", Op::Or), (" ^ ", Op::Xor)] {
+            let original = Expression::parse(&inputs.join(operator), &inputs).unwrap();
+            let balanced = original.0.balanced();
+            let mut order = Vec::new();
+            assert_eq!(leaves(&balanced, op, &mut order), count);
+            assert_eq!(order, (0..count).collect::<Vec<_>>());
+        }
     }
 }

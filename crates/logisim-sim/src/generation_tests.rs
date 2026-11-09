@@ -196,23 +196,35 @@ fn expression_only_thirty_two_input_xor_simulates_with_standard_and_nand_gates()
 }
 
 #[test]
-fn balanced_and_generation_preserves_grouping_fanout_and_inversions() {
-    let mut a = Analysis::default();
-    for name in ["A", "B", "C", "D", "E", "F", "G", "H"] {
-        a.add_input(name.into()).unwrap();
-    }
-    for (name, text) in [
-        ("Left", "A & B & C & D & E & F & G & H"),
-        ("Right", "A & (B & (C & (D & (E & (F & (G & H))))))"),
-        ("Odd", "A & B & C & D & E"),
-        ("Nested", "A & (B | C) & ~(D & E & F & G & H)"),
-        ("Xor", "(A & B & C & D) ^ (E & F & G & H)"),
-        ("Repeated", "A & B & A & ~C & 1 & D & E & F"),
-    ] {
-        a.add_output(name.into()).unwrap();
-        a.apply_expression(a.outputs().len() - 1, text).unwrap();
-    }
-    for basis in [GateBasis::Standard, GateBasis::Nand] {
-        verify(&a, &a.generate_with_basis(basis).unwrap());
+fn balanced_generation_preserves_grouping_fanout_and_inversions() {
+    for operator in ['&', '|', '^'] {
+        let mut a = Analysis::default();
+        for name in ["A", "B", "C", "D", "E", "F", "G", "H"] {
+            a.add_input(name.into()).unwrap();
+        }
+        for (name, text) in [
+            ("Left", "A & B & C & D & E & F & G & H"),
+            ("Right", "A & (B & (C & (D & (E & (F & (G & H))))))"),
+            ("Odd", "A & B & C & D & E"),
+            ("Inverted", "~(A & B & C & D & E)"),
+            ("Repeated", "A & B & A & ~C & 1 & D & E & F"),
+        ] {
+            a.add_output(name.into()).unwrap();
+            a.apply_expression(
+                a.outputs().len() - 1,
+                &text.replace('&', &operator.to_string()),
+            )
+            .unwrap();
+        }
+        for (name, text) in [
+            ("Nested", "A & (B | C) & ~(D & E & F & G & H)"),
+            ("Mixed", "~(A | B | C | D) ^ (E & F & G & H)"),
+        ] {
+            a.add_output(name.into()).unwrap();
+            a.apply_expression(a.outputs().len() - 1, text).unwrap();
+        }
+        for basis in [GateBasis::Standard, GateBasis::Nand] {
+            verify(&a, &a.generate_with_basis(basis).unwrap());
+        }
     }
 }
