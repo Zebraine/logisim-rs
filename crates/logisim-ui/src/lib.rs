@@ -17,14 +17,12 @@ mod workspace;
 pub use document::{DocumentView, FileAction};
 mod drawing;
 mod editor;
-#[cfg(test)]
-mod editor_tests;
 pub mod i18n;
-#[cfg(test)]
-mod i18n_tests;
 mod icons;
 mod io;
 mod terminal;
+#[cfg(test)]
+mod tests;
 pub use terminal::TtyView;
 mod settings;
 pub use i18n::Language;

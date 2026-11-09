@@ -196,9 +196,4 @@ pub(super) fn run(shared: Arc<Shared>, repaint: impl Fn()) {
 }
 
 #[cfg(test)]
-#[path = "engine_tests.rs"]
 mod tests;
-
-#[cfg(test)]
-#[path = "engine_plugin_tests.rs"]
-mod plugin_tests;

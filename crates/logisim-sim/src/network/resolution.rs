@@ -3,7 +3,6 @@ use super::{Network, Port, merge};
 use crate::{Bit, Value, work::WorkSet};
 use std::collections::BTreeMap;
 #[cfg(test)]
-#[path = "resolution_tests.rs"]
 mod tests;
 
 #[derive(Default)]

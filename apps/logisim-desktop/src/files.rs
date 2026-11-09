@@ -1,11 +1,8 @@
 //! File workflow: unsaved actions, protected imports and transactional saves.
 mod dialog;
 #[cfg(test)]
-mod memory_tests;
-#[cfg(test)]
-mod plugin_tests;
-#[cfg(test)]
 mod tests;
+
 use dialog::{Dialog, Response};
 
 use crate::simulation::Host;
@@ -14,8 +11,6 @@ use crate::{
     storage::{self, SaveMode, Storage},
 };
 use eframe::egui;
-#[cfg(test)]
-use logisim_sim::ProjectSimulator as Simulator;
 use logisim_ui::{DocumentView, FileAction, Workspace};
 use logisim_ui::{i18n::tr, tf};
 use std::path::{Path, PathBuf};

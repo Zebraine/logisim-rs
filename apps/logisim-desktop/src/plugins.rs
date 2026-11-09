@@ -6,7 +6,7 @@ use logisim_core::{
 use logisim_plugin::{Plugin, Registry};
 use logisim_ui::i18n::tr;
 #[cfg(test)]
-pub(crate) mod tests;
+mod tests;
 use std::{
     collections::BTreeMap,
     path::{Component, Path, PathBuf},

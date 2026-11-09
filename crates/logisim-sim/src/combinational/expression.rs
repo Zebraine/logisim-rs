@@ -3,10 +3,6 @@ mod incremental;
 mod operation;
 pub use incremental::{EvaluationStats, Evaluator};
 #[cfg(test)]
-mod bus_tests;
-#[cfg(test)]
-mod incremental_tests;
-#[cfg(test)]
 mod tests;
 
 use super::{Analysis, Input, Port};

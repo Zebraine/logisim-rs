@@ -10,9 +10,8 @@ mod mode;
 mod rebuild;
 pub use rebuild::{RebuildTarget, analysis_pins};
 #[cfg(test)]
-mod multi_tests;
-#[cfg(test)]
 mod tests;
+
 mod work;
 
 use crate::Circuit;

@@ -2,8 +2,6 @@
 mod analysis;
 mod clocks;
 mod file_picker;
-#[cfg(test)]
-mod file_tests;
 mod files;
 mod generation;
 mod library_import;
@@ -13,6 +11,8 @@ mod preferences;
 mod runtime_rates;
 mod simulation;
 mod storage;
+#[cfg(test)]
+mod tests;
 
 fn main() -> eframe::Result {
     eframe::run_native(

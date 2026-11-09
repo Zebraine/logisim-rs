@@ -4,11 +4,7 @@
 //! path lengths therefore cannot change that sample. This is a different timing
 //! model from observing intermediate propagation batches, not a claim that those
 //! batches are equivalent. Unsupported circuits are rejected before advancing them.
-#[cfg(test)]
-mod bus_tests;
 mod memory;
-#[cfg(test)]
-mod memory_tests;
 #[cfg(test)]
 mod tests;
 

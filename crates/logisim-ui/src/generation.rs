@@ -643,15 +643,3 @@ impl Editor {
 
 #[cfg(test)]
 mod tests;
-
-#[cfg(test)]
-mod rebuild_tests;
-
-#[cfg(test)]
-mod multi_tests;
-
-#[cfg(test)]
-mod memory_tests;
-
-#[cfg(test)]
-mod entry_tests;

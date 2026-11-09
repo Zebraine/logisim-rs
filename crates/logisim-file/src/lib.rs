@@ -4,8 +4,6 @@ mod appearance;
 mod arithmetic;
 mod attributes;
 mod bus;
-#[cfg(test)]
-mod compatibility_tests;
 mod component;
 mod diagnostics;
 mod fonts;
@@ -14,7 +12,8 @@ mod hex;
 mod io;
 mod latches;
 #[cfg(test)]
-mod limits_tests;
+mod tests;
+
 mod memory;
 mod parity;
 mod pla;
@@ -23,8 +22,7 @@ mod plugin;
 mod read;
 mod sequential;
 mod terminal;
-#[cfg(test)]
-mod tests;
+
 mod transistors;
 mod ttl;
 mod write;

@@ -1,5 +1,5 @@
 use super::*;
-use crate::file_tests::Temp;
+use crate::tests::support::Temp;
 use logisim_core::{Component, Kind, Point};
 use logisim_sim::ProjectSimulator;
 use std::fs;

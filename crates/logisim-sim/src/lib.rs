@@ -4,50 +4,33 @@ pub mod combinational;
 mod engine;
 mod execution;
 mod gates;
-#[cfg(test)]
-mod generation_tests;
 mod hierarchy;
 mod progress;
 pub mod stable;
+#[cfg(test)]
+mod tests;
 mod work;
 pub use hierarchy::ProjectSimulator;
 mod arithmetic;
-#[cfg(test)]
-mod arithmetic_tests;
 mod bus;
 mod displays;
 mod io;
 mod joystick;
 mod terminal;
-#[cfg(test)]
-mod terminal_tests;
 pub use terminal::TtyScreen;
 mod latches;
 mod memory;
-#[cfg(test)]
-mod memory_tests;
 mod network;
 mod parity;
 mod pins;
 mod pla;
-#[cfg(test)]
-mod plexer_tests;
 mod plexers;
 mod plugins;
 mod random;
-#[cfg(test)]
-mod random_tests;
 mod sequential;
-#[cfg(test)]
-mod sequential_extra_tests;
-#[cfg(test)]
-mod sequential_tests;
-#[cfg(test)]
-mod tests;
 mod transistors;
 mod ttl;
 mod value;
-
 pub use logisim_core::{Bit, Value};
 
 /// A borrowed, instance-local resolved net. Membership is valid only for this read.

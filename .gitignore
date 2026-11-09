@@ -58,3 +58,7 @@
 .DS_Store
 Thumbs.db
 *.swp
+
+# Source tests for the drawing cache, not generated cache contents.
+!/crates/logisim-ui/src/drawing/cache/
+!/crates/logisim-ui/src/drawing/cache/tests.rs

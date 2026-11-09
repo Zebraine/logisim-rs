@@ -27,6 +27,10 @@ git diff --check
 按职责在现有 crate 中扩展，避免课程电路特例。回归覆盖受影响的四态、实例隔离、编辑历史、文件往返与失败路径。
 UI 文案集中于 `crates/logisim-ui/src/i18n.rs`，使用 `tr` / `tf!`，控件 ID 不依赖翻译。
 
+测试由所属模块的 `#[cfg(test)] mod tests;` 加载：小套件放 `tests.rs`，大套件按功能拆到
+`tests/`，共享辅助代码放 `support`。跨模块流程放 crate 根测试入口；不为测试扩大生产 API，
+不从其他用例文件导入辅助函数。
+
 Git 采用 `.gitignore` 白名单，仅包含：
 
 - 必要的 Rust 源码、Cargo/工具链文件、LICENSE 和 Git/构建配置。
