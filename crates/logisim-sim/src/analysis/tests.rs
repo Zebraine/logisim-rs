@@ -387,7 +387,7 @@ fn interface_names_and_pin_count_never_silently_change_the_function() {
         .label = "has space".into();
     assert!(analyze(&p, p.main).is_err());
     let mut p = generated();
-    for i in 0..6 {
+    for i in 0..10 {
         let mut pin = Component::new(Kind::Pin, Point::new(2000, i * 50));
         pin.label = format!("Extra{i}");
         p.main_circuit_mut().circuit.add_component(pin);
@@ -396,7 +396,7 @@ fn interface_names_and_pin_count_never_silently_change_the_function() {
         analyze(&p, p.main)
             .unwrap_err()
             .message
-            .contains("8 inputs")
+            .contains("12 inputs")
     );
     let p = Project::default();
     assert!(
@@ -405,4 +405,21 @@ fn interface_names_and_pin_count_never_silently_change_the_function() {
             .message
             .contains("output Pin")
     );
+}
+
+#[test]
+fn twelve_inputs_thirty_two_outputs_analyze_without_changing_the_project() {
+    let mut a = Analysis::default();
+    for i in 0..12 {
+        a.add_input(format!("I{i}")).unwrap();
+    }
+    for i in 0..32 {
+        a.add_output(format!("O{i}")).unwrap();
+        a.apply_expression(i, &format!("I{}", i % 12)).unwrap();
+    }
+    let p = Project::single("wide", a.generate().unwrap());
+    let before = p.clone();
+    let result = analyze(&p, p.main).unwrap();
+    same_table(&a, &result);
+    assert_eq!(p, before);
 }

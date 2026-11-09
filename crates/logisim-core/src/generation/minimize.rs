@@ -1,8 +1,9 @@
 //! Bounded prime implicants, essential terms and deterministic greedy covering.
 //! The cover is valid and irredundant; it need not be the globally smallest cover.
 use super::{
-    Cell, Expression, Form,
+    Cell, Expression, Form, Result,
     expression::{Node, Op},
+    work::Work,
 };
 use std::collections::BTreeSet;
 
@@ -17,9 +18,15 @@ impl Cube {
     }
 }
 
-pub(super) fn minimize(values: &[Cell], inputs: usize, form: Form) -> Expression {
+pub(super) fn minimize(
+    values: &[Cell],
+    inputs: usize,
+    form: Form,
+    work: &mut Work<'_>,
+) -> Result<Expression> {
+    work.step()?;
     if values.iter().all(|v| *v == Cell::DontCare) {
-        return Expression(Node::Constant(false));
+        return Ok(Expression(Node::Constant(false)));
     }
     let target = if form == Form::SumOfProducts {
         Cell::One
@@ -32,7 +39,7 @@ pub(super) fn minimize(values: &[Cell], inputs: usize, form: Form) -> Expression
         .filter_map(|(i, v)| (*v == target).then_some(i))
         .collect();
     if required.is_empty() {
-        return Expression(Node::Constant(target == Cell::Zero));
+        return Ok(Expression(Node::Constant(target == Cell::Zero)));
     }
     let mut cubes: BTreeSet<_> = values
         .iter()
@@ -49,6 +56,7 @@ pub(super) fn minimize(values: &[Cell], inputs: usize, form: Form) -> Expression
         for cube in &cubes {
             let mut used = false;
             for bit in 0..inputs {
+                work.step()?;
                 let bit = 1 << bit;
                 if cube.mask & bit != 0
                     && cubes.contains(&Cube {
@@ -57,54 +65,97 @@ pub(super) fn minimize(values: &[Cell], inputs: usize, form: Form) -> Expression
                     })
                 {
                     used = true;
+                    if merged.len() >= 65_536 {
+                        return Err(Work::exhausted());
+                    }
                     merged.insert(Cube {
                         mask: cube.mask & !bit,
                         value: cube.value & !bit,
                     });
                 }
             }
-            if !used && required.iter().any(|row| cube.covers(*row)) {
-                primes.insert(*cube);
+            if !used {
+                for row in &required {
+                    work.step()?;
+                    if cube.covers(*row) {
+                        primes.insert(*cube);
+                        break;
+                    }
+                }
             }
         }
         cubes = merged;
     }
     let mut selected = BTreeSet::new();
     for row in &required {
-        let mut covering = primes.iter().filter(|cube| cube.covers(*row));
-        if let Some(first) = covering.next()
-            && covering.next().is_none()
-        {
-            selected.insert(*first);
+        let mut first = None;
+        let mut multiple = false;
+        for cube in &primes {
+            work.step()?;
+            if cube.covers(*row) {
+                if first.is_some() {
+                    multiple = true;
+                    break;
+                }
+                first = Some(*cube);
+            }
+        }
+        if !multiple && let Some(cube) = first {
+            selected.insert(cube);
         }
     }
-    let mut uncovered: BTreeSet<_> = required
-        .iter()
-        .copied()
-        .filter(|row| !selected.iter().any(|cube| cube.covers(*row)))
-        .collect();
+    let mut uncovered = BTreeSet::new();
+    for row in &required {
+        let mut covered = false;
+        for cube in &selected {
+            work.step()?;
+            if cube.covers(*row) {
+                covered = true;
+                break;
+            }
+        }
+        if !covered {
+            uncovered.insert(*row);
+        }
+    }
     while !uncovered.is_empty() {
-        // Fixed tie ordering makes the generated document reproducible.
-        let best = primes
-            .iter()
-            .max_by_key(|cube| {
-                (
-                    uncovered.iter().filter(|row| cube.covers(**row)).count(),
-                    std::cmp::Reverse(cube.mask.count_ones()),
-                    std::cmp::Reverse(**cube),
-                )
-            })
-            .copied()
-            .expect("each required row has a prime implicant");
+        let mut best = None;
+        for cube in &primes {
+            let mut count = 0;
+            for row in &uncovered {
+                work.step()?;
+                count += usize::from(cube.covers(*row));
+            }
+            let key = (
+                count,
+                std::cmp::Reverse(cube.mask.count_ones()),
+                std::cmp::Reverse(*cube),
+            );
+            if best.is_none_or(|(old, _)| key > old) {
+                best = Some((key, *cube));
+            }
+        }
+        let best = best.expect("each required row has a prime implicant").1;
         uncovered.retain(|row| !best.covers(*row));
         selected.insert(best);
     }
     for cube in selected.clone().iter().rev() {
-        if required.iter().all(|row| {
-            selected
-                .iter()
-                .any(|other| other != cube && other.covers(*row))
-        }) {
+        let mut redundant = true;
+        for row in &required {
+            let mut covered = false;
+            for other in &selected {
+                work.step()?;
+                if other != cube && other.covers(*row) {
+                    covered = true;
+                    break;
+                }
+            }
+            if !covered {
+                redundant = false;
+                break;
+            }
+        }
+        if redundant {
             selected.remove(cube);
         }
     }
@@ -129,7 +180,11 @@ pub(super) fn minimize(values: &[Cell], inputs: usize, form: Form) -> Expression
             combine(literals, if sop { Op::And } else { Op::Or }, sop)
         })
         .collect();
-    Expression(combine(terms, if sop { Op::Or } else { Op::And }, !sop))
+    Ok(Expression(combine(
+        terms,
+        if sop { Op::Or } else { Op::And },
+        !sop,
+    )))
 }
 
 fn combine(mut nodes: Vec<Node>, op: Op, empty: bool) -> Node {

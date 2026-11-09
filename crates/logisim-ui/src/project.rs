@@ -187,7 +187,10 @@ impl Workspace {
     }
     pub fn replace_project(&mut self, mut project: Project) {
         self.analysis.cancel();
+        self.generator.cancel_computation();
+        let serial = self.generator.serial;
         self.generator = Default::default();
+        self.generator.serial = serial;
         self.libraries.clear();
         project.refresh_interfaces(false);
         let id = project.main;

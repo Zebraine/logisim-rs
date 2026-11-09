@@ -199,3 +199,35 @@ fn limits_constants_and_dont_cares_are_explicit() {
     }
     assert_eq!(a.expression(0).unwrap().text(a.inputs()), "A");
 }
+
+#[test]
+fn bounded_simplification_and_cancellation_preserve_all_cells() {
+    let mut a = Analysis::default();
+    for i in 0..12 {
+        a.add_input(format!("I{i}")).unwrap();
+    }
+    a.add_output("Y".into()).unwrap();
+    a.apply_expression(0, &a.inputs().join(" ^ ")).unwrap();
+    let before = a.clone();
+    let calls = std::cell::Cell::new(0);
+    let error = a
+        .minimized_cancellable(0, Form::SumOfProducts, || {
+            calls.set(calls.get() + 1);
+            calls.get() == 3
+        })
+        .unwrap_err();
+    assert_eq!(error.message, "Computation cancelled.");
+    assert_eq!(calls.get(), 3);
+    assert!(
+        a.minimized(0, Form::SumOfProducts)
+            .unwrap_err()
+            .message
+            .contains("limit")
+    );
+    assert_eq!(a, before);
+    assert!(
+        a.generate_cancellable(GateBasis::Standard, || true)
+            .is_err()
+    );
+    assert!(a.generate().is_ok());
+}

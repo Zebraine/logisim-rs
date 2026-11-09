@@ -5,6 +5,7 @@ mod file_picker;
 #[cfg(test)]
 mod file_tests;
 mod files;
+mod generation;
 mod library_import;
 mod memory_import;
 mod plugins;
@@ -29,6 +30,7 @@ fn main() -> eframe::Result {
             let preferences = preferences::Preferences::load(&mut workspace);
             let mut app = DesktopApp {
                 analysis: Default::default(),
+                generation: Default::default(),
                 workspace,
                 preferences,
                 simulator: simulation::worker::Worker::new({
@@ -55,6 +57,7 @@ fn main() -> eframe::Result {
 
 struct DesktopApp {
     analysis: analysis::Service,
+    generation: generation::Service,
     preferences: preferences::Preferences,
     workspace: logisim_ui::Workspace,
     simulator: simulation::worker::Worker,
@@ -102,6 +105,9 @@ impl DesktopApp {
         self.preferences.synchronize(&mut self.workspace);
         let context = ui.ctx().clone();
         self.analysis
+            .update(&mut self.workspace, move || context.request_repaint());
+        let context = ui.ctx().clone();
+        self.generation
             .update(&mut self.workspace, move || context.request_repaint());
         let view = self.files.present(&self.workspace);
         let title = format!(

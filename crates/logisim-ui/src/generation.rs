@@ -1,4 +1,7 @@
 //! The analyzer is a session draft. Only Build commits an editable circuit.
+mod jobs;
+pub use jobs::{Reply, Request};
+
 use crate::{Workspace, editor::Editor, i18n::tr, tf};
 use egui::{Color32, Ui};
 use logisim_core::{
@@ -24,6 +27,10 @@ struct VariableEditor {
 
 pub(crate) struct Generator {
     pub open: bool,
+    pub(super) serial: u64,
+    computing: bool,
+    building: bool,
+    requested: Option<Request>,
     analysis: Analysis,
     tab: Tab,
     inputs: VariableEditor,
@@ -46,6 +53,10 @@ impl Default for Generator {
         analysis.add_output("Y".into()).unwrap();
         Self {
             open: false,
+            serial: 0,
+            computing: false,
+            building: false,
+            requested: None,
             analysis,
             tab: Tab::Inputs,
             inputs: Default::default(),
@@ -63,7 +74,9 @@ impl Default for Generator {
 }
 impl Generator {
     pub(crate) fn load_analysis(&mut self, analysis: Analysis) {
+        self.cancel_computation();
         *self = Self {
+            serial: self.serial,
             analysis,
             tab: Tab::Table,
             name: "analyzed".into(),
@@ -75,21 +88,19 @@ impl Generator {
         self.draft != self.applied
     }
     fn refresh(&mut self) {
+        self.cancel_computation();
         self.output = self
             .output
             .min(self.analysis.outputs().len().saturating_sub(1));
         self.applied = self
             .analysis
-            .expression(self.output)
+            .supplied_expression(self.output)
             .map(|e| e.text(self.analysis.inputs()))
             .unwrap_or_default();
         self.draft.clone_from(&self.applied);
-        self.minimized = self
-            .analysis
-            .minimized(self.output, self.form)
-            .map(|e| e.text(self.analysis.inputs()))
-            .unwrap_or_default();
+        self.minimized.clear();
         self.error = None;
+        self.request_minimize();
     }
     fn result(&mut self, result: Result<(), Error>) {
         match result {
@@ -97,7 +108,7 @@ impl Generator {
             Err(error) => self.error = Some(error),
         }
     }
-    pub fn show(&mut self, ctx: &egui::Context, editor: &mut Editor) {
+    pub fn show(&mut self, ctx: &egui::Context, _editor: &mut Editor) {
         if !self.open {
             return;
         }
@@ -106,7 +117,7 @@ impl Generator {
             let available = ctx.content_rect().size();
             ui.set_width((available.x - 80.0).clamp(280.0, 760.0));
             ui.heading(tr("Combinational Circuit Generator"));
-            ui.weak(tr("Single-bit inputs and outputs · up to 8 each"));
+            ui.weak(tr("Single-bit inputs · up to 12 inputs and 32 outputs"));
             let pending = self.pending();
             ui.horizontal_wrapped(|ui| {
                 for (tab, label) in [
@@ -130,20 +141,23 @@ impl Generator {
             });
             ui.separator();
             let height = (available.y - 280.0).clamp(120.0, 380.0);
-            egui::ScrollArea::vertical()
-                .id_salt("generator-body")
-                .max_height(height)
-                .min_scrolled_height(height)
-                .show(ui, |ui| {
-                    ui.set_min_height(height);
-                    match self.tab {
-                        Tab::Inputs => self.variables(ui, true),
-                        Tab::Outputs => self.variables(ui, false),
-                        Tab::Table => self.table(ui),
-                        Tab::Expression => self.expression(ui),
-                        Tab::Minimized => self.minimized(ui),
-                    }
-                });
+            ui.add_enabled_ui(!self.building, |ui| {
+                if self.tab == Tab::Table {
+                    self.table(ui, height);
+                } else {
+                    egui::ScrollArea::vertical().id_salt("generator-body")
+                        .max_height(height).min_scrolled_height(height).show(ui, |ui| {
+                            ui.set_min_height(height);
+                            match self.tab {
+                                Tab::Inputs => self.variables(ui, true),
+                                Tab::Outputs => self.variables(ui, false),
+                                Tab::Expression => self.expression(ui),
+                                Tab::Minimized => self.minimized(ui),
+                                Tab::Table => unreachable!(),
+                            }
+                        });
+                }
+            });
             ui.separator();
             ui.checkbox(&mut self.nand_only, tr("Use NAND gates only"))
                 .on_hover_text(tr("Convert all logic gates, including XOR, to two-input NAND gates. Pins and constants are retained."));
@@ -166,19 +180,17 @@ impl Generator {
                 );
                 if ui
                     .add_enabled(
-                        !self.pending() && !self.analysis.outputs().is_empty(),
+                        !self.pending() && !self.building && !self.analysis.outputs().is_empty(),
                         egui::Button::new(tr("Build Circuit")),
                     )
                     .clicked()
                 {
-                    let basis = if self.nand_only { GateBasis::Nand } else { GateBasis::Standard };
-                    let result = self.analysis.generate_with_basis(basis).and_then(|circuit| {
-                        editor.install_generated(self.name.trim().to_owned(), circuit)
-                    });
-                    match result {
-                        Ok(()) => close = true,
-                        Err(error) => self.error = Some(error),
-                    }
+                    self.request_build();
+                }
+                if self.computing {
+                    ui.spinner();
+                    ui.label(tr("Computing…"));
+                    if ui.button(tr("Cancel")).clicked() { self.cancel_computation(); }
                 }
                 if ui.button(tr("Close")).clicked() {
                     close = true;
@@ -186,6 +198,7 @@ impl Generator {
             });
         });
         if close || modal.should_close() {
+            self.cancel_computation();
             self.open = false;
         }
     }
@@ -308,50 +321,61 @@ impl Generator {
             self.result(result);
         }
     }
-    fn table(&mut self, ui: &mut Ui) {
+    fn table(&mut self, ui: &mut Ui, height: f32) {
         ui.weak(tr("Click an output: 0 → 1 → x. x is a don't-care and will become 0 or 1 in the generated circuit."));
         let mut edit = None;
-        egui::ScrollArea::horizontal()
-            .id_salt("truth-table-horizontal")
-            .show(ui, |ui| {
-                egui::Grid::new("generator-table")
-                    .striped(true)
-                    .min_col_width(36.0)
-                    .show(ui, |ui| {
-                        for name in self
-                            .analysis
-                            .inputs()
-                            .iter()
-                            .map(String::as_str)
-                            .chain(self.analysis.outputs().iter().map(|o| o.name()))
-                        {
-                            ui.add_sized(
-                                [64.0, 24.0],
-                                egui::Label::new(egui::RichText::new(name).strong()).truncate(),
-                            )
-                            .on_hover_text(name);
-                        }
-                        ui.end_row();
-                        for row in 0..self.analysis.rows() {
+        let columns = self.analysis.inputs().len() + self.analysis.outputs().len();
+        let cell_width = 64.0;
+        let width = columns as f32 * (cell_width + ui.spacing().item_spacing.x);
+        egui::ScrollArea::both()
+            .id_salt("truth-table")
+            .max_height((height - 24.0).max(60.0))
+            .show_rows(ui, 24.0, self.analysis.rows() + 1, |ui, range| {
+                ui.set_min_width(width);
+                for display_row in range {
+                    ui.push_id(display_row, |ui| {
+                        ui.horizontal(|ui| {
+                            if display_row == 0 {
+                                for name in self
+                                    .analysis
+                                    .inputs()
+                                    .iter()
+                                    .map(String::as_str)
+                                    .chain(self.analysis.outputs().iter().map(|o| o.name()))
+                                {
+                                    ui.add_sized(
+                                        [cell_width, 24.0],
+                                        egui::Label::new(egui::RichText::new(name).strong())
+                                            .truncate(),
+                                    )
+                                    .on_hover_text(name);
+                                }
+                                return;
+                            }
+                            let row = display_row - 1;
                             for input in 0..self.analysis.inputs().len() {
-                                ui.monospace(if self.analysis.input_value(row, input).unwrap() {
+                                let text = if self.analysis.input_value(row, input).unwrap() {
                                     "1"
                                 } else {
                                     "0"
-                                });
+                                };
+                                ui.add_sized(
+                                    [cell_width, 24.0],
+                                    egui::Label::new(egui::RichText::new(text).monospace()),
+                                );
                             }
                             for (output, column) in self.analysis.outputs().iter().enumerate() {
                                 let cell = column.values()[row];
                                 if ui
-                                    .add_sized([64.0, 24.0], egui::Button::new(cell.text()))
+                                    .add_sized([cell_width, 24.0], egui::Button::new(cell.text()))
                                     .clicked()
                                 {
                                     edit = Some((output, row, cell.next()));
                                 }
                             }
-                            ui.end_row();
-                        }
+                        })
                     });
+                }
             });
         if let Some((output, row, cell)) = edit {
             let result = self.analysis.set_cell(output, row, cell);
@@ -386,7 +410,8 @@ impl Generator {
             return;
         }
         ui.label(tf!("Applied: {}", self.applied));
-        ui.add(
+        ui.add_enabled(
+            !self.computing,
             egui::TextEdit::multiline(&mut self.draft)
                 .id_salt("generator-expression")
                 .code_editor()
@@ -401,7 +426,10 @@ impl Generator {
             "Precedence: NOT > AND > XOR > OR. Use parentheses to group; constants are 0 and 1.",
         ));
         ui.horizontal(|ui| {
-            if ui.button(tr("Clear")).clicked() {
+            if ui
+                .add_enabled(!self.computing, egui::Button::new(tr("Clear")))
+                .clicked()
+            {
                 self.draft.clear();
                 self.error = None;
             }
@@ -412,7 +440,10 @@ impl Generator {
                 self.refresh();
             }
             if ui
-                .add_enabled(self.pending(), egui::Button::new(tr("Apply")))
+                .add_enabled(
+                    self.pending() && !self.computing,
+                    egui::Button::new(tr("Apply")),
+                )
                 .clicked()
             {
                 let result = self.analysis.apply_expression(self.output, &self.draft);
@@ -447,7 +478,16 @@ impl Generator {
                 .desired_rows(7)
                 .desired_width(f32::INFINITY),
         );
-        if ui.button(tr("Set As Expression")).clicked() {
+        if !self.computing && self.minimized.is_empty() && ui.button(tr("Compute")).clicked() {
+            self.request_minimize();
+        }
+        if ui
+            .add_enabled(
+                !self.computing && !self.minimized.is_empty(),
+                egui::Button::new(tr("Set As Expression")),
+            )
+            .clicked()
+        {
             let result = self.analysis.apply_expression(self.output, &self.minimized);
             if result.is_ok() {
                 self.tab = Tab::Expression;

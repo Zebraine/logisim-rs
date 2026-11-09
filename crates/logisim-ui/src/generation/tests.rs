@@ -5,7 +5,7 @@ use logisim_core::{Component, Kind, Point, Project};
 fn localized_dialog_applies_expressions_and_blocks_stale_generation() {
     use crate::{
         Language, i18n,
-        i18n_tests::{click, frame, frame_at_size},
+        i18n_tests::{frame, frame_at_size},
     };
     use logisim_core::generation::Cell;
     for language in Language::ALL {
@@ -97,7 +97,6 @@ fn localized_dialog_applies_expressions_and_blocks_stale_generation() {
 
 #[test]
 fn nand_budget_failure_is_atomic_and_can_be_retried_with_standard_gates() {
-    use crate::i18n_tests::click;
     let ctx = egui::Context::default();
     crate::configure(&ctx);
     let mut w = Workspace::default();
@@ -207,7 +206,6 @@ fn project_budget_failure_preserves_selection_and_draft_can_be_retried() {
 
 #[test]
 fn circuit_analysis_success_loads_table_and_builds_as_one_edit() {
-    use crate::i18n_tests::click;
     let ctx = egui::Context::default();
     crate::configure(&ctx);
     let mut w = Workspace::default();
@@ -234,10 +232,7 @@ fn circuit_analysis_success_loads_table_and_builds_as_one_edit() {
 
 #[test]
 fn circuit_analysis_cancel_error_stale_results_and_partial_import_preserve_draft() {
-    use crate::{
-        Language, i18n,
-        i18n_tests::{click, frame_at_size},
-    };
+    use crate::{Language, i18n, i18n_tests::frame_at_size};
     for language in Language::ALL {
         let ctx = egui::Context::default();
         crate::configure(&ctx);
@@ -293,4 +288,73 @@ fn circuit_analysis_cancel_error_stale_results_and_partial_import_preserve_draft
         w.request_analysis();
         assert!(w.take_analysis_request().is_none());
     }
+}
+
+fn finish_jobs(w: &mut Workspace) {
+    while let Some(request) = w.take_generation_request() {
+        w.receive_generation(request.serial, request.execute(|| false));
+    }
+}
+fn click(ctx: &egui::Context, w: &mut Workspace, label: &str) {
+    finish_jobs(w);
+    crate::i18n_tests::click(ctx, w, label);
+    finish_jobs(w);
+}
+
+#[test]
+fn cancelled_and_replaced_generation_results_never_change_the_draft_or_document() {
+    let mut w = Workspace::default();
+    w.open_generator();
+    w.generator.request_minimize();
+    let old = w.take_generation_request().unwrap();
+    w.generator.analysis.apply_expression(0, "A ^ B").unwrap();
+    w.generator.refresh();
+    w.receive_generation(old.serial, old.execute(|| false));
+    assert_eq!(w.generator.applied, "A ^ B");
+    finish_jobs(&mut w);
+    w.generator.request_build();
+    let old = w.take_generation_request().unwrap();
+    let before = w.project().clone();
+    w.generator.cancel_computation();
+    w.receive_generation(old.serial, old.execute(|| false));
+    assert_eq!(w.project(), &before);
+    w.generator.request_build();
+    let old = w.take_generation_request().unwrap();
+    w.replace_project(Project::default());
+    w.open_generator();
+    w.generator.request_minimize();
+    let new = w.take_generation_request().unwrap();
+    w.receive_generation(old.serial, old.execute(|| false));
+    assert!(w.generation_pending(new.serial));
+    assert_eq!(w.project().circuits.len(), 1);
+}
+
+#[test]
+fn work_budget_failure_keeps_the_table_and_expression_generation_available() {
+    use logisim_core::generation::{Cell, MAX_INPUTS};
+    let mut a = Analysis::default();
+    for i in 0..MAX_INPUTS {
+        a.add_input(format!("I{i}")).unwrap();
+    }
+    a.add_output("Y".into()).unwrap();
+    let expression = a.inputs().join(" ^ ");
+    a.apply_expression(0, &expression).unwrap();
+    let mut w = Workspace::default();
+    w.generator.load_analysis(a.clone());
+    w.open_generator();
+    finish_jobs(&mut w);
+    assert!(
+        w.generator
+            .error
+            .as_ref()
+            .unwrap()
+            .message
+            .contains("limit")
+    );
+    assert_eq!(w.generator.analysis, a);
+    assert_eq!(a.outputs()[0].values()[1], Cell::One);
+    assert!(!w.generator.pending());
+    w.generator.request_build();
+    finish_jobs(&mut w);
+    assert_eq!(w.project().circuits.len(), 2);
 }

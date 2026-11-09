@@ -6,12 +6,13 @@ mod layout;
 mod minimize;
 #[cfg(test)]
 mod tests;
+mod work;
 
 use crate::Circuit;
 pub use expression::Expression;
 
-pub const MAX_INPUTS: usize = 8;
-pub const MAX_OUTPUTS: usize = 8;
+pub const MAX_INPUTS: usize = 12;
+pub const MAX_OUTPUTS: usize = 32;
 pub const MAX_EXPRESSION_BYTES: usize = 16_384;
 pub const MAX_GENERATED_ITEMS: usize = crate::MAX_CIRCUIT_ITEMS;
 
@@ -155,7 +156,7 @@ impl Analysis {
     pub fn add_input(&mut self, name: String) -> Result<()> {
         self.validate_name(&name, None)?;
         if self.inputs.len() == MAX_INPUTS {
-            return Err(Error::new("At most 8 inputs are supported."));
+            return Err(Error::new("At most 12 inputs are supported."));
         }
         self.inputs.push(name);
         for output in &mut self.outputs {
@@ -166,7 +167,7 @@ impl Analysis {
     pub fn add_output(&mut self, name: String) -> Result<()> {
         self.validate_name(&name, None)?;
         if self.outputs.len() == MAX_OUTPUTS {
-            return Err(Error::new("At most 8 outputs are supported."));
+            return Err(Error::new("At most 32 outputs are supported."));
         }
         self.outputs.push(Output {
             name,
@@ -271,12 +272,36 @@ impl Analysis {
         Ok(())
     }
     pub fn minimized(&self, output: usize, form: Form) -> Result<Expression> {
+        self.minimized_cancellable(output, form, || false)
+    }
+    pub fn minimized_cancellable(
+        &self,
+        output: usize,
+        form: Form,
+        cancelled: impl Fn() -> bool,
+    ) -> Result<Expression> {
+        self.minimize_with(output, form, &mut work::Work::new(&cancelled))
+    }
+    fn minimize_with(
+        &self,
+        output: usize,
+        form: Form,
+        work: &mut work::Work<'_>,
+    ) -> Result<Expression> {
         self.check_index(false, output)?;
-        Ok(minimize::minimize(
-            &self.outputs[output].values,
-            self.inputs.len(),
-            form,
-        ))
+        minimize::minimize(&self.outputs[output].values, self.inputs.len(), form, work)
+    }
+    /// Already supplied expressions are available without table simplification.
+    pub fn supplied_expression(&self, output: usize) -> Option<&Expression> {
+        self.outputs.get(output)?.expression.as_ref()
+    }
+    fn expression_with(&self, output: usize, work: &mut work::Work<'_>) -> Result<Expression> {
+        work.step()?;
+        self.check_index(false, output)?;
+        match &self.outputs[output].expression {
+            Some(expression) => Ok(expression.clone()),
+            None => self.minimize_with(output, Form::SumOfProducts, work),
+        }
     }
     pub fn expression(&self, output: usize) -> Result<Expression> {
         self.check_index(false, output)?;
@@ -292,11 +317,18 @@ impl Analysis {
     /// Generate an independent document without changing the table or expressions.
     /// Equivalence is binary and settled; gate delays and four-state behavior can differ.
     pub fn generate_with_basis(&self, basis: GateBasis) -> Result<Circuit> {
+        self.generate_cancellable(basis, || false)
+    }
+    pub fn generate_cancellable(
+        &self,
+        basis: GateBasis,
+        cancelled: impl Fn() -> bool,
+    ) -> Result<Circuit> {
         if self.outputs.is_empty() {
             return Err(Error::new(
                 "Add at least one output before building a circuit.",
             ));
         }
-        layout::generate(self, basis)
+        layout::generate(self, basis, &mut work::Work::new(&cancelled))
     }
 }

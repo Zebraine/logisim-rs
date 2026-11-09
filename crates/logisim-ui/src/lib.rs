@@ -8,7 +8,7 @@ mod bus;
 mod canvas;
 mod document;
 mod fonts;
-mod generation;
+pub mod generation;
 mod latches;
 mod parity;
 mod transistors;
