@@ -10,7 +10,7 @@
 
 - 电路编辑、子电路、自定义外观与封装设计。
 - 从真值表或表达式生成组合电路；真值表最多 12 输入，表达式最多 32 输入，均支持 32 输出。
-- 门电路、布线、算术、Plexers、时序、存储器、输入/输出及基础 TTL 元件。
+- 门电路、布线、算术、Plexers、时序、存储器及输入/输出元件。
 - 四态与层级仿真，可选择稳定态或事件传播模式。
 - 已实现内容的 `.circ` 读写、ROM/RAM 的 `v2.0 raw` 格式 `.hex` 导入。
 - `.circ` 子电路库与 Wasm 元件插件，支持英语和简体中文。
@@ -46,10 +46,19 @@ cargo run -p logisim-rs --release --locked -- examples/course/redirect-pipeline.
 - Project → Analyze Circuit 分析无状态组合电路，生成默认回写原定义；Generate Circuit 支持独立生成，可选仅使用 NAND 门。
 - ROM/RAM 的内容编辑器提供 `.hex` 导入；ROM 内容随电路保存，RAM 内容复位后清零。
 
+## 自带插件
+
+[`plugins/`](plugins/) 收纳独立 Wasm 插件及源码，通过 Project → Load Wasm Plugin 加载：
+
+- [`course/course.wasm`](plugins/course/course.wasm)：RegisterFile、RiscV Probe。
+- [`ttl/ttl.wasm`](plugins/ttl/ttl.wasm)：7400、7402、7404、7408、7432、7486、747266。
+
+TTL 的普通封装和 Vcc/GND 封装可在元件属性中切换。旧 `#TTL` 电路需用 `ttl-plugin-convert` 显式迁移，宿主不再内置 TTL。
+
 ## CPU 示例
 
-[`examples/course/`](examples/course/) 包含 8 类 CPU 和 2 个测试，共用同目录的 `course.wasm`，无需 Java。
-移动示例时请同时复制插件；打开后使用 Poke 按下并松开“复位”或“总复位”，再启动自动时钟。
+[`examples/course/`](examples/course/) 包含 8 类 CPU 和 2 个测试，共用 [`plugins/course/course.wasm`](plugins/course/course.wasm)，无需 Java。
+移动示例时请保留 `examples/` 与 `plugins/` 的相对目录；打开后使用 Poke 按下并松开“复位”或“总复位”，再启动自动时钟。
 
 | 文件 | 电路 |
 | --- | --- |

@@ -1,5 +1,5 @@
 //! Common port dispatch and world-coordinate transforms. Family modules own their layouts.
-use crate::{Component, Extension, Facing, Gate, GateSize, Kind, Point, SplitAppearance, Ttl};
+use crate::{Component, Extension, Facing, Gate, GateSize, Kind, Point, SplitAppearance};
 
 impl Component {
     pub fn input_count(&self) -> u8 {
@@ -20,13 +20,7 @@ impl Component {
                     .collect()
             });
         }
-        if matches!(self.kind, Kind::Ttl(_)) {
-            return self
-                .ttl_pins()
-                .iter()
-                .map(|p| Ttl::pin_position(*p))
-                .collect();
-        }
+
         if self.kind == Kind::PlaRom {
             return vec![Point::new(60, 0), Point::ZERO, Point::new(30, 30)];
         }

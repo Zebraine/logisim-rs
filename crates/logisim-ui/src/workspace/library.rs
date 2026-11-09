@@ -1,12 +1,12 @@
 //! UI tool order and stable, untranslated group identifiers. Domain families supply their variants.
-use logisim_core::{Arithmetic, FlipFlop, Gate, Kind, Latch, Parity, Plexer, Ttl};
+use logisim_core::{Arithmetic, FlipFlop, Gate, Kind, Latch, Parity, Plexer};
 
 pub(super) struct ToolGroup {
     pub key: &'static str,
     pub tools: Vec<Kind>,
 }
 pub(super) fn groups() -> &'static [ToolGroup] {
-    static GROUPS: std::sync::OnceLock<[ToolGroup; 8]> = std::sync::OnceLock::new();
+    static GROUPS: std::sync::OnceLock<[ToolGroup; 7]> = std::sync::OnceLock::new();
     GROUPS.get_or_init(|| {
         [
             ToolGroup {
@@ -34,10 +34,6 @@ pub(super) fn groups() -> &'static [ToolGroup] {
                     .chain(Parity::ALL.into_iter().map(Kind::Parity))
                     .chain([Kind::ControlledBuffer, Kind::ControlledInverter])
                     .collect(),
-            },
-            ToolGroup {
-                key: "TTL",
-                tools: Ttl::ALL.into_iter().map(Kind::Ttl).collect(),
             },
             ToolGroup {
                 key: "Plexers",

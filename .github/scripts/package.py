@@ -1,4 +1,4 @@
-"""Package a native desktop build and the matching shared Wasm plugin."""
+"""Package a native desktop build and the matching bundled Wasm plugins."""
 
 import argparse
 import hashlib
@@ -47,7 +47,7 @@ def version():
     return value
 
 
-def package(target, plugin):
+def package(target, plugins):
     release = version()
     windows = "windows" in target
     macos = "apple" in target
@@ -55,8 +55,11 @@ def package(target, plugin):
     executable = ROOT / "target" / target / "release" / binary
     if not executable.is_file():
         raise FileNotFoundError(executable)
-    if not plugin.read_bytes().startswith(b"\0asm\x01\0\0\0"):
-        raise ValueError("Expected a built WebAssembly module")
+    if set(plugins) != {"course", "ttl"}:
+        raise ValueError("Provide the course and ttl plugins")
+    for plugin in plugins.values():
+        if not plugin.read_bytes().startswith(b"\0asm\x01\0\0\0"):
+            raise ValueError("Expected a built WebAssembly module")
     name = f"logisim-rs-v{release}-{target}"
     destination = ROOT / "dist"
     destination.mkdir(exist_ok=True)
@@ -77,12 +80,15 @@ def package(target, plugin):
                 raise ValueError(f"Missing plugin dependency: {circuit.name}")
             dependencies = json.loads(sources.attrib["val"])
             if len(dependencies) != 1 or any(
-                s["path"] != "course.wasm" or s.get("fallback")
+                s["path"] != "../../plugins/course/course.wasm" or s.get("fallback")
                 for s in dependencies
             ):
                 raise ValueError(f"Non-portable plugin dependency: {circuit.name}")
             shutil.copyfile(circuit, examples / circuit.name)
-        shutil.copyfile(plugin, examples / "course.wasm")
+        for plugin_name, module in plugins.items():
+            directory = staging / "plugins" / plugin_name
+            directory.mkdir(parents=True)
+            shutil.copyfile(module, directory / f"{plugin_name}.wasm")
         if macos:
             contents = staging / "Logisim rs.app" / "Contents"
             (contents / "MacOS").mkdir(parents=True)
@@ -123,7 +129,7 @@ def package(target, plugin):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("target", nargs="?", choices=TARGETS)
-    parser.add_argument("--plugin", type=Path)
+    parser.add_argument("--plugin", action="append", metavar="NAME=PATH")
     parser.add_argument("--version", action="store_true")
     parser.add_argument("--matrix", action="store_true")
     args = parser.parse_args()
@@ -134,6 +140,12 @@ if __name__ == "__main__":
         print("matrix=" + json.dumps(matrix, separators=(",", ":")))
         print("package_count=" + str(len(matrix["include"])))
     elif args.target and args.plugin:
-        package(args.target, args.plugin)
+        plugins = {}
+        for item in args.plugin:
+            name, separator, path = item.partition("=")
+            if not separator or not path or name in plugins:
+                parser.error("Use distinct --plugin NAME=PATH entries")
+            plugins[name] = Path(path)
+        package(args.target, plugins)
     else:
         parser.error("Provide a build target and --plugin, or use --version")

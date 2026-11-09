@@ -283,9 +283,7 @@ pub(crate) fn classify(c: &Component) -> Classification {
         }
         Kind::Plugin => Boundary(B::Plugin),
         Kind::Subcircuit(_) => Boundary(B::Hierarchy),
-        Kind::Ttl(_) | Kind::Transistor | Kind::TransmissionGate => {
-            Boundary(B::UnsupportedComponent)
-        }
+        Kind::Transistor | Kind::TransmissionGate => Boundary(B::UnsupportedComponent),
         Kind::Pin
         | Kind::PullResistor
         | Kind::Tunnel

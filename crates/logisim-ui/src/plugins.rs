@@ -6,7 +6,7 @@ use crate::{
     i18n::tr,
     simulation::{SimulationUi, SimulationView},
 };
-use egui::{Align2, Color32, FontId, Painter, Rect, Stroke, StrokeKind, Ui};
+use egui::{Align2, Color32, Painter, Rect, Stroke, StrokeKind, Ui};
 use logisim_core::{
     Component, Kind, Point,
     plugin::api::{Manifest, PropertyKind, Shape},
@@ -54,10 +54,47 @@ impl Workspace {
         }
     }
 }
-pub(crate) fn fields(ui: &mut Ui, c: &mut Component) -> bool {
+pub(crate) fn fields(ui: &mut Ui, c: &mut Component, manifests: &[Manifest]) -> bool {
     let Some(plugin) = c.plugin.as_mut() else {
         return false;
     };
+    if let Some(manifest) = manifests
+        .iter()
+        .find(|m| m.id == plugin.plugin && m.version == plugin.version)
+    {
+        ui.label(tr("Component"));
+        let mut selected = plugin.tool.id.clone();
+        egui::ComboBox::from_id_salt("plugin-tool")
+            .selected_text(&plugin.tool.name)
+            .show_ui(ui, |ui| {
+                for tool in &manifest.tools {
+                    ui.selectable_value(&mut selected, tool.id.clone(), &tool.name);
+                }
+            });
+        ui.end_row();
+        if selected != plugin.tool.id {
+            let tool = manifest
+                .tools
+                .iter()
+                .find(|t| t.id == selected)
+                .expect("catalogue tool")
+                .clone();
+            plugin.properties = tool
+                .properties
+                .iter()
+                .map(|property| {
+                    let value = plugin
+                        .properties
+                        .get(&property.id)
+                        .filter(|v| property.accepts(v))
+                        .unwrap_or(&property.default)
+                        .clone();
+                    (property.id.clone(), value)
+                })
+                .collect();
+            plugin.tool = tool;
+        }
+    }
     ui.label(tr("Plugin"));
     ui.label(format!("{} {}", plugin.plugin, plugin.version));
     ui.end_row();
@@ -152,8 +189,8 @@ pub(crate) fn draw(
     let Some(plugin) = &c.plugin else {
         return;
     };
-    let at = |p: [i32; 2]| canvas.screen(c.position + Point::new(p[0], p[1]));
-    let bounds = Rect::from_min_max(at(plugin.tool.bounds[0]), at(plugin.tool.bounds[1]));
+    let at = |p: [i32; 2]| canvas.screen(c.position + c.facing.transform(Point::new(p[0], p[1])));
+    let bounds = Rect::from_two_pos(at(plugin.tool.bounds[0]), at(plugin.tool.bounds[1]));
     let p = p.with_clip_rect(p.clip_rect().intersect(bounds.expand(2.0)));
     let color = |rgba: [u8; 4]| {
         let c = Color32::from_rgba_unmultiplied(rgba[0], rgba[1], rgba[2], rgba[3]);
@@ -171,7 +208,7 @@ pub(crate) fn draw(
                 stroke,
             } => {
                 p.rect(
-                    Rect::from_min_max(at(*min), at(*max)),
+                    Rect::from_two_pos(at(*min), at(*max)),
                     0,
                     color(*fill),
                     Stroke::new(canvas.camera.zoom, color(*stroke)),
@@ -184,7 +221,7 @@ pub(crate) fn draw(
                 fill,
                 stroke,
             } => {
-                let r = Rect::from_min_max(at(*min), at(*max));
+                let r = Rect::from_two_pos(at(*min), at(*max));
                 p.add(egui::Shape::ellipse_filled(
                     r.center(),
                     r.size() / 2.0,
@@ -208,13 +245,25 @@ pub(crate) fn draw(
                 size,
                 color: rgba,
             } => {
-                p.text(
-                    at(*position),
-                    Align2::LEFT_TOP,
+                let font = logisim_core::ArtworkFont {
+                    family: "monospace".into(),
+                    size: *size,
+                    ..Default::default()
+                };
+                let angle = match c.facing {
+                    logisim_core::Facing::East => 0.0,
+                    logisim_core::Facing::South => std::f32::consts::FRAC_PI_2,
+                    logisim_core::Facing::West => std::f32::consts::PI,
+                    logisim_core::Facing::North => -std::f32::consts::FRAC_PI_2,
+                };
+                crate::fonts::Text {
                     text,
-                    FontId::monospace(f32::from(*size) * canvas.camera.zoom),
-                    color(*rgba),
-                );
+                    font: &font,
+                    color: color(*rgba),
+                    zoom: canvas.camera.zoom,
+                    angle,
+                }
+                .paint(&p, at(*position), Align2::LEFT_TOP);
             }
         }
     }

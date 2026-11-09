@@ -1319,6 +1319,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "logisim-ttl-plugin"
+version = "0.1.0"
+dependencies = [
+ "logisim-core",
+ "logisim-file",
+ "logisim-plugin",
+ "logisim-plugin-api",
+ "logisim-plugin-sdk",
+ "logisim-sim",
+ "roxmltree 0.20.0",
+ "serde_json",
+]
+
+[[package]]
 name = "logisim-ui"
 version = "0.1.0"
 dependencies = [

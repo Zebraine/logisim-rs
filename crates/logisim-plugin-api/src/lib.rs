@@ -14,7 +14,8 @@
 //! are ignored). Output widths must match the declared ports. Inputs are sampled before
 //! any component's new drives are committed. Actions are explicit UI requests.
 //! A schema change requires a new plugin version; identity/version/definition must match
-//! the saved document exactly. V1 ports and bounds are fixed, components face East.
+//! the saved document exactly. Ports and bounds are fixed in local coordinates; placement rotation and labels
+//! are host document metadata and do not alter the plugin protocol.
 //! Plugin strings are opaque to host translation. Protocol evolution uses a new ABI.
 //!
 //! Coordinates are integer grid units relative to the component origin, with +x right

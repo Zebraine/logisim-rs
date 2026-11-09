@@ -811,7 +811,7 @@ impl Editor {
                     || c.kind.is_sequential()
                     || matches!(
                         c.kind,
-                        Kind::Plexer(_) | Kind::Arithmetic(_) | Kind::Parity(_) | Kind::Ttl(_)
+                        Kind::Plexer(_) | Kind::Arithmetic(_) | Kind::Parity(_)
                     )
             }) {
                 for (index, point) in c.ports().iter().enumerate() {
@@ -825,8 +825,6 @@ impl Editor {
                                         .clone()
                                 } else if matches!(c.kind, Kind::Plexer(_)) {
                                     crate::plexers::port_label(c, c.plexer_terminals()[index].role)
-                                } else if matches!(c.kind, Kind::Ttl(_)) {
-                                    crate::ttl::port_label(c, index)
                                 } else if matches!(c.kind, Kind::Arithmetic(_)) {
                                     crate::arithmetic::port_label(c, index)
                                 } else if matches!(c.kind, Kind::Parity(_)) {

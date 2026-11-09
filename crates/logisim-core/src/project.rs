@@ -330,9 +330,6 @@ impl Project {
                     if plugins.len() > 64 {
                         return Err("Too many plugin sources.".into());
                     }
-                    if component.facing != Facing::East {
-                        return Err("Plugin ABI v1 components must face East.".into());
-                    }
                 } else if component.plugin.is_some() {
                     return Err("Plugin definition on a non-plugin component.".into());
                 }

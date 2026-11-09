@@ -37,15 +37,22 @@
 !/crates/**/build.rs
 !/crates/**/src/**/*.rs
 
+# Bundled plugin source packages and their portable runtime modules.
+!/plugins/
+!/plugins/**/
+!/plugins/**/Cargo.toml
+!/plugins/**/src/**/*.rs
+!/plugins/course/course.wasm
+!/plugins/ttl/ttl.wasm
+
 # Language catalogs are compile-time inputs, embedded in the application.
 !/crates/logisim-ui/locales/en.json
 !/crates/logisim-ui/locales/zh-CN.json
 
-# Published CPU examples and their shared runtime plugin only.
+# Published CPU examples.
 !/examples/
 !/examples/course/
 !/examples/course/*.circ
-!/examples/course/course.wasm
 
 # Local design and observation material, including each directory's README.
 /docs/

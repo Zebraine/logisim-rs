@@ -24,7 +24,6 @@ mod sequential;
 mod terminal;
 
 mod transistors;
-mod ttl;
 mod write;
 mod xml;
 

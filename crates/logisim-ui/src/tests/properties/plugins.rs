@@ -3,8 +3,7 @@ use crate::{editor::Tool, *};
 use egui::{Context, Event, Modifiers, PointerButton};
 use logisim_core::Point;
 
-#[test]
-fn generic_plugin_palette_properties_actions_and_strings_in_both_languages() {
+fn manifest() -> logisim_core::plugin::api::Manifest {
     use logisim_core::plugin::api;
     let tool = api::Tool {
         id: "first".into(),
@@ -52,6 +51,12 @@ fn generic_plugin_palette_properties_actions_and_strings_in_both_languages() {
         ],
     };
     manifest.validate().unwrap();
+    manifest
+}
+
+#[test]
+fn generic_plugin_palette_properties_actions_and_strings_in_both_languages() {
+    let manifest = manifest();
     for language in Language::ALL {
         let ctx = Context::default();
         configure(&ctx);
@@ -161,5 +166,103 @@ fn generic_plugin_palette_properties_actions_and_strings_in_both_languages() {
         assert_eq!(app.project(), &before);
         app.editor.redo();
         assert_eq!(app.project().plugin_sources, sources);
+    }
+}
+
+#[test]
+fn plugin_tool_and_orientation_edits_preserve_wires_and_undo() {
+    use logisim_core::{Component, Facing};
+    let mut manifest = manifest();
+    manifest.tools[1].bounds = [[0, -10], [60, 10]];
+    manifest.tools[1].ports[0].at = [60, 0];
+    manifest.tools[1]
+        .properties
+        .push(logisim_core::plugin::api::Property {
+            id: "extra".into(),
+            label: "Extra option".into(),
+            default: "true".into(),
+            kind: logisim_core::plugin::api::PropertyKind::Boolean,
+        });
+    for language in Language::ALL {
+        let ctx = Context::default();
+        configure(&ctx);
+        let mut app = Workspace::default();
+        app.set_language(language);
+        app.set_plugin_catalogue(vec![manifest.clone()]);
+        let mut c = Component::from_plugin(manifest.components()[0].clone(), Point::new(200, 200));
+        c.label = "User label".into();
+        c.plugin
+            .as_mut()
+            .unwrap()
+            .properties
+            .insert("mode".into(), "second".into());
+        let id = app.editor.session.circuit.add_component(c);
+        app.editor
+            .session
+            .circuit
+            .add_wire(Point::new(220, 200), Point::new(240, 200));
+        app.editor.session.selection.insert(id);
+        let before = app.circuit().clone();
+        // Hide the palette so tool names refer to the attribute selector.
+        click(&ctx, &mut app, "User library");
+        let labels = frame(&ctx, &mut app, vec![]);
+        let pos = labels
+            .iter()
+            .rev()
+            .find(|(text, _)| text == "Plugin tool A")
+            .unwrap()
+            .1
+            .center();
+        for pressed in [true, false] {
+            frame(
+                &ctx,
+                &mut app,
+                vec![
+                    Event::PointerMoved(pos),
+                    Event::PointerButton {
+                        pos,
+                        button: PointerButton::Primary,
+                        pressed,
+                        modifiers: Modifiers::NONE,
+                    },
+                ],
+            );
+        }
+        click(&ctx, &mut app, "Plugin tool B");
+        app.finish_edit();
+        let edited = app.circuit().component(id).unwrap();
+        assert_eq!(edited.plugin.as_ref().unwrap().tool.id, "second");
+        assert_eq!(edited.plugin.as_ref().unwrap().properties["mode"], "second");
+        assert_eq!(edited.plugin.as_ref().unwrap().properties["extra"], "true");
+        assert_eq!(edited.ports(), vec![Point::new(260, 200)]);
+        assert_eq!(edited.label, "User label");
+        assert_eq!(app.circuit().wires, before.wires);
+        app.editor.undo();
+        assert_eq!(app.circuit(), &before);
+        app.editor.redo();
+        app.editor.session.selection.insert(id);
+        let before_rotation = app.circuit().clone();
+        let tr = |s| i18n::with_language(language, || i18n::tr(s).to_owned());
+        click(&ctx, &mut app, &tr("East"));
+        click(&ctx, &mut app, &tr("South"));
+        app.finish_edit();
+        let rotated = app.circuit().component(id).unwrap();
+        assert_eq!(rotated.facing, Facing::South);
+        assert_eq!(rotated.ports(), vec![Point::new(200, 260)]);
+        let bounds = crate::drawing::bounds(rotated);
+        assert_eq!(bounds.min, egui::pos2(190.0, 200.0));
+        assert_eq!(bounds.max, egui::pos2(210.0, 260.0));
+        assert_eq!(app.circuit().wires, before.wires);
+        app.editor.undo();
+        assert_eq!(app.circuit(), &before_rotation);
+        app.editor.redo();
+        app.editor.duplicate();
+        assert_eq!(app.circuit().components.len(), 2);
+        assert_eq!(
+            app.circuit().components[0].plugin,
+            app.circuit().components[1].plugin
+        );
+        app.editor.undo();
+        assert_eq!(app.circuit().components.len(), 1);
     }
 }

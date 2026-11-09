@@ -402,22 +402,6 @@ impl SimulationUi {
             return;
         }
         match c.kind {
-            logisim_core::Kind::Ttl(_) => {
-                ui.horizontal_wrapped(|ui| {
-                    for (index, pin) in c.ttl_pins().iter().enumerate() {
-                        if c.ttl_output(index)
-                            && let Some(signal) = self.view.ports.get(&(c.id, index))
-                        {
-                            ui.colored_label(
-                                signal.tone.color(),
-                                tf!("Pin {} · {}", pin, signal.text),
-                            )
-                            .on_hover_text(&signal.binary);
-                        }
-                    }
-                });
-                return;
-            }
             logisim_core::Kind::Keyboard => {
                 ui.weak(tr(
                     "Poke: click to type. Enter sends a newline; Esc stops typing.",

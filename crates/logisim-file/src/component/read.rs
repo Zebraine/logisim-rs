@@ -26,12 +26,6 @@ pub(crate) fn read(
         ("", name) if n.attribute("lib").is_none() && names.contains_key(name) => {
             Kind::Subcircuit(names[name])
         }
-        ("#TTL", name) => Kind::Ttl(
-            logisim_core::Ttl::ALL
-                .into_iter()
-                .find(|t| t.name() == name)
-                .ok_or_else(|| Error(format!("Unsupported TTL component: {name}")))?,
-        ),
         ("#Arithmetic", name) => Kind::Arithmetic(
             logisim_core::Arithmetic::ALL
                 .into_iter()
@@ -101,7 +95,6 @@ pub(crate) fn read(
     for key in a.keys() {
         let allowed = match kind {
             Kind::Plugin => false,
-            Kind::Ttl(_) => crate::ttl::allowed(key),
             Kind::Parity(_) => crate::parity::allowed(key),
             Kind::Latch(_) => crate::latches::allowed(key),
             Kind::Transistor | Kind::TransmissionGate => crate::transistors::allowed(kind, key),
@@ -214,7 +207,6 @@ pub(crate) fn read(
         },
         1..=32,
     )?;
-    crate::ttl::read(&mut c, &a)?;
     crate::latches::read(&mut c, &a)?;
     crate::bus::read(&mut c, &a)?;
     crate::transistors::read(&mut c, &a)?;

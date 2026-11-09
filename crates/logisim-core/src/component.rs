@@ -5,7 +5,7 @@ mod ports;
 use crate::{
     ArithmeticOptions, ArtworkFont, BusControl, Extension, Facing, GateOptions, Id, Interface, Io,
     Kind, LatchEnable, Memory, ParityOptions, PinOptions, Pla, Plexer, Plexing, Point, Radix,
-    Sequential, Splitter, TerminalOptions, TransistorOptions, TtlOptions,
+    Sequential, Splitter, TerminalOptions, TransistorOptions,
 };
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -61,7 +61,6 @@ pub struct Component {
     pub bus: BusControl,
     pub transistor: TransistorOptions,
     pub parity: ParityOptions,
-    pub ttl: TtlOptions,
     pub latch_enable: LatchEnable,
 }
 impl Component {
@@ -103,17 +102,14 @@ impl Component {
                 String::new()
             },
             font: ArtworkFont {
-                size: if matches!(kind, Kind::Joystick | Kind::PlaRom | Kind::Ttl(_)) {
+                size: if matches!(kind, Kind::Joystick | Kind::PlaRom) {
                     12
                 } else {
                     14
                 },
                 ..Default::default()
             },
-            color: if matches!(
-                kind,
-                Kind::Tunnel | Kind::Joystick | Kind::PlaRom | Kind::Ttl(_)
-            ) {
+            color: if matches!(kind, Kind::Tunnel | Kind::Joystick | Kind::PlaRom) {
                 [0, 0, 0]
             } else {
                 [51, 65, 85]
@@ -142,7 +138,6 @@ impl Component {
             bus: BusControl::default(),
             transistor: TransistorOptions::default(),
             parity: ParityOptions::default(),
-            ttl: TtlOptions::default(),
             latch_enable: LatchEnable::default(),
             plexing: Plexing {
                 select_bits: if kind == Kind::Plexer(Plexer::PriorityEncoder) {

@@ -6,7 +6,12 @@ use logisim_core::{
     SplitAppearance, VerticalAlign,
 };
 
-pub(crate) fn show(ui: &mut Ui, editor: &mut Editor, circuit_name: &str) {
+pub(crate) fn show(
+    ui: &mut Ui,
+    editor: &mut Editor,
+    circuit_name: &str,
+    plugins: &[logisim_core::plugin::api::Manifest],
+) {
     let placing = matches!(editor.tool, Tool::Place(_));
     if !editor.session.context.path.is_empty() {
         ui.weak(tr(
@@ -49,7 +54,7 @@ pub(crate) fn show(ui: &mut Ui, editor: &mut Editor, circuit_name: &str) {
                         editor.simulation.component(ui, &c);
                         ui.separator();
                     }
-                    component_editor(ui, editor, c, placing);
+                    component_editor(ui, editor, c, placing, plugins);
                 } else {
                     selection_info(ui, editor);
                 }
@@ -168,7 +173,13 @@ fn selection_info(ui: &mut Ui, editor: &mut Editor) {
     ui.weak(tr("Use File to open or save the supported .circ subset."));
 }
 
-fn component_editor(ui: &mut Ui, editor: &mut Editor, mut c: Component, placing: bool) {
+fn component_editor(
+    ui: &mut Ui,
+    editor: &mut Editor,
+    mut c: Component,
+    placing: bool,
+    plugins: &[logisim_core::plugin::api::Manifest],
+) {
     if matches!(c.kind, Kind::Subcircuit(_)) {
         ui.strong(tf!("Circuit: {}", c.interface.name));
         if !placing && ui.button(tr("View instance")).clicked() {
@@ -193,9 +204,7 @@ fn component_editor(ui: &mut Ui, editor: &mut Editor, mut c: Component, placing:
             "Resizing preserves the upper-left connections; removed cells are discarded.",
         ));
     }
-    if let Kind::Ttl(t) = c.kind {
-        ui.weak(tr(t.description()));
-    }
+
     let original = c.clone();
     let mut active = false;
     if c.kind.has_label() {
@@ -228,7 +237,7 @@ fn component_editor(ui: &mut Ui, editor: &mut Editor, mut c: Component, placing:
         .num_columns(2)
         .spacing(egui::vec2(12.0, 9.0))
         .show(ui, |ui| {
-            active |= fields(ui, &mut c, placing);
+            active |= fields(ui, &mut c, placing, plugins);
         });
     if c.position != original.position && c.kind != Kind::Text {
         c.position = Point::snapped(c.position.x as f32, c.position.y as f32);
@@ -259,10 +268,12 @@ fn component_editor(ui: &mut Ui, editor: &mut Editor, mut c: Component, placing:
     }
 }
 
-fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
-    if c.kind == Kind::Plugin {
-        return crate::plugins::fields(ui, c);
-    }
+fn fields(
+    ui: &mut Ui,
+    c: &mut Component,
+    placing: bool,
+    plugins: &[logisim_core::plugin::api::Manifest],
+) -> bool {
     let mut active = false;
     if c.kind.rotatable() {
         ui.label(tr("Facing"));
@@ -275,6 +286,14 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
                 }
             });
         ui.end_row();
+    }
+    if c.kind == Kind::Plugin {
+        active |= crate::plugins::fields(ui, c, plugins);
+        active |= crate::fonts::properties(ui, &mut c.font);
+        ui.label(tr("Color"));
+        ui.color_edit_button_srgb(&mut c.color);
+        ui.end_row();
+        return active;
     }
     if !matches!(
         c.kind,
@@ -289,7 +308,6 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
             | Kind::Keyboard
             | Kind::Tty
             | Kind::Rom
-            | Kind::Ttl(_)
             | Kind::PlaRom
             | Kind::Ram
             | Kind::Probe
@@ -332,7 +350,6 @@ fn fields(ui: &mut Ui, c: &mut Component, placing: bool) -> bool {
         active |= r.has_focus() || r.dragged();
         ui.end_row();
     }
-    crate::ttl::fields(ui, c);
     crate::latches::fields(ui, c);
     crate::bus::fields(ui, c);
     crate::transistors::fields(ui, c);

@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='utf-8'?>
 <project source="logisim-rs-plugin-v1" version="1.0">
-  <lib name="course-wasm" desc="logisim-rs#plugin-v1"><a name="sources" val="[{&quot;plugin&quot;:&quot;org.logisim-rs.course&quot;,&quot;version&quot;:&quot;1.0.0&quot;,&quot;path&quot;:&quot;course.wasm&quot;,&quot;fallback&quot;:&quot;&quot;}]" /></lib>
+  <lib name="course-wasm" desc="logisim-rs#plugin-v1"><a name="sources" val="[{&quot;plugin&quot;:&quot;org.logisim-rs.course&quot;,&quot;version&quot;:&quot;1.0.0&quot;,&quot;path&quot;:&quot;../../plugins/course/course.wasm&quot;,&quot;fallback&quot;:&quot;&quot;}]" /></lib>
   This file is intended to be loaded by Logisim http://logisim.altervista.org
 
   <lib desc="#Wiring" name="0">

@@ -104,7 +104,6 @@ impl CircuitCache {
                 | Kind::Text
                 | Kind::Gate(_)
                 | Kind::Parity(_)
-                | Kind::Ttl(_)
                 | Kind::ControlledBuffer
                 | Kind::ControlledInverter
                 | Kind::PullResistor

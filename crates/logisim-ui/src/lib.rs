@@ -12,7 +12,6 @@ pub mod generation;
 mod latches;
 mod parity;
 mod transistors;
-mod ttl;
 mod workspace;
 pub use document::{DocumentView, FileAction};
 mod drawing;

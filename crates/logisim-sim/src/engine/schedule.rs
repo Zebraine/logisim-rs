@@ -1,7 +1,7 @@
 //! Deterministic driver batches and component scheduling. Preserve gather-before-mutate order.
 use crate::{
     Bit, Simulator, Value, arithmetic, bus, gates, memory, network, parity, pla, plexers,
-    transistors, ttl,
+    transistors,
 };
 use logisim_core::{Extension, Id, Kind};
 
@@ -125,7 +125,6 @@ impl Simulator {
                         &c.arithmetic_logic().expect("matched component kind"),
                         &ports,
                     ),
-                    Kind::Ttl(_) => ttl::evaluate(c, &ports),
                     _ => plexers::evaluate(
                         &c.plexer_logic().expect("matched component kind"),
                         &ports,

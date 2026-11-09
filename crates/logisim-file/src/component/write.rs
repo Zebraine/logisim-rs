@@ -20,7 +20,6 @@ pub(crate) fn write(out: &mut String, c: &Component, document: &Document) -> Res
         return crate::plugin::write(out, c);
     }
     let lib = match c.kind {
-        Kind::Ttl(_) => 7,
         Kind::Plexer(_) => 4,
         Kind::Arithmetic(_) => 5,
         Kind::Button
@@ -95,7 +94,6 @@ pub(crate) fn write(out: &mut String, c: &Component, document: &Document) -> Res
     if !matches!(
         c.kind,
         Kind::Text
-            | Kind::Ttl(_)
             | Kind::Probe
             | Kind::PullResistor
             | Kind::Splitter
@@ -126,7 +124,6 @@ pub(crate) fn write(out: &mut String, c: &Component, document: &Document) -> Res
     ) {
         attribute(out, "width", c.bits)?;
     }
-    crate::ttl::write(out, c)?;
     crate::latches::write(out, c)?;
     crate::parity::write(out, c)?;
     crate::gates::write(out, c)?;

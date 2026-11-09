@@ -13,7 +13,7 @@ impl Component {
                 || old.kind.is_memory()
                 || matches!(old.kind, Kind::DotMatrix | Kind::Joystick)
                 || old.kind.is_transistor()
-                || matches!(old.kind, Kind::Parity(_) | Kind::Latch(_) | Kind::Ttl(_))
+                || matches!(old.kind, Kind::Parity(_) | Kind::Latch(_) | Kind::Plugin)
                 || (matches!(old.kind, Kind::Gate(_))
                     && old.gate_options.negated != replacement.gate_options.negated)
                 || (old.kind.is_controlled()

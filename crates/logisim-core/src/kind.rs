@@ -1,12 +1,11 @@
 //! Component identity and editor capabilities; family behavior lives in its own module.
-use crate::{Arithmetic, FlipFlop, Gate, Id, Latch, Parity, Plexer, Ttl};
+use crate::{Arithmetic, FlipFlop, Gate, Id, Latch, Parity, Plexer};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
     Plugin,
     Subcircuit(Id),
     Gate(Gate),
-    Ttl(Ttl),
     Parity(Parity),
     ControlledBuffer,
     ControlledInverter,
@@ -52,8 +51,7 @@ impl Kind {
     pub fn rotatable(self) -> bool {
         !matches!(
             self,
-            Self::Plugin
-                | Self::Text
+            Self::Text
                 | Self::Keyboard
                 | Self::Tty
                 | Self::SevenSegment
@@ -85,7 +83,7 @@ impl Kind {
                 | Self::RgbLed
                 | Self::Pin
                 | Self::Gate(_)
-                | Self::Ttl(_)
+                | Self::Plugin
                 | Self::Parity(_)
                 | Self::ControlledBuffer
                 | Self::ControlledInverter
@@ -108,7 +106,6 @@ impl Kind {
             Self::Plugin => "Plugin component",
             Self::Subcircuit(_) => "Subcircuit",
             Self::Gate(g) => g.name(),
-            Self::Ttl(t) => t.name(),
             Self::Latch(l) => l.name(),
             Self::Parity(p) => p.name(),
             Self::ControlledBuffer => "Controlled Buffer",

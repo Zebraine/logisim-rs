@@ -78,9 +78,9 @@ pub(crate) fn bounds(c: &Component) -> Rect {
     if c.kind == Kind::Plugin {
         if let Some(p) = &c.plugin {
             let [a, b] = p.tool.bounds;
-            return Rect::from_min_max(
-                pos(c.position + Point::new(a[0], a[1])),
-                pos(c.position + Point::new(b[0], b[1])),
+            return Rect::from_two_pos(
+                pos(c.position + c.facing.transform(Point::new(a[0], a[1]))),
+                pos(c.position + c.facing.transform(Point::new(b[0], b[1]))),
             );
         }
         return Rect::from_center_size(pos(c.position), vec2(20.0, 20.0));
@@ -105,12 +105,7 @@ pub(crate) fn bounds(c: &Component) -> Rect {
             pos(c.position + c.facing.transform(max)),
         );
     }
-    if matches!(c.kind, Kind::Ttl(_)) {
-        return Rect::from_two_pos(
-            pos(c.position + c.facing.transform(Point::new(0, -30))),
-            pos(c.position + c.facing.transform(Point::new(140, 30))),
-        );
-    }
+
     if c.kind == Kind::PlaRom {
         return Rect::from_min_max(
             pos(c.position + Point::new(0, -30)),
@@ -358,7 +353,6 @@ pub(crate) fn component(
     };
     match c.kind {
         Kind::Plugin => crate::plugins::draw(p, canvas, c, simulation, ghost),
-        Kind::Ttl(_) => crate::ttl::draw(p, canvas, c, color),
         Kind::Transistor | Kind::TransmissionGate => {
             crate::transistors::draw(p, canvas, c, color, fill)
         }
@@ -739,12 +733,6 @@ pub(crate) fn component(
         let r = bounds(c);
         let (anchor, align) = if c.kind == Kind::Button && c.label_center {
             (r.center().to_vec2(), Align2::CENTER_CENTER)
-        } else if matches!(c.kind, Kind::Ttl(_)) {
-            if matches!(c.facing, Facing::East | Facing::West) {
-                (vec2(r.right() + 8.0, r.center().y), Align2::LEFT_CENTER)
-            } else {
-                (vec2(r.center().x, r.top() - 8.0), Align2::CENTER_BOTTOM)
-            }
         } else if matches!(
             c.kind,
             Kind::Probe

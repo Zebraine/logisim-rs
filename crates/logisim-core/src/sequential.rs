@@ -196,9 +196,7 @@ impl Component {
                 .and_then(|p| p.tool.ports.get(index))
                 .is_some_and(|p| p.output);
         }
-        if matches!(self.kind, Kind::Ttl(_)) {
-            return self.ttl_output(index);
-        }
+
         if matches!(self.kind, Kind::Joystick | Kind::Keyboard) {
             return index < 2;
         }

@@ -1,5 +1,5 @@
 //! DIP geometry and pin assignments observed in the reference application.
-use crate::{Component, Kind, Point};
+use logisim_core::Point;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Ttl {
@@ -32,17 +32,6 @@ impl Ttl {
             Self::Ic747266 => "747266",
         }
     }
-    pub fn description(self) -> &'static str {
-        match self {
-            Self::Ic7400 => "Quad 2-input NAND",
-            Self::Ic7402 => "Quad 2-input NOR",
-            Self::Ic7404 => "Hex inverter",
-            Self::Ic7408 => "Quad 2-input AND",
-            Self::Ic7432 => "Quad 2-input OR",
-            Self::Ic7486 => "Quad 2-input XOR",
-            Self::Ic747266 => "Quad 2-input XNOR",
-        }
-    }
     /// Physical pin numbers [input A, input B, output]. Inverters repeat their input.
     pub fn gates(self) -> &'static [[u8; 3]] {
         match self {
@@ -70,27 +59,39 @@ impl Ttl {
         }
     }
 }
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct TtlOptions {
-    pub power_pins: bool,
-    pub internal: bool,
+
+#[derive(Clone, Copy, Debug)]
+pub struct Chip {
+    pub kind: Ttl,
+    pub power: bool,
 }
-impl Component {
-    /// Signal indices stay stable when the two supply terminals are appended.
-    pub fn ttl_pins(&self) -> &'static [u8] {
-        if self.ttl.power_pins {
+impl Chip {
+    pub fn id(self) -> String {
+        if self.power {
+            format!("{}-powered", self.kind.name())
+        } else {
+            self.kind.name().into()
+        }
+    }
+    pub fn parse(id: &str) -> Option<Self> {
+        let power = id.ends_with("-powered");
+        let name = id.strip_suffix("-powered").unwrap_or(id);
+        Ttl::ALL
+            .into_iter()
+            .find(|k| k.name() == name)
+            .map(|kind| Self { kind, power })
+    }
+    pub fn pins(self) -> &'static [u8] {
+        if self.power {
             &[1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 7, 14]
         } else {
             &[1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13]
         }
     }
-    pub fn ttl_index(&self, pin: u8) -> Option<usize> {
-        self.ttl_pins().iter().position(|p| *p == pin)
-    }
-    pub fn ttl_output(&self, index: usize) -> bool {
-        matches!(self.kind, Kind::Ttl(t) if self.ttl_pins().get(index).is_some_and(|p| t.output(*p)))
+    pub fn index(self, pin: u8) -> usize {
+        self.pins()
+            .iter()
+            .position(|p| *p == pin)
+            .expect("chip pin")
     }
 }
-
-#[cfg(test)]
-mod tests;

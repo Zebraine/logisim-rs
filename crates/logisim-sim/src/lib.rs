@@ -29,7 +29,6 @@ mod plugins;
 mod random;
 mod sequential;
 mod transistors;
-mod ttl;
 mod value;
 pub use logisim_core::{Bit, Value};
 

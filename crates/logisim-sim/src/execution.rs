@@ -107,7 +107,7 @@ impl Plan {
                 | Kind::Power
                 | Kind::Ground
                 | Kind::BitExtender => &mut plan.single,
-                Kind::Plexer(_) | Kind::Arithmetic(_) | Kind::Ttl(_) => &mut plan.multiple,
+                Kind::Plexer(_) | Kind::Arithmetic(_) => &mut plan.multiple,
                 Kind::Switch | Kind::DipSwitch | Kind::Joystick | Kind::Slider => {
                     &mut plan.controls
                 }

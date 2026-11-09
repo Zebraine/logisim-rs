@@ -26,7 +26,7 @@ pub fn serialize(document: &Document) -> Result<String> {
     }
     let name = escape(&document.main_circuit().name)?;
     let mut out = String::from(
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!-- Written by logisim-rs; source identifies the file format. -->\n<project source=\"2.16.2.2.jar\" version=\"1.0\">\n  <lib desc=\"#Wiring\" name=\"0\"/>\n  <lib desc=\"#Gates\" name=\"1\"/>\n  <lib desc=\"#Base\" name=\"2\"/>\n  <lib desc=\"#Memory\" name=\"3\"/>\n  <lib desc=\"#Plexers\" name=\"4\"/>\n  <lib desc=\"#Arithmetic\" name=\"5\"/>\n  <lib desc=\"#I/O\" name=\"6\"/>\n  <lib desc=\"#TTL\" name=\"7\"/>\n",
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!-- Written by logisim-rs; source identifies the file format. -->\n<project source=\"2.16.2.2.jar\" version=\"1.0\">\n  <lib desc=\"#Wiring\" name=\"0\"/>\n  <lib desc=\"#Gates\" name=\"1\"/>\n  <lib desc=\"#Base\" name=\"2\"/>\n  <lib desc=\"#Memory\" name=\"3\"/>\n  <lib desc=\"#Plexers\" name=\"4\"/>\n  <lib desc=\"#Arithmetic\" name=\"5\"/>\n  <lib desc=\"#I/O\" name=\"6\"/>\n",
     );
     crate::plugin::declaration(document, &mut out)?;
     writeln!(out, "  <main name=\"{name}\"/>").unwrap();

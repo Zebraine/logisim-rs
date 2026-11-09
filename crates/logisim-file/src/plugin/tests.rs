@@ -90,6 +90,48 @@ fn plugin_snapshot_roundtrip_and_invalid_schema_protection() {
         Some(&definition)
     );
     assert_eq!(crate::serialize(&parsed.document).unwrap(), xml);
+    // Geometry and label metadata belong to the host, not the plugin ABI snapshot.
+    for facing in logisim_core::Facing::ALL {
+        let c = &mut p.main_circuit_mut().circuit.components[0];
+        c.facing = facing;
+        c.label = "自定义 & label".into();
+        c.font = logisim_core::ArtworkFont {
+            family: "Dialog".into(),
+            size: 16,
+            bold: true,
+            italic: true,
+        };
+        c.color = [18, 52, 86];
+        let text = crate::serialize(&p).unwrap();
+        let imported = crate::parse(&text).unwrap();
+        assert!(imported.warnings.is_empty());
+        assert_eq!(
+            imported.document.main_circuit().circuit.components,
+            p.main_circuit().circuit.components
+        );
+        assert_eq!(crate::serialize(&imported.document).unwrap(), text);
+    }
+    let labeled = crate::serialize(&p).unwrap();
+    for broken in [
+        labeled.replace(
+            "name=\"facing\" val=\"north\"",
+            "name=\"facing\" val=\"diagonal\"",
+        ),
+        labeled.replace("#123456", "#invalid"),
+        labeled.replace("Dialog bolditalic 16", "Dialog plain 0"),
+    ] {
+        assert_ne!(labeled, broken);
+        let imported = crate::parse(&broken).unwrap();
+        assert!(!imported.warnings.is_empty());
+        assert!(
+            imported
+                .document
+                .main_circuit()
+                .circuit
+                .components
+                .is_empty()
+        );
+    }
     // Missing/invalid metadata is reported, so the desktop protects the source.
     for broken in [
         xml.replace("&quot;width&quot;:32", "&quot;width&quot;:0"),

@@ -99,7 +99,7 @@ impl Workspace {
                 if self.editor.session.context.appearance_mode {
                     self.appearance.properties(ui, &mut self.editor);
                 } else {
-                    properties::show(ui, &mut self.editor, &name);
+                    properties::show(ui, &mut self.editor, &name, &self.plugins);
                 }
             });
     }
@@ -107,11 +107,6 @@ impl Workspace {
     fn library_tool(&mut self, ui: &mut Ui, kind: Kind) {
         let tool = Tool::Place(kind);
         let response = ui.selectable_label(self.editor.tool == tool, tr(kind.name()));
-        let response = if let Kind::Ttl(t) = kind {
-            response.on_hover_text(tr(t.description()))
-        } else {
-            response
-        };
         if response.clicked() {
             self.editor.session.context.appearance_mode = false;
             self.editor.set_tool(tool);

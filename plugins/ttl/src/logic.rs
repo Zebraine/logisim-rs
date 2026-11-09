@@ -1,12 +1,10 @@
-use crate::{Bit, Value};
-use logisim_core::{Component, Kind, Ttl};
+use crate::model::{Chip, Ttl};
+use logisim_core::{Bit, Value};
 
-pub(crate) fn evaluate(c: &Component, ports: &[Value]) -> Vec<(usize, Value)> {
-    let Kind::Ttl(kind) = c.kind else {
-        return vec![];
-    };
-    let at = |pin| ports[c.ttl_index(pin).expect("TTL pin")].bit(0);
-    let powered = !c.ttl.power_pins || (at(14) == Bit::One && at(7) == Bit::Zero);
+pub(crate) fn evaluate(c: Chip, ports: &[Value]) -> Vec<(usize, Value)> {
+    let kind = c.kind;
+    let at = |pin| ports[c.index(pin)].bit(0);
+    let powered = !c.power || (at(14) == Bit::One && at(7) == Bit::Zero);
     kind.gates()
         .iter()
         .map(|&[a, b, out]| {
@@ -15,7 +13,7 @@ pub(crate) fn evaluate(c: &Component, ports: &[Value]) -> Vec<(usize, Value)> {
             } else {
                 Bit::Unknown
             };
-            (c.ttl_index(out).expect("TTL output"), Value::filled(1, bit))
+            (c.index(out), Value::filled(1, bit))
         })
         .collect()
 }
@@ -59,6 +57,3 @@ fn gate(kind: Ttl, a: Bit, b: Bit) -> Bit {
         Ttl::Ic747266 => invert(xor()),
     }
 }
-
-#[cfg(test)]
-mod tests;
