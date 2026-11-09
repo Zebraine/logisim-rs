@@ -122,10 +122,11 @@ mod tests {
     };
     fn workspace() -> Workspace {
         let mut w = Workspace::default();
-        w.request_analysis();
-        let serial = w.take_analysis_request().unwrap();
         let mut a = Analysis::default();
         a.add_output("Y".into()).unwrap();
+        w.replace_circuit(a.generate().unwrap());
+        w.request_analysis();
+        let serial = w.take_analysis_request().unwrap();
         w.receive_analysis(serial, Ok(a));
         w
     }

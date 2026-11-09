@@ -214,3 +214,75 @@ fn styled_fonts_and_circuit_labels_roundtrip_without_changing_ports() {
         }
     }
 }
+
+#[test]
+fn rebuilt_appearance_ports_bind_to_new_internal_pin_positions_after_roundtrip() {
+    use logisim_core::{
+        Facing, Project,
+        generation::{Analysis, GateBasis, RebuildTarget},
+    };
+    let mut a = Analysis::default();
+    for name in ["A", "B"] {
+        a.add_input(name.into()).unwrap();
+    }
+    a.add_output("Y".into()).unwrap();
+    a.apply_expression(0, "A ^ B").unwrap();
+    let mut p = Project::single("child", a.generate().unwrap());
+    let mut appearance = p.main_circuit().editable_appearance();
+    appearance.facing = Facing::North;
+    p.main_circuit_mut().circuit.appearance = Some(appearance);
+    let child = p.main;
+    let host = p.add("host".into()).unwrap();
+    let mut instance = p.instance(child, Point::new(400, 400)).unwrap();
+    instance.facing = Facing::West;
+    p.circuit_mut(host).unwrap().circuit.add_component(instance);
+    let target = RebuildTarget::bind(p.main_circuit(), &a).unwrap();
+    for changed in [false, true] {
+        let mut analysis = a.clone();
+        if changed {
+            analysis.add_input("C".into()).unwrap();
+        }
+        let mut rebuilt = p.clone();
+        rebuilt.main_circuit_mut().circuit = target
+            .rebuild(
+                p.main_circuit(),
+                analysis.generate_with_basis(GateBasis::Nand).unwrap(),
+            )
+            .unwrap();
+        rebuilt.refresh_interfaces(false);
+        let saved = serialize(&rebuilt).unwrap();
+        let read = parse(&saved).unwrap();
+        assert!(read.warnings.is_empty(), "{:?}", read.warnings);
+        let ports = |p: &Project| {
+            let mut result: Vec<_> = p
+                .named("child")
+                .unwrap()
+                .interface()
+                .ports
+                .into_iter()
+                .map(|p| (p.label, p.offset, p.output, p.bits))
+                .collect();
+            result.sort();
+            result
+        };
+        assert_eq!(ports(&read.document), ports(&rebuilt));
+        let positions = |p: &Project| {
+            let d = &p.named("child").unwrap().circuit;
+            let mut result: Vec<_> = d
+                .appearance
+                .as_ref()
+                .unwrap()
+                .ports
+                .iter()
+                .map(|(id, at)| {
+                    let pin = d.component(*id).unwrap();
+                    (pin.label.clone(), pin.position, *at)
+                })
+                .collect();
+            result.sort();
+            result
+        };
+        assert_eq!(positions(&read.document), positions(&rebuilt));
+        assert_eq!(serialize(&read.document).unwrap(), saved);
+    }
+}

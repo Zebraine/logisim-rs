@@ -214,6 +214,7 @@ fn circuit_analysis_success_loads_table_and_builds_as_one_edit() {
     let mut w = Workspace::default();
     let mut analysis = Generator::default().analysis;
     analysis.apply_expression(0, "A ^ B").unwrap();
+    w.replace_circuit(analysis.generate().unwrap());
     let before = w.project().clone();
     w.request_analysis();
     let serial = w.take_analysis_request().unwrap();
@@ -225,12 +226,12 @@ fn circuit_analysis_success_loads_table_and_builds_as_one_edit() {
     assert!(!w.editor.can_undo());
     click(&ctx, &mut w, "Use NAND gates only");
     click(&ctx, &mut w, "Build Circuit");
-    assert_eq!(w.circuit_name(), "analyzed");
-    assert_eq!(w.project().circuits.len(), 2);
+    assert_eq!(w.circuit_name(), "main");
+    assert_eq!(w.project().circuits.len(), 1);
     w.editor.undo();
     assert_eq!(w.project().circuits, before.circuits);
     w.editor.redo();
-    assert_eq!(w.circuit_name(), "analyzed");
+    assert_eq!(w.circuit_name(), "main");
 }
 
 #[test]
@@ -293,12 +294,12 @@ fn circuit_analysis_cancel_error_stale_results_and_partial_import_preserve_draft
     }
 }
 
-fn finish_jobs(w: &mut Workspace) {
+pub(super) fn finish_jobs(w: &mut Workspace) {
     while let Some(request) = w.take_generation_request() {
         w.receive_generation(request.serial, request.execute(|| false));
     }
 }
-fn click(ctx: &egui::Context, w: &mut Workspace, label: &str) {
+pub(super) fn click(ctx: &egui::Context, w: &mut Workspace, label: &str) {
     finish_jobs(w);
     crate::i18n_tests::click(ctx, w, label);
     finish_jobs(w);

@@ -55,12 +55,7 @@ pub fn analyze_cancellable(
         .circuit(root)
         .ok_or_else(|| error("Missing circuit to analyze.", root))?
         .circuit;
-    let mut pins: Vec<_> = circuit
-        .components
-        .iter()
-        .filter(|c| c.kind == Kind::Pin)
-        .collect();
-    pins.sort_by_key(|p| (p.output, p.position.y, p.position.x, p.id));
+    let pins = logisim_core::generation::analysis_pins(circuit);
     if !pins.iter().any(|p| p.output) {
         return Err(error("Analysis requires at least one output Pin.", ""));
     }

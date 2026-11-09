@@ -6,7 +6,7 @@ use crate::{Workspace, editor::Editor, i18n::tr, tf};
 use egui::{Color32, Ui};
 use logisim_core::{
     Circuit,
-    generation::{Analysis, Error, Form, GateBasis, MAX_EXPRESSION_BYTES},
+    generation::{Analysis, Error, Form, GateBasis, MAX_EXPRESSION_BYTES, RebuildTarget},
 };
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -41,6 +41,8 @@ pub(crate) struct Generator {
     form: Form,
     nand_only: bool,
     name: String,
+    pub(super) target: Option<RebuildTarget>,
+    pub(super) replace_target: bool,
     error: Option<Error>,
 }
 impl Default for Generator {
@@ -67,6 +69,8 @@ impl Default for Generator {
             form: Form::default(),
             nand_only: false,
             name: "generated".into(),
+            target: None,
+            replace_target: false,
             error: None,
         }
     }
@@ -173,13 +177,20 @@ impl Generator {
                 );
             }
             ui.horizontal_wrapped(|ui| {
-                ui.label(tr("New circuit name"));
-                ui.add(
-                    egui::TextEdit::singleline(&mut self.name)
-                        .id_salt("generated-name")
-                        .char_limit(1024)
-                        .desired_width(200.0),
-                );
+                if let Some(target) = &self.target {
+                    ui.add_enabled(!self.building, egui::Checkbox::new(
+                        &mut self.replace_target, tf!("Replace circuit: {}", target.name()),
+                    ));
+                }
+                if !self.replace_target {
+                    ui.label(tr("New circuit name"));
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.name)
+                            .id_salt("generated-name")
+                            .char_limit(1024)
+                            .desired_width(200.0),
+                    );
+                }
                 if ui
                     .add_enabled(
                         !self.pending() && !self.building && !self.analysis.outputs().is_empty(),
@@ -537,6 +548,24 @@ impl Editor {
             detail: tr(&message).to_owned(),
         })?;
         project.circuit_mut(id).unwrap().circuit = circuit;
+        self.commit_generated(before, project, id)
+    }
+    fn install_rebuilt(&mut self, target: RebuildTarget, circuit: Circuit) -> Result<(), Error> {
+        let before = self.snapshot();
+        let mut project = before.project.clone();
+        let definition = project.circuit_mut(target.id()).ok_or_else(|| Error {
+            message: "The circuit changed during analysis. Please analyze it again.",
+            detail: String::new(),
+        })?;
+        definition.circuit = target.rebuild(definition, circuit)?;
+        self.commit_generated(before, project, target.id())
+    }
+    fn commit_generated(
+        &mut self,
+        before: crate::editor::Snapshot,
+        mut project: logisim_core::Project,
+        id: logisim_core::Id,
+    ) -> Result<(), Error> {
         if project
             .circuits
             .iter()
@@ -555,7 +584,17 @@ impl Editor {
             detail: tr(&message).to_owned(),
         })?;
         self.project = project;
-        self.switch_circuit(id);
+        // Synchronize the active copy before navigation/recording can write it back.
+        self.circuit = self.project.circuit(self.active).unwrap().circuit.clone();
+        if self.active != id {
+            self.switch_circuit(id);
+        } else {
+            self.appearance_mode = false;
+            self.selection.clear();
+            self.set_tool(crate::editor::Tool::Select);
+            self.simulation.view = Default::default();
+            self.simulation.plugin_arguments.clear();
+        }
         self.record(before);
         Ok(())
     }
@@ -563,3 +602,6 @@ impl Editor {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod rebuild_tests;

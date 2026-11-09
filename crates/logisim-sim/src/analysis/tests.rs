@@ -423,3 +423,67 @@ fn twelve_inputs_thirty_two_outputs_analyze_without_changing_the_project() {
     same_table(&a, &result);
     assert_eq!(p, before);
 }
+
+#[test]
+fn rebuilt_child_preserves_parent_wires_and_behavior_in_rotated_instances() {
+    use logisim_core::generation::RebuildTarget;
+    let mut p = generated();
+    let child = p.main;
+    let mut appearance = p.main_circuit().editable_appearance();
+    let input_ports: Vec<_> = p
+        .main_circuit()
+        .interface()
+        .ports
+        .into_iter()
+        .filter(|p| !p.output)
+        .map(|p| p.pin)
+        .collect();
+    let first = appearance.ports[&input_ports[0]];
+    let last = appearance.ports[&input_ports[2]];
+    appearance.ports.insert(input_ports[0], last);
+    appearance.ports.insert(input_ports[2], first);
+    p.main_circuit_mut().circuit.appearance = Some(appearance);
+    let mut roots = vec![];
+    for facing in [Facing::East, Facing::South, Facing::West, Facing::North] {
+        let root = p.add(format!("parent{}", roots.len())).unwrap();
+        let mut instance = p.instance(child, Point::new(400, 400)).unwrap();
+        instance.facing = facing;
+        let circuit = &mut p.circuit_mut(root).unwrap().circuit;
+        for (port, at) in instance.interface.ports.iter().zip(instance.ports()) {
+            let position =
+                at + facing.transform(Point::new(if port.output { 100 } else { -100 }, 0));
+            let mut pin = Component::new(Kind::Pin, position);
+            pin.output = port.output;
+            pin.label = port.label.clone();
+            pin.facing = if pin.output {
+                Facing::West
+            } else {
+                Facing::East
+            };
+            circuit.add_component(pin);
+            circuit.add_wire(position, at);
+        }
+        circuit.add_component(instance);
+        roots.push(root);
+    }
+    let mut analysis = analyze(&p, child).unwrap();
+    let target = RebuildTarget::bind(p.main_circuit(), &analysis).unwrap();
+    analysis.swap(true, 0, 1).unwrap();
+    for basis in [GateBasis::Standard, GateBasis::Nand] {
+        let mut rebuilt = p.clone();
+        rebuilt.main_circuit_mut().circuit = target
+            .rebuild(
+                p.main_circuit(),
+                analysis.generate_with_basis(basis).unwrap(),
+            )
+            .unwrap();
+        rebuilt.refresh_interfaces(false);
+        for root in &roots {
+            assert_eq!(rebuilt.circuit(*root), p.circuit(*root));
+            same_table(
+                &analyze(&rebuilt, *root).unwrap(),
+                &analyze(&p, *root).unwrap(),
+            );
+        }
+    }
+}

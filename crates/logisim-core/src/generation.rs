@@ -7,6 +7,8 @@ mod expression;
 mod layout;
 mod minimize;
 mod mode;
+mod rebuild;
+pub use rebuild::{RebuildTarget, analysis_pins};
 #[cfg(test)]
 mod tests;
 mod work;

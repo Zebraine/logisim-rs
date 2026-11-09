@@ -10,6 +10,11 @@ pub struct Request {
     cache: logisim_core::generation::Minimizer,
 }
 #[derive(Clone)]
+enum Destination {
+    New(String),
+    Replace(RebuildTarget),
+}
+#[derive(Clone)]
 enum Operation {
     Mode {
         expressions: bool,
@@ -21,7 +26,7 @@ enum Operation {
         editing: bool,
     },
     Build {
-        name: String,
+        destination: Destination,
         basis: GateBasis,
     },
 }
@@ -38,7 +43,7 @@ enum Outcome {
         editing: bool,
     },
     Built {
-        name: String,
+        destination: Destination,
         circuit: Circuit,
     },
 }
@@ -82,8 +87,8 @@ impl Request {
                     editing: *editing,
                 })
             }
-            Operation::Build { name, basis } => Ok(Outcome::Built {
-                name: name.clone(),
+            Operation::Build { destination, basis } => Ok(Outcome::Built {
+                destination: destination.clone(),
                 circuit: cache.generate(&self.analysis, *basis, &cancelled)?,
             }),
         })();
@@ -156,7 +161,12 @@ impl Generator {
     }
     pub(super) fn request_build(&mut self) {
         self.request(Operation::Build {
-            name: self.name.trim().to_owned(),
+            destination: if let Some(target) = self.target.as_ref().filter(|_| self.replace_target)
+            {
+                Destination::Replace(target.clone())
+            } else {
+                Destination::New(self.name.trim().to_owned())
+            },
             basis: if self.nand_only {
                 GateBasis::Nand
             } else {
@@ -203,8 +213,15 @@ impl Workspace {
             }) => {
                 g.receive_expression(expression, editing);
             }
-            Ok(Outcome::Built { name, circuit }) => {
-                match self.editor.install_generated(name, circuit) {
+            Ok(Outcome::Built {
+                destination,
+                circuit,
+            }) => {
+                let result = match destination {
+                    Destination::New(name) => self.editor.install_generated(name, circuit),
+                    Destination::Replace(target) => self.editor.install_rebuilt(target, circuit),
+                };
+                match result {
                     Ok(()) => {
                         g.cancel_computation();
                         g.open = false;

@@ -45,10 +45,19 @@ impl Workspace {
         if !self.analysis_pending(serial) {
             return;
         }
+        let result = result.and_then(|analysis| {
+            let target = logisim_core::generation::RebuildTarget::bind(
+                self.project().circuit(self.active_circuit()).unwrap(),
+                &analysis,
+            )?;
+            Ok((analysis, target))
+        });
         match result {
-            Ok(analysis) => {
+            Ok((analysis, target)) => {
                 self.analysis.cancel();
                 self.generator.load_analysis(analysis);
+                self.generator.target = Some(target);
+                self.generator.replace_target = true;
                 self.open_generator();
             }
             Err(error) => self.analysis.error = Some(error),

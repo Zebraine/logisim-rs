@@ -952,6 +952,7 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Rename circuit", "重命名电路"),
     ("Rename…", "重命名…"),
     ("Replace", "替换"),
+    ("Replace circuit: {}", "覆盖电路：{}"),
     ("Replace existing file?", "替换已有文件？"),
     (
         "Replace the artwork with a labeled package. You can undo this change.",
@@ -1108,6 +1109,10 @@ const MESSAGES: &[(&str, &str)] = &[
     (
         "The RAM simulation instance is no longer available.",
         "目标 RAM 仿真实例已不可用。",
+    ),
+    (
+        "The analyzed interface no longer matches the circuit. Please analyze it again.",
+        "分析接口已与电路不符，请重新分析。",
     ),
     (
         "The anchor sets the placement origin and the artwork's original facing.",
