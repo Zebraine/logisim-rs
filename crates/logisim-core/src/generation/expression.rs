@@ -55,6 +55,17 @@ impl Node {
             }
         }
     }
+    pub(super) fn remap_inputs(&mut self, inputs: &[usize]) {
+        match self {
+            Self::Input(i) => *i = inputs[*i],
+            Self::Not(n) => n.remap_inputs(inputs),
+            Self::Binary(_, a, b) => {
+                a.remap_inputs(inputs);
+                b.remap_inputs(inputs);
+            }
+            Self::Constant(_) => {}
+        }
+    }
     fn swap_inputs(&mut self, a: usize, b: usize) {
         match self {
             Self::Input(i) if *i == a => *i = b,

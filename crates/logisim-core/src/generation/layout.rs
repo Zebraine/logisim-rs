@@ -94,6 +94,7 @@ pub(super) fn generate(
     analysis: &Analysis,
     basis: GateBasis,
     work: &mut super::work::Work<'_>,
+    cache: &mut super::Minimizer,
 ) -> Result<Circuit> {
     let mut layout = Layout {
         basis,
@@ -104,7 +105,7 @@ pub(super) fn generate(
     };
     let mut roots = Vec::new();
     for i in 0..analysis.outputs.len() {
-        roots.push(layout.node(&analysis.expression_with(i, work)?.0)?);
+        roots.push(layout.node(&cache.expression_with(analysis, i, work)?.0)?);
         layout.next_y += 80;
     }
     let output_x = roots.iter().map(|p| p.x).max().unwrap() + 100;

@@ -25,6 +25,45 @@ pub(super) fn minimize(
     work: &mut Work<'_>,
 ) -> Result<Expression> {
     work.step()?;
+    // Exact equality (including don't-cares) preserves the complete specification.
+    let mut active = Vec::new();
+    for input in 0..inputs {
+        let bit = 1 << (inputs - input - 1);
+        let mut dependent = false;
+        for row in 0..values.len() {
+            work.step()?;
+            if row & bit == 0 && values[row] != values[row | bit] {
+                dependent = true;
+                break;
+            }
+        }
+        if dependent {
+            active.push(input);
+        }
+    }
+    if active.len() == inputs {
+        return minimize_reduced(values, inputs, form, work);
+    }
+    let reduced: Vec<_> = (0..1usize << active.len())
+        .map(|row| {
+            let original = active.iter().enumerate().fold(0, |value, (i, input)| {
+                value | ((row >> (active.len() - i - 1) & 1) << (inputs - input - 1))
+            });
+            values[original]
+        })
+        .collect();
+    let mut result = minimize_reduced(&reduced, active.len(), form, work)?;
+    result.0.remap_inputs(&active);
+    Ok(result)
+}
+
+fn minimize_reduced(
+    values: &[Cell],
+    inputs: usize,
+    form: Form,
+    work: &mut Work<'_>,
+) -> Result<Expression> {
+    work.step()?;
     if values.iter().all(|v| *v == Cell::DontCare) {
         return Ok(Expression(Node::Constant(false)));
     }
@@ -33,6 +72,9 @@ pub(super) fn minimize(
     } else {
         Cell::Zero
     };
+    if values.iter().all(|v| *v == target || *v == Cell::DontCare) {
+        return Ok(Expression(Node::Constant(target == Cell::One)));
+    }
     let required: BTreeSet<_> = values
         .iter()
         .enumerate()
@@ -139,24 +181,31 @@ pub(super) fn minimize(
         uncovered.retain(|row| !best.covers(*row));
         selected.insert(best);
     }
+    // Count coverage once. Only rows covered by this cube can lose their cover.
+    let mut counts = vec![0usize; values.len()];
+    for cube in &selected {
+        for row in &required {
+            work.step()?;
+            counts[*row] += usize::from(cube.covers(*row));
+        }
+    }
     for cube in selected.clone().iter().rev() {
         let mut redundant = true;
         for row in &required {
-            let mut covered = false;
-            for other in &selected {
-                work.step()?;
-                if other != cube && other.covers(*row) {
-                    covered = true;
-                    break;
-                }
-            }
-            if !covered {
+            work.step()?;
+            if cube.covers(*row) && counts[*row] == 1 {
                 redundant = false;
                 break;
             }
         }
         if redundant {
             selected.remove(cube);
+            for row in &required {
+                work.step()?;
+                if cube.covers(*row) {
+                    counts[*row] -= 1;
+                }
+            }
         }
     }
     let sop = form == Form::SumOfProducts;

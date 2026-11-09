@@ -339,6 +339,11 @@ fn work_budget_failure_keeps_the_table_and_expression_generation_available() {
     a.add_output("Y".into()).unwrap();
     let expression = a.inputs().join(" ^ ");
     a.apply_expression(0, &expression).unwrap();
+    let mut rng = 12345u32;
+    for row in 0..a.rows() {
+        rng = rng.wrapping_mul(1664525).wrapping_add(1013904223);
+        a.set_cell(0, row, Cell::from(rng >> 31 != 0)).unwrap();
+    }
     let mut w = Workspace::default();
     w.generator.load_analysis(a.clone());
     w.open_generator();
@@ -352,9 +357,43 @@ fn work_budget_failure_keeps_the_table_and_expression_generation_available() {
             .contains("limit")
     );
     assert_eq!(w.generator.analysis, a);
-    assert_eq!(a.outputs()[0].values()[1], Cell::One);
+    w.generator
+        .analysis
+        .apply_expression(0, &expression)
+        .unwrap();
+    w.generator.refresh();
+    finish_jobs(&mut w);
     assert!(!w.generator.pending());
     w.generator.request_build();
     finish_jobs(&mut w);
     assert_eq!(w.project().circuits.len(), 2);
+}
+
+#[test]
+fn cached_forms_survive_output_switches_rename_and_restore_but_not_table_changes() {
+    use logisim_core::generation::Cell;
+    let mut w = Workspace::default();
+    w.open_generator();
+    w.generator.analysis.set_cell(0, 3, Cell::One).unwrap();
+    w.generator.refresh();
+    finish_jobs(&mut w);
+    w.generator.form = Form::ProductOfSums;
+    w.generator.refresh();
+    finish_jobs(&mut w);
+    for form in [Form::SumOfProducts, Form::ProductOfSums] {
+        w.generator.form = form;
+        w.generator.refresh();
+        assert!(!w.generator.computing);
+        assert!(w.take_generation_request().is_none());
+    }
+    w.generator.analysis.rename(true, 0, "NewA".into()).unwrap();
+    w.generator.refresh();
+    assert!(!w.generator.computing);
+    w.generator.analysis.set_cell(0, 0, Cell::Zero).unwrap();
+    w.generator.refresh();
+    assert!(w.generator.computing);
+    finish_jobs(&mut w);
+    w.generator.analysis.set_cell(0, 0, Cell::DontCare).unwrap();
+    w.generator.refresh();
+    assert!(!w.generator.computing);
 }

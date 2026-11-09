@@ -7,13 +7,18 @@ pub struct Request {
     pub serial: u64,
     analysis: Analysis,
     operation: Operation,
+    cache: logisim_core::generation::Minimizer,
 }
 #[derive(Clone)]
 enum Operation {
     Minimize { output: usize, form: Form },
     Build { name: String, basis: GateBasis },
 }
-pub enum Reply {
+pub struct Reply {
+    cache: logisim_core::generation::Minimizer,
+    result: Result<Outcome, Error>,
+}
+enum Outcome {
     Minimized {
         applied: Expression,
         minimized: Expression,
@@ -25,27 +30,25 @@ pub enum Reply {
 }
 impl Request {
     pub fn execute(&self, cancelled: impl Fn() -> bool) -> Result<Reply, Error> {
-        match &self.operation {
+        let mut cache = self.cache.clone();
+        let result = (|| match &self.operation {
             Operation::Minimize { output, form } => {
-                let minimized = self
-                    .analysis
-                    .minimized_cancellable(*output, *form, &cancelled)?;
+                let minimized = cache.minimized(&self.analysis, *output, *form, &cancelled)?;
                 let applied = match self.analysis.supplied_expression(*output) {
                     Some(e) => e.clone(),
                     None if *form == Form::SumOfProducts => minimized.clone(),
-                    None => self.analysis.minimized_cancellable(
-                        *output,
-                        Form::SumOfProducts,
-                        &cancelled,
-                    )?,
+                    None => {
+                        cache.minimized(&self.analysis, *output, Form::SumOfProducts, &cancelled)?
+                    }
                 };
-                Ok(Reply::Minimized { applied, minimized })
+                Ok(Outcome::Minimized { applied, minimized })
             }
-            Operation::Build { name, basis } => Ok(Reply::Built {
+            Operation::Build { name, basis } => Ok(Outcome::Built {
                 name: name.clone(),
-                circuit: self.analysis.generate_cancellable(*basis, cancelled)?,
+                circuit: cache.generate(&self.analysis, *basis, &cancelled)?,
             }),
-        }
+        })();
+        Ok(Reply { cache, result })
     }
 }
 impl Generator {
@@ -64,15 +67,42 @@ impl Generator {
             serial: self.serial,
             analysis: self.analysis.clone(),
             operation,
+            cache: self.cache.clone(),
         });
     }
     pub(super) fn request_minimize(&mut self) {
-        if !self.analysis.outputs().is_empty() {
-            self.request(Operation::Minimize {
-                output: self.output,
-                form: self.form,
-            });
+        if self.analysis.outputs().is_empty() {
+            return;
         }
+        if let Some(result) = self.cache.cached(&self.analysis, self.output, self.form) {
+            match result {
+                Ok(minimized) => {
+                    let applied = self
+                        .analysis
+                        .supplied_expression(self.output)
+                        .cloned()
+                        .map(Ok)
+                        .or_else(|| {
+                            self.cache
+                                .cached(&self.analysis, self.output, Form::SumOfProducts)
+                        });
+                    if let Some(Ok(applied)) = applied {
+                        self.applied = applied.text(self.analysis.inputs());
+                        self.draft.clone_from(&self.applied);
+                        self.minimized = minimized.text(self.analysis.inputs());
+                        return;
+                    }
+                }
+                Err(error) => {
+                    self.error = Some(error);
+                    return;
+                }
+            }
+        }
+        self.request(Operation::Minimize {
+            output: self.output,
+            form: self.form,
+        });
     }
     pub(super) fn request_build(&mut self) {
         self.request(Operation::Build {
@@ -103,14 +133,18 @@ impl Workspace {
         g.computing = false;
         g.building = false;
         g.requested = None;
+        let result = result.and_then(|reply| {
+            g.cache = reply.cache;
+            reply.result
+        });
         match result {
-            Ok(Reply::Minimized { applied, minimized }) => {
+            Ok(Outcome::Minimized { applied, minimized }) => {
                 g.applied = applied.text(g.analysis.inputs());
                 g.draft.clone_from(&g.applied);
                 g.minimized = minimized.text(g.analysis.inputs());
                 g.error = None;
             }
-            Ok(Reply::Built { name, circuit }) => {
+            Ok(Outcome::Built { name, circuit }) => {
                 match self.editor.install_generated(name, circuit) {
                     Ok(()) => {
                         g.cancel_computation();

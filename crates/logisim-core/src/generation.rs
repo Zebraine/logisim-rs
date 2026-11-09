@@ -1,6 +1,8 @@
 //! Bounded, binary combinational specifications and editable circuit synthesis.
 //! This model has no simulator, GUI or filesystem dependency. A don't-care is a
 //! synthesis freedom, not a floating simulation value.
+mod cache;
+pub use cache::Minimizer;
 mod expression;
 mod layout;
 mod minimize;
@@ -295,14 +297,6 @@ impl Analysis {
     pub fn supplied_expression(&self, output: usize) -> Option<&Expression> {
         self.outputs.get(output)?.expression.as_ref()
     }
-    fn expression_with(&self, output: usize, work: &mut work::Work<'_>) -> Result<Expression> {
-        work.step()?;
-        self.check_index(false, output)?;
-        match &self.outputs[output].expression {
-            Some(expression) => Ok(expression.clone()),
-            None => self.minimize_with(output, Form::SumOfProducts, work),
-        }
-    }
     pub fn expression(&self, output: usize) -> Result<Expression> {
         self.check_index(false, output)?;
         if let Some(expression) = &self.outputs[output].expression {
@@ -324,11 +318,6 @@ impl Analysis {
         basis: GateBasis,
         cancelled: impl Fn() -> bool,
     ) -> Result<Circuit> {
-        if self.outputs.is_empty() {
-            return Err(Error::new(
-                "Add at least one output before building a circuit.",
-            ));
-        }
-        layout::generate(self, basis, &mut work::Work::new(&cancelled))
+        Minimizer::default().generate(self, basis, cancelled)
     }
 }

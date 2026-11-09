@@ -218,16 +218,71 @@ fn bounded_simplification_and_cancellation_preserve_all_cells() {
         .unwrap_err();
     assert_eq!(error.message, "Computation cancelled.");
     assert_eq!(calls.get(), 3);
-    assert!(
-        a.minimized(0, Form::SumOfProducts)
-            .unwrap_err()
-            .message
-            .contains("limit")
-    );
+    let optimized = a.minimized(0, Form::SumOfProducts).unwrap();
+    for row in 0..a.rows() {
+        assert_eq!(optimized.evaluate(row, 12), row.count_ones() % 2 == 1);
+    }
+    let mut hard = a.clone();
+    let mut rng = 12345u32;
+    for row in 0..hard.rows() {
+        rng = rng.wrapping_mul(1664525).wrapping_add(1013904223);
+        hard.set_cell(0, row, Cell::from(rng >> 31 != 0)).unwrap();
+    }
+    let original = hard.clone();
+    assert!(hard.minimized(0, Form::SumOfProducts).is_err());
+    assert_eq!(hard, original);
     assert_eq!(a, before);
     assert!(
         a.generate_cancellable(GateBasis::Standard, || true)
             .is_err()
     );
     assert!(a.generate().is_ok());
+}
+
+#[test]
+fn reduced_inputs_constants_and_cached_columns_keep_exact_semantics() {
+    let mut a = Analysis::default();
+    for i in 0..12 {
+        a.add_input(format!("I{i}")).unwrap();
+    }
+    a.add_output("Y".into()).unwrap();
+    let mut cache = Minimizer::default();
+    for (case, text) in [(0, "1"), (1, "I3"), (2, "I3 ^ I9")] {
+        for row in 0..a.rows() {
+            let v = match case {
+                0 => true,
+                1 => row & (1 << 8) != 0,
+                _ => (row & (1 << 8) != 0) ^ (row & (1 << 2) != 0),
+            };
+            a.set_cell(0, row, Cell::from(v)).unwrap();
+        }
+        let expected = Expression::parse(text, a.inputs()).unwrap();
+        for form in [Form::SumOfProducts, Form::ProductOfSums] {
+            let result = cache.minimized(&a, 0, form, || false).unwrap();
+            for row in 0..a.rows() {
+                assert_eq!(result.evaluate(row, 12), expected.evaluate(row, 12));
+            }
+        }
+    }
+    assert!(cache.cached(&a, 0, Form::SumOfProducts).is_some());
+    a.rename(true, 3, "Renamed".into()).unwrap();
+    assert!(
+        cache
+            .cached(&a, 0, Form::SumOfProducts)
+            .unwrap()
+            .unwrap()
+            .text(a.inputs())
+            .contains("Renamed")
+    );
+    a.set_cell(0, 0, Cell::One).unwrap();
+    assert!(cache.cached(&a, 0, Form::SumOfProducts).is_none());
+    a.set_cell(0, 0, Cell::Zero).unwrap();
+    assert!(cache.cached(&a, 0, Form::SumOfProducts).is_some());
+    assert!(
+        cache
+            .minimized(&a, 0, Form::SumOfProducts, || true)
+            .is_err()
+    );
+    a.swap(true, 3, 0).unwrap();
+    assert!(cache.cached(&a, 0, Form::SumOfProducts).is_none());
 }
