@@ -164,10 +164,17 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Arithmetic", "算术"),
     ("Arithmetic right", "算术右移"),
     ("Ascending", "升序"),
-    ("At most 12 inputs are supported.", "最多支持 12 个输入。"),
+    (
+        "At most 12 inputs are supported. Switch to expression mode for more inputs.",
+        "最多支持 12 个输入，更多输入请切换到表达式模式。",
+    ),
     (
         "At most 128 circuits are supported.",
         "最多支持 128 个电路。",
+    ),
+    (
+        "At most 32 expression inputs are supported.",
+        "表达式模式最多支持 32 个输入。",
     ),
     ("At most 32 outputs are supported.", "最多支持 32 个输出。"),
     ("Auto ticks", "自动时钟"),
@@ -390,6 +397,10 @@ const MESSAGES: &[(&str, &str)] = &[
     ),
     ("Comparator", "比较器"),
     (
+        "Complete truth tables support at most 12 inputs. The expressions are preserved.",
+        "完整真值表最多支持 12 个输入，表达式已保留。",
+    ),
+    (
         "Completed UI frames per second, measured over about one second. Idle redraws are included.",
         "按约一秒内实际完成的界面帧数统计，包含闲置时的刷新。",
     ),
@@ -431,6 +442,11 @@ const MESSAGES: &[(&str, &str)] = &[
         "计数：0 时保持或加载，其余值允许计数",
     ),
     ("Counter", "计数器"),
+    ("Create Truth Table", "生成真值表"),
+    (
+        "Create a truth table before minimizing.",
+        "化简前请先生成真值表。",
+    ),
     ("Curve", "曲线"),
     ("Custom appearance", "自定义外观"),
     ("Custom tick frequency", "自定义时钟频率"),
@@ -543,6 +559,11 @@ const MESSAGES: &[(&str, &str)] = &[
     (
         "Expression exceeds the size or depth limit.",
         "表达式超出大小或嵌套深度限制。",
+    ),
+    ("Expression mode", "表达式模式"),
+    (
+        "Expressions are stored without enumerating inputs. Generate a complete table only when needed.",
+        "表达式直接保存，不枚举输入；需要时再生成完整真值表。",
     ),
     ("Extension", "扩展方式"),
     ("FPS: {}", "帧率：{} FPS"),
@@ -1043,10 +1064,6 @@ const MESSAGES: &[(&str, &str)] = &[
         "Simulation worker stopped. Restart the application.",
         "仿真工作线程已停止，请重新启动应用。",
     ),
-    (
-        "Single-bit inputs · up to 12 inputs and 32 outputs",
-        "单比特输入与输出 · 最多 12 个输入、32 个输出",
-    ),
     ("Size ", "字号 "),
     ("Slider", "滑块"),
     ("Snap", "网格吸附"),
@@ -1075,6 +1092,10 @@ const MESSAGES: &[(&str, &str)] = &[
     ),
     ("Sum of products", "积之和"),
     ("Switch", "开关"),
+    (
+        "Switching to expressions resolves all x entries to 0 or 1.",
+        "切换到表达式时，所有 x 项会确定为 0 或 1。",
+    ),
     ("T Flip-Flop", "T 触发器"),
     ("TTL", "TTL"),
     ("TTY", "TTY 字符终端"),
@@ -1143,6 +1164,10 @@ const MESSAGES: &[(&str, &str)] = &[
         "导入时省略了未支持的内容，请另存到其他文件以保护原文件。",
     ),
     (
+        "This input is used by an expression. Edit the expression before removing it.",
+        "表达式仍使用此输入，请先修改表达式再删除。",
+    ),
+    (
         "This project has unsaved changes.",
         "此项目有未保存的修改。",
     ),
@@ -1169,6 +1194,14 @@ const MESSAGES: &[(&str, &str)] = &[
     ("Transmission Gate", "传输门"),
     ("Trigger", "触发方式"),
     ("Truth Table", "真值表"),
+    (
+        "Truth table generation exceeded its work limit. The expressions are preserved.",
+        "真值表生成超出计算量限制，表达式已保留。",
+    ),
+    (
+        "Truth tables: 12 inputs · Expressions: 32 inputs · Outputs: 32",
+        "真值表：12 输入 · 表达式：32 输入 · 输出：32",
+    ),
     ("Tunnel", "隧道"),
     ("Tunnel · U", "隧道 · U"),
     ("Two's complement", "补码"),

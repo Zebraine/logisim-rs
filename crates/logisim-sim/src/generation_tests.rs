@@ -146,3 +146,51 @@ fn nested_nand_xor_reuses_subtrees_and_preserves_all_eight_input_rows() {
         .unwrap();
     verify(&a, &a.generate_with_basis(GateBasis::Nand).unwrap());
 }
+
+#[test]
+fn expression_only_thirty_two_input_xor_simulates_with_standard_and_nand_gates() {
+    let mut a = Analysis::expressions();
+    for i in 0..32 {
+        a.add_input(format!("I{i}")).unwrap();
+    }
+    a.add_output("Y".into()).unwrap();
+    a.apply_expression(0, &a.inputs().join(" ^ ")).unwrap();
+    for basis in [GateBasis::Standard, GateBasis::Nand] {
+        let circuit = a.generate_with_basis(basis).unwrap();
+        let inputs: Vec<_> = a
+            .inputs()
+            .iter()
+            .map(|name| {
+                circuit
+                    .components
+                    .iter()
+                    .find(|c| &c.label == name)
+                    .unwrap()
+                    .id
+            })
+            .collect();
+        let output = circuit
+            .components
+            .iter()
+            .find(|c| c.label == "Y")
+            .unwrap()
+            .id;
+        let mut sim = Simulator::default();
+        sim.synchronize(&circuit);
+        let mut patterns = vec![0u32, u32::MAX, 0x12345678, 0xAAAAAAAA, 0x55555555];
+        for bit in 0..32 {
+            patterns.extend([1 << bit, !(1 << bit)]);
+        }
+        for row in patterns {
+            for (i, id) in inputs.iter().enumerate() {
+                sim.set_input(*id, (row >> (31 - i)) & 1);
+            }
+            sim.settle_compiled().unwrap();
+            assert!(sim.diagnostics().is_empty());
+            assert_eq!(
+                sim.port_value(output, 0).unwrap().number(),
+                Some(row.count_ones() % 2)
+            );
+        }
+    }
+}

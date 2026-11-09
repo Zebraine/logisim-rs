@@ -55,6 +55,21 @@ impl Node {
             }
         }
     }
+    fn uses_input(&self, index: usize) -> bool {
+        match self {
+            Self::Input(i) => *i == index,
+            Self::Not(n) => n.uses_input(index),
+            Self::Binary(_, a, b) => a.uses_input(index) || b.uses_input(index),
+            Self::Constant(_) => false,
+        }
+    }
+    fn node_count(&self) -> usize {
+        match self {
+            Self::Not(n) => 1 + n.node_count(),
+            Self::Binary(_, a, b) => 1 + a.node_count() + b.node_count(),
+            _ => 1,
+        }
+    }
     pub(super) fn remap_inputs(&mut self, inputs: &[usize]) {
         match self {
             Self::Input(i) => *i = inputs[*i],
@@ -113,6 +128,12 @@ impl Node {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Expression(pub(super) Node);
 impl Expression {
+    pub(super) fn uses_input(&self, index: usize) -> bool {
+        self.0.uses_input(index)
+    }
+    pub(super) fn node_count(&self) -> usize {
+        self.0.node_count()
+    }
     pub fn parse(text: &str, inputs: &[String]) -> Result<Self> {
         if text.len() > MAX_EXPRESSION_BYTES || inputs.len() > MAX_INPUTS {
             return Err(Error::new("Expression exceeds the size or depth limit."));

@@ -174,7 +174,7 @@ fn limits_constants_and_dont_cares_are_explicit() {
         a.apply_expression(0, text).unwrap();
         assert!(a.generate().is_ok());
     }
-    for i in 0..MAX_INPUTS {
+    for i in 0..MAX_TABLE_INPUTS {
         a.add_input(format!("I{i}")).unwrap();
     }
     let before = a.clone();

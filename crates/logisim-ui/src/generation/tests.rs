@@ -331,9 +331,9 @@ fn cancelled_and_replaced_generation_results_never_change_the_draft_or_document(
 
 #[test]
 fn work_budget_failure_keeps_the_table_and_expression_generation_available() {
-    use logisim_core::generation::{Cell, MAX_INPUTS};
+    use logisim_core::generation::{Cell, MAX_TABLE_INPUTS};
     let mut a = Analysis::default();
-    for i in 0..MAX_INPUTS {
+    for i in 0..MAX_TABLE_INPUTS {
         a.add_input(format!("I{i}")).unwrap();
     }
     a.add_output("Y".into()).unwrap();
@@ -396,4 +396,103 @@ fn cached_forms_survive_output_switches_rename_and_restore_but_not_table_changes
     w.generator.analysis.set_cell(0, 0, Cell::DontCare).unwrap();
     w.generator.refresh();
     assert!(!w.generator.computing);
+}
+
+#[test]
+fn localized_expression_mode_builds_without_tables_and_materializes_on_request() {
+    use crate::{Language, i18n, i18n_tests::frame_at_size};
+    for language in Language::ALL {
+        let ctx = egui::Context::default();
+        crate::configure(&ctx);
+        let mut w = Workspace::default();
+        w.set_language(language);
+        w.open_generator();
+        let label = |key: &str| i18n::with_language(language, || tr(key).to_owned());
+        click(&ctx, &mut w, &label("Expression mode"));
+        assert!(w.generator.analysis.is_expression_mode());
+        w.generator.draft = "A ^ B".into();
+        click(&ctx, &mut w, &label("Apply"));
+        assert_eq!(w.generator.analysis.rows(), 0);
+        click(&ctx, &mut w, &label("Truth Table"));
+        click(&ctx, &mut w, &label("Create Truth Table"));
+        assert_eq!(w.generator.analysis.rows(), 4);
+        assert_eq!(w.generator.applied, "A ^ B");
+        click(&ctx, &mut w, &label("Expression mode"));
+        for i in 2..32 {
+            w.generator.analysis.add_input(format!("I{i}")).unwrap();
+        }
+        w.generator
+            .analysis
+            .apply_expression(0, &w.generator.analysis.inputs().join(" ^ "))
+            .unwrap();
+        w.generator.refresh();
+        assert!(!w.generator.computing);
+        w.generator.tab = Tab::Table;
+        let mut labels = vec![];
+        for _ in 0..3 {
+            labels = frame_at_size(&ctx, &mut w, vec![], egui::vec2(720.0, 480.0));
+        }
+        assert!(labels.iter().any(|(s, _)| *s
+            == label(
+                "Complete truth tables support at most 12 inputs. The expressions are preserved."
+            )));
+        assert!(
+            !labels
+                .iter()
+                .any(|(s, _)| *s == label("Create Truth Table"))
+        );
+        w.generator.request_mode(false);
+        finish_jobs(&mut w);
+        assert!(w.generator.analysis.is_expression_mode());
+        assert_eq!(w.generator.analysis.rows(), 0);
+        assert!(w.generator.error.is_some());
+        click(&ctx, &mut w, &label("Build Circuit"));
+        assert_eq!(w.project().circuits.len(), 2);
+        assert_eq!(
+            w.circuit()
+                .components
+                .iter()
+                .filter(|c| c.kind == Kind::Gate(logisim_core::Gate::Xor))
+                .count(),
+            31
+        );
+    }
+}
+
+#[test]
+fn variable_add_controls_follow_table_expression_and_output_limits() {
+    let ctx = egui::Context::default();
+    crate::configure(&ctx);
+    let mut w = Workspace::default();
+    w.open_generator();
+    for i in 2..12 {
+        w.generator.inputs.name = format!("I{i}");
+        click(&ctx, &mut w, "Add");
+    }
+    assert_eq!(w.generator.analysis.inputs().len(), 12);
+    w.generator.inputs.name = "I12".into();
+    click(&ctx, &mut w, "Add");
+    assert_eq!(w.generator.analysis.inputs().len(), 12);
+    click(&ctx, &mut w, "Expression mode");
+    click(&ctx, &mut w, "Input variables");
+    for i in 12..32 {
+        w.generator.inputs.name = format!("I{i}");
+        click(&ctx, &mut w, "Add");
+    }
+    assert_eq!(w.generator.analysis.inputs().len(), 32);
+    click(&ctx, &mut w, "Output variables");
+    for i in 1..32 {
+        w.generator.outputs.name = format!("O{i}");
+        click(&ctx, &mut w, "Add");
+    }
+    assert_eq!(w.generator.analysis.outputs().len(), 32);
+    for _ in 0..3 {
+        crate::i18n_tests::frame_at_size(&ctx, &mut w, vec![], egui::vec2(720.0, 480.0));
+    }
+    let labels = crate::i18n_tests::frame_at_size(&ctx, &mut w, vec![], egui::vec2(720.0, 480.0));
+    assert!(
+        labels
+            .iter()
+            .any(|(label, rect)| label == "Add" && rect.bottom() <= 480.0)
+    );
 }

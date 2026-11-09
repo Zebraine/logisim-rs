@@ -19,6 +19,9 @@ impl Minimizer {
         output: usize,
         form: Form,
     ) -> Option<Result<Expression>> {
+        if analysis.is_expression_mode() {
+            return None;
+        }
         let column = analysis.outputs.get(output)?;
         self.entries
             .iter()

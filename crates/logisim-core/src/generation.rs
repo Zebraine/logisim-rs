@@ -6,6 +6,7 @@ pub use cache::Minimizer;
 mod expression;
 mod layout;
 mod minimize;
+mod mode;
 #[cfg(test)]
 mod tests;
 mod work;
@@ -13,7 +14,8 @@ mod work;
 use crate::Circuit;
 pub use expression::Expression;
 
-pub const MAX_INPUTS: usize = 12;
+pub const MAX_INPUTS: usize = 32;
+pub const MAX_TABLE_INPUTS: usize = 12;
 pub const MAX_OUTPUTS: usize = 32;
 pub const MAX_EXPRESSION_BYTES: usize = 16_384;
 pub const MAX_GENERATED_ITEMS: usize = crate::MAX_CIRCUIT_ITEMS;
@@ -104,6 +106,7 @@ impl Output {
     pub fn name(&self) -> &str {
         &self.name
     }
+    /// Empty in expression mode; no complete truth table has been materialized.
     pub fn values(&self) -> &[Cell] {
         &self.values
     }
@@ -115,6 +118,7 @@ impl Output {
 pub struct Analysis {
     inputs: Vec<String>,
     outputs: Vec<Output>,
+    expression_mode: bool,
 }
 impl Analysis {
     pub fn inputs(&self) -> &[String] {
@@ -123,8 +127,22 @@ impl Analysis {
     pub fn outputs(&self) -> &[Output] {
         &self.outputs
     }
+    /// Materialized row count. Expression-only specifications have zero rows.
     pub fn rows(&self) -> usize {
-        1 << self.inputs.len()
+        if self.expression_mode {
+            0
+        } else {
+            1 << self.inputs.len()
+        }
+    }
+    pub fn is_expression_mode(&self) -> bool {
+        self.expression_mode
+    }
+    pub fn expressions() -> Self {
+        Self {
+            expression_mode: true,
+            ..Self::default()
+        }
     }
     pub fn input_value(&self, row: usize, input: usize) -> Option<bool> {
         (row < self.rows() && input < self.inputs.len())
@@ -157,8 +175,13 @@ impl Analysis {
     }
     pub fn add_input(&mut self, name: String) -> Result<()> {
         self.validate_name(&name, None)?;
+        if !self.expression_mode && self.inputs.len() == MAX_TABLE_INPUTS {
+            return Err(Error::new(
+                "At most 12 inputs are supported. Switch to expression mode for more inputs.",
+            ));
+        }
         if self.inputs.len() == MAX_INPUTS {
-            return Err(Error::new("At most 12 inputs are supported."));
+            return Err(Error::new("At most 32 expression inputs are supported."));
         }
         self.inputs.push(name);
         for output in &mut self.outputs {
@@ -174,7 +197,9 @@ impl Analysis {
         self.outputs.push(Output {
             name,
             values: vec![Cell::DontCare; self.rows()],
-            expression: None,
+            expression: self
+                .expression_mode
+                .then_some(Expression(expression::Node::Constant(false))),
         });
         Ok(())
     }
@@ -190,7 +215,26 @@ impl Analysis {
     }
     pub fn remove(&mut self, input: bool, index: usize) -> Result<()> {
         self.check_index(input, index)?;
-        if input {
+        if input && self.expression_mode {
+            if self
+                .outputs
+                .iter()
+                .any(|o| o.expression.as_ref().is_some_and(|e| e.uses_input(index)))
+            {
+                return Err(Error::new(
+                    "This input is used by an expression. Edit the expression before removing it.",
+                ));
+            }
+            let mapping: Vec<_> = (0..self.inputs.len())
+                .map(|i| if i > index { i - 1 } else { i })
+                .collect();
+            for output in &mut self.outputs {
+                if let Some(expression) = &mut output.expression {
+                    expression.0.remap_inputs(&mapping);
+                }
+            }
+            self.inputs.remove(index);
+        } else if input {
             self.inputs.remove(index);
             let bit = 1 << (self.inputs.len() - index);
             let rows = self.rows();
@@ -291,6 +335,9 @@ impl Analysis {
         work: &mut work::Work<'_>,
     ) -> Result<Expression> {
         self.check_index(false, output)?;
+        if self.expression_mode {
+            return Err(Error::new("Create a truth table before minimizing."));
+        }
         minimize::minimize(&self.outputs[output].values, self.inputs.len(), form, work)
     }
     /// Already supplied expressions are available without table simplification.

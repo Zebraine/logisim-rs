@@ -11,6 +11,7 @@ pub struct Request {
 }
 #[derive(Clone)]
 enum Operation {
+    Mode { expressions: bool },
     Minimize { output: usize, form: Form },
     Build { name: String, basis: GateBasis },
 }
@@ -19,6 +20,9 @@ pub struct Reply {
     result: Result<Outcome, Error>,
 }
 enum Outcome {
+    Converted {
+        analysis: Analysis,
+    },
     Minimized {
         applied: Expression,
         minimized: Expression,
@@ -32,6 +36,13 @@ impl Request {
     pub fn execute(&self, cancelled: impl Fn() -> bool) -> Result<Reply, Error> {
         let mut cache = self.cache.clone();
         let result = (|| match &self.operation {
+            Operation::Mode { expressions } => Ok(Outcome::Converted {
+                analysis: if *expressions {
+                    cache.expressions(&self.analysis, &cancelled)?
+                } else {
+                    self.analysis.truth_table(&cancelled)?
+                },
+            }),
             Operation::Minimize { output, form } => {
                 let minimized = cache.minimized(&self.analysis, *output, *form, &cancelled)?;
                 let applied = match self.analysis.supplied_expression(*output) {
@@ -60,7 +71,7 @@ impl Generator {
     }
     fn request(&mut self, operation: Operation) {
         self.cancel_computation();
-        self.building = matches!(operation, Operation::Build { .. });
+        self.building = matches!(operation, Operation::Build { .. } | Operation::Mode { .. });
         self.computing = true;
         self.error = None;
         self.requested = Some(Request {
@@ -71,7 +82,7 @@ impl Generator {
         });
     }
     pub(super) fn request_minimize(&mut self) {
-        if self.analysis.outputs().is_empty() {
+        if self.analysis.is_expression_mode() || self.analysis.outputs().is_empty() {
             return;
         }
         if let Some(result) = self.cache.cached(&self.analysis, self.output, self.form) {
@@ -103,6 +114,9 @@ impl Generator {
             output: self.output,
             form: self.form,
         });
+    }
+    pub(super) fn request_mode(&mut self, expressions: bool) {
+        self.request(Operation::Mode { expressions });
     }
     pub(super) fn request_build(&mut self) {
         self.request(Operation::Build {
@@ -138,6 +152,15 @@ impl Workspace {
             reply.result
         });
         match result {
+            Ok(Outcome::Converted { analysis }) => {
+                g.analysis = analysis;
+                g.tab = if g.analysis.is_expression_mode() {
+                    Tab::Expression
+                } else {
+                    Tab::Table
+                };
+                g.refresh();
+            }
             Ok(Outcome::Minimized { applied, minimized }) => {
                 g.applied = applied.text(g.analysis.inputs());
                 g.draft.clone_from(&g.applied);

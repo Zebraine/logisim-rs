@@ -1082,3 +1082,36 @@ fn pin_tristate_pull_and_world_label_locations_roundtrip() {
     assert!(restored.warnings.is_empty());
     assert_eq!(restored.document, imported.document);
 }
+
+#[test]
+fn expression_only_generation_saves_thirty_two_inputs_without_analysis_metadata() {
+    use logisim_core::generation::Analysis;
+    let mut a = Analysis::expressions();
+    for i in 0..32 {
+        a.add_input(format!("I{i}")).unwrap();
+    }
+    a.add_output("Y".into()).unwrap();
+    a.apply_expression(0, &a.inputs().join(" ^ ")).unwrap();
+    let document = Document::single("xor32", a.generate().unwrap());
+    let xml = serialize(&document).unwrap();
+    let loaded = parse(&xml).unwrap();
+    assert!(loaded.warnings.is_empty());
+    assert_eq!(serialize(&loaded.document).unwrap(), xml);
+    let circuit = &loaded.document.main_circuit().circuit;
+    assert_eq!(
+        circuit
+            .components
+            .iter()
+            .filter(|c| c.kind == Kind::Pin && !c.output)
+            .count(),
+        32
+    );
+    assert_eq!(
+        circuit
+            .components
+            .iter()
+            .filter(|c| c.kind == Kind::Gate(Gate::Xor))
+            .count(),
+        31
+    );
+}

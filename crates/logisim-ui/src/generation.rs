@@ -119,8 +119,12 @@ impl Generator {
             let available = ctx.content_rect().size();
             ui.set_width((available.x - 80.0).clamp(280.0, 760.0));
             ui.heading(tr("Combinational Circuit Generator"));
-            ui.weak(tr("Single-bit inputs · up to 12 inputs and 32 outputs"));
+            ui.weak(tr("Truth tables: 12 inputs · Expressions: 32 inputs · Outputs: 32"));
             let pending = self.pending();
+            let mut expression_mode = self.analysis.is_expression_mode();
+            if ui.add_enabled(!pending && !self.computing, egui::Checkbox::new(&mut expression_mode, tr("Expression mode"))).on_hover_text(tr("Switching to expressions resolves all x entries to 0 or 1.")).changed() {
+                self.request_mode(expression_mode);
+            }
             ui.horizontal_wrapped(|ui| {
                 for (tab, label) in [
                     (Tab::Inputs, "Input variables"),
@@ -151,8 +155,8 @@ impl Generator {
                         .max_height(height).min_scrolled_height(height).show(ui, |ui| {
                             ui.set_min_height(height);
                             match self.tab {
-                                Tab::Inputs => self.variables(ui, true),
-                                Tab::Outputs => self.variables(ui, false),
+                                Tab::Inputs => self.variables(ui, true, height),
+                                Tab::Outputs => self.variables(ui, false, height),
                                 Tab::Expression => self.expression(ui),
                                 Tab::Minimized => self.minimized(ui),
                                 Tab::Table => unreachable!(),
@@ -204,7 +208,14 @@ impl Generator {
             self.open = false;
         }
     }
-    fn variables(&mut self, ui: &mut Ui, input: bool) {
+    fn variables(&mut self, ui: &mut Ui, input: bool, height: f32) {
+        let limit = if !input {
+            logisim_core::generation::MAX_OUTPUTS
+        } else if self.analysis.is_expression_mode() {
+            logisim_core::generation::MAX_INPUTS
+        } else {
+            logisim_core::generation::MAX_TABLE_INPUTS
+        };
         let names: Vec<_> = if input {
             self.analysis.inputs().to_vec()
         } else {
@@ -220,22 +231,28 @@ impl Generator {
             &mut self.outputs
         };
         let mut action = None;
-        ui.horizontal(|ui| {
-            ui.vertical(|ui| {
-                ui.set_min_width(200.0);
-                for (index, name) in names.iter().enumerate() {
-                    if ui
-                        .selectable_label(fields.selected == Some(index), name)
-                        .clicked()
-                    {
-                        fields.selected = Some(index);
-                        fields.name = name.clone();
-                    }
-                }
-                if names.is_empty() {
-                    ui.weak(tr("No variables"));
-                }
-            });
+        ui.horizontal_top(|ui| {
+            egui::ScrollArea::vertical()
+                .id_salt(("generator-variable-list", input))
+                .max_width(220.0)
+                .max_height((height - 160.0).clamp(60.0, 200.0))
+                .show(ui, |ui| {
+                    ui.vertical(|ui| {
+                        ui.set_min_width(200.0);
+                        for (index, name) in names.iter().enumerate() {
+                            if ui
+                                .selectable_label(fields.selected == Some(index), name)
+                                .clicked()
+                            {
+                                fields.selected = Some(index);
+                                fields.name = name.clone();
+                            }
+                        }
+                        if names.is_empty() {
+                            ui.weak(tr("No variables"));
+                        }
+                    });
+                });
             ui.vertical(|ui| {
                 let selected = fields.selected.filter(|i| *i < names.len());
                 if ui
@@ -280,13 +297,13 @@ impl Generator {
                 action = Some(3);
             }
             if ui
-                .add_enabled(names.len() < 8, egui::Button::new(tr("Add")))
+                .add_enabled(names.len() < limit, egui::Button::new(tr("Add")))
                 .clicked()
             {
                 action = Some(4);
             }
         });
-        if input {
+        if input && !self.analysis.is_expression_mode() {
             ui.weak(tr("The first input is the most significant table bit. Removing an input turns conflicting rows into x."));
         }
         if let Some(action) = action {
@@ -323,7 +340,24 @@ impl Generator {
             self.result(result);
         }
     }
+    fn unmaterialized_table(&mut self, ui: &mut Ui) {
+        ui.weak(tr("Expressions are stored without enumerating inputs. Generate a complete table only when needed."));
+        if self.analysis.inputs().len() > logisim_core::generation::MAX_TABLE_INPUTS {
+            ui.weak(tr(
+                "Complete truth tables support at most 12 inputs. The expressions are preserved.",
+            ));
+        } else if ui
+            .add_enabled(!self.computing, egui::Button::new(tr("Create Truth Table")))
+            .clicked()
+        {
+            self.request_mode(false);
+        }
+    }
     fn table(&mut self, ui: &mut Ui, height: f32) {
+        if self.analysis.is_expression_mode() {
+            self.unmaterialized_table(ui);
+            return;
+        }
         ui.weak(tr("Click an output: 0 → 1 → x. x is a don't-care and will become 0 or 1 in the generated circuit."));
         let mut edit = None;
         let columns = self.analysis.inputs().len() + self.analysis.outputs().len();
@@ -418,7 +452,7 @@ impl Generator {
                 .id_salt("generator-expression")
                 .code_editor()
                 .char_limit(MAX_EXPRESSION_BYTES)
-                .desired_rows(5)
+                .desired_rows(3)
                 .desired_width(f32::INFINITY),
         );
         ui.weak(tr(
@@ -454,6 +488,10 @@ impl Generator {
         });
     }
     fn minimized(&mut self, ui: &mut Ui) {
+        if self.analysis.is_expression_mode() {
+            self.unmaterialized_table(ui);
+            return;
+        }
         if !self.output_selector(ui) {
             return;
         }

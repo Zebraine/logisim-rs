@@ -25,6 +25,14 @@ impl<'a> Work<'a> {
         self.remaining = self.remaining.checked_sub(1).ok_or_else(Self::exhausted)?;
         Ok(())
     }
+    pub fn spend(&mut self, units: usize) -> Result<()> {
+        self.step()?;
+        self.remaining = self
+            .remaining
+            .checked_sub(units)
+            .ok_or_else(Self::exhausted)?;
+        Ok(())
+    }
     pub fn exhausted() -> Error {
         Error::new("Simplification exceeded its work or size limit. The truth table is preserved.")
     }
