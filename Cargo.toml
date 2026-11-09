@@ -9,6 +9,7 @@ members = [
     "crates/logisim-plugin-sdk",
     "plugins/course",
     "plugins/ttl",
+    "plugins/ttl-combinational",
     "crates/logisim-sim",
     "crates/logisim-file",
     "crates/logisim-ui",

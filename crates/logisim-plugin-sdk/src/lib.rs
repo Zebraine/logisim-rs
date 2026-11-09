@@ -1,6 +1,7 @@
 //! Rust SDK for the versioned Wasm interface. Only the export macro needs an unsafe
 //! attribute (symbol naming); memory buffers and parsing use safe Rust throughout.
 pub mod frame;
+pub mod stateless;
 use api::{MAX_MESSAGE, Request, Response};
 pub use logisim_plugin_api as api;
 use std::sync::Mutex;

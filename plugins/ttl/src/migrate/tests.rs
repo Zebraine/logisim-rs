@@ -13,6 +13,61 @@ fn source() -> PluginSource {
     }
 }
 #[test]
+fn mixed_batches_use_their_own_definitions_and_reject_ambiguous_or_missing_modules() {
+    let api::Response::Manifest(extra) =
+        logisim_ttl_combinational_plugin::handle(api::Request::Describe)
+    else {
+        panic!()
+    };
+    let extra_source = PluginSource {
+        plugin: extra.id.clone(),
+        version: extra.version.clone(),
+        path: "ttl-combinational.wasm".into(),
+        fallback: String::new(),
+    };
+    let modules = [
+        (crate::graphics::manifest(), source()),
+        (&extra, extra_source.clone()),
+    ];
+    let input = xml("7400", "").replace("</circuit>", r#"<comp lib="t" name="74283" loc="(500,200)"><a name="VccGndPorts" val="true"/></comp></circuit>"#);
+    assert!(convert(&input, crate::graphics::manifest(), source()).is_err());
+    assert!(convert(&input, &extra, extra_source.clone()).is_err());
+    let converted = convert_many(&input, &modules).unwrap();
+    let project = logisim_file::parse(&converted).unwrap().document;
+    let components = &project.main_circuit().circuit.components;
+    assert_eq!(
+        components[0].plugin.as_ref().unwrap().plugin,
+        source().plugin
+    );
+    assert_eq!(components[1].plugin.as_ref().unwrap().plugin, extra.id);
+    assert_eq!(components[1].ports().len(), 16);
+    assert_eq!(project.plugin_sources.len(), 2);
+    let mut duplicate = extra.clone();
+    duplicate.id = "test.ambiguous".into();
+    let duplicate_source = PluginSource {
+        plugin: duplicate.id.clone(),
+        ..extra_source.clone()
+    };
+    assert!(
+        convert_many(
+            &input,
+            &[
+                (&extra, extra_source.clone()),
+                (&duplicate, duplicate_source)
+            ]
+        )
+        .is_err()
+    );
+    assert!(
+        convert_many(
+            &input,
+            &[(&extra, extra_source.clone()), (&extra, extra_source)]
+        )
+        .is_err()
+    );
+    assert!(convert_many(&input.replace("74283", "74165"), &modules).is_err());
+}
+#[test]
 fn all_models_options_and_orientations_migrate_without_moving_wires() {
     for kind in crate::model::Ttl::ALL {
         for facing in logisim_core::Facing::ALL {
@@ -63,6 +118,7 @@ fn all_models_options_and_orientations_migrate_without_moving_wires() {
 fn unknown_models_attributes_and_omissions_are_rejected() {
     for input in [
         xml("74125", ""),
+        xml("7400-powered", ""),
         xml("7400", r#"<a name="VccGndPorts" val="yes"/>"#),
         xml("7400", r#"<a name="width" val="1"/>"#),
         xml("7400", r#"<a name="facing" val="up"/>"#),

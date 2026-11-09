@@ -34,8 +34,10 @@ jobs:
         run: cargo test --workspace --all-features --locked --offline
       - name: Build and verify dynamic plugins
         run: |
-          cargo build -p logisim-course-plugin -p logisim-ttl-plugin --release --target wasm32-unknown-unknown --locked --offline
+          cargo build -p logisim-course-plugin -p logisim-ttl-plugin -p logisim-ttl-combinational-plugin --release --target wasm32-unknown-unknown --locked --offline
           cargo run -p logisim-plugin --bin logisim-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_course_plugin.wasm
           cargo run -p logisim-course-plugin --features host-check --bin course-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_course_plugin.wasm
           cargo run -p logisim-plugin --bin logisim-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_ttl_plugin.wasm
           cargo run -p logisim-ttl-plugin --features host-check --bin ttl-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_ttl_plugin.wasm
+          cargo run -p logisim-plugin --bin logisim-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_ttl_combinational_plugin.wasm
+          cargo run -p logisim-ttl-combinational-plugin --features host-check --bin ttl-combinational-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_ttl_combinational_plugin.wasm

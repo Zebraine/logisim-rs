@@ -35,17 +35,20 @@ jobs:
           cargo fetch --locked
       - name: Build and verify bundled plugins
         run: |
-          cargo build -p logisim-course-plugin -p logisim-ttl-plugin --release --target wasm32-unknown-unknown --locked --offline
+          cargo build -p logisim-course-plugin -p logisim-ttl-plugin -p logisim-ttl-combinational-plugin --release --target wasm32-unknown-unknown --locked --offline
           cargo run -p logisim-plugin --bin logisim-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_course_plugin.wasm
           cargo run -p logisim-course-plugin --features host-check --bin course-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_course_plugin.wasm
           cargo run -p logisim-plugin --bin logisim-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_ttl_plugin.wasm
           cargo run -p logisim-ttl-plugin --features host-check --bin ttl-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_ttl_plugin.wasm
+          cargo run -p logisim-plugin --bin logisim-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_ttl_combinational_plugin.wasm
+          cargo run -p logisim-ttl-combinational-plugin --features host-check --bin ttl-combinational-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_ttl_combinational_plugin.wasm
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: bundled-wasm
           path: |
             target/wasm32-unknown-unknown/release/logisim_course_plugin.wasm
             target/wasm32-unknown-unknown/release/logisim_ttl_plugin.wasm
+            target/wasm32-unknown-unknown/release/logisim_ttl_combinational_plugin.wasm
           if-no-files-found: error
 
   desktop:
@@ -77,7 +80,7 @@ jobs:
           name: bundled-wasm
           path: target/release-plugin
       - name: Package desktop and examples
-        run: python .github/scripts/package.py "$BUILD_TARGET" --plugin course=target/release-plugin/logisim_course_plugin.wasm --plugin ttl=target/release-plugin/logisim_ttl_plugin.wasm
+        run: python .github/scripts/package.py "$BUILD_TARGET" --plugin course=target/release-plugin/logisim_course_plugin.wasm --plugin ttl=target/release-plugin/logisim_ttl_plugin.wasm --plugin ttl-combinational=target/release-plugin/logisim_ttl_combinational_plugin.wasm
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: package-${{ matrix.target }}

@@ -21,7 +21,7 @@ fn manifest_interfaces_and_contracts_are_bounded_and_stateless() {
             tool: c.tool.id.clone(),
             properties: c.properties.clone(),
         };
-        let contract = stable::contract(config).unwrap().unwrap();
+        let contract = LIBRARY.contract(config).unwrap().unwrap();
         contract.validate(&c.tool).unwrap();
         assert_eq!(contract.state_inputs, None);
         assert_eq!(contract.outputs.len(), chip.kind.gates().len());
@@ -68,7 +68,7 @@ fn malformed_requests_do_not_bypass_schema_or_stateless_contract() {
         assert!(matches!(handle(Request::Evaluate(bad)), Response::Error(_)));
     }
     assert!(
-        stable::frame(
+        handle_stable_frame(
             &StableConfig {
                 tool: c.tool.id,
                 properties: c.properties

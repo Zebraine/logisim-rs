@@ -51,14 +51,54 @@ pub fn convert(
     manifest: &api::Manifest,
     source: PluginSource,
 ) -> Result<String, String> {
+    convert_many(xml, &[(manifest, source)])
+}
+/// Route observed TTL names to explicit module definitions; ambiguous models fail atomically.
+pub fn convert_many(
+    xml: &str,
+    modules: &[(&api::Manifest, PluginSource)],
+) -> Result<String, String> {
     if xml.len() > logisim_file::MAX_BYTES {
         return Err("Input exceeds the circuit file limit".into());
     }
-    manifest.validate()?;
-    source.validate()?;
-    if source.plugin != manifest.id || source.version != manifest.version {
-        return Err("Plugin source identity mismatch".into());
+    if modules.is_empty() || modules.len() > 16 {
+        return Err("Choose 1–16 TTL modules".into());
     }
+    let mut definitions = BTreeMap::new();
+    let mut identities = BTreeSet::new();
+    for (manifest, source) in modules {
+        manifest.validate()?;
+        source.validate()?;
+        if source.plugin != manifest.id
+            || source.version != manifest.version
+            || !identities.insert((&manifest.id, &manifest.version))
+        {
+            return Err("Plugin source identity mismatch or duplicate".into());
+        }
+        for definition in manifest.components() {
+            let name = definition
+                .tool
+                .id
+                .strip_suffix("-powered")
+                .unwrap_or(&definition.tool.id);
+            if name.is_empty() || !name.bytes().all(|b| b.is_ascii_digit()) {
+                return Err("Expected numeric TTL tool identities".into());
+            }
+            if definitions
+                .insert(definition.tool.id.clone(), definition)
+                .is_some()
+            {
+                return Err("Ambiguous TTL model across modules".into());
+            }
+        }
+    }
+    let known = |name: Option<&str>| {
+        name.is_some_and(|name| {
+            !name.is_empty()
+                && name.bytes().all(|b| b.is_ascii_digit())
+                && definitions.contains_key(name)
+        })
+    };
     let tree = roxmltree::Document::parse_with_options(
         xml,
         roxmltree::ParsingOptions {
@@ -94,9 +134,7 @@ pub fn convert(
             for tool in lib.children().filter(|n| n.is_element()) {
                 if !tool.has_tag_name("tool")
                     || tool.attributes().any(|a| a.name() != "name")
-                    || crate::model::Ttl::ALL
-                        .into_iter()
-                        .all(|t| Some(t.name()) != tool.attribute("name"))
+                    || !known(tool.attribute("name"))
                 {
                     return Err("Unsupported TTL library tool".into());
                 }
@@ -112,7 +150,7 @@ pub fn convert(
     while ids.contains(lib_id.as_str()) {
         lib_id.push('_');
     }
-    let definitions = manifest.components();
+    let mut used = BTreeSet::new();
     let mut count = 0;
     for c in root.descendants().filter(|n| n.has_tag_name("comp")) {
         if !c.attribute("lib").is_some_and(|id| libraries.contains(id)) {
@@ -124,20 +162,23 @@ pub fn convert(
             return Err("Unsupported TTL component metadata".into());
         }
         let name = c.attribute("name").ok_or("Missing TTL model")?;
-        let kind = crate::model::Ttl::ALL
-            .into_iter()
-            .find(|t| t.name() == name)
-            .ok_or("Unsupported TTL model")?;
+        if !known(Some(name)) {
+            return Err("Unsupported TTL model".into());
+        }
         let attrs = attributes(c)?;
-        let chip = crate::model::Chip {
-            kind,
-            power: attrs.get("VccGndPorts").is_some_and(|s| s == "true"),
-        };
+        let id = format!(
+            "{name}{}",
+            if attrs.get("VccGndPorts").is_some_and(|s| s == "true") {
+                "-powered"
+            } else {
+                ""
+            }
+        );
         let mut definition = definitions
-            .iter()
-            .find(|d| d.tool.id == chip.id())
+            .get(&id)
             .ok_or("Plugin has no compatible TTL tool")?
             .clone();
+        used.insert((definition.plugin.clone(), definition.version.clone()));
         definition.properties.insert(
             "internal".into(),
             attrs
@@ -149,7 +190,7 @@ pub fn convert(
         let json = serde_json::to_string(&definition).map_err(|e| e.to_string())?;
         let mut out = format!(
             "<comp lib=\"{lib_id}\" name=\"{}\" loc=\"{}\"><a name=\"definition\" val=\"{}\"/>",
-            chip.id(),
+            id,
             escape(c.attribute("loc").ok_or("Missing position")?),
             escape(&json)
         );
@@ -174,10 +215,7 @@ pub fn convert(
     for tool in root.descendants().filter(|n| {
         n.has_tag_name("tool") && n.attribute("lib").is_some_and(|l| libraries.contains(l))
     }) {
-        if crate::model::Ttl::ALL
-            .into_iter()
-            .all(|t| Some(t.name()) != tool.attribute("name"))
-        {
+        if !known(tool.attribute("name")) {
             return Err("Unsupported TTL palette tool".into());
         }
         attributes(tool)?;
@@ -197,7 +235,12 @@ pub fn convert(
         .ok_or("Invalid project tag")?
         + root.range().start
         + 1;
-    let sources = serde_json::to_string(&vec![source]).map_err(|e| e.to_string())?;
+    let sources: Vec<_> = modules
+        .iter()
+        .filter(|(_, s)| used.contains(&(s.plugin.clone(), s.version.clone())))
+        .map(|(_, s)| s)
+        .collect();
+    let sources = serde_json::to_string(&sources).map_err(|e| e.to_string())?;
     edits.push((insert..insert,format!("\n<lib name=\"{lib_id}\" desc=\"logisim-rs#plugin-v1\"><a name=\"sources\" val=\"{}\"/></lib>",escape(&sources))));
     // An insertion at the start of the first library must precede its removal.
     edits.sort_by_key(|(r, _)| (r.start, r.end));
