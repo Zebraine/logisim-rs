@@ -37,6 +37,10 @@
 !/crates/**/build.rs
 !/crates/**/src/**/*.rs
 
+# Language catalogs are compile-time inputs, embedded in the application.
+!/crates/logisim-ui/locales/en.json
+!/crates/logisim-ui/locales/zh-CN.json
+
 # Published CPU examples and their shared runtime plugin only.
 !/examples/
 !/examples/course/

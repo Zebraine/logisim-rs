@@ -25,7 +25,7 @@ git diff --check
 ## 修改与提交
 
 按职责在现有 crate 中扩展，避免课程电路特例。回归覆盖受影响的四态、实例隔离、编辑历史、文件往返与失败路径。
-UI 文案集中于 `crates/logisim-ui/src/i18n.rs`，使用 `tr` / `tf!`，控件 ID 不依赖翻译。
+UI 文案集中于 `crates/logisim-ui/locales/`，使用 `tr` / `tf!`，控件 ID 不依赖翻译。
 
 测试由所属模块的 `#[cfg(test)] mod tests;` 加载：小套件放 `tests.rs`，大套件按功能拆到
 `tests/`，共享辅助代码放 `support`。跨模块流程放 crate 根测试入口；不为测试扩大生产 API，
@@ -34,6 +34,7 @@ UI 文案集中于 `crates/logisim-ui/src/i18n.rs`，使用 `tr` / `tf!`，控�
 Git 采用 `.gitignore` 白名单，仅包含：
 
 - 必要的 Rust 源码、Cargo/工具链文件、LICENSE 和 Git/构建配置。
+- `crates/logisim-ui/locales/` 中编译必需的英语、简体中文词条。
 - 根目录 `README.md`、`CONTRIBUTING.md`、`AGENTS.md`。
 - `examples/course/*.circ` 及共用的 `course.wasm`。
 

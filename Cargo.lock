@@ -1324,6 +1324,8 @@ version = "0.1.0"
 dependencies = [
  "egui",
  "logisim-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
