@@ -35,21 +35,21 @@ fn simulation_continues_without_gui_and_latest_slot_does_not_queue_frames() {
     let (mut workspace, _, _) = workspace();
     let mut worker = Worker::new(|| {});
     worker.synchronize(&mut workspace, false);
-    worker.action(SimulationAction::SetTickRate(4096));
+    worker.action(SimulationAction::SetTickRate(32768));
     worker.action(SimulationAction::ToggleTicks);
     // No receive/render calls: the first snapshot must not block computation.
     thread::sleep(Duration::from_millis(150));
     let first = worker.shared.latest.lock().unwrap().take().unwrap();
     assert!(first.view.ticks > 1);
     assert!(first.view.automatic_ticks);
-    assert_eq!(first.view.tick_hz, 4096);
+    assert_eq!(first.view.tick_hz, 32768);
     thread::sleep(Duration::from_millis(100));
     let second = worker.shared.latest.lock().unwrap().take().unwrap();
     assert!(second.view.ticks > first.view.ticks);
     assert!(second.total_ticks > first.total_ticks);
     worker.action(SimulationAction::ToggleEnabled);
     wait(&mut worker, &mut workspace, |v| {
-        !v.enabled && v.tick_hz == 4096
+        !v.enabled && v.tick_hz == 32768
     });
     let ticks = workspace.simulation_mut().ticks;
     thread::sleep(Duration::from_millis(40));

@@ -366,11 +366,14 @@ impl SimulationUi {
                 "Completed UI frames per second, measured over about one second. Idle redraws are included.",
             ),
             (
-                tf!("Target: {} Hz", self.view.tick_hz),
+                tf!("Target: {} Hz", frequency::format_target(self.view.tick_hz)),
                 "Configured automatic clock tick frequency.",
             ),
             (
-                tf!("Actual: {} Hz", format!("{:.1}", self.view.actual_tick_hz)),
+                tf!(
+                    "Actual: {} Hz",
+                    frequency::format_actual(self.view.actual_tick_hz)
+                ),
                 "Successful clock ticks per second, measured over about one second. Includes manual ticks; not full clock cycles or propagation steps.",
             ),
         ] {
@@ -391,7 +394,7 @@ impl SimulationUi {
             ui.weak(tf!(
                 "{} clock ticks · {} ticks/s",
                 self.view.ticks,
-                self.view.tick_hz
+                frequency::format_target(self.view.tick_hz)
             ));
         }
         if !self.view.enabled && self.view.pending > 0 {

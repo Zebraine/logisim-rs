@@ -7,51 +7,58 @@ use logisim_core::{Kind, Point};
 fn runtime_rates_are_visible_beside_controls_in_both_languages_and_narrow_windows() {
     for language in Language::ALL {
         for size in [egui::vec2(1200.0, 820.0), egui::vec2(720.0, 480.0)] {
-            let ctx = Context::default();
-            configure(&ctx);
-            let mut app = Workspace::default();
-            app.set_language(language);
-            app.set_simulation(SimulationView {
-                enabled: true,
-                has_clocks: true,
-                tick_hz: 4096,
-                actual_tick_hz: 1766.5,
-                frames_per_second: Some(59.9),
-                ..Default::default()
-            });
-            let before = app.project().clone();
-            let mut labels = vec![];
-            for _ in 0..3 {
-                labels = frame_at_size(&ctx, &mut app, vec![], size);
+            for (target_hz, actual_hz, target, actual) in [
+                (512, 512.3, "512", "512.3"),
+                (1024, 1024.0, "1k", "1.0k"),
+                (1536, 1766.5, "1.5k", "1.7k"),
+                (32768, 32768.0, "32k", "32.0k"),
+            ] {
+                let ctx = Context::default();
+                configure(&ctx);
+                let mut app = Workspace::default();
+                app.set_language(language);
+                app.set_simulation(SimulationView {
+                    enabled: true,
+                    has_clocks: true,
+                    tick_hz: target_hz,
+                    actual_tick_hz: actual_hz,
+                    frames_per_second: Some(59.9),
+                    ..Default::default()
+                });
+                let before = app.project().clone();
+                let mut labels = vec![];
+                for _ in 0..3 {
+                    labels = frame_at_size(&ctx, &mut app, vec![], size);
+                }
+                let expected = i18n::with_language(language, || {
+                    [
+                        tf!("FPS: {}", "59.9"),
+                        tf!("Target: {} Hz", target),
+                        tf!("Actual: {} Hz", actual),
+                    ]
+                });
+                let auto = i18n::with_language(language, || i18n::tr("Auto ticks"));
+                let auto = labels.iter().find(|(text, _)| text == auto).unwrap().1;
+                for expected in expected {
+                    let rect = labels
+                        .iter()
+                        .find(|(text, _)| text == &expected)
+                        .unwrap_or_else(|| panic!("Missing {expected}: {labels:?}"))
+                        .1;
+                    assert!(
+                        rect.left() >= 0.0 && rect.right() <= size.x,
+                        "{expected}: {rect:?}"
+                    );
+                    assert!(
+                        rect.bottom() <= app.canvas.rect.top(),
+                        "{expected} is outside the toolbar"
+                    );
+                    assert!(rect.left() >= auto.right() || rect.top() >= auto.bottom());
+                }
+                assert_eq!(app.project(), &before);
+                assert!(!app.editor.can_undo());
+                assert!(app.take_simulation_actions().is_empty());
             }
-            let expected = i18n::with_language(language, || {
-                [
-                    tf!("FPS: {}", "59.9"),
-                    tf!("Target: {} Hz", 4096),
-                    tf!("Actual: {} Hz", "1766.5"),
-                ]
-            });
-            let auto = i18n::with_language(language, || i18n::tr("Auto ticks"));
-            let auto = labels.iter().find(|(text, _)| text == auto).unwrap().1;
-            for expected in expected {
-                let rect = labels
-                    .iter()
-                    .find(|(text, _)| text == &expected)
-                    .unwrap_or_else(|| panic!("Missing {expected}: {labels:?}"))
-                    .1;
-                assert!(
-                    rect.left() >= 0.0 && rect.right() <= size.x,
-                    "{expected}: {rect:?}"
-                );
-                assert!(
-                    rect.bottom() <= app.canvas.rect.top(),
-                    "{expected} is outside the toolbar"
-                );
-                assert!(rect.left() >= auto.right() || rect.top() >= auto.bottom());
-            }
-            assert_eq!(app.project(), &before);
-            assert!(!app.editor.can_undo());
-            assert!(app.take_simulation_actions().is_empty());
         }
     }
 }
@@ -158,19 +165,29 @@ fn tick_frequency_presets_custom_validation_cancel_and_modal_shortcuts_in_both_l
         app.editor.simulation.view.tick_hz = DEFAULT_TICK_HZ;
         let t = |s| i18n::with_language(language, || i18n::tr(s).to_owned());
         let before = app.project().clone();
-        click(&ctx, &mut app, &t("Simulate"));
-        click(&ctx, &mut app, &t("Tick frequency"));
-        click(&ctx, &mut app, "4096 Hz");
-        assert_eq!(
-            app.take_simulation_actions(),
-            vec![SimulationAction::SetTickRate(4096)]
-        );
-        app.editor.simulation.view.tick_hz = 4096;
+        for (label, hz) in [
+            ("512 Hz", 512),
+            ("1k Hz", 1024),
+            ("2k Hz", 2048),
+            ("4k Hz", 4096),
+            ("8k Hz", 8192),
+            ("16k Hz", 16384),
+            ("32k Hz", 32768),
+        ] {
+            click(&ctx, &mut app, &t("Simulate"));
+            click(&ctx, &mut app, &t("Tick frequency"));
+            click(&ctx, &mut app, label);
+            assert_eq!(
+                app.take_simulation_actions(),
+                vec![SimulationAction::SetTickRate(hz)]
+            );
+            app.editor.simulation.view.tick_hz = hz;
+        }
         click(&ctx, &mut app, &t("Simulate"));
         click(&ctx, &mut app, &t("Tick frequency"));
         click(&ctx, &mut app, &t("Custom…"));
         frame(&ctx, &mut app, vec![]);
-        for bad in ["0", "4097", "abc", "1.5"] {
+        for bad in ["0", "32769", "abc", "1.5"] {
             replace_input(&ctx, &mut app, bad);
             let labels = frame(&ctx, &mut app, vec![]);
             assert!(has(
@@ -205,6 +222,17 @@ fn tick_frequency_presets_custom_validation_cancel_and_modal_shortcuts_in_both_l
         );
         assert!(app.editor.simulation.tick_rate_draft.is_none());
         app.editor.simulation.view.tick_hz = 250;
+        click(&ctx, &mut app, &t("Simulate"));
+        click(&ctx, &mut app, &t("Tick frequency"));
+        click(&ctx, &mut app, &t("Custom…"));
+        frame(&ctx, &mut app, vec![]);
+        replace_input(&ctx, &mut app, "32768");
+        click(&ctx, &mut app, &t("Apply"));
+        assert_eq!(
+            app.take_simulation_actions(),
+            vec![SimulationAction::SetTickRate(32768)]
+        );
+        app.editor.simulation.view.tick_hz = 32768;
         click(&ctx, &mut app, &t("Simulate"));
         click(&ctx, &mut app, &t("Tick frequency"));
         click(&ctx, &mut app, &t("Custom…"));

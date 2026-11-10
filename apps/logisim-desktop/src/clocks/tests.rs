@@ -40,15 +40,15 @@ fn defaults_custom_rates_and_invalid_commands() {
     c.present(&mut view);
     assert_eq!(view.tick_hz, 4);
     assert!(!view.automatic_ticks);
-    for hz in [1, 3, 250, 4096] {
+    for hz in [1, 3, 250, 4096, 8192, 16384, 32768] {
         c.action(&SimulationAction::SetTickRate(hz));
         c.present(&mut view);
         assert_eq!(view.tick_hz, hz);
     }
-    for hz in [0, 4097, u32::MAX] {
+    for hz in [0, 32769, u32::MAX] {
         c.action(&SimulationAction::SetTickRate(hz));
         c.present(&mut view);
-        assert_eq!(view.tick_hz, 4096);
+        assert_eq!(view.tick_hz, 32768);
     }
 }
 #[test]
@@ -99,15 +99,15 @@ fn pacing_pauses_without_backlog_and_waits_for_propagation() {
     );
 }
 #[test]
-fn high_frequency_batches_preserve_every_edge_at_render_frame_cadence() {
+fn high_frequency_batches_preserve_every_edge_at_worker_poll_cadence() {
     let (mut sim, id) = fixture();
     let mut c = Clocks::default();
-    c.action(&SimulationAction::SetTickRate(4096));
+    c.action(&SimulationAction::SetTickRate(32768));
     c.action(&SimulationAction::ToggleTicks);
     let start = Instant::now();
-    let period = Duration::from_secs_f64(1.0 / 4096.0);
+    let period = Duration::from_secs_f64(1.0 / 32768.0);
     poll(&mut c, start, &mut sim);
-    for frame in 1..=64 {
+    for frame in 1..=512 {
         poll(&mut c, start + period * (64 * frame), &mut sim);
         assert_eq!(sim.ticks(), u64::from(64 * frame));
         assert_eq!(sim.pending_count(), 0);
@@ -116,7 +116,7 @@ fn high_frequency_batches_preserve_every_edge_at_render_frame_cadence() {
             Some(32 * frame)
         );
     }
-    assert_eq!(sim.ticks(), 4096);
+    assert_eq!(sim.ticks(), 32768);
     assert!(!sim.limited());
     assert!(sim.diagnostics(&[]).is_empty());
 }

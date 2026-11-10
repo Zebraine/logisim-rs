@@ -4,8 +4,8 @@ use crate::{i18n::tr, tf};
 use egui::{Color32, Context, Id, Key, Modal, TextEdit, Ui};
 
 pub const DEFAULT_TICK_HZ: u32 = 4;
-pub const MAX_TICK_HZ: u32 = 4096;
-const PRESETS: [u32; 13] = [
+pub const MAX_TICK_HZ: u32 = 32768;
+const PRESETS: [u32; 16] = [
     1,
     2,
     4,
@@ -18,15 +18,37 @@ const PRESETS: [u32; 13] = [
     512,
     1024,
     2048,
+    4096,
+    8192,
+    16384,
     MAX_TICK_HZ,
 ];
+
+// Frequency shorthand follows the binary tick presets: 1k = 1024 Hz.
+pub(super) fn format_target(hz: u32) -> String {
+    if hz < 1024 {
+        hz.to_string()
+    } else {
+        let scaled = format!("{:.3}", f64::from(hz) / 1024.0);
+        format!("{}k", scaled.trim_end_matches('0').trim_end_matches('.'))
+    }
+}
+
+pub(super) fn format_actual(hz: f64) -> String {
+    if hz < 1024.0 {
+        format!("{hz:.1}")
+    } else {
+        format!("{:.1}k", hz / 1024.0)
+    }
+}
 
 impl SimulationUi {
     pub(super) fn frequency_menu(&mut self, ui: &mut Ui) {
         ui.menu_button(tr("Tick frequency"), |ui| {
             for hz in PRESETS {
                 if ui
-                    .selectable_label(self.view.tick_hz == hz, format!("{hz} Hz"))
+                    .selectable_label(self.view.tick_hz == hz, format!("{} Hz", format_target(hz)))
+                    .on_hover_text(format!("{hz} Hz"))
                     .clicked()
                 {
                     self.actions.push(SimulationAction::SetTickRate(hz));
