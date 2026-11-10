@@ -1,6 +1,7 @@
 //! Generic rendering and property/action controls for plugin-owned definitions.
 mod import;
 pub(crate) mod keyboard;
+mod raster;
 pub use import::PluginImportTarget;
 pub use keyboard::PluginInputTarget;
 use logisim_core::plugin::api::presentation::{Library, Presentation};
@@ -322,6 +323,9 @@ pub(crate) fn draw(
                 .paint(&p, at(*position), Align2::LEFT_TOP);
             }
         }
+    }
+    if let Some(image) = view.and_then(|v| v.plugin_rasters.get(&c.id)) {
+        raster::draw(&p, canvas, c, image, ghost);
     }
     if view.is_some_and(|v| v.keyboard_focus == Some(c.id)) {
         p.rect_stroke(

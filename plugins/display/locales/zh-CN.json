@@ -1,0 +1,12 @@
+{
+  "Pixel displays": "像素显示",
+  "Framebuffer 16×16": "帧缓冲显示器 16×16",
+  "Framebuffer 32×32": "帧缓冲显示器 32×32",
+  "Clock": "时钟",
+  "Color": "颜色",
+  "Write": "写入",
+  "Clear": "清屏",
+  "Present": "提交画面",
+  "Palette": "调色板",
+  "Grayscale": "灰度"
+}

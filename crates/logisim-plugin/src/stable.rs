@@ -176,3 +176,17 @@ impl StableInstance {
         result
     }
 }
+
+impl StableInstance {
+    pub fn raster(
+        &mut self,
+        state: &[u8],
+        previous: Option<&Arc<logisim_plugin_api::raster::Image>>,
+    ) -> Result<Option<Arc<logisim_plugin_api::raster::Image>>> {
+        if let Some(fault) = &self.fault {
+            return Err(fault.clone());
+        }
+        let result = self.instance.raster(&self.component, state, previous);
+        self.finish(result)
+    }
+}

@@ -1,6 +1,7 @@
 //! Rust SDK for the versioned Wasm interface. Only the export macro needs an unsafe
 //! attribute (symbol naming); memory buffers and parsing use safe Rust throughout.
 pub mod frame;
+pub mod raster;
 pub mod stateless;
 use api::{MAX_MESSAGE, Request, Response};
 pub use logisim_plugin_api as api;
@@ -59,6 +60,21 @@ fn metadata(value: &impl serde::Serialize) -> u64 {
 /// instance is reused for simulation. Each component has independent module memory.
 #[macro_export]
 macro_rules! export_plugin {
+    ($handler:path $(, stable = $stable:path)? $(, presentation = $ui:path)? $(, reconfiguration = $policy:path)? $(, interaction = $input:path)?, raster = $raster:path) => {
+        $crate::export_plugin!($handler $(, stable = $stable)? $(, presentation = $ui)? $(, reconfiguration = $policy)? $(, interaction = $input)?);
+        #[cfg(target_arch = "wasm32")]
+        #[allow(unsafe_code)]
+        #[unsafe(no_mangle)]
+        pub extern "C" fn logisim_raster_version() -> u32 { $crate::api::raster::VERSION }
+        #[cfg(target_arch = "wasm32")]
+        #[allow(unsafe_code)]
+        #[unsafe(no_mangle)]
+        pub extern "C" fn logisim_raster_config(length: u32) -> u32 { $crate::raster::configure(length) }
+        #[cfg(target_arch = "wasm32")]
+        #[allow(unsafe_code)]
+        #[unsafe(no_mangle)]
+        pub extern "C" fn logisim_raster_call(length: u32) -> u64 { $crate::raster::call(length, $raster) }
+    };
     ($handler:path $(, stable = $stable:path)? $(, presentation = $ui:path)? $(, reconfiguration = $policy:path)?, interaction = $input:path) => {
         $crate::export_plugin!($handler $(, stable = $stable)? $(, presentation = $ui)? $(, reconfiguration = $policy)?);
         #[cfg(target_arch = "wasm32")]

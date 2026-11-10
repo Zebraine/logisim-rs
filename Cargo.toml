@@ -12,6 +12,7 @@ members = [
     "plugins/ttl-combinational",
     "plugins/ttl-sequential",
     "plugins/input",
+    "plugins/display",
     "crates/logisim-sim",
     "crates/logisim-file",
     "crates/logisim-ui",

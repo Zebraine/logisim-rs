@@ -38,6 +38,9 @@ fn present(circuit: &Circuit, sim: &Simulator) -> SimulationView {
         }
     }
     for c in &circuit.components {
+        if let Some(image) = sim.plugin_raster(c.id) {
+            view.plugin_rasters.insert(c.id, Arc::clone(image));
+        }
         if c.kind == Kind::Plugin
             && let Some(graphics) = sim.plugin_graphics(c.id)
         {

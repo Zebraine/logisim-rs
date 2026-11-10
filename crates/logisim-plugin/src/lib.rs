@@ -3,6 +3,7 @@ mod frame;
 mod interaction;
 mod metadata;
 mod presentation;
+mod raster;
 mod reconfiguration;
 mod stable;
 #[cfg(test)]
@@ -78,7 +79,9 @@ impl Plugin {
     }
     pub fn instantiate(&self, component: &Component) -> Result<Instance> {
         self.check_component(component)?;
-        Instance::new(&self.module)
+        let mut instance = Instance::new(&self.module)?;
+        instance.bind_raster(component)?;
+        Ok(instance)
     }
     pub fn check_component(&self, component: &Component) -> Result<()> {
         component.validate()?;
@@ -96,6 +99,7 @@ pub struct Instance {
     interaction: Option<TypedFunc<(), u64>>,
     reconfiguration: Option<TypedFunc<(), u64>>,
     frame: Option<frame::FrameApi>,
+    raster: Option<raster::RasterApi>,
     abi: u32,
     store: Store<StoreLimits>,
     memory: Memory,
@@ -142,6 +146,7 @@ impl Instance {
                 "logisim_reconfiguration",
                 logisim_plugin_api::reconfiguration::VERSION,
             )?,
+            raster: raster::RasterApi::load(&instance, &mut store)?,
             frame,
             abi,
             memory: instance

@@ -67,6 +67,7 @@ pub struct StableOutputs {
 /// `outputs_changed: false` promises that replacing the old state with `state` cannot
 /// affect ANY output drive or runtime graphic for ANY legal inputs with these properties,
 /// including future read addresses, not just the inputs sampled in this request.
+/// For raster v1 modules this also covers the state-only raster image.
 /// `true` conservatively invalidates the output cache even if nothing actually changed.
 ///
 /// `fixed_point: true` promises that sampling the returned state again with the same

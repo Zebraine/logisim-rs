@@ -42,7 +42,7 @@ fn module(id: &str, abi: u32, contract: Option<api::StableContract>, fault: &str
         if abi >= 3 {
             Response::StableTransition(StateTransition {
                 state,
-                outputs_changed: matches!(fault, "conservative" | "output"),
+                outputs_changed: matches!(fault, "conservative" | "output" | "raster"),
                 fixed_point: !matches!(fault, "conservative" | "resample" | "oscillate"),
             })
         } else {
@@ -97,9 +97,21 @@ fn module(id: &str, abi: u32, contract: Option<api::StableContract>, fault: &str
     } else {
         format!("i64.const {sample}")
     };
+    let raster = if fault == "raster" {
+        r#"(data (i32.const 200000) "LSR1")
+        (global $raster (mut i32) (i32.const 0))
+        (func (export "logisim_raster_version") (result i32) i32.const 1)
+        (func (export "logisim_raster_config") (param i32) (result i32) i32.const 0)
+        (func (export "logisim_raster_call") (param i32) (result i64)
+            global.get $raster if unreachable end
+            i32.const 1 global.set $raster
+            i64.const 171798891840)"#
+    } else {
+        ""
+    };
     let bytes = wat::parse_str(format!(
         r#"(module (memory (export "memory") 8)
-      (global $outputs (mut i32) (i32.const 0)) {data}
+      (global $outputs (mut i32) (i32.const 0)) {data} {raster}
       (func (export "logisim_abi") (result i32) i32.const {abi})
       (func (export "logisim_buffer") (param i32) (result i32) i32.const 0)
       (func (export "logisim_call") (param $n i32) (result i64)
@@ -495,4 +507,29 @@ fn cooperative_batches_keep_state_only_work_pending_and_bound_convergence() {
         assert!(!sim.limited());
         assert!(sim.prepare_compiled().is_ok());
     }
+}
+
+#[test]
+fn raster_fault_after_state_commit_publishes_error_and_stops_stable_execution() {
+    let mut c = Circuit::default();
+    let mut registry = Registry::default();
+    let p = library(
+        &mut c,
+        &mut registry,
+        module("raster.test", 3, contract(false, true), "raster"),
+    );
+    let mut sim = Simulator::default();
+    sim.set_plugins(registry);
+    sim.synchronize(&c);
+    assert_eq!(sim.plugin_errors().count(), 0);
+    assert!(
+        matches!(sim.settle_compiled().unwrap_err().reason, Failure::Plugin { component, .. } if component == p)
+    );
+    assert_eq!(sim.port_value(p, 0), Some(Value::filled(1, Bit::Error)));
+    assert!(sim.plugin_raster(p).is_none());
+    assert_eq!(sim.plugin_errors().count(), 1);
+    assert!(matches!(
+        sim.settle_compiled().unwrap_err().reason,
+        Failure::Plugin { .. }
+    ));
 }

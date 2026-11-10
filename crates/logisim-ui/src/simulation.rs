@@ -83,6 +83,7 @@ pub struct SimulationIssue {
 #[derive(Default)]
 pub struct SimulationView {
     pub plugin_error_count: usize,
+    pub plugin_rasters: BTreeMap<Id, std::sync::Arc<logisim_core::plugin::api::raster::Image>>,
     pub plugin_graphics: BTreeMap<Id, Vec<logisim_core::plugin::api::Shape>>,
     pub plugin_errors: BTreeMap<Id, String>,
     pub enabled: bool,

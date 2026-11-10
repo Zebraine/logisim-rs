@@ -6,6 +6,7 @@ use logisim_core::{
     plugin::api::{self, Evaluation, Event},
 };
 use logisim_plugin::{Instance, Registry};
+use std::sync::Arc;
 
 pub(crate) struct State {
     definition: api::Component,
@@ -14,6 +15,7 @@ pub(crate) struct State {
     inputs: Option<Vec<api::Signal>>,
     outputs: Vec<api::Signal>,
     graphics: Vec<api::Shape>,
+    raster: Option<Arc<api::raster::Image>>,
     error: Option<String>,
     event_dirty: bool,
 }
@@ -34,6 +36,7 @@ impl State {
             inputs: None,
             outputs,
             graphics: vec![],
+            raster: None,
             error,
             event_dirty: false,
         }
@@ -45,6 +48,9 @@ impl State {
                 && self.inputs.as_ref() == Some(&inputs))
         {
             return;
+        }
+        if matches!(event, Event::Reset) {
+            self.raster = None;
         }
         let request = Evaluation {
             tool: self.definition.tool.id.clone(),
@@ -65,6 +71,15 @@ impl State {
                 self.state = update.state;
                 self.outputs = update.outputs;
                 self.graphics = update.graphics;
+                match self
+                    .instance
+                    .as_mut()
+                    .expect("valid plugin instance")
+                    .raster(&self.definition, &self.state, self.raster.as_ref())
+                {
+                    Ok(image) => self.raster = image,
+                    Err(error) => self.fail(error),
+                }
             }
             Err(error) => self.fail(error),
         }
@@ -72,6 +87,7 @@ impl State {
     fn fail(&mut self, error: String) {
         self.error = Some(error);
         self.graphics.clear();
+        self.raster = None;
         for (v, p) in self.outputs.iter_mut().zip(&self.definition.tool.ports) {
             *v = Value::filled(p.width, Bit::Error).into();
         }
@@ -118,6 +134,7 @@ impl Simulator {
                                 s.definition = p.clone();
                                 s.instance = Some(instance);
                                 s.event_dirty = true;
+                                s.raster = None;
                                 s
                             }
                             Err(_) => State::new(p.clone(), &self.plugins),
@@ -187,6 +204,9 @@ impl Simulator {
         );
         self.progress.restart();
         self.limited = false;
+    }
+    pub fn plugin_raster(&self, id: Id) -> Option<&Arc<api::raster::Image>> {
+        self.plugin_states.get(&id).and_then(|s| s.raster.as_ref())
     }
     pub fn plugin_graphics(&self, id: Id) -> Option<&[api::Shape]> {
         self.plugin_states.get(&id).map(|s| s.graphics.as_slice())

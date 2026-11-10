@@ -130,8 +130,14 @@ impl Simulator {
             }
             let inputs: Vec<_> = entry.values(&self.values).map(Into::into).collect();
             evaluated += 1;
-            match phase.vm.outputs(&inputs, &state.state) {
-                Ok(update) => {
+            match phase.vm.outputs(&inputs, &state.state).and_then(|output| {
+                phase
+                    .vm
+                    .raster(&state.state, state.raster.as_ref())
+                    .map(|image| (output, image))
+            }) {
+                Ok((update, image)) => {
+                    state.raster = image;
                     state.outputs = update.outputs;
                     state.graphics = update.graphics;
                     state.event_dirty = true;

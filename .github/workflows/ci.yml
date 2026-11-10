@@ -34,7 +34,7 @@ jobs:
         run: cargo test --workspace --all-features --locked --offline
       - name: Build and verify dynamic plugins
         run: |
-          cargo build -p logisim-course-plugin -p logisim-ttl-plugin -p logisim-ttl-combinational-plugin -p logisim-ttl-sequential-plugin -p logisim-input-plugin --release --target wasm32-unknown-unknown --locked --offline
+          cargo build -p logisim-course-plugin -p logisim-ttl-plugin -p logisim-ttl-combinational-plugin -p logisim-ttl-sequential-plugin -p logisim-input-plugin -p logisim-display-plugin --release --target wasm32-unknown-unknown --locked --offline
           cargo run -p logisim-plugin --bin logisim-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_course_plugin.wasm
           cargo run -p logisim-course-plugin --features host-check --bin course-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_course_plugin.wasm
           cargo run -p logisim-plugin --bin logisim-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_ttl_plugin.wasm
@@ -45,3 +45,5 @@ jobs:
           cargo run -p logisim-ttl-sequential-plugin --features host-check --bin ttl-sequential-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_ttl_sequential_plugin.wasm
           cargo run -p logisim-plugin --bin logisim-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_input_plugin.wasm
           cargo run -p logisim-input-plugin --features host-check --bin input-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_input_plugin.wasm
+          cargo run -p logisim-plugin --bin logisim-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_display_plugin.wasm
+          cargo run -p logisim-display-plugin --features host-check --bin display-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_display_plugin.wasm

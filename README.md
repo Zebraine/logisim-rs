@@ -55,6 +55,7 @@ cargo run -p logisim-rs --release --locked -- examples/course/redirect-pipeline.
 - [`ttl-combinational/ttl-combinational.wasm`](plugins/ttl-combinational/ttl-combinational.wasm)：第二批组合扩展，7447 七段译码器、7485 比较器、74125 三态缓冲器、74283 加法器。
 - [`ttl-sequential/ttl-sequential.wasm`](plugins/ttl-sequential/ttl-sequential.wasm)：第三批时序扩展，74165；保留参考程序的时钟沿装载和移位输出规则。
 
+- [`display/display.wasm`](plugins/display/display.wasm)：16×16 / 32×32 帧缓冲显示器，时钟写入、清屏与整帧提交，支持 RGB332 和灰度。
 - [`input/input.wasm`](plugins/input/input.wasm)：8 通道按键控制器，可配置映射，提供按住状态和时钟读取的事件队列；Poke 点击后接收输入，Esc/Tab 退出。
 
 TTL 的普通封装和 Vcc/GND 封装可在元件属性中切换。各批次可独立加载或同时使用。旧 `#TTL` 电路需用 `ttl-plugin-convert` 显式迁移，可传入多个批次模块；宿主不再内置 TTL。

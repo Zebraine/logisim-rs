@@ -30,9 +30,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             state: vec![],
             event: Event::Reset,
         };
-        let update = plugin
-            .instantiate(&component)?
-            .evaluate(&component, request)?;
+        let mut vm = plugin.instantiate(&component)?;
+        let update = vm.evaluate(&component, request)?;
+        if let Some(image) = vm.raster(&component, &update.state, None)? {
+            assert_eq!(
+                vm.raster(&component, &update.state, Some(&image))?
+                    .as_deref(),
+                Some(image.as_ref())
+            );
+            println!(
+                "{}: raster {}×{}",
+                component.tool.id, image.width, image.height
+            );
+        }
         println!(
             "{}: {} ports, {} static + {} runtime graphics",
             component.tool.id,

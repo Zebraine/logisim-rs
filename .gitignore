@@ -48,6 +48,8 @@
 !/plugins/ttl/ttl.wasm
 !/plugins/ttl-combinational/ttl-combinational.wasm
 !/plugins/ttl-combinational/locales/zh-CN.json
+!/plugins/display/display.wasm
+!/plugins/display/locales/zh-CN.json
 !/plugins/input/input.wasm
 !/plugins/input/locales/zh-CN.json
 !/plugins/ttl-sequential/ttl-sequential.wasm

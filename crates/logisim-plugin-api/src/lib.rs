@@ -52,6 +52,7 @@
 pub mod frame;
 pub mod interaction;
 pub mod presentation;
+pub mod raster;
 pub mod reconfiguration;
 mod stable;
 mod validate;

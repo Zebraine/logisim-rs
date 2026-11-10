@@ -29,6 +29,7 @@ pub(super) fn retain(view: &mut SimulationView, before: &Circuit, after: &Circui
     }
     keep!(
         plugin_graphics,
+        plugin_rasters,
         plugin_errors,
         buttons,
         joysticks,
