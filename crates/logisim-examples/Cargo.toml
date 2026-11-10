@@ -1,0 +1,20 @@
+[package]
+name = "logisim-examples"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "snake-example"
+path = "src/main.rs"
+
+[dependencies]
+logisim-core.workspace = true
+logisim-file.workspace = true
+logisim-plugin.workspace = true
+logisim-sim.workspace = true
+
+[lints]
+workspace = true

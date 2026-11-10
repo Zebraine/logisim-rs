@@ -68,23 +68,25 @@ def package(target, plugins):
         staging.mkdir()
         for document in ("README.md", "LICENSE"):
             shutil.copyfile(ROOT / document, staging / document)
-        examples = staging / "examples" / "course"
-        examples.mkdir(parents=True)
-        circuits = sorted((ROOT / "examples" / "course").glob("*.circ"))
-        if not circuits:
-            raise ValueError("No course examples found")
-        for circuit in circuits:
-            tree = ET.parse(circuit)
-            sources = tree.find("./lib[@desc='logisim-rs#plugin-v1']/a[@name='sources']")
-            if sources is None:
-                raise ValueError(f"Missing plugin dependency: {circuit.name}")
-            dependencies = json.loads(sources.attrib["val"])
-            if len(dependencies) != 1 or any(
-                s["path"] != "../../plugins/course/course.wasm" or s.get("fallback")
-                for s in dependencies
-            ):
-                raise ValueError(f"Non-portable plugin dependency: {circuit.name}")
-            shutil.copyfile(circuit, examples / circuit.name)
+        plugin_paths = {f"../../plugins/{name}/{name}.wasm" for name in plugins}
+        for group in ("course", "games"):
+            examples = staging / "examples" / group
+            examples.mkdir(parents=True)
+            circuits = sorted((ROOT / "examples" / group).glob("*.circ"))
+            if not circuits:
+                raise ValueError(f"No {group} examples found")
+            for circuit in circuits:
+                tree = ET.parse(circuit)
+                sources = tree.find("./lib[@desc='logisim-rs#plugin-v1']/a[@name='sources']")
+                if sources is None:
+                    raise ValueError(f"Missing plugin dependency: {circuit.name}")
+                dependencies = json.loads(sources.attrib["val"])
+                if not dependencies or any(
+                    s["path"] not in plugin_paths or s.get("fallback")
+                    for s in dependencies
+                ):
+                    raise ValueError(f"Non-portable plugin dependency: {circuit.name}")
+                shutil.copyfile(circuit, examples / circuit.name)
         for plugin_name, module in plugins.items():
             directory = staging / "plugins" / plugin_name
             directory.mkdir(parents=True)

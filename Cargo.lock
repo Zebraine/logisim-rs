@@ -1272,6 +1272,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "logisim-examples"
+version = "0.1.0"
+dependencies = [
+ "logisim-core",
+ "logisim-file",
+ "logisim-plugin",
+ "logisim-sim",
+]
+
+[[package]]
 name = "logisim-file"
 version = "0.1.0"
 dependencies = [

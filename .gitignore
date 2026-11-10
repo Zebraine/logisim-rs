@@ -59,10 +59,12 @@
 !/crates/logisim-ui/locales/en.json
 !/crates/logisim-ui/locales/zh-CN.json
 
-# Published CPU examples.
+# Published circuit examples.
 !/examples/
 !/examples/course/
 !/examples/course/*.circ
+!/examples/games/
+!/examples/games/*.circ
 
 # Local design and observation material, including each directory's README.
 /docs/
