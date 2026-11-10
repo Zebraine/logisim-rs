@@ -1,6 +1,8 @@
 //! Generic rendering and property/action controls for plugin-owned definitions.
 mod import;
+pub(crate) mod keyboard;
 pub use import::PluginImportTarget;
+pub use keyboard::PluginInputTarget;
 use logisim_core::plugin::api::presentation::{Library, Presentation};
 pub(crate) fn text<'a>(metadata: Option<&'a Presentation>, label: &'a str) -> &'a str {
     metadata.map_or(label, |m| {
@@ -197,7 +199,16 @@ pub(crate) fn runtime(
             }
         }
     }
+    let keyboard = keyboard::binding(libraries, c);
+    if keyboard.is_some() {
+        ui.weak(tr(
+            "Poke to capture keyboard input. Escape or Tab releases it.",
+        ));
+    }
     for action in &plugin.tool.actions {
+        if keyboard.is_some_and(|k| k.action == action.id) {
+            continue;
+        }
         ui.push_id(("plugin-action", c.id, &action.id), |ui| {
             let argument = sim
                 .plugin_arguments
@@ -311,6 +322,14 @@ pub(crate) fn draw(
                 .paint(&p, at(*position), Align2::LEFT_TOP);
             }
         }
+    }
+    if view.is_some_and(|v| v.keyboard_focus == Some(c.id)) {
+        p.rect_stroke(
+            bounds.expand(2.0),
+            3.0,
+            Stroke::new(2.0, crate::ACCENT),
+            StrokeKind::Outside,
+        );
     }
     if view.is_some_and(|v| v.plugin_errors.contains_key(&c.id)) {
         p.rect_stroke(

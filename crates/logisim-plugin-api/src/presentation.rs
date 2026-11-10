@@ -33,12 +33,14 @@ pub struct MemoryImport {
 pub struct Library {
     pub manifest: Manifest,
     pub presentation: Presentation,
+    pub interaction: crate::interaction::Interaction,
 }
 impl From<Manifest> for Library {
     fn from(manifest: Manifest) -> Self {
         Self {
             manifest,
             presentation: Presentation::default(),
+            interaction: Default::default(),
         }
     }
 }

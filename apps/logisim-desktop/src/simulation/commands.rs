@@ -36,7 +36,8 @@ pub fn apply_project(
         SimulationAction::ToggleInput { id, bit } => sim.toggle_input_at(path, id, bit),
         SimulationAction::SetInput { id, value } => sim.set_input_at(path, id, value),
         SimulationAction::SetInputUnknown { id } => sim.set_input_unknown_at(path, id),
-        SimulationAction::Step
+        SimulationAction::PluginInput { .. } // Worker validates its captured context.
+        | SimulationAction::Step
         | SimulationAction::ToggleTicks
         | SimulationAction::SetTickRate(_) => {}
     }

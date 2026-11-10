@@ -1,3 +1,4 @@
+mod input;
 use super::propagation::Propagation;
 use super::*;
 use crate::{
@@ -9,6 +10,7 @@ use std::time::Instant;
 
 #[derive(Default)]
 struct Engine {
+    input: Option<Box<logisim_ui::PluginInputTarget>>,
     sim: ProjectSimulator,
     clocks: Clocks,
     propagation: Propagation,
@@ -32,6 +34,14 @@ impl Engine {
                     .context
                     .as_ref()
                     .is_none_or(|old| old.mode != context.mode);
+                if plugins_changed
+                    || self
+                        .input
+                        .as_ref()
+                        .is_some_and(|t| !Self::input_matches(t, &context))
+                {
+                    self.release_input();
+                }
                 self.sim.set_plugins(context.plugins.clone());
                 let electrical_changed = self.sim.synchronize(&context.project, context.root);
                 if electrical_changed || plugins_changed || mode_changed {
@@ -41,10 +51,14 @@ impl Engine {
                 self.context = Some(context);
             }
             Command::Suspend(suspended) => {
+                if suspended {
+                    self.release_input();
+                }
                 self.suspended = suspended;
                 self.clocks.suspend();
             }
             Command::NewDocument => {
+                self.input = None;
                 self.sim = ProjectSimulator::default();
                 self.propagation = Propagation::default();
                 self.context = None;
@@ -59,8 +73,12 @@ impl Engine {
                 if matches!(action, SimulationAction::Reset) {
                     self.propagation = Propagation::for_mode(context.mode);
                 }
-                self.clocks.action(&action);
-                apply_project(&mut self.sim, &context.path, action);
+                if let SimulationAction::PluginInput { target, event } = action {
+                    self.input_event(target, event);
+                } else {
+                    self.clocks.action(&action);
+                    apply_project(&mut self.sim, &context.path, action);
+                }
                 self.total_ticks += self.sim.ticks().saturating_sub(before);
             }
             Command::Memory(revision, path, id, contents) => {

@@ -761,6 +761,7 @@
     "{} words · {} bits per word": "{} words · {} bits per word",
     "{} · {} bit(s)": "{} · {} bit(s)",
     "{} · {} · {} bit": "{} · {} · {} bit",
-    "{} · {} · {} bit(s) · Pin ({}, {})": "{} · {} · {} bit(s) · Pin ({}, {})"
+    "{} · {} · {} bit(s) · Pin ({}, {})": "{} · {} · {} bit(s) · Pin ({}, {})",
+    "Poke to capture keyboard input. Escape or Tab releases it.": "Poke to capture keyboard input. Escape or Tab releases it."
   }
 }

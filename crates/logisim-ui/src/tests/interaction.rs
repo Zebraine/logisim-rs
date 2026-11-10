@@ -2,6 +2,7 @@ mod appearance;
 mod components;
 mod editing;
 mod input_devices;
+mod plugins;
 mod simulation;
 mod support;
 mod terminals;

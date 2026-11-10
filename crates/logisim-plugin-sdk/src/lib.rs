@@ -44,6 +44,9 @@ pub fn presentation(value: api::presentation::Presentation) -> u64 {
 pub fn reconfiguration(value: api::reconfiguration::Policy) -> u64 {
     metadata(&value)
 }
+pub fn interaction(value: api::interaction::Interaction) -> u64 {
+    metadata(&value)
+}
 fn metadata(value: &impl serde::Serialize) -> u64 {
     let mut output = OUTPUT.lock().expect("response buffer");
     *output = serde_json::to_vec(value).expect("serializable metadata");
@@ -56,6 +59,17 @@ fn metadata(value: &impl serde::Serialize) -> u64 {
 /// instance is reused for simulation. Each component has independent module memory.
 #[macro_export]
 macro_rules! export_plugin {
+    ($handler:path $(, stable = $stable:path)? $(, presentation = $ui:path)? $(, reconfiguration = $policy:path)?, interaction = $input:path) => {
+        $crate::export_plugin!($handler $(, stable = $stable)? $(, presentation = $ui)? $(, reconfiguration = $policy)?);
+        #[cfg(target_arch = "wasm32")]
+        #[allow(unsafe_code)]
+        #[unsafe(no_mangle)]
+        pub extern "C" fn logisim_interaction_version() -> u32 { $crate::api::interaction::VERSION }
+        #[cfg(target_arch = "wasm32")]
+        #[allow(unsafe_code)]
+        #[unsafe(no_mangle)]
+        pub extern "C" fn logisim_interaction() -> u64 { $crate::interaction($input()) }
+    };
     ($handler:path $(, stable = $stable:path)? $(, presentation = $ui:path)?, reconfiguration = $policy:path) => {
         $crate::export_plugin!($handler $(, stable = $stable)? $(, presentation = $ui)?);
         #[cfg(target_arch = "wasm32")]

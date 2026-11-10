@@ -115,6 +115,10 @@ pub struct SimulationView {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SimulationAction {
+    PluginInput {
+        target: Box<crate::PluginInputTarget>,
+        event: logisim_core::plugin::api::interaction::InputEvent,
+    },
     PluginAction {
         id: Id,
         action: String,
@@ -165,6 +169,7 @@ pub enum SimulationAction {
 }
 #[derive(Default)]
 pub(crate) struct SimulationUi {
+    pub plugin_keyboard: Option<crate::plugins::keyboard::Focus>,
     pub tick_rate_draft: Option<String>,
     tick_rate_focus: bool,
     pub plugin_arguments: BTreeMap<(Id, String), String>,

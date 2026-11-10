@@ -1,5 +1,6 @@
 //! Sandboxed module loading. No filesystem access or implicit plugin discovery.
 mod frame;
+mod interaction;
 mod metadata;
 mod presentation;
 mod reconfiguration;
@@ -27,6 +28,7 @@ pub struct Plugin {
     manifest: Manifest,
     presentation: logisim_plugin_api::presentation::Presentation,
     reconfiguration: logisim_plugin_api::reconfiguration::Policy,
+    interaction: logisim_plugin_api::interaction::Interaction,
 }
 impl Plugin {
     pub fn load(bytes: &[u8]) -> Result<Self> {
@@ -53,17 +55,22 @@ impl Plugin {
         let reconfiguration: logisim_plugin_api::reconfiguration::Policy =
             instance.metadata(instance.reconfiguration)?;
         reconfiguration.validate(&manifest)?;
+        let interaction: logisim_plugin_api::interaction::Interaction =
+            instance.metadata(instance.interaction)?;
+        interaction.validate(&manifest)?;
         Ok(Self {
             module,
             manifest,
             presentation,
             reconfiguration,
+            interaction,
         })
     }
     pub fn library(&self) -> logisim_plugin_api::presentation::Library {
         logisim_plugin_api::presentation::Library {
             manifest: self.manifest.clone(),
             presentation: self.presentation.clone(),
+            interaction: self.interaction.clone(),
         }
     }
     pub fn manifest(&self) -> &Manifest {
@@ -86,6 +93,7 @@ impl Plugin {
 }
 pub struct Instance {
     ui: Option<TypedFunc<(), u64>>,
+    interaction: Option<TypedFunc<(), u64>>,
     reconfiguration: Option<TypedFunc<(), u64>>,
     frame: Option<frame::FrameApi>,
     abi: u32,
@@ -120,6 +128,13 @@ impl Instance {
         let frame = frame::FrameApi::load(&instance, &mut store, abi)?;
         Ok(Self {
             ui: presentation::load(&instance, &mut store)?,
+            interaction: metadata::load(
+                &instance,
+                &mut store,
+                "logisim_interaction_version",
+                "logisim_interaction",
+                logisim_plugin_api::interaction::VERSION,
+            )?,
             reconfiguration: metadata::load(
                 &instance,
                 &mut store,

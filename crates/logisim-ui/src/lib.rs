@@ -28,7 +28,7 @@ pub use i18n::Language;
 pub use settings::SimulationMode;
 mod libraries;
 mod plugins;
-pub use plugins::PluginImportTarget;
+pub use plugins::{PluginImportTarget, PluginInputTarget};
 mod project;
 mod properties;
 use project::NameDialog;

@@ -761,6 +761,7 @@
     "{} words · {} bits per word": "{} 个字 · 每字 {} 位",
     "{} · {} bit(s)": "{} · {} 位",
     "{} · {} · {} bit": "{} · {} · {} 位",
-    "{} · {} · {} bit(s) · Pin ({}, {})": "{} · {} · {} 位 · 引脚（{}, {}）"
+    "{} · {} · {} bit(s) · Pin ({}, {})": "{} · {} · {} 位 · 引脚（{}, {}）",
+    "Poke to capture keyboard input. Escape or Tab releases it.": "使用交互工具点击以接收键盘输入，按 Esc 或 Tab 退出。"
   }
 }

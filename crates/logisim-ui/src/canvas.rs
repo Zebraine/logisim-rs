@@ -87,7 +87,7 @@ impl Canvas {
     pub fn show(&mut self, ui: &mut Ui) -> egui::Response {
         let (rect, response) = ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
         self.rect = rect;
-        if response.clicked() {
+        if response.clicked() || response.is_pointer_button_down_on() {
             response.request_focus();
         }
         if ui.is_enabled()

@@ -31,7 +31,7 @@ impl Workspace {
             || self.editor.project_error.is_some();
         if modal || !ui.is_enabled() || ui.input(|i| !i.focused) {
             self.editor.cancel_slider();
-            self.editor.simulation.keyboard_focus = None;
+            self.editor.simulation.release_keyboard();
         }
         if modal
             || self.editor.session.context.appearance_mode
@@ -67,7 +67,7 @@ impl Workspace {
             )
         {
             self.editor.simulation.release_momentary();
-            self.editor.simulation.keyboard_focus = None;
+            self.editor.simulation.release_keyboard();
             self.appearance.reset_context();
             self.canvas.reset();
             self.fit_pending = true;
@@ -181,14 +181,15 @@ impl Workspace {
                     }
                     self.fit_pending = false;
                 }
-                self.canvas.typing = self.editor.simulation.keyboard_focus.is_some()
-                    && self.editor.tool == Tool::Poke;
+                self.canvas.typing =
+                    self.editor.simulation.typing() && self.editor.tool == Tool::Poke;
                 let response = self.canvas.show(ui);
                 if self.editor.session.context.appearance_mode {
                     self.appearance
                         .show(ui, &mut self.editor, &mut self.canvas, &response);
                 } else {
-                    self.editor.show(ui, &mut self.canvas, &response);
+                    self.editor
+                        .show(ui, &mut self.canvas, &response, &self.plugins);
                 }
             });
 

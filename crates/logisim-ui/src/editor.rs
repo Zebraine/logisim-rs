@@ -212,7 +212,7 @@ impl Editor {
         self.wire_start = None;
     }
     pub fn set_tool(&mut self, tool: Tool) {
-        self.simulation.keyboard_focus = None;
+        self.simulation.release_keyboard();
         self.simulation.release_momentary();
         self.cancel_gesture();
         self.commit_properties();
@@ -421,7 +421,14 @@ impl Editor {
         grid
     }
 
-    pub fn show(&mut self, ui: &mut Ui, canvas: &mut Canvas, response: &Response) {
+    pub fn show(
+        &mut self,
+        ui: &mut Ui,
+        canvas: &mut Canvas,
+        response: &Response,
+        libraries: &[logisim_core::plugin::api::presentation::Library],
+    ) {
+        self.validate_plugin_keyboard(libraries);
         let keyboard = ui.is_enabled()
             && !ui.ctx().any_popup_open()
             && (response.has_focus()
@@ -437,20 +444,22 @@ impl Editor {
                     .is_some_and(|c| c.kind == Kind::Keyboard)
             })
         {
-            self.simulation.keyboard_focus = None;
+            self.simulation.release_keyboard();
         }
         if keyboard {
-            if let Some(id) = self.simulation.keyboard_focus {
+            if self.simulation.plugin_keyboard.is_some() {
+                self.simulation.plugin_keyboard_input(ui);
+                self.simulation.shortcuts(ui, &BTreeSet::new());
+            } else if let Some(id) = self.simulation.keyboard_focus {
                 self.simulation.shortcuts(ui, &BTreeSet::new());
                 if !crate::terminal::input(ui, id, &mut self.simulation.actions) {
-                    self.simulation.keyboard_focus = None;
+                    self.simulation.release_keyboard();
                 }
             } else {
                 self.shortcuts(ui);
             }
         }
-        let space =
-            self.simulation.keyboard_focus.is_none() && ui.input(|i| i.key_down(Key::Space));
+        let space = !self.simulation.typing() && ui.input(|i| i.key_down(Key::Space));
         if space {
             self.cancel_gesture();
         }
@@ -693,7 +702,7 @@ impl Editor {
                 let snap = self.snap(world, tolerance);
                 match self.tool {
                     Tool::Poke => {
-                        self.simulation.keyboard_focus = None;
+                        self.simulation.release_keyboard();
                         self.session.selection.clear();
                         if let Some(id) = self.hit(world, tolerance) {
                             self.session.selection.insert(id);
@@ -704,6 +713,9 @@ impl Editor {
                                 .is_some_and(|c| c.kind == Kind::Keyboard)
                             {
                                 self.simulation.keyboard_focus = Some(id);
+                                response.request_focus();
+                            }
+                            if self.focus_plugin_keyboard(id, libraries) {
                                 response.request_focus();
                             }
                             if self.simulation.view.clocks.contains(&id) {
@@ -964,8 +976,25 @@ impl Editor {
             ui.ctx().copy_text(CLIPBOARD_MARKER.to_owned());
             self.publish_clipboard = false;
         }
+        let capture = self.simulation.plugin_keyboard.is_some();
+        ui.memory_mut(|m| {
+            m.set_focus_lock_filter(
+                response.id,
+                egui::EventFilter {
+                    horizontal_arrows: capture,
+                    vertical_arrows: capture,
+                    tab: capture,
+                    escape: capture,
+                },
+            )
+        });
         let painter = ui.painter_at(canvas.rect);
-        self.simulation.view.keyboard_focus = self.simulation.keyboard_focus;
+        self.simulation.view.keyboard_focus = self.simulation.keyboard_focus.or_else(|| {
+            self.simulation
+                .plugin_keyboard
+                .as_ref()
+                .map(|f| f.target.id)
+        });
         drawing::circuit(
             &painter,
             canvas,
