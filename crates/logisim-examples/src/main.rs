@@ -1,37 +1,41 @@
-//! Reproducible, editable example documents; never linked into the desktop host.
+//! Reproducible circuit authoring and assembly tools; never linked into the desktop host.
+mod assembler;
+mod board;
 mod builder;
-mod snake;
+mod cpu;
 use std::path::Path;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args_os().skip(1).collect();
-    match args.first().and_then(|a| a.to_str()) {
-        Some("generate") if args.len() == 4 => {
-            let input = logisim_plugin::Plugin::load(&std::fs::read(&args[1])?)?;
-            let display = logisim_plugin::Plugin::load(&std::fs::read(&args[2])?)?;
-            let project = snake::generate(&input, &display, &snake::Start::default())?;
-            let text = logisim_file::serialize(&project)?;
-            let roundtrip = logisim_file::parse(&text)?;
-            assert!(roundtrip.warnings.is_empty());
-            assert!(
-                logisim_file::serialize(&roundtrip.document)? == text,
-                "File must roundtrip without changes"
-            );
-            std::fs::write(&args[3], text)?;
-            println!(
-                "Generated {} circuits, {} components",
-                project.circuits.len(),
-                project
-                    .circuits
-                    .iter()
-                    .map(|c| c.circuit.components.len())
-                    .sum::<usize>()
-            );
+    match args.first().and_then(|s| s.to_str()) {
+        Some("assemble") if args.len() == 3 => {
+            let words = assembler::assemble(&std::fs::read_to_string(&args[1])?)?;
+            std::fs::write(&args[2], assembler::hex(&words))?;
+            println!("Assembled {} words", words.len());
         }
-        Some("check") if args.len() == 2 => snake::check(Path::new(&args[1]))?,
+        Some("generate") if args.len() == 5 => {
+            let image = logisim_file::parse_hex(&std::fs::read_to_string(&args[1])?, 16, 32)
+                .map_err(|e| format!("Invalid hex image: {e:?}"))?;
+            let input = logisim_plugin::Plugin::load(&std::fs::read(&args[2])?)?;
+            let display = logisim_plugin::Plugin::load(&std::fs::read(&args[3])?)?;
+            let words: Vec<_> = (0..65536).map(|i| image.get(i)).collect();
+            let project = board::generate(&input, &display, &words)?;
+            let text = logisim_file::serialize(&project)?;
+            let parsed = logisim_file::parse(&text)?;
+            assert!(parsed.warnings.is_empty());
+            assert_eq!(
+                logisim_file::serialize(&parsed.document)?,
+                text,
+                "Roundtrip changes circuit"
+            );
+            std::fs::write(&args[4], text)?;
+            println!("Generated {} circuit definitions", project.circuits.len());
+        }
+        Some("check") if args.len() == 2 => board::check(Path::new(&args[1]))?,
         _ => {
             return Err(concat!(
-                "Usage: snake-example generate input.wasm display.wasm ",
-                "examples/games/snake.circ | check examples/games/snake.circ"
+                "Usage: cpu-tool assemble program.asm program.hex | ",
+                "generate program.hex input.wasm display.wasm game.circ | ",
+                "check examples/game"
             )
             .into());
         }

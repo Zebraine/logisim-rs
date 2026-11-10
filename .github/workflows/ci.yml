@@ -47,11 +47,11 @@ jobs:
           cargo run -p logisim-input-plugin --features host-check --bin input-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_input_plugin.wasm
           cargo run -p logisim-plugin --bin logisim-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_display_plugin.wasm
           cargo run -p logisim-display-plugin --features host-check --bin display-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_display_plugin.wasm
-      - name: Verify editable Snake example with built plugins
+      - name: Verify programmable G16 circuit with built plugins
         run: |
-          # Regenerate after authoring changes: cargo run -p logisim-examples --release --locked -- generate plugins/input/input.wasm plugins/display/display.wasm examples/games/snake.circ
-          mkdir -p target/snake-example-check/examples/games target/snake-example-check/plugins/input target/snake-example-check/plugins/display
-          cp examples/games/snake.circ target/snake-example-check/examples/games/snake.circ
-          cp target/wasm32-unknown-unknown/release/logisim_input_plugin.wasm target/snake-example-check/plugins/input/input.wasm
-          cp target/wasm32-unknown-unknown/release/logisim_display_plugin.wasm target/snake-example-check/plugins/display/display.wasm
-          cargo run -p logisim-examples --release --locked --offline -- check target/snake-example-check/examples/games/snake.circ
+          # Regenerate: cargo run -p logisim-examples --release --locked -- generate examples/game/cpu-demo.hex plugins/input/input.wasm plugins/display/display.wasm examples/game/game.circ
+          mkdir -p target/game-check/examples/game target/game-check/plugins/input target/game-check/plugins/display
+          cp examples/game/game.circ examples/game/cpu-demo.asm examples/game/cpu-demo.hex target/game-check/examples/game/
+          cp target/wasm32-unknown-unknown/release/logisim_input_plugin.wasm target/game-check/plugins/input/input.wasm
+          cp target/wasm32-unknown-unknown/release/logisim_display_plugin.wasm target/game-check/plugins/display/display.wasm
+          cargo run -p logisim-examples --release --locked --offline -- check target/game-check/examples/game

@@ -63,8 +63,10 @@
 !/examples/
 !/examples/course/
 !/examples/course/*.circ
-!/examples/games/
-!/examples/games/*.circ
+!/examples/game/
+!/examples/game/*.circ
+!/examples/game/*.asm
+!/examples/game/*.hex
 
 # Local design and observation material, including each directory's README.
 /docs/

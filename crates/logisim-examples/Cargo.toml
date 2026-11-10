@@ -7,7 +7,7 @@ license.workspace = true
 publish.workspace = true
 
 [[bin]]
-name = "snake-example"
+name = "cpu-tool"
 path = "src/main.rs"
 
 [dependencies]

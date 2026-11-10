@@ -81,14 +81,21 @@ TTL 的普通封装和 Vcc/GND 封装可在元件属性中切换。各批次可�
 重定向流水线和动态分支预测已核对完整运行轨迹，分别为 2298、1766 周期，最终显示 `0000 0038`。
 全部示例已通过导入、往返保存、插件加载和复位后 128 tick 检查；其余示例尚未完成整机验收。
 
-## 贪吃蛇示例
+## 可编程游戏电路
 
-打开 [`examples/games/snake.circ`](examples/games/snake.circ)，将自动时钟设为 1024 Hz 并启用。
-使用 Poke 点击键盘元件后，方向键转向，空格暂停/继续，Enter 重新开始，Esc 释放键盘。
-绿色为蛇，红色为食物；碰墙或碰到身体结束，填满 16×16 棋盘获胜。
+[`examples/game/game.circ`](examples/game/game.circ) 使用自定义 G16 CPU：16 位数据、8 个寄存器、
+64K×32 程序 ROM、4K×16 数据 RAM。CPU、寄存器堆、ALU 和外设总线均为可编辑子电路。
+键盘、显示、计时器和随机数通过内存映射访问。
 
-输入与显示分别使用通用 `input`、`display` 插件；游戏规则由可编辑的 `Snake engine` 子电路实现。
-内存仅保留在运行实例中。示例生成与功能检查命令见 [CI 配置](.github/workflows/ci.yml)。
+当前附带 [`cpu-demo.asm`](examples/game/cpu-demo.asm) 与对应 `.hex`，验证访存、调用和键盘绘图；
+贪吃蛇软件尚未实现。启用 4096 Hz 自动时钟，用 Poke 点击键盘后以方向键绘图，Esc 释放键盘。
+更换程序时在 Program ROM 中导入 `.hex` 并复位；数据 RAM 不随文件保存。
+
+```sh
+cargo run -p logisim-examples --release --locked -- assemble examples/game/cpu-demo.asm examples/game/cpu-demo.hex
+```
+
+指令与外设约定见汇编文件头；电路生成和验收命令见 [CI 配置](.github/workflows/ci.yml)。
 
 ## 兼容范围
 

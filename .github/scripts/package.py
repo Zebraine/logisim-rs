@@ -69,7 +69,7 @@ def package(target, plugins):
         for document in ("README.md", "LICENSE"):
             shutil.copyfile(ROOT / document, staging / document)
         plugin_paths = {f"../../plugins/{name}/{name}.wasm" for name in plugins}
-        for group in ("course", "games"):
+        for group in ("course", "game"):
             examples = staging / "examples" / group
             examples.mkdir(parents=True)
             circuits = sorted((ROOT / "examples" / group).glob("*.circ"))
@@ -87,6 +87,13 @@ def package(target, plugins):
                 ):
                     raise ValueError(f"Non-portable plugin dependency: {circuit.name}")
                 shutil.copyfile(circuit, examples / circuit.name)
+            if group == "game":
+                sources = sorted((ROOT / "examples" / group).glob("*.asm"))
+                images = sorted((ROOT / "examples" / group).glob("*.hex"))
+                if not sources or {s.stem for s in sources} != {s.stem for s in images}:
+                    raise ValueError("Game programs require matching .asm and .hex files")
+                for program in sources + images:
+                    shutil.copyfile(program, examples / program.name)
         for plugin_name, module in plugins.items():
             directory = staging / "plugins" / plugin_name
             directory.mkdir(parents=True)

@@ -1,5 +1,6 @@
 //! Deterministic document construction; no simulator callbacks or custom component kinds.
 mod expr;
+pub mod hierarchy;
 mod routing;
 pub use expr::{E, Op, any};
 use logisim_core::*;
@@ -42,11 +43,27 @@ impl Builder {
         self.cell += COLUMNS;
     }
     pub fn add(&mut self, mut c: Component) -> Id {
+        let sub = matches!(c.kind, Kind::Subcircuit(_));
+        if sub {
+            self.cell = self.cell.div_ceil(COLUMNS) * COLUMNS;
+        }
         c.position = Point::new(
             240 + (self.cell % COLUMNS) as i32 * 480,
             160 + (self.cell / COLUMNS) as i32 * 280,
         );
-        self.cell += 1;
+        self.cell += if sub {
+            COLUMNS
+                * (c.interface
+                    .ports
+                    .iter()
+                    .map(|p| p.offset.y)
+                    .max()
+                    .unwrap_or(0) as usize
+                    + 140)
+                    .div_ceil(280)
+        } else {
+            1
+        };
         self.circuit.add_component(c)
     }
     fn net(&mut self, name: &str, bits: u8, driver: bool) {
@@ -150,11 +167,29 @@ impl Builder {
                 });
                 self.emit(c, &[(1, a), (2, b), (3, &E::num(1, 0))], 0, e.bits)
             }
-            Op::Eq(a, b) => {
+            Op::Eq(a, b) | Op::Less(a, b, _) => {
                 c.kind = Kind::Arithmetic(Arithmetic::Comparator);
                 c.bits = a.bits;
-                c.arithmetic.signed = false;
-                self.emit(c, &[(1, a), (2, b)], 0, 1)
+                c.arithmetic.signed = matches!(e.op.as_ref(), Op::Less(_, _, true));
+                self.emit(
+                    c,
+                    &[(1, a), (2, b)],
+                    if matches!(e.op.as_ref(), Op::Eq(..)) {
+                        0
+                    } else {
+                        4
+                    },
+                    1,
+                )
+            }
+            Op::Shift(a, amount, mode) => {
+                c.kind = Kind::Arithmetic(Arithmetic::Shifter);
+                c.arithmetic.shift = [
+                    Shift::LogicalLeft,
+                    Shift::LogicalRight,
+                    Shift::ArithmeticRight,
+                ][*mode as usize];
+                self.emit(c, &[(1, a), (2, amount)], 0, e.bits)
             }
             Op::Mux(s, a, b) => {
                 c.kind = Kind::Plexer(Plexer::Multiplexer);
@@ -208,6 +243,7 @@ impl Builder {
         c.memory.interface = MemoryInterface::Separate;
         c.memory.simple = false;
         c.memory.select_high = true;
+        c.memory.address_bits = address.bits;
         let id = self.add(c);
         self.attach(id, 0, name, true);
         for (role, e) in [

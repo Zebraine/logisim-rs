@@ -16,6 +16,8 @@ pub enum Op {
     Add(E, E),
     Sub(E, E),
     Eq(E, E),
+    Less(E, E, bool),
+    Shift(E, E, u8),
     Mux(E, E, E),
     Slice(E, u8),
     Join(E, E),
@@ -67,6 +69,15 @@ impl E {
     }
     pub fn is(&self, n: u32) -> Self {
         self.eq(&Self::num(self.bits, n))
+    }
+    pub fn less(&self, b: &Self, signed: bool) -> Self {
+        self.same(b);
+        Self::new(1, Op::Less(self.clone(), b.clone(), signed))
+    }
+    pub fn shift(&self, amount: &Self, mode: u8) -> Self {
+        assert!(mode < 3);
+        assert_eq!(amount.bits, (self.bits - 1).ilog2() as u8 + 1);
+        Self::new(self.bits, Op::Shift(self.clone(), amount.clone(), mode))
     }
     /// Condition selects yes when one, no when zero.
     pub fn choose(&self, yes: &Self, no: &Self) -> Self {
