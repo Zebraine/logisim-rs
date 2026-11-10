@@ -83,19 +83,23 @@ TTL 的普通封装和 Vcc/GND 封装可在元件属性中切换。各批次可�
 
 ## 可编程游戏电路
 
-[`examples/game/game.circ`](examples/game/game.circ) 使用自定义 G16 CPU：16 位数据、8 个寄存器、
-64K×32 程序 ROM、4K×16 数据 RAM。CPU、寄存器堆、ALU 和外设总线均为可编辑子电路。
-键盘、显示、计时器和随机数通过内存映射访问。
+`examples/game/` 使用自定义 G16 CPU：16 位数据、8 个寄存器、64K×32 程序 ROM、4K×16 数据 RAM。
+CPU、寄存器堆、ALU 和外设总线均为可编辑子电路；游戏规则与绘图由汇编程序执行。
 
-当前附带 [`cpu-demo.asm`](examples/game/cpu-demo.asm) 与对应 `.hex`，验证访存、调用和键盘绘图；
-贪吃蛇软件尚未实现。启用 4096 Hz 自动时钟，用 Poke 点击键盘后以方向键绘图，Esc 释放键盘。
-更换程序时在 Program ROM 中导入 `.hex` 并复位；数据 RAM 不随文件保存。
+| 电路 | 程序 | 操作 |
+| --- | --- | --- |
+| [game.circ](examples/game/game.circ)（贪吃蛇） | [snake.asm](examples/game/snake.asm) / [snake.hex](examples/game/snake.hex) | 方向键转向；吃食物增长，碰墙或身体结束，填满棋盘获胜 |
+| [ping-pong.circ](examples/game/ping-pong.circ) | [ping-pong.asm](examples/game/ping-pong.asm) / [ping-pong.hex](examples/game/ping-pong.hex) | ↑/↓ 控制左拍，Z/X 控制右拍；顶部色条计分，先得 7 分获胜 |
+
+启用 4096 Hz 自动时钟，等待画面出现后用 Poke 点击键盘。两款游戏均以空格开始/暂停、Enter 重开，
+Esc 释放键盘。电路使用相同硬件；在 Program ROM 导入另一份 `.hex` 并复位即可换游戏。
+数据 RAM 不随文件保存。另保留 [cpu-demo.asm](examples/game/cpu-demo.asm) / `.hex` 作为 CPU 自检和绘图示例。
 
 ```sh
-cargo run -p logisim-examples --release --locked -- assemble examples/game/cpu-demo.asm examples/game/cpu-demo.hex
+cargo run -p logisim-examples --release --locked -- assemble examples/game/snake.asm examples/game/snake.hex
 ```
 
-指令与外设约定见汇编文件头；电路生成和验收命令见 [CI 配置](.github/workflows/ci.yml)。
+汇编后重新导入 ROM；指令与外设约定见 `cpu-demo.asm`，电路生成和验收命令见 [CI 配置](.github/workflows/ci.yml)。
 
 ## 兼容范围
 

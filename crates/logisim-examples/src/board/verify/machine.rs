@@ -171,15 +171,23 @@ impl Machine {
     }
     pub fn press(&mut self, key: Key) -> Result<()> {
         for pressed in [true, false] {
-            self.sim.plugin_action(
-                &self.root,
-                self.keyboard,
-                "key".into(),
-                InputEvent::Key { key, pressed }.argument(),
-            );
-            self.settle()?;
+            self.key(key, pressed)?;
         }
         Ok(())
+    }
+    pub fn key(&mut self, key: Key, pressed: bool) -> Result<()> {
+        self.sim.plugin_action(
+            &self.root,
+            self.keyboard,
+            "key".into(),
+            InputEvent::Key { key, pressed }.argument(),
+        );
+        self.settle()
+    }
+    pub fn set_word(&mut self, address: u32, value: u16) -> Result<()> {
+        self.sim
+            .set_memory_word(&self.io, self.ram, address, value.into());
+        self.settle()
     }
     pub fn pixel(&self, x: usize, y: usize) -> [u8; 4] {
         let image = self

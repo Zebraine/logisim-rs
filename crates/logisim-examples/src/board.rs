@@ -19,17 +19,17 @@ pub fn generate(input: &Plugin, display: &Plugin, words: &[u32]) -> Result<Proje
     let bus = io::define(&mut project)?;
     let mut b = Builder::new("G16 programmable computer / software controls keyboard and pixels");
     b.text(
-        "CPU stage: cpu-demo.asm / ROM image: cpu-demo.hex / not yet the Snake program",
+        "Software in Program ROM / import another .hex and Reset to change programs",
         Point::new(30, 50),
         16,
     );
     b.text(
-        "Enable Auto ticks at 4096 Hz. Poke keyboard; arrow keys draw pixels. Esc releases focus.",
+        "4096 Hz Auto ticks. Poke keyboard; Space starts/pauses, Enter restarts games. Esc releases focus.",
         Point::new(30, 80),
         14,
     );
     b.text(
-        "ROM: load a v2.0 raw hex image, then Reset. r0 = 0; two clock cycles per instruction.",
+        "Snake: arrows. Ping Pong: Up/Down left, Z/X right. Rules and controls are defined in .asm.",
         Point::new(30, 110),
         14,
     );

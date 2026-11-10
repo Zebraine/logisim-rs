@@ -1,4 +1,5 @@
-; G16 v1 CPU / keyboard / framebuffer demonstration. Snake software comes next.
+; G16 v1 CPU / keyboard / framebuffer demonstration.
+; Import cpu-demo.hex into either game board's Program ROM and Reset to run.
 ; 16-bit data, r0 always zero, r1-r7 writable, 32-bit instruction words.
 ; Format: OP[31:27], D[26:24], A[23:21], B[20:18], zero[17:16], IMM[15:0].
 ; Unused fields must be zero. Two rising clock edges per instruction: fetch, execute.

@@ -49,9 +49,11 @@ jobs:
           cargo run -p logisim-display-plugin --features host-check --bin display-plugin-check --locked --offline -- target/wasm32-unknown-unknown/release/logisim_display_plugin.wasm
       - name: Verify programmable G16 circuit with built plugins
         run: |
-          # Regenerate: cargo run -p logisim-examples --release --locked -- generate examples/game/cpu-demo.hex plugins/input/input.wasm plugins/display/display.wasm examples/game/game.circ
+          # Regenerate each .hex from its .asm with cpu-tool assemble.
+          # Generate game.circ from snake.hex, ping-pong.circ from ping-pong.hex.
+          # cpu-tool generate IMAGE.hex plugins/input/input.wasm plugins/display/display.wasm OUTPUT.circ
           mkdir -p target/game-check/examples/game target/game-check/plugins/input target/game-check/plugins/display
-          cp examples/game/game.circ examples/game/cpu-demo.asm examples/game/cpu-demo.hex target/game-check/examples/game/
+          cp examples/game/*.circ examples/game/*.asm examples/game/*.hex target/game-check/examples/game/
           cp target/wasm32-unknown-unknown/release/logisim_input_plugin.wasm target/game-check/plugins/input/input.wasm
           cp target/wasm32-unknown-unknown/release/logisim_display_plugin.wasm target/game-check/plugins/display/display.wasm
           cargo run -p logisim-examples --release --locked --offline -- check target/game-check/examples/game

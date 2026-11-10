@@ -5,6 +5,15 @@ use std::collections::BTreeMap;
 mod tests;
 
 pub fn assemble(source: &str) -> Result<Vec<u32>, String> {
+    Ok(compile(source)?.words)
+}
+
+pub struct Assembly {
+    pub words: Vec<u32>,
+    pub symbols: BTreeMap<String, i64>,
+}
+
+pub fn compile(source: &str) -> Result<Assembly, String> {
     if source.len() > 1_048_576 {
         return Err("Assembly source exceeds 1 MiB".into());
     }
@@ -117,7 +126,7 @@ pub fn assemble(source: &str) -> Result<Vec<u32>, String> {
     if words.is_empty() {
         return Err("Program is empty".into());
     }
-    Ok(words)
+    Ok(Assembly { words, symbols })
 }
 fn define(symbols: &mut BTreeMap<String, i64>, name: &str, value: i64) -> Result<(), String> {
     if name.is_empty()
