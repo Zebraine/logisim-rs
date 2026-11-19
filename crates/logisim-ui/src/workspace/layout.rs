@@ -210,7 +210,7 @@ impl Workspace {
 
     pub(super) fn zoom_controls(&mut self, ui: &mut Ui) {
         ui.horizontal(|ui| {
-            if ui.small_button("−").on_hover_text(tr("Zoom out")).clicked() {
+            if icons::button(ui, Icon::Minus, false, true, "Zoom out").clicked() {
                 self.canvas.set_zoom(self.canvas.camera.zoom / 1.1);
             }
             let mut percent = self.canvas.camera.zoom * 100.0;
@@ -226,7 +226,7 @@ impl Workspace {
             {
                 self.canvas.set_zoom(percent / 100.0);
             }
-            if ui.small_button("+").on_hover_text(tr("Zoom in")).clicked() {
+            if icons::button(ui, Icon::Plus, false, true, "Zoom in").clicked() {
                 self.canvas.set_zoom(self.canvas.camera.zoom * 1.1);
             }
             ui.separator();

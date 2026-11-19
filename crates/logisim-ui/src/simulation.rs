@@ -405,6 +405,22 @@ impl SimulationUi {
             "0 / 1: set selected input. Multi-bit values use hexadecimal.",
         ));
     }
+    pub fn has_component_controls(&self, c: &Component) -> bool {
+        use logisim_core::Kind;
+        self.view.ports.contains_key(&(c.id, 0))
+            || self.view.storage.contains_key(&c.id)
+            || self.view.inputs.contains_key(&c.id)
+            || self.view.clocks.contains(&c.id)
+            || matches!(
+                c.kind,
+                Kind::Keyboard
+                    | Kind::Switch
+                    | Kind::DipSwitch
+                    | Kind::Joystick
+                    | Kind::Slider
+                    | Kind::Button
+            )
+    }
     pub fn component(&mut self, ui: &mut Ui, c: &Component) {
         if c.kind == logisim_core::Kind::Plugin {
             return;

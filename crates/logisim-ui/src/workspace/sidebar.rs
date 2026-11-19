@@ -1,15 +1,25 @@
-//! Workspace sidebar; document and simulation commands stay in their existing layers.
+//! Project navigation and the resizable lower inspector.
 use crate::{
     Workspace,
-    editor::Tool,
     i18n::tr,
     icons::{self, Icon},
     project::CircuitCommand,
-    properties,
-    theme::CHROME,
+    properties, theme,
 };
-use egui::{Color32, Frame, Margin, Panel, RichText, ScrollArea, Ui};
-use logisim_core::Kind;
+use egui::{Frame, Margin, Panel, RichText, ScrollArea, Ui, vec2};
+
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum Tab {
+    #[default]
+    Circuits,
+    Components,
+}
+
+#[derive(Default)]
+pub(crate) struct Navigation {
+    tab: Tab,
+    query: String,
+}
 
 impl Workspace {
     pub(super) fn sidebar(&mut self, ui: &mut Ui) {
@@ -17,89 +27,80 @@ impl Workspace {
             .exact_size(40.0)
             .frame(
                 Frame::NONE
-                    .fill(CHROME)
-                    .inner_margin(Margin::symmetric(8, 3)),
+                    .fill(theme::CHROME)
+                    .inner_margin(Margin::symmetric(8, 5)),
             )
             .show(ui, |ui| self.zoom_controls(ui));
 
         let height = ui.available_height();
         Panel::top("project")
             .resizable(true)
-            .default_size(height * 0.5)
-            .size_range(125.0..=(height - 125.0).max(125.0))
-            .frame(Frame::NONE.fill(Color32::WHITE))
+            .default_size(height * 0.52)
+            .size_range(144.0..=(height - 98.0).max(144.0))
+            .frame(
+                Frame::NONE
+                    .fill(theme::SURFACE)
+                    .inner_margin(Margin::symmetric(8, 4)),
+            )
             .show(ui, |ui| {
-                Panel::top("project_actions")
-                    .exact_size(36.0)
-                    .frame(
-                        Frame::NONE
-                            .fill(CHROME)
-                            .inner_margin(Margin::symmetric(8, 3)),
-                    )
-                    .show(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            for (icon, name, command) in [
-                                (Icon::Plus, "Add circuit", CircuitCommand::Add),
-                                (Icon::Up, "Move up", CircuitCommand::Up),
-                                (Icon::Down, "Move down", CircuitCommand::Down),
-                                (Icon::Trash, "Remove circuit", CircuitCommand::Remove),
-                            ] {
-                                let enabled = !matches!(command,CircuitCommand::Remove) || self.editor.session.project.can_remove(self.editor.session.context.active);
-                                if icons::button(ui, icon, false, enabled, name).clicked() { self.circuit_command(command); }
-                            }
-                            if !self.editor.session.context.path.is_empty() && ui.small_button(tr("Back")).on_hover_text(tr("Return to parent instance · Alt+Left")).clicked() { self.editor.leave_instance(); }
-
-                        });
-                    });
-                ScrollArea::both()
+                self.document_header(ui);
+                ui.horizontal(|ui| {
+                    let width = (ui.available_width() - 4.0) / 2.0;
+                    for (tab, label) in
+                        [(Tab::Circuits, "Circuits"), (Tab::Components, "Components")]
+                    {
+                        if ui
+                            .add_sized(
+                                [width, 28.0],
+                                egui::Button::selectable(self.navigation.tab == tab, tr(label)),
+                            )
+                            .clicked()
+                        {
+                            self.navigation.tab = tab;
+                        }
+                    }
+                });
+                let components = self.navigation.tab == Tab::Components;
+                let query = self.navigation.query.trim().to_lowercase();
+                let count = self.result_count(components, &query);
+                ui.horizontal(|ui| {
+                    let (rect, _) = ui.allocate_exact_size(vec2(16.0, 16.0), egui::Sense::hover());
+                    icons::paint(ui.painter(), rect.shrink(1.0), Icon::Search, theme::MUTED);
+                    let response = ui.add(
+                        egui::TextEdit::singleline(&mut self.navigation.query)
+                            .id_salt("catalogue-search")
+                            .hint_text(tr("Search · Ctrl+F"))
+                            .desired_width((ui.available_width() - 42.0).max(50.0)),
+                    );
+                    if ui.is_enabled()
+                        && !ui.ctx().any_popup_open()
+                        && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::F))
+                    {
+                        response.request_focus();
+                    }
+                    theme::chip(ui, &count.to_string()).on_hover_text(tr("Results"));
+                });
+                ui.separator();
+                ScrollArea::vertical()
+                    .id_salt(("catalogue-scroll", components))
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
-                        ui.add_space(6.0);
-                        egui::CollapsingHeader::new(RichText::new(self.document.label()).strong())
-                            .id_salt("document-tree")
-                            .default_open(true)
-                            .show(ui, |ui| {
-                                let definitions: Vec<_> = self.editor.session.project.circuits.iter().map(|c|(c.id,c.name.clone())).collect();
-                                for (id,name) in definitions {
-                                    let allowed = self.editor.session.project.can_instantiate(self.editor.session.context.active,id);
-                                    let label = format!("{}{}",name,if id == self.editor.session.project.main { tr("  (main)") } else { "" });
-                                    let response = ui.selectable_label(self.editor.session.context.active == id, label)
-                                        .on_hover_text(tr("Double-click to edit; single-click another circuit to place an instance."));
-                                    if response.double_clicked() { self.editor.switch_circuit(id); }
-                                    else if response.clicked() && allowed { self.editor.session.context.appearance_mode=false; self.editor.set_tool(Tool::Place(Kind::Subcircuit(id))); }
-                                    response.context_menu(|ui| {
-                                        if ui.button(tr("Open circuit")).clicked() { self.editor.switch_circuit(id); ui.close(); }
-                                        if ui.button(tr("Analyze Circuit…")).clicked() { self.request_circuit_analysis(id); ui.close(); }
-                                        if ui.add_enabled(allowed,egui::Button::new(tr("Place instance"))).clicked() { self.editor.set_tool(Tool::Place(Kind::Subcircuit(id))); ui.close(); }
-                                        if ui.button(tr("Edit appearance")).clicked(){self.finish_edit();self.editor.switch_circuit(id);self.editor.session.context.appearance_mode=true;ui.close();}
-                                        if ui.button(tr("Rename…")).clicked() { self.editor.switch_circuit(id); self.circuit_command(CircuitCommand::Rename); ui.close(); }
-                                    });
-                                }
-                                if !self.editor.session.context.path.is_empty() {
-                                    ui.weak(self.editor.context_label()).on_hover_text(tr("Viewing this instance. Edits change the shared circuit definition."));
-                                }
-                                self.library_groups(ui);
-                                self.plugin_groups(ui);
-                                for group in super::library::groups() {
-                                    egui::CollapsingHeader::new(tr(group.key))
-                                        .id_salt(group.key)
-                                        .show(ui, |ui| {
-                                            for &kind in &group.tools {
-                                                self.library_tool(ui, kind);
-                                            }
-                                        });
-                                }
-                            });
+                        if count == 0 {
+                            ui.weak(tr("No results"));
+                        } else if components {
+                            self.components(ui, &query);
+                        } else {
+                            self.circuits(ui, &query);
+                        }
                     });
             });
-
         egui::CentralPanel::default()
-            .frame(Frame::NONE.fill(CHROME))
+            .frame(Frame::NONE.fill(theme::CHROME))
             .show(ui, |ui| {
-                let name = self.circuit_name().to_owned();
                 if self.editor.session.context.appearance_mode {
                     self.appearance.properties(ui, &mut self.editor);
                 } else {
+                    let name = self.circuit_name().to_owned();
                     properties::show(
                         ui,
                         &mut self.editor,
@@ -111,12 +112,72 @@ impl Workspace {
             });
     }
 
-    fn library_tool(&mut self, ui: &mut Ui, kind: Kind) {
-        let tool = Tool::Place(kind);
-        let response = ui.selectable_label(self.editor.tool == tool, tr(kind.name()));
-        if response.clicked() {
-            self.editor.session.context.appearance_mode = false;
-            self.editor.set_tool(tool);
+    fn document_header(&mut self, ui: &mut Ui) {
+        ui.horizontal(|ui| {
+            let (rect, _) = ui.allocate_exact_size(vec2(20.0, 24.0), egui::Sense::hover());
+            icons::paint(
+                ui.painter(),
+                rect.shrink2(vec2(2.0, 4.0)),
+                Icon::Document,
+                theme::ACCENT,
+            );
+            if self.document.dirty {
+                let (r, response) = ui.allocate_exact_size(vec2(8.0, 12.0), egui::Sense::hover());
+                ui.painter().circle_filled(r.center(), 3.0, theme::WARNING);
+                response.on_hover_text(tr("Unsaved changes"));
+            }
+            let title = format!(
+                "{}{}",
+                self.document.display_title(),
+                if self.document.partial {
+                    tr(" (partial)")
+                } else {
+                    ""
+                }
+            );
+            ui.allocate_ui_with_layout(
+                vec2(ui.available_width() - 36.0, 28.0),
+                egui::Layout::left_to_right(egui::Align::Center),
+                |ui| {
+                    ui.set_min_width(ui.available_width());
+                    ui.add(egui::Label::new(RichText::new(&title).size(15.0).strong()).truncate())
+                        .on_hover_text(&title);
+                },
+            );
+            let button = icons::button(ui, Icon::More, false, true, "Project actions");
+            egui::Popup::menu(&button).show(|ui| {
+                for (name, command) in [
+                    ("Add circuit", CircuitCommand::Add),
+                    ("Rename…", CircuitCommand::Rename),
+                    ("Move up", CircuitCommand::Up),
+                    ("Move down", CircuitCommand::Down),
+                    ("Remove circuit", CircuitCommand::Remove),
+                ] {
+                    let enabled = !matches!(command, CircuitCommand::Remove)
+                        || self.project().can_remove(self.active_circuit());
+                    if ui
+                        .add_enabled(enabled, egui::Button::new(tr(name)))
+                        .clicked()
+                    {
+                        self.circuit_command(command);
+                        ui.close();
+                    }
+                }
+                if !self.editor.session.context.path.is_empty()
+                    && ui
+                        .button(tr("Back"))
+                        .on_hover_text(tr("Return to parent instance · Alt+Left"))
+                        .clicked()
+                {
+                    self.editor.leave_instance();
+                    ui.close();
+                }
+            });
+        });
+        if !self.editor.session.context.path.is_empty() {
+            ui.weak(self.editor.context_label()).on_hover_text(tr(
+                "Viewing this instance. Edits change the shared circuit definition.",
+            ));
         }
     }
 }

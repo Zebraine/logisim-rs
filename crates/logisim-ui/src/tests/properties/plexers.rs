@@ -11,6 +11,7 @@ fn plexers_library_and_output_properties_work_in_both_languages() {
         let mut app = Workspace::default();
         app.set_language(language);
         let translated = |text| i18n::with_language(language, || i18n::tr(text).to_owned());
+        click(&ctx, &mut app, &translated("Components"));
         click(&ctx, &mut app, &translated("Plexers"));
         for kind in logisim_core::Plexer::ALL {
             if kind == logisim_core::Plexer::DisplayDecoder {

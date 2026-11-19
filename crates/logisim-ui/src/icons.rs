@@ -14,9 +14,11 @@ pub(crate) enum Icon {
     And,
     Or,
     Plus,
-    Up,
-    Down,
-    Trash,
+    More,
+    Document,
+    Chip,
+    Search,
+    Minus,
     Home,
 }
 
@@ -48,7 +50,7 @@ pub(crate) fn button(
     .inner
 }
 
-fn paint(p: &egui::Painter, r: Rect, icon: Icon, color: Color32) {
+pub(crate) fn paint(p: &egui::Painter, r: Rect, icon: Icon, color: Color32) {
     let stroke = Stroke::new(1.5, color);
     let point = |x: f32, y: f32| pos2(r.left() + r.width() * x, r.top() + r.height() * y);
     let line = |a: (f32, f32), b: (f32, f32)| {
@@ -146,25 +148,29 @@ fn paint(p: &egui::Painter, r: Rect, icon: Icon, color: Color32) {
             line((0.5, 0.1), (0.5, 0.9));
             line((0.1, 0.5), (0.9, 0.5));
         }
-        Icon::Up | Icon::Down => {
-            let (tip, end) = if matches!(icon, Icon::Up) {
-                (0.15, 0.85)
-            } else {
-                (0.85, 0.15)
-            };
-            line((0.5, tip), (0.5, end));
-            line((0.2, 0.5), (0.5, tip));
-            line((0.8, 0.5), (0.5, tip));
+        Icon::More => {
+            for x in [0.12, 0.5, 0.88] {
+                p.circle_filled(point(x, 0.5), 1.5, color);
+            }
         }
-        Icon::Trash => {
-            p.rect_stroke(
-                Rect::from_min_max(point(0.2, 0.25), point(0.8, 0.95)),
-                1,
-                stroke,
-                StrokeKind::Inside,
-            );
-            line((0.1, 0.15), (0.9, 0.15));
-            line((0.4, 0.0), (0.6, 0.0));
+        Icon::Minus => line((0.1, 0.5), (0.9, 0.5)),
+        Icon::Search => {
+            p.circle_stroke(point(0.4, 0.4), r.width() * 0.31, stroke);
+            line((0.63, 0.63), (0.95, 0.95));
+        }
+        Icon::Document => {
+            p.rect_stroke(r.shrink2(vec2(2.0, 0.0)), 2, stroke, StrokeKind::Inside);
+            line((0.32, 0.38), (0.68, 0.38));
+            line((0.32, 0.65), (0.58, 0.65));
+        }
+        Icon::Chip => {
+            p.rect_stroke(r.shrink(r.width() * 0.18), 2, stroke, StrokeKind::Inside);
+            for n in [0.32, 0.68] {
+                line((0.0, n), (0.18, n));
+                line((0.82, n), (1.0, n));
+                line((n, 0.0), (n, 0.18));
+                line((n, 0.82), (n, 1.0));
+            }
         }
         Icon::Home => {
             p.add(Shape::closed_line(

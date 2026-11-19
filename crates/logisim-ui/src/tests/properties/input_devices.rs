@@ -11,6 +11,7 @@ fn joystick_library_properties_and_rotation_undo_in_both_languages() {
         let mut app = Workspace::default();
         app.set_language(language);
         let t = |s| i18n::with_language(language, || i18n::tr(s).to_owned());
+        click(&ctx, &mut app, &t("Components"));
         click(&ctx, &mut app, &t("Input/Output"));
         frame(
             &ctx,
@@ -69,6 +70,7 @@ fn io_library_properties_and_momentary_inspector_work_in_both_languages() {
         let mut app = Workspace::default();
         app.set_language(language);
         let translated = |s: &str| i18n::with_language(language, || i18n::tr(s).to_owned());
+        click(&ctx, &mut app, &translated("Components"));
         click(&ctx, &mut app, &translated("Input/Output"));
         for kind in [
             Kind::Button,

@@ -87,6 +87,7 @@ fn parity_properties_and_library_tools_work_in_both_languages() {
         assert!(!app.circuit().component(gate).unwrap().parity_negated(0));
         app.editor.redo();
         assert!(app.circuit().component(gate).unwrap().parity_negated(0));
+        click(&ctx, &mut app, &translated("Components"));
         click(&ctx, &mut app, &translated("Gates"));
         frame(
             &ctx,

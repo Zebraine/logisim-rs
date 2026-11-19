@@ -12,6 +12,7 @@ fn arithmetic_library_and_modes_edit_in_both_languages_with_undo() {
         let mut app = Workspace::default();
         app.set_language(language);
         let translated = |text| i18n::with_language(language, || i18n::tr(text).to_owned());
+        click(&ctx, &mut app, &translated("Components"));
         click(&ctx, &mut app, &translated("Arithmetic"));
         for kind in Arithmetic::ALL {
             if kind == Arithmetic::Negator {

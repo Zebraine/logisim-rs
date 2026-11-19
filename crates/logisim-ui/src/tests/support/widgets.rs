@@ -2,7 +2,8 @@ use crate::*;
 use egui::{Context, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, Shape};
 
 pub(crate) fn frame(ctx: &Context, app: &mut Workspace, events: Vec<Event>) -> Vec<(String, Rect)> {
-    frame_at_size(ctx, app, events, egui::vec2(1200.0, 820.0))
+    // Field interaction suites exercise complete expanded groups. Layout suites pass an explicit viewport.
+    frame_at_size(ctx, app, events, egui::vec2(1440.0, 1600.0))
 }
 pub(crate) fn frame_at_size(
     ctx: &Context,
@@ -44,9 +45,20 @@ pub(crate) fn click(ctx: &Context, app: &mut Workspace, text: &str) {
     for _ in 0..2 {
         labels = frame(ctx, app, vec![]);
     }
+    // A catalogue count can have the same text as an editable numeric field.
+    let heading = i18n::with_language(app.language(), || i18n::tr("Inspector").to_uppercase());
+    let inspector = labels
+        .iter()
+        .find(|(t, _)| t == &heading)
+        .map(|(_, r)| r.top());
     let pos = labels
         .iter()
-        .find(|(t, _)| t == text)
+        .find(|(t, r)| {
+            t == text
+                && (text.parse::<i64>().is_err()
+                    || r.left() > app.canvas.rect.left()
+                    || inspector.is_none_or(|y| r.top() > y))
+        })
         .unwrap_or_else(|| panic!("Missing {text}: {labels:?}"))
         .1
         .center();

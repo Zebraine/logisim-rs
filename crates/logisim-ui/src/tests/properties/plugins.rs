@@ -63,6 +63,12 @@ fn generic_plugin_palette_properties_actions_and_strings_in_both_languages() {
         let mut app = Workspace::default();
         app.set_language(language);
         app.set_plugin_catalogue(vec![manifest.clone().into()]);
+        click(
+            &ctx,
+            &mut app,
+            &i18n::with_language(language, || i18n::tr("Components").to_owned()),
+        );
+        click(&ctx, &mut app, "User library");
         click(&ctx, &mut app, "Plugin tool A");
         assert_eq!(
             app.editor.template.plugin.as_ref().unwrap().tool.id,
@@ -220,7 +226,6 @@ fn plugin_owned_translations_and_image_import_preserve_document_and_identity() {
     let id = app.editor.session.circuit.add_component(c);
     app.editor.session.selection.insert(id);
     app.finish_edit();
-    click(&ctx, &mut app, "User library");
     let labels = frame(&ctx, &mut app, vec![]);
     assert!(has(&labels, "插件工具甲"));
     assert!(has(&labels, "插件地址"));
@@ -317,8 +322,7 @@ fn plugin_tool_and_orientation_edits_preserve_wires_and_undo() {
             .add_wire(Point::new(220, 200), Point::new(240, 200));
         app.editor.session.selection.insert(id);
         let before = app.circuit().clone();
-        // Hide the palette so tool names refer to the attribute selector.
-        click(&ctx, &mut app, "User library");
+        // The Circuits tab leaves only the inspector tool selector visible.
         let labels = frame(&ctx, &mut app, vec![]);
         let pos = labels
             .iter()

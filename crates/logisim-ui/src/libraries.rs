@@ -1,10 +1,10 @@
 //! Session palette groups for imported, editable project snapshots.
-use crate::{Workspace, editor::Tool, i18n::tr};
-use logisim_core::{Id, Kind, LibraryImport};
+use crate::Workspace;
+use logisim_core::{Id, LibraryImport};
 
 pub(crate) struct LibraryGroup {
-    name: String,
-    circuits: Vec<Id>,
+    pub(crate) name: String,
+    pub(crate) circuits: Vec<Id>,
 }
 
 impl Workspace {
@@ -19,38 +19,6 @@ impl Workspace {
             name: import.name,
             circuits: import.circuits,
         });
-    }
-
-    pub(crate) fn library_groups(&mut self, ui: &mut egui::Ui) {
-        for group in &self.libraries {
-            let definitions: Vec<_> = group
-                .circuits
-                .iter()
-                .filter_map(|id| self.editor.session.project.circuit(*id))
-                .map(|d| (d.id, d.name.clone()))
-                .collect();
-            if definitions.is_empty() {
-                continue;
-            }
-            egui::CollapsingHeader::new(&group.name)
-                .id_salt(("imported-library", group.circuits[0]))
-                .default_open(true)
-                .show(ui, |ui| {
-                    ui.weak(tr("Embedded library snapshot"));
-                    for (id, name) in definitions {
-                        let tool = Tool::Place(Kind::Subcircuit(id));
-                        let allowed = self.editor.session.project.can_instantiate(self.editor.session.context.active, id);
-                        let response = ui.add_enabled(allowed, egui::Button::selectable(self.editor.tool == tool, name))
-                            .on_hover_text(tr("Double-click to edit; single-click another circuit to place an instance."));
-                        if response.double_clicked() {
-                            self.editor.switch_circuit(id);
-                        } else if response.clicked() {
-                            self.editor.session.context.appearance_mode = false;
-                            self.editor.set_tool(tool);
-                        }
-                    }
-                });
-        }
     }
 }
 

@@ -86,3 +86,39 @@ pub(crate) fn focus_ring(ui: &Ui, response: &Response) {
         );
     }
 }
+
+pub(crate) fn section(ui: &mut Ui, label: &str) -> Response {
+    ui.label(
+        egui::RichText::new(label.to_uppercase())
+            .size(11.0)
+            .extra_letter_spacing(0.4)
+            .strong()
+            .color(MUTED),
+    )
+}
+
+pub(crate) fn chip(ui: &mut Ui, label: &str) -> Response {
+    egui::Frame::NONE
+        .fill(SUNKEN)
+        .corner_radius(4)
+        .inner_margin(egui::Margin::symmetric(6, 2))
+        .show(ui, |ui| {
+            ui.label(egui::RichText::new(label).size(12.0).color(MUTED))
+        })
+        .response
+}
+
+pub(crate) fn card<R>(ui: &mut Ui, label: &str, body: impl FnOnce(&mut Ui) -> R) -> R {
+    egui::Frame::NONE
+        .fill(SURFACE)
+        .stroke(Stroke::new(1.0, BORDER))
+        .corner_radius(6)
+        .inner_margin(8)
+        .show(ui, |ui| {
+            ui.set_min_width(ui.available_width());
+            section(ui, label);
+            ui.add_space(2.0);
+            body(ui)
+        })
+        .inner
+}

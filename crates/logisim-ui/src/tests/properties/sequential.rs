@@ -12,6 +12,7 @@ fn latch_library_modes_layout_controls_and_undo_work_in_both_languages() {
         let mut app = Workspace::default();
         app.set_language(language);
         let t = |s| i18n::with_language(language, || i18n::tr(s).to_owned());
+        click(&ctx, &mut app, &t("Components"));
         click(&ctx, &mut app, &t("Memory"));
         click(&ctx, &mut app, &t("D Latch"));
         assert_eq!(app.editor.tool, Tool::Place(Kind::Latch(Latch::D)));
@@ -109,6 +110,7 @@ fn sequential_library_properties_and_controls_work_in_both_languages() {
         let mut app = Workspace::default();
         app.set_language(language);
         let translated = |text| i18n::with_language(language, || i18n::tr(text).to_owned());
+        click(&ctx, &mut app, &translated("Components"));
         click(&ctx, &mut app, &translated("Memory"));
         frame(
             &ctx,
@@ -316,6 +318,7 @@ fn random_library_seed_trigger_and_undo_are_available_in_both_languages() {
         let mut app = Workspace::default();
         app.set_language(language);
         let t = |s| i18n::with_language(language, || i18n::tr(s).to_owned());
+        click(&ctx, &mut app, &t("Components"));
         click(&ctx, &mut app, &t("Memory"));
         frame(
             &ctx,

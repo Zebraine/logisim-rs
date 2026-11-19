@@ -1,4 +1,6 @@
 use super::*;
+use crate::editor::Tool;
+use logisim_core::Kind;
 use logisim_core::{Point, Project};
 #[test]
 fn one_undo_removes_import_and_redo_restores_placeable_definitions() {

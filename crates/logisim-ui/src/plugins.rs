@@ -20,13 +20,12 @@ pub(crate) fn metadata<'a>(libraries: &'a [Library], c: &Component) -> Option<&'
 use crate::{
     SimulationAction, Workspace,
     canvas::Canvas,
-    editor::Tool,
     i18n::tr,
     simulation::{SimulationUi, SimulationView},
 };
 use egui::{Align2, Color32, Painter, Rect, Stroke, StrokeKind, Ui};
 use logisim_core::{
-    Component, Kind, Point,
+    Component, Point,
     plugin::api::{PropertyKind, Shape},
 };
 
@@ -42,36 +41,6 @@ impl Workspace {
     }
     pub fn set_plugin_catalogue(&mut self, manifests: Vec<Library>) {
         self.plugins = manifests;
-    }
-    pub(crate) fn plugin_groups(&mut self, ui: &mut Ui) {
-        for library in &self.plugins {
-            let manifest = &library.manifest;
-            let metadata = Some(&library.presentation);
-            egui::CollapsingHeader::new(text(metadata, &manifest.name))
-                .id_salt(("plugin-library", &manifest.id, &manifest.version))
-                .default_open(true)
-                .show(ui, |ui| {
-                    for component in manifest.components() {
-                        let selected = self.editor.tool == Tool::Place(Kind::Plugin)
-                            && self.editor.template.plugin.as_ref().is_some_and(|p| {
-                                p.plugin == component.plugin
-                                    && p.version == component.version
-                                    && p.tool.id == component.tool.id
-                            });
-                        ui.push_id(&component.tool.id, |ui| {
-                            if ui
-                                .selectable_label(selected, text(metadata, &component.tool.name))
-                                .clicked()
-                            {
-                                self.editor.session.context.appearance_mode = false;
-                                self.editor.set_tool(Tool::Place(Kind::Plugin));
-                                self.editor.template =
-                                    Component::from_plugin(component.clone(), Point::ZERO);
-                            }
-                        });
-                    }
-                });
-        }
     }
 }
 pub(crate) fn fields(ui: &mut Ui, c: &mut Component, manifests: &[Library]) -> bool {
@@ -118,7 +87,15 @@ pub(crate) fn fields(ui: &mut Ui, c: &mut Component, manifests: &[Library]) -> b
         }
     }
     ui.label(tr("Plugin"));
-    ui.label(format!("{} {}", plugin.plugin, plugin.version));
+    ui.label(format!(
+        "{} {}",
+        library.map_or(tr("Missing plugin"), |lib| text(
+            metadata,
+            &lib.manifest.name
+        )),
+        plugin.version
+    ))
+    .on_hover_text(&plugin.plugin);
     ui.end_row();
     let mut active = false;
     for property in &plugin.tool.properties {
@@ -159,20 +136,26 @@ pub(crate) fn fields(ui: &mut Ui, c: &mut Component, manifests: &[Library]) -> b
     }
     active
 }
+pub(crate) fn has_runtime(sim: &SimulationUi, c: &Component, libraries: &[Library]) -> bool {
+    let Some(plugin) = &c.plugin else {
+        return false;
+    };
+    let metadata = metadata(libraries, c);
+    sim.view.plugin_errors.contains_key(&c.id)
+        || !plugin.tool.actions.is_empty()
+        || metadata.is_some_and(|m| m.imports.iter().any(|i| i.tool == plugin.tool.id))
+}
 pub(crate) fn runtime(
     ui: &mut Ui,
     sim: &mut SimulationUi,
     c: &Component,
     libraries: &[Library],
     files: &mut Vec<crate::FileAction>,
-) -> bool {
+) {
     let metadata = metadata(libraries, c);
     let Some(plugin) = &c.plugin else {
-        return false;
+        return;
     };
-    let visible = sim.view.plugin_errors.contains_key(&c.id)
-        || !plugin.tool.actions.is_empty()
-        || metadata.is_some_and(|m| m.imports.iter().any(|i| i.tool == plugin.tool.id));
     if let Some(error) = sim.view.plugin_errors.get(&c.id) {
         ui.colored_label(Color32::DARK_RED, error);
         ui.weak(tr(
@@ -234,7 +217,6 @@ pub(crate) fn runtime(
             }
         });
     }
-    visible
 }
 pub(crate) fn draw(
     p: &Painter,

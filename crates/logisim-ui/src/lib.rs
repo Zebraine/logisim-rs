@@ -53,6 +53,7 @@ pub use theme::configure;
 /// Circuit editing and viewport state. Signal simulation is not part of this layer.
 #[derive(Default)]
 pub struct Workspace {
+    navigation: workspace::Navigation,
     analysis: analysis::AnalysisUi,
     generator: generation::Generator,
     generated_expressions: generation::Memory,

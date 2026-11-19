@@ -111,6 +111,7 @@ fn pla_table_apply_cancel_clear_history_and_document_replacement_in_both_languag
         let mut app = Workspace::default();
         app.set_language(language);
         let t = |s| i18n::with_language(language, || i18n::tr(s).to_owned());
+        click(&ctx, &mut app, &t("Components"));
         click(&ctx, &mut app, &t("Memory"));
         frame(
             &ctx,

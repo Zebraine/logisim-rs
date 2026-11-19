@@ -104,6 +104,7 @@ fn bus_control_properties_use_translated_widgets_and_keep_wires_with_undo() {
             Pull::One
         );
         // Library entries are real placement tools in either language.
+        click(&ctx, &mut app, &translated("Components"));
         click(&ctx, &mut app, &translated("Gates"));
         frame(
             &ctx,
@@ -199,6 +200,7 @@ fn transistor_properties_and_library_tools_work_in_both_languages() {
                 .gate_bottom_right
         );
         assert_eq!(app.circuit().wires, wires);
+        click(&ctx, &mut app, &translated("Components"));
         click(&ctx, &mut app, &translated("Wiring"));
         frame(
             &ctx,

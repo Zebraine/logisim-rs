@@ -1,5 +1,5 @@
 use crate::editor::{Editor, Tool};
-use crate::{i18n::tr, tf};
+use crate::{i18n::tr, tf, theme};
 use egui::{Frame, RichText, ScrollArea, Ui};
 use logisim_core::{
     Component, Extension, Facing, Gate, GateSize, HorizontalAlign, Kind, Point, Radix,
@@ -14,11 +14,6 @@ pub(crate) fn show(
     files: &mut Vec<crate::FileAction>,
 ) {
     let placing = matches!(editor.tool, Tool::Place(_));
-    if !editor.session.context.path.is_empty() {
-        ui.weak(tr(
-            "Instance inputs are driven by the parent circuit. Edits apply to all instances.",
-        ));
-    }
     let target = if placing {
         Some(editor.template.clone())
     } else if editor.session.selection.len() == 1 {
@@ -31,42 +26,60 @@ pub(crate) fn show(
     } else {
         None
     };
-    let title = if let Some(plugin) = target.as_ref().and_then(|c| c.plugin.as_ref()) {
-        crate::plugins::text(
-            target
-                .as_ref()
-                .and_then(|c| crate::plugins::metadata(plugins, c)),
-            &plugin.tool.name,
-        )
-        .to_owned()
-    } else if placing {
-        tf!("Tool: {}", tr(editor.tool.name()))
-    } else if let Some(c) = &target {
-        tf!("Selection: {}", tr(c.kind.name()))
-    } else if !editor.session.selection.is_empty() {
-        tf!("Selection: {} item(s)", editor.session.selection.len())
-    } else {
-        tf!("Circuit: {}", circuit_name)
-    };
-    Frame::NONE.inner_margin(12).show(ui, |ui| {
-        ui.label(RichText::new(title).strong());
+    let plugin = target.as_ref().and_then(|c| c.plugin.as_ref());
+    let library = plugin.and_then(|p| {
+        plugins
+            .iter()
+            .find(|l| l.manifest.id == p.plugin && l.manifest.version == p.version)
     });
-    ui.separator();
-    ScrollArea::vertical()
+    let title = match (&target, plugin) {
+        (_, Some(p)) => {
+            crate::plugins::text(library.map(|l| &l.presentation), &p.tool.name).to_owned()
+        }
+        (Some(c), _) if matches!(c.kind, Kind::Subcircuit(_)) => c.interface.name.clone(),
+        (Some(c), _) => tr(c.kind.name()).to_owned(),
+        _ if editor.session.selection.len() == 1 => tr("Wire").to_owned(),
+        _ if !editor.session.selection.is_empty() => {
+            tf!("Selection: {} item(s)", editor.session.selection.len())
+        }
+        _ => circuit_name.to_owned(),
+    };
+    let source = match (&target, plugin) {
+        (_, Some(p)) => format!(
+            "{} {}",
+            library.map_or(tr("Missing plugin"), |l| crate::plugins::text(
+                Some(&l.presentation),
+                &l.manifest.name
+            )),
+            p.version
+        ),
+        (Some(c), _) if matches!(c.kind, Kind::Subcircuit(_)) => tr("Subcircuit").to_owned(),
+        (Some(_), _) => tr("Built-in").to_owned(),
+        _ if editor.session.selection.is_empty() => tr("Circuit").to_owned(),
+        _ => tr("Selection").to_owned(),
+    };
+    let source_id = plugin.map(|p| p.plugin.clone());
+    ScrollArea::vertical().id_salt("inspector-scroll")
         .auto_shrink([false, false])
         .show(ui, |ui| {
-            Frame::NONE.inner_margin(12).show(ui, |ui| {
+            Frame::NONE.inner_margin(8).show(ui, |ui| {
+                ui.set_min_width(ui.available_width());
+                ui.spacing_mut().text_edit_width = (ui.available_width()*0.45).max(72.0);
+                ui.spacing_mut().combo_width = ui.spacing().text_edit_width;
+                theme::section(ui,tr("Inspector"));
+                ui.horizontal_wrapped(|ui|{
+                    ui.label(RichText::new(&title).size(15.0).strong());
+                    let chip=theme::chip(ui,&source);
+                    if let Some(id)=source_id{chip.on_hover_text(id);}
+                    else if !editor.session.context.path.is_empty(){chip.on_hover_text(tr("Instance inputs are driven by the parent circuit. Edits apply to all instances."));}
+                });
                 if let Some(c) = target {
-                    if !placing {
-                        let visible = if c.kind == Kind::Plugin {
-                            crate::plugins::runtime(ui, &mut editor.simulation, &c, plugins, files)
-                        } else {
-                            editor.simulation.component(ui, &c);
-                            true
-                        };
-                        if visible {
-                            ui.separator();
+                    if !placing && c.kind == Kind::Plugin {
+                        if crate::plugins::has_runtime(&editor.simulation,&c,plugins) {
+                            theme::card(ui,tr("Simulation"),|ui|crate::plugins::runtime(ui,&mut editor.simulation,&c,plugins,files));
                         }
+                    } else if !placing && editor.simulation.has_component_controls(&c) {
+                        theme::card(ui,tr("Simulation"),|ui|editor.simulation.component(ui,&c));
                     }
                     component_editor(ui, editor, c, placing, plugins);
                 } else {
@@ -138,53 +151,45 @@ fn selection_info(ui: &mut Ui, editor: &mut Editor) {
         }
         return;
     }
-    let mut label = editor.session.circuit.label.clone();
-    ui.label(tr("Circuit label"));
-    let mut active = ui.text_edit_singleline(&mut label.text).has_focus();
-    egui::Grid::new("circuit_label_properties")
-        .num_columns(2)
-        .show(ui, |ui| {
-            active |= crate::fonts::properties(ui, &mut label.font);
-            ui.label(tr("Label up"));
-            egui::ComboBox::from_id_salt("circuit_label_up")
-                .selected_text(tr(label.up.name()))
-                .show_ui(ui, |ui| {
-                    for facing in Facing::ALL {
-                        ui.selectable_value(&mut label.up, facing, tr(facing.name()));
-                    }
-                });
-            ui.end_row();
-            ui.label(tr("Label color"));
-            ui.color_edit_button_srgb(&mut label.color);
-            ui.end_row();
-        });
-    editor.update_circuit_label(label);
-    if !active && !ui.ctx().any_popup_open() {
-        editor.commit_properties();
-    }
-    ui.separator();
     ui.label(tf!(
         "{} components · {} wires",
         editor.session.circuit.components.len(),
         editor.session.circuit.wires.len()
-    ));
-    ui.add_space(10.0);
-    if editor.tool == Tool::Wire {
-        ui.weak(tr(
-            "Click two points or drag to connect. Shift changes the bend. Esc cancels.",
-        ));
+    ))
+    .on_hover_text(tr(if editor.tool == Tool::Wire {
+        "Click two points or drag to connect. Shift changes the bend. Esc cancels."
     } else {
-        ui.weak(tr(
-            "Click or drag a wire to branch. Ctrl-click selects; Ctrl-drag moves.",
-        ));
-        ui.weak(tr(
-            "Drag empty space to select. Shift adds to the selection.",
-        ));
+        "Click or drag a wire to branch. Ctrl-click selects; Ctrl-drag moves."
+    }));
+    let mut label = editor.session.circuit.label.clone();
+    let mut active = false;
+    theme::card(ui, tr("Label & typography"), |ui| {
+        egui::Grid::new("circuit_label_properties")
+            .num_columns(2)
+            .show(ui, |ui| {
+                ui.label(tr("Circuit label"));
+                active |= ui.text_edit_singleline(&mut label.text).has_focus();
+                ui.end_row();
+                active |= crate::fonts::properties(ui, &mut label.font);
+                ui.label(tr("Label up"));
+                egui::ComboBox::from_id_salt("circuit_label_up")
+                    .selected_text(tr(label.up.name()))
+                    .show_ui(ui, |ui| {
+                        for facing in Facing::ALL {
+                            ui.selectable_value(&mut label.up, facing, tr(facing.name()));
+                        }
+                    });
+                ui.end_row();
+                ui.label(tr("Label color"));
+                ui.color_edit_button_srgb(&mut label.color);
+                ui.end_row();
+            });
+    });
+    editor.update_circuit_label(label);
+    if !active && !ui.ctx().any_popup_open() {
+        editor.commit_properties();
     }
-    ui.add_space(10.0);
-    editor.simulation.overview(ui);
-    ui.add_space(8.0);
-    ui.weak(tr("Use File to open or save the supported .circ subset."));
+    theme::card(ui, tr("Simulation"), |ui| editor.simulation.overview(ui));
 }
 
 fn component_editor(
@@ -222,37 +227,55 @@ fn component_editor(
     let original = c.clone();
     let mut active = false;
     if c.kind.has_label() {
-        let response = if c.kind == Kind::Text {
-            ui.label(tr("Text"));
-            ui.add(
-                egui::TextEdit::multiline(&mut c.label)
-                    .desired_rows(3)
-                    .desired_width(f32::INFINITY)
-                    .char_limit(4096)
-                    .id_salt((c.id, "text")),
-            )
-        } else {
-            ui.label(tr("Label"));
-            ui.add(
-                egui::TextEdit::singleline(&mut c.label)
-                    .desired_width(f32::INFINITY)
-                    .char_limit(128)
-                    .id_salt((c.id, "label")),
-            )
-        };
-        if editor.focus_text {
-            response.request_focus();
-            editor.focus_text = false;
-        }
-        active |= response.has_focus();
-    }
-    ui.add_space(8.0);
-    egui::Grid::new(("component_properties", c.id))
-        .num_columns(2)
-        .spacing(egui::vec2(12.0, 9.0))
-        .show(ui, |ui| {
-            active |= fields(ui, &mut c, placing, plugins);
+        property_grid(ui, ("label", c.id), |ui| {
+            let response = if c.kind == Kind::Text {
+                ui.label(tr("Text"));
+                ui.add(
+                    egui::TextEdit::multiline(&mut c.label)
+                        .desired_rows(3)
+                        .desired_width(f32::INFINITY)
+                        .char_limit(4096)
+                        .id_salt((c.id, "text")),
+                )
+            } else {
+                ui.label(tr("Label"));
+                ui.add(
+                    egui::TextEdit::singleline(&mut c.label)
+                        .desired_width(f32::INFINITY)
+                        .char_limit(128)
+                        .id_salt((c.id, "label")),
+                )
+            };
+            if editor.focus_text {
+                response.request_focus();
+                editor.focus_text = false;
+            }
+            ui.end_row();
+            active |= response.has_focus();
+            active
         });
+    }
+    theme::card(
+        ui,
+        tr(if c.kind == Kind::Plugin {
+            "Plugin"
+        } else {
+            "Geometry / behavior"
+        }),
+        |ui| {
+            active |= property_grid(ui, ("component_properties", c.id), |ui| {
+                fields(ui, &mut c, plugins)
+            });
+        },
+    );
+    if c.kind.has_label() || c.kind == Kind::Plugin {
+        theme::card(ui, tr("Label & typography"), |ui| {
+            active |= property_grid(ui, ("font", c.id), |ui| typography(ui, &mut c));
+        });
+    }
+    if !placing && c.kind != Kind::Plugin {
+        active |= property_grid(ui, ("position", c.id), |ui| position(ui, &mut c));
+    }
     if c.position != original.position && c.kind != Kind::Text {
         c.position = Point::snapped(c.position.x as f32, c.position.y as f32);
     }
@@ -282,10 +305,19 @@ fn component_editor(
     }
 }
 
+fn property_grid(ui: &mut Ui, id: impl egui::AsIdSalt, body: impl FnOnce(&mut Ui) -> bool) -> bool {
+    egui::Grid::new(id)
+        .num_columns(2)
+        .min_col_width(32.0)
+        .max_col_width((ui.available_width() - 8.0) * 0.52)
+        .spacing(egui::vec2(8.0, 4.0))
+        .show(ui, body)
+        .inner
+}
+
 fn fields(
     ui: &mut Ui,
     c: &mut Component,
-    placing: bool,
     plugins: &[logisim_core::plugin::api::presentation::Library],
 ) -> bool {
     let mut active = false;
@@ -303,10 +335,6 @@ fn fields(
     }
     if c.kind == Kind::Plugin {
         active |= crate::plugins::fields(ui, c, plugins);
-        active |= crate::fonts::properties(ui, &mut c.font);
-        ui.label(tr("Color"));
-        ui.color_edit_button_srgb(&mut c.color);
-        ui.end_row();
         return active;
     }
     if !matches!(
@@ -473,33 +501,37 @@ fn fields(
             ui.end_row();
         }
     }
-    if c.kind.has_label() {
-        active |= crate::fonts::properties(ui, &mut c.font);
-        if c.kind != Kind::Tunnel {
-            ui.label(tr("Color"));
-            if c.kind == Kind::Text {
-                let mut rgba = [c.color[0], c.color[1], c.color[2], c.color_alpha];
-                if ui.color_edit_button_srgba_unmultiplied(&mut rgba).changed() {
-                    c.color = [rgba[0], rgba[1], rgba[2]];
-                    c.color_alpha = rgba[3];
-                }
-            } else {
-                ui.color_edit_button_srgb(&mut c.color);
+    active
+}
+
+fn typography(ui: &mut Ui, c: &mut Component) -> bool {
+    let active = crate::fonts::properties(ui, &mut c.font);
+    if c.kind != Kind::Tunnel {
+        ui.label(tr("Color"));
+        if c.kind == Kind::Text {
+            let mut rgba = [c.color[0], c.color[1], c.color[2], c.color_alpha];
+            if ui.color_edit_button_srgba_unmultiplied(&mut rgba).changed() {
+                c.color = [rgba[0], rgba[1], rgba[2]];
+                c.color_alpha = rgba[3];
             }
-            ui.end_row();
+        } else {
+            ui.color_edit_button_srgb(&mut c.color);
         }
+        ui.end_row();
     }
-    if !placing {
-        for (label, value) in [("X", &mut c.position.x), ("Y", &mut c.position.y)] {
-            ui.label(label);
-            let r = ui.add(
-                egui::DragValue::new(value)
-                    .speed(10.0)
-                    .range(-1_000_000..=1_000_000),
-            );
-            active |= r.has_focus() || r.dragged();
-            ui.end_row();
-        }
+    active
+}
+fn position(ui: &mut Ui, c: &mut Component) -> bool {
+    let mut active = false;
+    for (label, value) in [("X", &mut c.position.x), ("Y", &mut c.position.y)] {
+        ui.label(label);
+        let r = ui.add(
+            egui::DragValue::new(value)
+                .speed(10.0)
+                .range(-1_000_000..=1_000_000),
+        );
+        active |= r.has_focus() || r.dragged();
+        ui.end_row();
     }
     active
 }
