@@ -37,7 +37,7 @@ fn registry_restores_each_field_without_changing_other_preferences() {
 }
 
 #[test]
-fn dialog_resize_keeps_footer_and_controls_inside_the_viewport_in_both_languages() {
+fn dialog_stays_centered_and_keeps_its_controls_visible_on_resize() {
     for lang in Language::ALL {
         let ctx = egui::Context::default();
         crate::configure(&ctx);
@@ -52,12 +52,14 @@ fn dialog_resize_keeps_footer_and_controls_inside_the_viewport_in_both_languages
         )));
         for (width, height, scale) in [
             (1200., 820., UiScale::P100),
+            (1440., 900., UiScale::P100),
             (720., 480., UiScale::P100),
             (720., 480., UiScale::P80),
             (720., 480., UiScale::P90),
             (720., 480., UiScale::P110),
             (720., 480., UiScale::P125),
             (720., 480., UiScale::P150),
+            (1200., 820., UiScale::P100),
         ] {
             app.apply_settings(Settings {
                 ui_scale: scale,
@@ -76,6 +78,10 @@ fn dialog_resize_keeps_footer_and_controls_inside_the_viewport_in_both_languages
                 assert!(
                     bounds.width() <= screen.x * 0.9 + 1. && bounds.height() <= screen.y * 0.9 + 1.,
                     "{cat:?} {screen} {bounds:?}"
+                );
+                assert!(
+                    (bounds.center().to_vec2() - screen * 0.5).length() <= 1.,
+                    "off-center {cat:?} {screen} {bounds:?}"
                 );
                 let close = crate::i18n::with_language(lang, || tr("Close"));
                 let close_rect = labels.iter().rev().find(|(s, _)| s == close).unwrap().1;

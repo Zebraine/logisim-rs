@@ -32,38 +32,26 @@ impl Page {
     ) {
         let screen = ctx.content_rect();
         let limit = screen.size() * 0.9;
-        let margin = egui::Vec2::splat(26.0);
+        let frame = egui::Frame::window(&ctx.global_style()).inner_margin(12);
+        let margin = frame.total_margin().sum();
         let maximum = limit - margin;
         let target = vec2(760., 560.).min(limit);
         let min = vec2(640., 440.).min(limit) - margin;
         let compact = screen.width() < 850. || screen.width() * ctx.zoom_factor() <= 720.;
         let search_id = Id::unique("preference-search");
         let find = ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::F));
-        if !ctx.any_popup_open() && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape)) {
-            if self.confirm_reset {
-                self.confirm_reset = false;
-            } else if !self.query.is_empty() {
-                self.query.clear();
-            } else {
-                *open = false;
-                return;
-            }
-        }
         if find {
             ctx.memory_mut(|m| m.request_focus(search_id));
         }
-        egui::Window::new(tr("Settings"))
-            .id(Id::unique("settings-window"))
-            .title_bar(false)
-            .collapsible(false)
-            .frame(egui::Frame::window(&ctx.global_style()).inner_margin(12))
-            .default_pos(screen.center() - target * 0.5)
-            .constrain_to(egui::Rect::from_center_size(screen.center(), limit))
-            .min_size(min + margin)
-            .max_size(limit)
-            .default_size(target)
-            .resizable(true)
-            .show(ctx, |ui| {
+        let resize = egui::Resize::default()
+            .id_salt("settings-size")
+            .with_stroke(false)
+            .min_size(min)
+            .max_size(maximum)
+            .default_size(target - margin);
+        let dialog = egui::Modal::new(Id::unique("settings-window")).frame(frame);
+        let modal = dialog.show(ctx, |ui| {
+            resize.show(ui, |ui| {
                 let available = ui.available_size().clamp(min, maximum);
                 ui.set_min_size(available);
                 ui.set_max_size(available);
@@ -174,6 +162,7 @@ impl Page {
                         }),
                     );
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        ui.add_space(ui.visuals().resize_corner_size);
                         if ui.button(tr("Close")).clicked() {
                             *open = false;
                         }
@@ -190,6 +179,18 @@ impl Page {
                     });
                 });
             });
+        });
+        if modal.should_close() {
+            if modal.backdrop_response.clicked() {
+                *open = false;
+            } else if self.confirm_reset {
+                self.confirm_reset = false;
+            } else if !self.query.is_empty() {
+                self.query.clear();
+            } else {
+                *open = false;
+            }
+        }
     }
     fn select(&mut self, cat: Category) {
         self.category = cat;
