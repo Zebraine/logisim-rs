@@ -1,3 +1,7 @@
+mod registry;
+pub const CONFIG_VERSION: u32 = 1;
+mod page;
+pub(crate) use page::Page;
 mod model;
 use crate::{Language, Workspace, i18n::tr, theme};
 pub use model::{DefaultZoom, Settings, TickHz, UiScale};
@@ -70,64 +74,24 @@ impl Workspace {
         std::mem::take(&mut self.retry_settings)
     }
     pub(crate) fn settings(&mut self, ctx: &egui::Context) {
-        let mut truth_table_generation = self.preferences.truth_table;
-        egui::Window::new(tr("Settings"))
-            .id(egui::Id::unique("settings-window"))
-            .open(&mut self.settings_open)
-            .default_pos(ctx.content_rect().center() - egui::vec2(226.0, 166.0))
-            .collapsible(false)
-            .resizable(false)
-            .default_height(332.0)
-            .max_height(ctx.content_rect().height()-56.0)
-            .vscroll(true)
-            .show(ctx, |ui| {
-                ui.set_width((ctx.content_rect().width()-64.0).min(420.0));
-                if let Some(error) = &self.settings_error {
-                    ui.colored_label(theme::DANGER, tr("Settings need attention."));
-                    ui.label(tr(error));
-                    ui.weak(tr("Your choice applies now. Retry to save it for the next launch."));
-                    if ui.button(tr("Retry")).clicked() {
-                        self.retry_settings = true;
-                    }
-                    ui.separator();
-                }
-                theme::section(ui,tr("Interface"));
-                egui::Grid::new("settings-interface").min_col_width(130.0).show(ui,|ui|{
-                    ui.label(tr("Language"));
-                    egui::ComboBox::from_id_salt("language").width(200.0)
-                        .selected_text(self.preferences.language.name()).show_ui(ui,|ui|{
-                            for language in Language::ALL{
-                                if ui.selectable_value(&mut self.preferences.language,language,language.name()).changed(){ctx.request_repaint();}
-                            }
-                        });
-                    ui.end_row();
-                });
-                ui.weak(tr("Language changes apply immediately and are saved for the next launch."));
-                if !ui.fonts_mut(|fonts|fonts.has_glyphs(&egui::FontId::proportional(14.0),"简体中文设置")){
-                    // Keep the font installation hint readable without CJK glyphs.
-                    let hint = crate::i18n::with_language(Language::English, || tr("Chinese characters require a system CJK font (for example Noto Sans CJK SC)."));
-                    ui.colored_label(theme::DANGER, hint);
-                }
-                ui.add_space(4.0);
-                ui.separator();
-                theme::section(ui,tr("Simulation"));
-                egui::Grid::new("settings-simulation").min_col_width(130.0).show(ui,|ui|{
-                    ui.label(tr("Simulation mode"));
-                    egui::ComboBox::from_id_salt("simulation-mode").width(200.0)
-                        .selected_text(self.preferences.simulation_mode.name()).show_ui(ui,|ui|{
-                            for mode in SimulationMode::ALL{ui.selectable_value(&mut self.preferences.simulation_mode,mode,mode.name());}
-                        });
-                    ui.end_row();
-                });
-                ui.weak(tr("Stable state settles combinational logic before sampling state. Unsupported circuits use event propagation."));
-                ui.weak(tr("Changes apply without resetting the circuit and are saved for the next launch. Manual propagation steps always use events."));
-                ui.add_space(4.0);
-                ui.separator();
-                ui.checkbox(&mut truth_table_generation,tr("Enable truth table generation"));
-
-            });
-        if truth_table_generation != self.preferences.truth_table {
-            self.set_truth_table_generation(truth_table_generation);
+        if !self.settings_open {
+            return;
+        }
+        let mut values = self.preferences;
+        self.settings_page.show(
+            ctx,
+            &mut self.settings_open,
+            &mut values,
+            self.config_path.as_deref(),
+            self.settings_error.as_deref(),
+            &mut self.retry_settings,
+        );
+        if !self.settings_open {
+            self.settings_page.clear_transient();
+        }
+        if values != self.preferences {
+            self.apply_settings(values);
+            ctx.request_repaint();
         }
     }
 }

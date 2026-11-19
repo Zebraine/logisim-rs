@@ -2,7 +2,7 @@
 use logisim_ui::{DefaultZoom, Language, Settings, SimulationMode, TickHz, UiScale};
 use serde::{Deserialize, Serialize};
 
-pub(super) const VERSION: u32 = 1;
+use logisim_ui::CONFIG_VERSION;
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct File {
@@ -106,7 +106,7 @@ struct Generation {
 
 pub(super) fn decode(bytes: &[u8]) -> Result<Settings, &'static str> {
     let file: File = serde_json::from_slice(bytes).map_err(|_| "Unknown or invalid settings.")?;
-    if file.version != VERSION {
+    if file.version != CONFIG_VERSION {
         return Err("Unsupported configuration version.");
     }
     let ui_scale = UiScale::ALL
@@ -128,7 +128,7 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Settings, &'static str> {
 }
 pub(super) fn encode(s: Settings) -> Vec<u8> {
     let file = File {
-        version: VERSION,
+        version: CONFIG_VERSION,
         general: General {
             language: s.language,
         },

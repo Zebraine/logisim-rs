@@ -51,6 +51,10 @@ pub(crate) fn click(ctx: &Context, app: &mut Workspace, text: &str) {
         .iter()
         .find(|(t, _)| t == &heading)
         .map(|(_, r)| r.top());
+    // Modal content is painted after the disabled workbench, which can use the same label.
+    if app.settings_open {
+        labels.reverse();
+    }
     let pos = labels
         .iter()
         .find(|(t, r)| {

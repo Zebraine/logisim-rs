@@ -25,7 +25,7 @@ mod tests;
 pub use terminal::TtyView;
 mod settings;
 pub use i18n::Language;
-pub use settings::{DefaultZoom, Settings, SimulationMode, TickHz, UiScale};
+pub use settings::{CONFIG_VERSION, DefaultZoom, Settings, SimulationMode, TickHz, UiScale};
 mod libraries;
 mod plugins;
 pub use plugins::{PluginImportTarget, PluginInputTarget};
@@ -64,6 +64,7 @@ pub struct Workspace {
     preferences: Settings,
     config_path: Option<String>,
     settings_open: bool,
+    settings_page: settings::Page,
     settings_error: Option<String>,
     retry_settings: bool,
     appearance: appearance::AppearanceEditor,

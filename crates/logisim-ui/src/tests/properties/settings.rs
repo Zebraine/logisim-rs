@@ -266,12 +266,14 @@ fn settings_are_localized_and_separate_from_document_and_runtime_state() {
             SimulationMode::Stable,
             SimulationMode::Event,
         ] {
+            click(&ctx, &mut app, &t("Simulation"));
             let old = i18n::with_language(language, || app.simulation_mode().name().to_owned());
             let new = i18n::with_language(language, || mode.name().to_owned());
             click(&ctx, &mut app, &old);
             click(&ctx, &mut app, &new);
             let was_enabled = app.truth_table_generation();
-            click(&ctx, &mut app, &t("Enable truth table generation"));
+            click(&ctx, &mut app, &t("Circuit generation"));
+            click(&ctx, &mut app, &t(if was_enabled { "On" } else { "Off" }));
             assert_eq!(app.truth_table_generation(), !was_enabled);
             assert_eq!(app.simulation_mode(), mode);
             assert_eq!(app.project(), &document);
@@ -289,8 +291,7 @@ fn settings_are_localized_and_separate_from_document_and_runtime_state() {
             labels = frame_at_size(&small, &mut app, vec![], size);
         }
         for text in [
-            t("Simulation mode"),
-            t("Event propagation"),
+            t("Show truth tables in circuit generation."),
             t("Enable truth table generation"),
         ] {
             let rect = labels.iter().find(|(label, _)| label == &text).unwrap().1;
@@ -299,5 +300,59 @@ fn settings_are_localized_and_separate_from_document_and_runtime_state() {
         app.replace_project(document);
         assert_eq!(app.simulation_mode(), SimulationMode::Event);
         assert!(app.truth_table_generation());
+    }
+}
+
+#[test]
+fn search_matches_localized_descriptions_and_reset_requires_confirmation() {
+    let key = |key, modifiers| Event::Key {
+        key,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers,
+    };
+    for language in Language::ALL {
+        let ctx = Context::default();
+        configure(&ctx);
+        let mut app = Workspace {
+            settings_open: true,
+            ..Default::default()
+        };
+        app.set_language(language);
+        app.simulation_mut().steps = 23;
+        let document = app.project().clone();
+        let t = |s| i18n::with_language(language, || i18n::tr(s).to_owned());
+        frame(&ctx, &mut app, vec![]);
+        frame(&ctx, &mut app, vec![key(Key::F, Modifiers::COMMAND)]);
+        frame(
+            &ctx,
+            &mut app,
+            vec![Event::Text(
+                if language == Language::English {
+                    "animations"
+                } else {
+                    "动画"
+                }
+                .into(),
+            )],
+        );
+        assert!(has(&frame(&ctx, &mut app, vec![]), &t("Reduce motion")));
+        click(&ctx, &mut app, &t("Off"));
+        assert!(app.preferences().reduce_motion);
+        frame(&ctx, &mut app, vec![key(Key::Escape, Modifiers::NONE)]);
+        assert!(app.settings_open);
+        click(&ctx, &mut app, &t("Advanced"));
+        click(&ctx, &mut app, &t("Reset all"));
+        click(&ctx, &mut app, &t("Cancel"));
+        assert!(app.preferences().reduce_motion);
+        click(&ctx, &mut app, &t("Reset all"));
+        click(&ctx, &mut app, &t("Confirm reset"));
+        assert_eq!(app.preferences(), Settings::default());
+        assert_eq!(app.project(), &document);
+        assert_eq!(app.simulation_mut().steps, 23);
+        assert!(!app.editor.can_undo());
+        frame(&ctx, &mut app, vec![key(Key::Escape, Modifiers::NONE)]);
+        assert!(!app.settings_open);
     }
 }

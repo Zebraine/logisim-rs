@@ -18,6 +18,7 @@ pub(crate) enum Icon {
     Document,
     Chip,
     Search,
+    Restore,
     Minus,
     Home,
 }
@@ -57,6 +58,19 @@ pub(crate) fn paint(p: &egui::Painter, r: Rect, icon: Icon, color: Color32) {
         p.line_segment([point(a.0, a.1), point(b.0, b.1)], stroke);
     };
     match icon {
+        Icon::Restore => {
+            let center = r.center();
+            let radius = r.width() * 0.35;
+            let arc = (0..=20)
+                .map(|i| {
+                    let angle = -2.55 + i as f32 * (5.65 / 20.0);
+                    center + egui::Vec2::angled(angle) * radius
+                })
+                .collect();
+            p.add(Shape::line(arc, stroke));
+            line((0.16, 0.10), (0.16, 0.36));
+            line((0.16, 0.36), (0.43, 0.36));
+        }
         Icon::Select => {
             p.add(Shape::closed_line(
                 vec![

@@ -87,20 +87,11 @@ impl Default for Settings {
 impl Settings {
     /// Replay only local edits when Retry loads a configuration repaired on disk.
     pub fn with_changes(mut self, before: Self, after: Self) -> Self {
-        macro_rules! overlay {
-            ($($field:ident),+) => { $(if before.$field != after.$field { self.$field = after.$field; })+ };
+        for entry in super::registry::REGISTRY {
+            if entry.changed(after, before) {
+                entry.copy(&mut self, after);
+            }
         }
-        overlay!(
-            language,
-            ui_scale,
-            reduce_motion,
-            show_telemetry,
-            show_grid,
-            default_zoom,
-            simulation_mode,
-            tick_hz,
-            truth_table
-        );
         self
     }
 }
