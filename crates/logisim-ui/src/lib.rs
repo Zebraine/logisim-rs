@@ -25,7 +25,7 @@ mod tests;
 pub use terminal::TtyView;
 mod settings;
 pub use i18n::Language;
-pub use settings::SimulationMode;
+pub use settings::{DefaultZoom, Settings, SimulationMode, TickHz, UiScale};
 mod libraries;
 mod plugins;
 pub use plugins::{PluginImportTarget, PluginInputTarget};
@@ -61,9 +61,8 @@ pub struct Workspace {
     libraries: Vec<libraries::LibraryGroup>,
     memory_editor: memory::MemoryEditor,
     pla_editor: pla::PlaEditor,
-    language: Language,
-    simulation_mode: SimulationMode,
-    truth_table_generation: bool,
+    preferences: Settings,
+    config_path: Option<String>,
     settings_open: bool,
     settings_error: Option<String>,
     retry_settings: bool,

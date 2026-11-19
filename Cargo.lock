@@ -1342,6 +1342,7 @@ dependencies = [
  "logisim-plugin",
  "logisim-sim",
  "logisim-ui",
+ "serde",
  "serde_json",
  "wat",
 ]

@@ -13,7 +13,7 @@ use egui::{Frame, Margin, Panel, Ui, vec2};
 
 impl Workspace {
     pub fn show(&mut self, ui: &mut Ui) {
-        i18n::with_language(self.language, || self.show_localized(ui));
+        i18n::with_language(self.preferences.language, || self.show_localized(ui));
     }
     fn show_localized(&mut self, ui: &mut Ui) {
         let before = (
@@ -50,7 +50,7 @@ impl Workspace {
             self.memory_editor
                 .show(ui.ctx(), &mut self.editor, &mut self.file_actions);
             self.pla_editor.show(ui.ctx(), &mut self.editor);
-            self.generator.show(ui.ctx(), self.truth_table_generation);
+            self.generator.show(ui.ctx(), self.preferences.truth_table);
         }
         if let Some(id) = self.editor.open_instance.take() {
             self.editor.enter_instance(id);

@@ -21,7 +21,7 @@ impl Drop for Temp {
 #[test]
 fn preferences_persist_in_both_directions_without_dirtying_or_reserializing_the_project() {
     let temp = Temp::new();
-    let path = temp.0.join("settings/preferences");
+    let path = temp.0.join("settings/preferences.json");
     let mut workspace = Workspace::default();
     let mut prefs = Preferences::at(Some(path.clone()), &mut workspace);
     assert_eq!(workspace.language(), Language::English);
@@ -53,78 +53,122 @@ fn preferences_persist_in_both_directions_without_dirtying_or_reserializing_the_
     }
 }
 #[test]
-fn invalid_settings_and_failed_writes_do_not_break_the_editor_or_replace_files() {
+fn migrates_legacy_only_on_edit_and_always_prefers_json() {
     let temp = Temp::new();
-    let path = temp.0.join("preferences");
-    fs::write(&path, "language=unknown\n").unwrap();
+    let old = temp.0.join("preferences");
+    let json = old.with_extension("json");
     let mut workspace = Workspace::default();
-    let mut prefs = Preferences::at(Some(path.clone()), &mut workspace);
-    assert_eq!(workspace.language(), Language::English);
+    for (text, truth, mode) in [
+        ("language=zh-CN\n", false, SimulationMode::Stable),
+        (
+            "language=zh-CN\nsimulation_mode=event\ntruth_table_generation=true\n",
+            true,
+            SimulationMode::Event,
+        ),
+    ] {
+        fs::write(&old, text).unwrap();
+        let mut prefs = Preferences::at(Some(json.clone()), &mut workspace);
+        assert_eq!(workspace.language(), Language::SimplifiedChinese);
+        assert_eq!(workspace.simulation_mode(), mode);
+        assert_eq!(workspace.truth_table_generation(), truth);
+        prefs.synchronize(&mut workspace);
+        assert!(!json.exists());
+        assert_eq!(fs::read_to_string(&old).unwrap(), text);
+    }
+    let mut prefs = Preferences::at(Some(json.clone()), &mut workspace);
+    workspace.set_language(Language::English);
     prefs.synchronize(&mut workspace);
-    assert_eq!(fs::read_to_string(&path).unwrap(), "language=unknown\n");
-    let blocked = path.join("preferences"); // parent is a file
+    let mut restarted = Workspace::default();
+    Preferences::at(Some(json.clone()), &mut restarted);
+    assert_eq!(restarted.preferences(), workspace.preferences());
+    assert!(restarted.truth_table_generation());
     assert!(
-        save(
-            &blocked,
-            Values {
-                language: Language::SimplifiedChinese,
-                ..Values::default()
-            }
-        )
-        .is_err()
-    );
-    assert_eq!(fs::read_to_string(&path).unwrap(), "language=unknown\n");
-    workspace.set_language(Language::SimplifiedChinese);
-    prefs.synchronize(&mut workspace);
-    assert_eq!(
-        decode(&fs::read_to_string(path).unwrap()),
-        Some(Values {
-            language: Language::SimplifiedChinese,
-            ..Values::default()
-        })
+        fs::read_to_string(old)
+            .unwrap()
+            .starts_with("language=zh-CN")
     );
 }
 #[test]
-fn older_preferences_keep_defaults_and_invalid_settings_are_not_overwritten() {
+fn rejects_invalid_legacy_without_creating_a_replacement() {
     let temp = Temp::new();
-    let path = temp.0.join("preferences");
-    fs::write(&path, "language=zh-CN\n").unwrap();
-    let mut workspace = Workspace::default();
-    let mut prefs = Preferences::at(Some(path.clone()), &mut workspace);
-    assert_eq!(workspace.language(), Language::SimplifiedChinese);
-    assert_eq!(workspace.simulation_mode(), SimulationMode::Stable);
-    assert!(!workspace.truth_table_generation());
-    prefs.synchronize(&mut workspace);
-    assert_eq!(fs::read_to_string(&path).unwrap(), "language=zh-CN\n");
-    fs::write(&path, "language=zh-CN\nsimulation_mode=stable\n").unwrap();
-    let mut prefs = Preferences::at(Some(path.clone()), &mut workspace);
-    assert!(!workspace.truth_table_generation());
-    prefs.synchronize(&mut workspace);
-    assert_eq!(
-        fs::read_to_string(&path).unwrap(),
-        "language=zh-CN\nsimulation_mode=stable\n"
-    );
-    workspace.set_simulation_mode(SimulationMode::Event);
-    prefs.synchronize(&mut workspace);
-    assert_eq!(
-        decode(&fs::read_to_string(&path).unwrap()),
-        Some(Values {
-            language: Language::SimplifiedChinese,
-            simulation_mode: SimulationMode::Event,
-            ..Values::default()
-        })
-    );
+    let old = temp.0.join("preferences");
+    let json = old.with_extension("json");
     for text in [
-        "language=en\nsimulation_mode=invalid\n",
-        "language=en\nsimulation_mode=event\nsimulation_mode=stable\n",
-        "language=en\ntruth_table_generation=yes\n",
-        "language=en\ntruth_table_generation=true\ntruth_table_generation=false\n",
+        "language=unknown",
+        "language=en\nsimulation_mode=invalid",
+        "language=en\nsimulation_mode=stable\nsimulation_mode=event",
+        "language=en\ntruth_table_generation=yes",
+        "language=en\ntruth_table_generation=true\ntruth_table_generation=false",
     ] {
-        fs::write(&path, text).unwrap();
-        let mut prefs = Preferences::at(Some(path.clone()), &mut workspace);
-        assert_eq!(workspace.simulation_mode(), SimulationMode::Stable);
-        assert!(!workspace.truth_table_generation());
+        fs::write(&old, text).unwrap();
+        let mut workspace = Workspace::default();
+        let mut prefs = Preferences::at(Some(json.clone()), &mut workspace);
+        assert_eq!(workspace.preferences(), Settings::default());
+        workspace.set_simulation_mode(SimulationMode::Event);
         prefs.synchronize(&mut workspace);
-        assert_eq!(fs::read_to_string(&path).unwrap(), text);
+        assert!(!json.exists());
+        assert_eq!(fs::read_to_string(&old).unwrap(), text);
     }
+}
+#[test]
+fn missing_fields_default_and_invalid_json_stays_intact_after_edits() {
+    let defaults = Settings::default();
+    assert_eq!(
+        schema::decode(br#"{"version":1,"appearance":{},"generation":{}}"#).unwrap(),
+        defaults
+    );
+    let temp = Temp::new();
+    let path = temp.0.join("preferences.json");
+    fs::write(temp.0.join("preferences"), "language=zh-CN").unwrap();
+    for json in [
+        "{",
+        "{}",
+        r#"{"version":2}"#,
+        r#"{"version":1,"other":0}"#,
+        r#"{"version":1,"simulation":{"typo":4}}"#,
+        r#"{"version":1,"simulation":{"tick_hz":32769}}"#,
+        r#"{"version":1,"simulation":{"tick_hz":0}}"#,
+        r#"{"version":1,"appearance":{"ui_scale":1.01}}"#,
+        r#"{"version":1,"general":{"language":"other"}}"#,
+        r#"{"version":1,"generation":{"truth_table":"yes"}}"#,
+    ] {
+        fs::write(&path, json).unwrap();
+        let mut workspace = Workspace::default();
+        let mut prefs = Preferences::at(Some(path.clone()), &mut workspace);
+        assert_eq!(workspace.preferences(), defaults);
+        workspace.set_truth_table_generation(true);
+        prefs.synchronize(&mut workspace);
+        assert_eq!(fs::read_to_string(&path).unwrap(), json);
+    }
+}
+#[test]
+fn all_fields_restart_reset_and_atomic_conflict_protection() {
+    use logisim_ui::{DefaultZoom, TickHz, UiScale};
+    let alternative = Settings {
+        language: Language::SimplifiedChinese,
+        ui_scale: UiScale::P125,
+        reduce_motion: true,
+        show_telemetry: false,
+        show_grid: false,
+        default_zoom: DefaultZoom::Actual,
+        simulation_mode: SimulationMode::Event,
+        tick_hz: TickHz::new(32768).unwrap(),
+        truth_table: true,
+    };
+    let temp = Temp::new();
+    let path = temp.0.join("preferences.json");
+    let mut w = Workspace::default();
+    let mut prefs = Preferences::at(Some(path.clone()), &mut w);
+    for desired in [alternative, Settings::default()] {
+        w.apply_settings(desired);
+        prefs.synchronize(&mut w);
+        prefs = Preferences::at(Some(path.clone()), &mut w);
+        assert_eq!(w.preferences(), desired);
+        assert_eq!(fs::read_dir(&temp.0).unwrap().count(), 1);
+    }
+    fs::write(&path, "bad external edit").unwrap();
+    w.apply_settings(alternative);
+    prefs.synchronize(&mut w);
+    assert!(prefs.blocked);
+    assert_eq!(fs::read_to_string(path).unwrap(), "bad external edit");
 }

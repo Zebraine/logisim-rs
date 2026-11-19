@@ -567,7 +567,7 @@ impl Generator {
 impl Workspace {
     pub(crate) fn open_generator(&mut self) {
         self.finish_edit();
-        if !self.truth_table_generation {
+        if !self.preferences.truth_table {
             self.generator.hide_truth_table();
         }
         if self.project().named(&self.generator.name).is_some() {
