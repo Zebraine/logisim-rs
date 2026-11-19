@@ -172,3 +172,34 @@ fn all_fields_restart_reset_and_atomic_conflict_protection() {
     assert!(prefs.blocked);
     assert_eq!(fs::read_to_string(path).unwrap(), "bad external edit");
 }
+
+#[test]
+fn retry_after_write_failure_replays_only_local_changes_on_repaired_file() {
+    let temp = Temp::new();
+    let directory = temp.0.join("prefs");
+    let path = directory.join("preferences.json");
+    let mut w = Workspace::default();
+    let mut prefs = Preferences::at(Some(path.clone()), &mut w);
+    fs::write(&directory, b"blocks directory creation").unwrap();
+    w.set_truth_table_generation(true);
+    prefs.synchronize(&mut w);
+    assert!(prefs.blocked);
+    assert!(w.truth_table_generation());
+    assert_eq!(fs::read(&directory).unwrap(), b"blocks directory creation");
+    fs::remove_file(&directory).unwrap();
+    fs::create_dir(&directory).unwrap();
+    fs::write(&path, b"invalid").unwrap();
+    prefs.retry(&mut w);
+    prefs.synchronize(&mut w);
+    assert!(prefs.blocked);
+    assert_eq!(fs::read(&path).unwrap(), b"invalid");
+    fs::write(&path, br#"{"version":1,"general":{"language":"zh-CN"}}"#).unwrap();
+    prefs.retry(&mut w);
+    prefs.synchronize(&mut w);
+    assert!(!prefs.blocked);
+    let mut restarted = Workspace::default();
+    Preferences::at(Some(path), &mut restarted);
+    assert!(restarted.truth_table_generation());
+    assert_eq!(restarted.language(), Language::SimplifiedChinese);
+    assert_eq!(w.preferences(), restarted.preferences());
+}

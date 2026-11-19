@@ -138,13 +138,27 @@ impl Workspace {
         self.generated_expressions = Default::default();
         self.libraries.clear();
         project.refresh_interfaces(false);
+        let pending_rate = self
+            .editor
+            .simulation
+            .actions
+            .iter()
+            .any(|a| matches!(a, crate::SimulationAction::SetTickRate(_)));
         self.editor = Editor::new(project);
+        if pending_rate {
+            self.editor
+                .simulation
+                .actions
+                .push(crate::SimulationAction::SetTickRate(
+                    self.preferences.tick_hz.get(),
+                ));
+        }
         self.pla_editor = crate::pla::PlaEditor::default();
         self.appearance.reset_context();
         self.name_dialog = None;
         self.remove_dialog = false;
         self.canvas.reset();
-        self.fit_pending = true;
+        self.fit_pending = self.preferences.default_zoom == crate::DefaultZoom::Fit;
     }
     pub(crate) fn circuit_command(&mut self, command: CircuitCommand) {
         self.finish_edit();

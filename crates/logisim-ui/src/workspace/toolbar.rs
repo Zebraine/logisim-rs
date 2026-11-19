@@ -14,9 +14,13 @@ impl Workspace {
             self.appearance.toolbar(ui, &mut self.editor);
             return;
         }
+        let narrow = ui.available_width() < 620.0;
         let compact = ui.available_width() < 1100.0;
         ui.horizontal(|ui| {
             self.edit_tools(ui);
+            if narrow {
+                return;
+            }
             if compact {
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     self.editor.simulation.status_chip(ui)
@@ -30,14 +34,25 @@ impl Workspace {
         if compact {
             ui.horizontal(|ui| {
                 self.editor.simulation.toolbar(ui);
-                self.runtime_status(ui, false);
+                if !narrow {
+                    self.runtime_status(ui, false);
+                } else if !self.preferences.show_telemetry {
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        self.editor.simulation.status_chip(ui)
+                    });
+                }
             });
+        }
+        if narrow && self.preferences.show_telemetry {
+            ui.horizontal(|ui| self.runtime_status(ui, true));
         }
     }
 
     fn runtime_status(&self, ui: &mut Ui, show_state: bool) {
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            self.editor.simulation.telemetry(ui);
+            if self.preferences.show_telemetry {
+                self.editor.simulation.telemetry(ui);
+            }
             if show_state {
                 self.editor.simulation.status_chip(ui);
             }

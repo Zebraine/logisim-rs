@@ -40,6 +40,9 @@ impl Workspace {
         if self.preferences.truth_table != settings.truth_table {
             self.set_truth_table_generation(settings.truth_table);
         }
+        self.editor
+            .simulation
+            .set_tick_rate(&mut self.preferences.tick_hz, settings.tick_hz);
         self.preferences = settings;
     }
     pub fn set_config_path(&mut self, path: Option<String>) {

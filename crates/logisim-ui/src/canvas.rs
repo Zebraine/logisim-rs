@@ -43,7 +43,6 @@ impl Camera {
 
 pub(crate) struct Canvas {
     pub camera: Camera,
-    pub show_grid: bool,
     pub typing: bool,
     pub rect: Rect,
 }
@@ -52,7 +51,6 @@ impl Default for Canvas {
     fn default() -> Self {
         Self {
             camera: Camera::default(),
-            show_grid: true,
             typing: false,
             rect: Rect::NOTHING,
         }
@@ -84,7 +82,7 @@ impl Canvas {
         self.camera.zoom_at(zoom, anchor);
     }
 
-    pub fn show(&mut self, ui: &mut Ui) -> egui::Response {
+    pub fn show(&mut self, ui: &mut Ui, show_grid: bool) -> egui::Response {
         let (rect, response) = ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
         self.rect = rect;
         if response.clicked() || response.is_pointer_button_down_on() {
@@ -136,7 +134,7 @@ impl Canvas {
 
         let painter = ui.painter_at(rect);
         painter.rect_filled(rect, 0, crate::theme::CANVAS);
-        if self.show_grid {
+        if show_grid {
             self.paint_grid(&painter, rect);
         }
 

@@ -22,6 +22,8 @@ pub(crate) const UNKNOWN: Color32 = Color32::from_rgb(124, 58, 237);
 pub(crate) const WARNING: Color32 = Color32::from_rgb(180, 83, 9);
 pub(crate) const DANGER: Color32 = Color32::from_rgb(220, 38, 38);
 
+pub(crate) const ANIMATION_SECONDS: f32 = 0.12;
+
 /// Configure the shared light theme before the workspace or a host dialog opens.
 pub fn configure(ctx: &Context) {
     ctx.set_theme(egui::Theme::Light);
@@ -40,7 +42,7 @@ pub fn configure(ctx: &Context) {
     style.spacing.window_margin = 16.into();
     style.spacing.menu_margin = 4.into();
     style.spacing.scroll.bar_width = 6.0;
-    style.animation_time = 0.12;
+    style.animation_time = ANIMATION_SECONDS;
     let v = &mut style.visuals;
     v.panel_fill = CHROME;
     v.window_fill = SURFACE;

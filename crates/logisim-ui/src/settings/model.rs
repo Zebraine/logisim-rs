@@ -85,6 +85,18 @@ impl Default for Settings {
 }
 
 impl Settings {
+    /// Apply interface density and motion without touching the canvas camera.
+    pub fn apply_appearance(&self, ctx: &egui::Context) {
+        ctx.set_zoom_factor(f32::from(self.ui_scale.percent()) / 100.0);
+        let animation = if self.reduce_motion {
+            0.0
+        } else {
+            crate::theme::ANIMATION_SECONDS
+        };
+        if ctx.global_style().animation_time != animation {
+            ctx.global_style_mut(|style| style.animation_time = animation);
+        }
+    }
     /// Replay only local edits when Retry loads a configuration repaired on disk.
     pub fn with_changes(mut self, before: Self, after: Self) -> Self {
         for entry in super::registry::REGISTRY {

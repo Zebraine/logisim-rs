@@ -13,6 +13,7 @@ use egui::{Frame, Margin, Panel, Ui, vec2};
 
 impl Workspace {
     pub fn show(&mut self, ui: &mut Ui) {
+        self.preferences.apply_appearance(ui.ctx());
         i18n::with_language(self.preferences.language, || self.show_localized(ui));
     }
     fn show_localized(&mut self, ui: &mut Ui) {
@@ -46,7 +47,9 @@ impl Workspace {
             self.project_dialogs(ui.ctx());
             self.analysis_dialog(ui.ctx());
             self.settings(ui.ctx());
-            self.editor.simulation.frequency_dialog(ui.ctx());
+            self.editor
+                .simulation
+                .frequency_dialog(ui.ctx(), &mut self.preferences.tick_hz);
             self.memory_editor
                 .show(ui.ctx(), &mut self.editor, &mut self.file_actions);
             self.pla_editor.show(ui.ctx(), &mut self.editor);
@@ -128,9 +131,17 @@ impl Workspace {
             )
             .show(ui, |ui| self.menus(ui));
 
-        let compact = ui.available_width() - 16.0 < 1100.0;
+        let width = ui.available_width() - 16.;
+        let compact = width < 1100.;
+        let toolbar_height = if width < 620. && self.preferences.show_telemetry {
+            108.
+        } else if compact {
+            78.
+        } else {
+            50.
+        };
         Panel::top("tools")
-            .exact_size(if compact { 78.0 } else { 50.0 })
+            .exact_size(toolbar_height)
             .frame(
                 Frame::NONE
                     .fill(CHROME)
@@ -151,7 +162,10 @@ impl Workspace {
                 if std::mem::take(&mut self.appearance.fit_requested) {
                     self.fit_pending = true;
                 }
-                if self.fit_pending {
+                if self.fit_pending
+                    && ui.ctx().zoom_factor()
+                        == f32::from(self.preferences.ui_scale.percent()) / 100.0
+                {
                     let mut bounds = egui::Rect::NOTHING;
                     for c in &self.editor.session.circuit.components {
                         bounds = bounds.union(drawing::bounds(c));
@@ -185,13 +199,18 @@ impl Workspace {
                 }
                 self.canvas.typing =
                     self.editor.simulation.typing() && self.editor.tool == Tool::Poke;
-                let response = self.canvas.show(ui);
+                let response = self.canvas.show(ui, self.preferences.show_grid);
                 if self.editor.session.context.appearance_mode {
                     self.appearance
                         .show(ui, &mut self.editor, &mut self.canvas, &response);
                 } else {
-                    self.editor
-                        .show(ui, &mut self.canvas, &response, &self.plugins);
+                    self.editor.show(
+                        ui,
+                        &mut self.canvas,
+                        &response,
+                        &self.plugins,
+                        &mut self.preferences.show_grid,
+                    );
                 }
             });
 
@@ -234,7 +253,7 @@ impl Workspace {
             if icons::button(ui, Icon::Home, false, true, "Reset canvas · Ctrl+0").clicked() {
                 self.canvas.reset();
             }
-            ui.checkbox(&mut self.canvas.show_grid, tr("Grid"));
+            ui.checkbox(&mut self.preferences.show_grid, tr("Grid"));
         });
     }
 }

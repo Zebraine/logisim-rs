@@ -356,3 +356,82 @@ fn search_matches_localized_descriptions_and_reset_requires_confirmation() {
         assert!(!app.settings_open);
     }
 }
+
+#[test]
+fn grid_zoom_frequency_motion_and_telemetry_share_the_workbench_controls() {
+    let ctx = Context::default();
+    configure(&ctx);
+    let mut app = Workspace::default();
+    let mut project = logisim_core::Project::default();
+    let circuit = &mut project.main_circuit_mut().circuit;
+    circuit.add_component(logisim_core::Component::new(
+        Kind::Pin,
+        Point::new(9000, 3000),
+    ));
+    circuit.add_component(logisim_core::Component::new(Kind::Pin, Point::ZERO));
+    app.replace_project(project.clone());
+    frame(&ctx, &mut app, vec![]);
+    let fit = app.canvas.camera.zoom;
+    assert!(fit < 1.);
+    let offset = app.canvas.camera.offset;
+    app.simulation_mut().ticks = 19;
+    click(&ctx, &mut app, "Grid");
+    assert!(!app.preferences().show_grid);
+    app.settings_open = true;
+    click(&ctx, &mut app, "Editor");
+    click(&ctx, &mut app, "Off");
+    assert!(app.preferences().show_grid);
+    click(&ctx, &mut app, "Fit to canvas");
+    click(&ctx, &mut app, "100%");
+    assert_eq!(app.canvas.camera.zoom, fit);
+    assert_eq!(app.canvas.camera.offset, offset);
+    click(&ctx, &mut app, "Appearance");
+    click(&ctx, &mut app, "On"); // telemetry
+    click(&ctx, &mut app, "Off"); // reverse paint order selects telemetry again
+    assert!(app.preferences().show_telemetry);
+    let settings = Settings {
+        show_telemetry: false,
+        reduce_motion: true,
+        ui_scale: UiScale::P125,
+        ..app.preferences()
+    };
+    app.apply_settings(settings);
+    app.settings_open = false;
+    let mut labels = vec![];
+    for _ in 0..3 {
+        labels = frame(&ctx, &mut app, vec![]);
+    }
+    assert_eq!(ctx.zoom_factor(), 1.25);
+    assert_eq!(ctx.global_style().animation_time, 0.);
+    assert!(!labels.iter().any(|(s, _)| s.starts_with("FPS:")));
+    assert!(has(&labels, "Paused"));
+    assert_eq!(app.project(), &project);
+    assert_eq!(app.simulation_mut().ticks, 19);
+    assert!(!app.editor.can_undo());
+    app.replace_project(project);
+    frame(&ctx, &mut app, vec![]);
+    assert_eq!(app.canvas.camera.zoom, 1.);
+    app.apply_settings(Settings {
+        tick_hz: TickHz::new(512).unwrap(),
+        ..Settings::default()
+    });
+    assert_eq!(
+        app.take_simulation_actions(),
+        vec![SimulationAction::SetTickRate(512)]
+    );
+    for _ in 0..3 {
+        frame(&ctx, &mut app, vec![]);
+    }
+    assert_eq!(
+        ctx.global_style().animation_time,
+        crate::theme::ANIMATION_SECONDS
+    );
+    click(&ctx, &mut app, "Simulate");
+    click(&ctx, &mut app, "Tick frequency");
+    click(&ctx, &mut app, "8 Hz");
+    assert_eq!(app.preferences().tick_hz.get(), 8);
+    assert_eq!(
+        app.take_simulation_actions(),
+        vec![SimulationAction::SetTickRate(8)]
+    );
+}

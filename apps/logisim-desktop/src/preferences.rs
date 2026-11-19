@@ -98,19 +98,25 @@ impl Preferences {
             }
         }
     }
-    pub fn synchronize(&mut self, workspace: &mut Workspace) {
-        let mut values = workspace.preferences();
-        if workspace.take_settings_retry() {
-            let baseline = self.loaded.values;
-            if self.path.is_none() {
-                self.path = config_path();
-            }
-            if !self.reload(workspace) {
-                return;
-            }
-            values = self.loaded.values.with_changes(baseline, values);
-            workspace.apply_settings(values);
+    /// Re-read the file before retrying a write, preserving independent disk edits.
+    fn retry(&mut self, workspace: &mut Workspace) {
+        let baseline = self.loaded.values;
+        if self.path.is_none() {
+            self.path = config_path();
         }
+        if self.reload(workspace) {
+            workspace.apply_settings(
+                self.loaded
+                    .values
+                    .with_changes(baseline, workspace.preferences()),
+            );
+        }
+    }
+    pub fn synchronize(&mut self, workspace: &mut Workspace) {
+        if workspace.take_settings_retry() {
+            self.retry(workspace);
+        }
+        let values = workspace.preferences();
         if self.blocked || values == self.loaded.values {
             return;
         }

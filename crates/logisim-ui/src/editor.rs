@@ -424,6 +424,7 @@ impl Editor {
         canvas: &mut Canvas,
         response: &Response,
         libraries: &[logisim_core::plugin::api::presentation::Library],
+        show_grid: &mut bool,
     ) {
         self.validate_plugin_keyboard(libraries);
         let keyboard = ui.is_enabled()
@@ -866,7 +867,7 @@ impl Editor {
                 canvas.set_zoom(1.0);
                 ui.close();
             }
-            ui.checkbox(&mut canvas.show_grid, tr("Show grid"));
+            ui.checkbox(show_grid, tr("Show grid"));
         });
         if self.publish_clipboard {
             ui.ctx().copy_text(CLIPBOARD_MARKER.to_owned());

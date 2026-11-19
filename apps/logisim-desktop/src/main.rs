@@ -29,6 +29,7 @@ fn main() -> eframe::Result {
             logisim_ui::configure(&cc.egui_ctx);
             let mut workspace = logisim_ui::Workspace::default();
             let preferences = preferences::Preferences::load(&mut workspace);
+            workspace.preferences().apply_appearance(&cc.egui_ctx);
             let mut app = DesktopApp {
                 analysis: Default::default(),
                 generation: Default::default(),

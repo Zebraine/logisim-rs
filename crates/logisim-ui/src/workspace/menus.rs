@@ -189,7 +189,9 @@ impl Workspace {
                 disabled_actions(ui, &["Project Options…"]);
             });
             ui.menu_button(tr("Simulate"), |ui| {
-                self.editor.simulation.menu(ui);
+                self.editor
+                    .simulation
+                    .menu(ui, &mut self.preferences.tick_hz);
             });
             ui.menu_button(tr("Window"), |ui| {
                 if ui.button(tr("Minimize")).clicked() {

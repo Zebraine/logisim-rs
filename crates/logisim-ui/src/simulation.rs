@@ -295,7 +295,7 @@ impl SimulationUi {
             }
         }
     }
-    pub fn menu(&mut self, ui: &mut Ui) {
+    pub fn menu(&mut self, ui: &mut Ui, rate: &mut crate::TickHz) {
         let label = if self.view.enabled {
             "Pause · Ctrl+E"
         } else {
@@ -336,7 +336,7 @@ impl SimulationUi {
         {
             self.actions.push(SimulationAction::ToggleTicks);
         }
-        self.frequency_menu(ui);
+        self.frequency_menu(ui, rate);
     }
     pub fn toolbar(&mut self, ui: &mut Ui) {
         if ui
@@ -486,7 +486,7 @@ impl SimulationUi {
     pub fn status_chip(&self, ui: &mut Ui) {
         let (name, tone) = if self.view.limited || self.view.plugin_error_count > 0 {
             (tr("Error").into(), theme::DANGER)
-        } else if self.view.pending > 0 {
+        } else if self.view.pending > 0 && ui.available_width() > 190.0 {
             (
                 self.status(),
                 if self.view.enabled {
