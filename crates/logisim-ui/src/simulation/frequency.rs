@@ -1,7 +1,7 @@
 //! Runtime frequency controls; changing them never edits the circuit document.
 use super::{SimulationAction, SimulationUi};
 use crate::{i18n::tr, tf};
-use egui::{Color32, Context, Id, Key, Modal, TextEdit, Ui};
+use egui::{Context, Id, Key, Modal, TextEdit, Ui};
 
 pub const DEFAULT_TICK_HZ: u32 = 4;
 pub const MAX_TICK_HZ: u32 = 32768;
@@ -92,7 +92,7 @@ impl SimulationUi {
                 .filter(|hz| (1..=MAX_TICK_HZ).contains(hz));
             if value.is_none() {
                 ui.colored_label(
-                    Color32::DARK_RED,
+                    crate::theme::DANGER,
                     tf!("Enter a whole number from 1 to {}.", MAX_TICK_HZ),
                 );
             }

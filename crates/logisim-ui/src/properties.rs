@@ -59,27 +59,33 @@ pub(crate) fn show(
         _ => tr("Selection").to_owned(),
     };
     let source_id = plugin.map(|p| p.plugin.clone());
-    ScrollArea::vertical().id_salt("inspector-scroll")
+    ScrollArea::vertical()
+        .id_salt("inspector-scroll")
         .auto_shrink([false, false])
         .show(ui, |ui| {
             Frame::NONE.inner_margin(8).show(ui, |ui| {
                 ui.set_min_width(ui.available_width());
-                ui.spacing_mut().text_edit_width = (ui.available_width()*0.45).max(72.0);
+                ui.spacing_mut().text_edit_width = (ui.available_width() * 0.45).max(72.0);
                 ui.spacing_mut().combo_width = ui.spacing().text_edit_width;
-                theme::section(ui,tr("Inspector"));
-                ui.horizontal_wrapped(|ui|{
+                theme::section(ui, tr("Inspector"));
+                ui.horizontal_wrapped(|ui| {
                     ui.label(RichText::new(&title).size(15.0).strong());
-                    let chip=theme::chip(ui,&source);
-                    if let Some(id)=source_id{chip.on_hover_text(id);}
-                    else if !editor.session.context.path.is_empty(){chip.on_hover_text(tr("Instance inputs are driven by the parent circuit. Edits apply to all instances."));}
+                    let chip = theme::chip(ui, &source);
+                    if let Some(id) = source_id {
+                        chip.on_hover_text(id);
+                    } else if !editor.session.context.path.is_empty() {
+                        chip.on_hover_text(tr("Instance inputs are driven by the parent circuit. Edits apply to all instances."));
+                    }
                 });
                 if let Some(c) = target {
                     if !placing && c.kind == Kind::Plugin {
-                        if crate::plugins::has_runtime(&editor.simulation,&c,plugins) {
-                            theme::card(ui,tr("Simulation"),|ui|crate::plugins::runtime(ui,&mut editor.simulation,&c,plugins,files));
+                        if crate::plugins::has_runtime(&editor.simulation, &c, plugins) {
+                            theme::card(ui, tr("Simulation"), |ui| {
+                                crate::plugins::runtime(ui, &mut editor.simulation, &c, plugins, files)
+                            });
                         }
                     } else if !placing && editor.simulation.has_component_controls(&c) {
-                        theme::card(ui,tr("Simulation"),|ui|editor.simulation.component(ui,&c));
+                        theme::card(ui, tr("Simulation"), |ui| editor.simulation.component(ui, &c));
                     }
                     component_editor(ui, editor, c, placing, plugins);
                 } else {
@@ -164,26 +170,24 @@ fn selection_info(ui: &mut Ui, editor: &mut Editor) {
     let mut label = editor.session.circuit.label.clone();
     let mut active = false;
     theme::card(ui, tr("Label & typography"), |ui| {
-        egui::Grid::new("circuit_label_properties")
-            .num_columns(2)
-            .show(ui, |ui| {
-                ui.label(tr("Circuit label"));
-                active |= ui.text_edit_singleline(&mut label.text).has_focus();
-                ui.end_row();
-                active |= crate::fonts::properties(ui, &mut label.font);
-                ui.label(tr("Label up"));
-                egui::ComboBox::from_id_salt("circuit_label_up")
-                    .selected_text(tr(label.up.name()))
-                    .show_ui(ui, |ui| {
-                        for facing in Facing::ALL {
-                            ui.selectable_value(&mut label.up, facing, tr(facing.name()));
-                        }
-                    });
-                ui.end_row();
-                ui.label(tr("Label color"));
-                ui.color_edit_button_srgb(&mut label.color);
-                ui.end_row();
-            });
+        property_grid(ui, "circuit_label_properties", |ui| {
+            ui.label(tr("Circuit label"));
+            active |= ui.text_edit_singleline(&mut label.text).has_focus();
+            ui.end_row();
+            active |= crate::fonts::properties(ui, &mut label.font);
+            ui.label(tr("Label up"));
+            egui::ComboBox::from_id_salt("circuit_label_up")
+                .selected_text(tr(label.up.name()))
+                .show_ui(ui, |ui| {
+                    for facing in Facing::ALL {
+                        ui.selectable_value(&mut label.up, facing, tr(facing.name()));
+                    }
+                });
+            ui.end_row();
+            ui.label(tr("Label color"));
+            ui.color_edit_button_srgb(&mut label.color);
+            ui.end_row();
+        });
     });
     editor.update_circuit_label(label);
     if !active && !ui.ctx().any_popup_open() {
@@ -227,13 +231,13 @@ fn component_editor(
     let original = c.clone();
     let mut active = false;
     if c.kind.has_label() {
-        property_grid(ui, ("label", c.id), |ui| {
+        active |= property_grid(ui, ("label", c.id), |ui| {
             let response = if c.kind == Kind::Text {
                 ui.label(tr("Text"));
                 ui.add(
                     egui::TextEdit::multiline(&mut c.label)
                         .desired_rows(3)
-                        .desired_width(f32::INFINITY)
+                        .desired_width(ui.spacing().text_edit_width)
                         .char_limit(4096)
                         .id_salt((c.id, "text")),
                 )
@@ -241,7 +245,7 @@ fn component_editor(
                 ui.label(tr("Label"));
                 ui.add(
                     egui::TextEdit::singleline(&mut c.label)
-                        .desired_width(f32::INFINITY)
+                        .desired_width(ui.spacing().text_edit_width)
                         .char_limit(128)
                         .id_salt((c.id, "label")),
                 )
@@ -251,8 +255,7 @@ fn component_editor(
                 editor.focus_text = false;
             }
             ui.end_row();
-            active |= response.has_focus();
-            active
+            response.has_focus()
         });
     }
     theme::card(
@@ -305,10 +308,13 @@ fn component_editor(
     }
 }
 
-fn property_grid(ui: &mut Ui, id: impl egui::AsIdSalt, body: impl FnOnce(&mut Ui) -> bool) -> bool {
+fn property_grid<R>(ui: &mut Ui, id: impl egui::AsIdSalt, body: impl FnOnce(&mut Ui) -> R) -> R {
+    let width = ui.available_width() - 8.0;
+    ui.spacing_mut().text_edit_width = width * 0.52;
+    ui.spacing_mut().combo_width = width * 0.52;
     egui::Grid::new(id)
         .num_columns(2)
-        .min_col_width(32.0)
+        .min_col_width(width * 0.42)
         .max_col_width((ui.available_width() - 8.0) * 0.52)
         .spacing(egui::vec2(8.0, 4.0))
         .show(ui, body)
@@ -325,7 +331,7 @@ fn fields(
         ui.label(tr("Facing"));
         egui::ComboBox::from_id_salt("facing")
             .selected_text(tr(c.facing.name()))
-            .width(110.0)
+            .width(ui.spacing().combo_width)
             .show_ui(ui, |ui| {
                 for facing in Facing::ALL {
                     ui.selectable_value(&mut c.facing, facing, tr(facing.name()));

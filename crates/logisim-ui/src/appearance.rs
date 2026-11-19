@@ -807,7 +807,7 @@ impl AppearanceEditor {
             painter.circle_filled(center, 2.0, ACCENT);
         }
         let center = canvas.screen(preview.anchor);
-        let green = egui::Color32::from_rgb(34, 139, 70);
+        let green = crate::theme::SUCCESS;
         painter.circle_stroke(center, 4.0 * canvas.camera.zoom, Stroke::new(1.7, green));
         painter.line_segment(
             [

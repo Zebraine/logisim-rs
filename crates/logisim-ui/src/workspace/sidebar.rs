@@ -86,7 +86,11 @@ impl Workspace {
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
                         if count == 0 {
-                            ui.weak(tr("No results"));
+                            ui.add_space(4.0);
+                            ui.label(tr("No results"));
+                            if ui.button(tr("Clear search")).clicked() {
+                                self.navigation.query.clear();
+                            }
                         } else if components {
                             self.components(ui, &query);
                         } else {

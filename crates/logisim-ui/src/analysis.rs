@@ -102,7 +102,7 @@ impl Workspace {
             ui.set_width((ctx.content_rect().width() - 80.0).clamp(280.0, 560.0));
             ui.heading(tr("Analyze Circuit"));
             if let Some(error) = &self.analysis.error {
-                ui.colored_label(egui::Color32::from_rgb(185, 28, 28), tr(error.message));
+                ui.colored_label(crate::theme::DANGER, tr(error.message));
                 egui::ScrollArea::vertical().max_height(140.0).show(ui, |ui| { ui.label(&error.detail); });
                 close = ui.button(tr("Close")).clicked();
             } else {

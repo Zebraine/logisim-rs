@@ -89,8 +89,10 @@ fn font(ui: &mut Ui, font: &mut ArtworkFont, anchor: &mut TextAnchor) {
 impl AppearanceEditor {
     pub fn properties(&mut self, ui: &mut Ui, editor: &mut Editor) {
         ScrollArea::vertical().show(ui,|ui| { Frame::NONE.inner_margin(12).show(ui,|ui|{
+            crate::theme::section(ui,tr("Inspector"));
             ui.strong(tf!("Appearance: {}", editor.session.project.circuit(editor.session.context.active).unwrap().name));
-            ui.weak(tr("Changes update every instance. Wires keep their positions; reconnect moved ports in the circuit layout."));ui.separator();
+            crate::theme::chip(ui,tr("Subcircuit")).on_hover_text(tr("Changes update every instance. Wires keep their positions; reconnect moved ports in the circuit layout."));
+            ui.separator();
             let mut a=Self::current(editor);let original=a.clone();
             let selection=(self.selected.len()==1).then(||*self.selected.first().unwrap());
             if self.tool!=Tool::Select {

@@ -452,7 +452,7 @@ pub(crate) fn component(
                 p.rect(
                     screen,
                     4.0,
-                    Color32::from_rgb(241, 245, 251),
+                    crate::theme::CHROME,
                     stroke,
                     StrokeKind::Inside,
                 );

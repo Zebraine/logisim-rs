@@ -519,7 +519,12 @@ impl SimulationUi {
         self.view.has_clocks && self.view.pending == 0 && !self.view.limited
     }
     pub fn overview(&self, ui: &mut Ui) {
-        ui.label(self.status());
+        ui.label(self.status()).on_hover_ui(|ui| {
+            ui.label(tr("P: Poke · click a 1-bit input to toggle."));
+            ui.label(tr(
+                "0 / 1: set selected input. Multi-bit values use hexadecimal.",
+            ));
+        });
         ui.weak(tf!("{} propagation steps", self.view.steps));
         if self.view.has_clocks {
             ui.weak(tf!(
@@ -531,10 +536,6 @@ impl SimulationUi {
         if !self.view.enabled && self.view.pending > 0 {
             ui.weak(tr("Inputs have pending changes. Step or Run to propagate."));
         }
-        ui.weak(tr("P: Poke · click a 1-bit input to toggle."));
-        ui.weak(tr(
-            "0 / 1: set selected input. Multi-bit values use hexadecimal.",
-        ));
     }
     pub fn has_component_controls(&self, c: &Component) -> bool {
         use logisim_core::Kind;

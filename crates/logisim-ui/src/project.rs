@@ -185,7 +185,7 @@ impl Workspace {
                     response.request_focus();
                 }
                 if !dialog.error.is_empty() {
-                    ui.colored_label(egui::Color32::DARK_RED, tr(&dialog.error));
+                    ui.colored_label(crate::theme::DANGER, tr(&dialog.error));
                 }
                 ui.horizontal(|ui| {
                     apply = ui

@@ -157,7 +157,7 @@ pub(crate) fn runtime(
         return;
     };
     if let Some(error) = sim.view.plugin_errors.get(&c.id) {
-        ui.colored_label(Color32::DARK_RED, error);
+        ui.colored_label(crate::theme::DANGER, error);
         ui.weak(tr(
             "Load the matching plugin, or Reset after correcting the problem.",
         ));
@@ -321,7 +321,7 @@ pub(crate) fn draw(
         p.rect_stroke(
             bounds,
             0,
-            Stroke::new(2.0, Color32::RED),
+            Stroke::new(2.0, crate::theme::DANGER),
             StrokeKind::Inside,
         );
     }

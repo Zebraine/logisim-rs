@@ -148,7 +148,7 @@ pub(crate) fn draw(
     p.rect(
         Rect::from_min_max(at(-140, -40), at(0, 40)),
         3.0 * z,
-        Color32::from_rgb(244, 248, 255),
+        crate::theme::CHROME,
         Stroke::new(1.6, color),
         StrokeKind::Inside,
     );
@@ -182,7 +182,7 @@ pub(crate) fn draw(
             p.rect_filled(
                 Rect::from_min_max(at(-125, y - 5), at(-15, y + 5)),
                 1.0,
-                Color32::from_rgb(221, 234, 253),
+                crate::theme::SELECTED,
             );
         }
         text(
@@ -325,7 +325,7 @@ impl MemoryEditor {
                 if ui.add_enabled(value.is_some(),egui::Button::new(tr("Write word"))).clicked() {edit=Some((self.address,self.address+1,value.unwrap()));}
             });
             let value=parse_word(&self.value,c.bits);
-            if value.is_none() {ui.colored_label(Color32::RED,tf!("Enter a hexadecimal value within {} bits.",c.bits));}
+            if value.is_none() {ui.colored_label(crate::theme::DANGER,tf!("Enter a hexadecimal value within {} bits.",c.bits));}
             ui.horizontal(|ui| {
                 ui.label(tr("Through address (hex)"));
                 ui.add(egui::DragValue::new(&mut self.last).range(self.address..=capacity-1).hexadecimal(c.memory.address_bits.div_ceil(4) as usize,false,true));

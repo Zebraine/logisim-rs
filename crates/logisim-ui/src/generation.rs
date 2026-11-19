@@ -5,7 +5,7 @@ pub use jobs::{Reply, Request};
 pub(crate) use memory::Memory;
 
 use crate::{Workspace, editor::Editor, i18n::tr, tf};
-use egui::{Color32, Ui};
+use egui::Ui;
 use logisim_core::{
     Circuit,
     generation::{
@@ -210,7 +210,7 @@ impl Generator {
             }
             if let Some(error) = &self.error {
                 ui.colored_label(
-                    Color32::from_rgb(185, 28, 28),
+                    crate::theme::DANGER,
                     format!("{} {}", tr(error.message), error.detail),
                 );
             }

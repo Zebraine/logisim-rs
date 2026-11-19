@@ -1,4 +1,4 @@
-use crate::{Language, Workspace, i18n::tr};
+use crate::{Language, Workspace, i18n::tr, theme};
 
 /// Host execution preference, independent of the document and its undo history.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -59,52 +59,57 @@ impl Workspace {
         egui::Window::new(tr("Settings"))
             .id(egui::Id::unique("settings-window"))
             .open(&mut self.settings_open)
-            .default_pos(ctx.content_rect().center() - egui::vec2(220.0, 80.0))
+            .default_pos(ctx.content_rect().center() - egui::vec2(226.0, 166.0))
             .collapsible(false)
             .resizable(false)
+            .default_height(332.0)
+            .max_height(ctx.content_rect().height()-56.0)
+            .vscroll(true)
             .show(ctx, |ui| {
-                ui.set_width((ctx.content_rect().width() - 48.0).min(440.0));
-                ui.horizontal(|ui| {
-                    ui.label(tr("Language"));
-                    egui::ComboBox::from_id_salt("language")
-                        .width(180.0)
-                        .selected_text(self.language.name())
-                        .show_ui(ui, |ui| {
-                            for language in Language::ALL {
-                                if ui.selectable_value(&mut self.language, language, language.name()).changed() {
-                                    ctx.request_repaint();
-                                }
-                            }
-                        });
-                });
-                ui.label(tr("Language changes apply immediately and are saved for the next launch."));
-                if !ui.fonts_mut(|fonts| fonts.has_glyphs(&egui::FontId::proportional(14.0), "简体中文设置")) {
-                    // Keep this actionable even when the missing font makes Chinese unreadable.
-                    ui.colored_label(egui::Color32::DARK_RED, "Chinese characters require a system CJK font (for example Noto Sans CJK SC).");
-                }
-                ui.separator();
-                ui.horizontal(|ui| {
-                    ui.label(tr("Simulation mode"));
-                    egui::ComboBox::from_id_salt("simulation-mode")
-                        .width(180.0)
-                        .selected_text(self.simulation_mode.name())
-                        .show_ui(ui, |ui| {
-                            for mode in SimulationMode::ALL {
-                                ui.selectable_value(&mut self.simulation_mode, mode, mode.name());
-                            }
-                        });
-                });
-                ui.label(tr("Stable state settles combinational logic before sampling state. Unsupported circuits use event propagation."));
-                ui.label(tr("Changes apply without resetting the circuit and are saved for the next launch. Manual propagation steps always use events."));
-                ui.separator();
-                ui.checkbox(&mut truth_table_generation, tr("Enable truth table generation"));
+                ui.set_width((ctx.content_rect().width()-64.0).min(420.0));
                 if let Some(error) = &self.settings_error {
-                    ui.separator();
-                    ui.colored_label(egui::Color32::DARK_RED, tr("Settings need attention."));
+                    ui.colored_label(theme::DANGER, tr("Settings need attention."));
                     ui.label(tr(error));
-                    ui.label(tr("Your choice applies now. Retry to save it for the next launch."));
-                    if ui.button(tr("Retry")).clicked() { self.retry_settings = true; }
+                    ui.weak(tr("Your choice applies now. Retry to save it for the next launch."));
+                    if ui.button(tr("Retry")).clicked() {
+                        self.retry_settings = true;
+                    }
+                    ui.separator();
                 }
+                theme::section(ui,tr("Interface"));
+                egui::Grid::new("settings-interface").min_col_width(130.0).show(ui,|ui|{
+                    ui.label(tr("Language"));
+                    egui::ComboBox::from_id_salt("language").width(200.0)
+                        .selected_text(self.language.name()).show_ui(ui,|ui|{
+                            for language in Language::ALL{
+                                if ui.selectable_value(&mut self.language,language,language.name()).changed(){ctx.request_repaint();}
+                            }
+                        });
+                    ui.end_row();
+                });
+                ui.weak(tr("Language changes apply immediately and are saved for the next launch."));
+                if !ui.fonts_mut(|fonts|fonts.has_glyphs(&egui::FontId::proportional(14.0),"简体中文设置")){
+                    // Keep the font installation hint readable without CJK glyphs.
+                    let hint = crate::i18n::with_language(Language::English, || tr("Chinese characters require a system CJK font (for example Noto Sans CJK SC)."));
+                    ui.colored_label(theme::DANGER, hint);
+                }
+                ui.add_space(4.0);
+                ui.separator();
+                theme::section(ui,tr("Simulation"));
+                egui::Grid::new("settings-simulation").min_col_width(130.0).show(ui,|ui|{
+                    ui.label(tr("Simulation mode"));
+                    egui::ComboBox::from_id_salt("simulation-mode").width(200.0)
+                        .selected_text(self.simulation_mode.name()).show_ui(ui,|ui|{
+                            for mode in SimulationMode::ALL{ui.selectable_value(&mut self.simulation_mode,mode,mode.name());}
+                        });
+                    ui.end_row();
+                });
+                ui.weak(tr("Stable state settles combinational logic before sampling state. Unsupported circuits use event propagation."));
+                ui.weak(tr("Changes apply without resetting the circuit and are saved for the next launch. Manual propagation steps always use events."));
+                ui.add_space(4.0);
+                ui.separator();
+                ui.checkbox(&mut truth_table_generation,tr("Enable truth table generation"));
+
             });
         if truth_table_generation != self.truth_table_generation {
             self.set_truth_table_generation(truth_table_generation);

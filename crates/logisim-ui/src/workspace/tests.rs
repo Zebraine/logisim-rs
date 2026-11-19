@@ -29,30 +29,32 @@ fn wheel() -> Event {
 }
 
 #[test]
-fn canvas_keeps_the_right_hand_layout_at_both_window_sizes() {
-    for size in [vec2(1200.0, 820.0), vec2(720.0, 480.0)] {
+fn canvas_keeps_the_right_hand_layout_when_resizing_in_both_languages() {
+    for language in Language::ALL {
         let ctx = Context::default();
         configure(&ctx);
         let mut app = Workspace::default();
-        frame(&ctx, &mut app, size, vec![]);
-        let canvas = app.canvas.rect;
-        assert!(canvas.left() >= 230.0 && canvas.left() < size.x * 0.5);
-        let toolbar_bottom = if size.x < 1000.0 {
-            95.0..115.0 // A second toolbar row keeps runtime telemetry visible.
-        } else {
-            65.0..90.0
-        };
-        assert!(
-            toolbar_bottom.contains(&canvas.top()),
-            "{size:?}: {canvas:?}"
-        );
-        assert_eq!(canvas.right(), size.x);
-        assert_eq!(
-            canvas.bottom(),
-            size.y,
-            "No full-width bottom bar may shrink the canvas"
-        );
-        assert!(canvas.width() > 450.0);
+        app.set_language(language);
+        for size in [vec2(1440.0, 900.0), vec2(1200.0, 820.0), vec2(720.0, 480.0)] {
+            for _ in 0..3 {
+                frame(&ctx, &mut app, size, vec![]);
+            }
+            let canvas = app.canvas.rect;
+            assert!(
+                (230.0..=381.0).contains(&canvas.left()),
+                "{size:?} {canvas:?}"
+            );
+            assert!(canvas.width() > 450.0);
+            let toolbar_height = canvas.top() - 30.0;
+            let expected = if size.x == 720.0 {
+                64.0..=84.0
+            } else {
+                48.0..=52.0
+            };
+            assert!(expected.contains(&toolbar_height), "{size:?} {canvas:?}");
+            assert_eq!(canvas.right(), size.x);
+            assert_eq!(canvas.bottom(), size.y);
+        }
     }
 }
 
