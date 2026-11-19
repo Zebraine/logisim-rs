@@ -292,7 +292,7 @@ pub(crate) fn draw(
         }
         let value = simulation.and_then(|s| s.storage.get(&c.id));
         let label = value.map_or("0", |s| s.text.as_str());
-        let tone = value.map_or(color, |s| s.tone.color());
+        let tone = value.map_or(color, |s| s.tone.text_color());
         let x = if c.kind == Kind::ShiftRegister {
             15
         } else {
@@ -419,6 +419,6 @@ pub(crate) fn draw(
         } else {
             12.0 * z
         }),
-        state.map_or(color, |s| s.tone.color()),
+        state.map_or(color, |s| s.tone.text_color()),
     );
 }

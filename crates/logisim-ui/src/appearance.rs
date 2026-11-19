@@ -151,7 +151,7 @@ impl AppearanceEditor {
             self.package_labels = true;
             self.initialized = true;
         }
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             for tool in [
                 Tool::Select,
                 Tool::Text,

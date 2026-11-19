@@ -128,12 +128,13 @@ impl Workspace {
             )
             .show(ui, |ui| self.menus(ui));
 
+        let compact = ui.available_width() - 16.0 < 1100.0;
         Panel::top("tools")
-            .min_size(50.0)
+            .exact_size(if compact { 78.0 } else { 50.0 })
             .frame(
                 Frame::NONE
                     .fill(CHROME)
-                    .inner_margin(Margin::symmetric(8, 5)),
+                    .inner_margin(Margin::symmetric(8, if compact { 6 } else { 10 })),
             )
             .show(ui, |ui| self.toolbar(ui));
 

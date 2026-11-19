@@ -1,6 +1,6 @@
 //! Presentation and commands only; the desktop host owns the simulation service.
 mod frequency;
-use crate::{i18n::tr, tf};
+use crate::{i18n::tr, tf, theme};
 use egui::{Color32, Key, Modifiers, Ui};
 pub use frequency::{DEFAULT_TICK_HZ, MAX_TICK_HZ};
 use logisim_core::{Component, Id, Point};
@@ -16,14 +16,21 @@ pub enum SignalTone {
     WidthMismatch,
 }
 impl SignalTone {
+    pub(crate) fn text_color(self) -> Color32 {
+        if self == Self::High {
+            theme::SUCCESS
+        } else {
+            self.color()
+        }
+    }
     pub(crate) fn color(self) -> Color32 {
         match self {
-            Self::Low => Color32::from_rgb(21, 110, 65),
-            Self::High => Color32::from_rgb(22, 180, 87),
-            Self::Bus => crate::theme::INK,
-            Self::Unknown => Color32::from_rgb(80, 91, 210),
-            Self::Error => Color32::from_rgb(210, 45, 58),
-            Self::WidthMismatch => Color32::from_rgb(211, 115, 12),
+            Self::Low => theme::LOW,
+            Self::High => theme::HIGH,
+            Self::Bus => theme::BUS,
+            Self::Unknown => theme::UNKNOWN,
+            Self::Error => theme::DANGER,
+            Self::WidthMismatch => theme::WARNING,
         }
     }
 }
@@ -33,6 +40,31 @@ pub struct SignalView {
     pub binary: String,
     pub tone: SignalTone,
 }
+impl SignalView {
+    pub(crate) fn pill(&self, ui: &mut Ui) {
+        egui::Frame::NONE
+            .fill(theme::SUNKEN)
+            .corner_radius(6)
+            .inner_margin(egui::Margin::symmetric(8, 4))
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    let (dot, _) =
+                        ui.allocate_exact_size(egui::vec2(10.0, 14.0), egui::Sense::hover());
+                    ui.painter()
+                        .circle_filled(dot.center(), 3.5, self.tone.color());
+                    ui.monospace(&self.text);
+                    ui.separator();
+                    ui.label(
+                        egui::RichText::new(tf!("{} bit", self.binary.len())).color(theme::MUTED),
+                    );
+                });
+            });
+        if self.text != self.binary {
+            ui.monospace(&self.binary);
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct InputValue {
     pub bits: u8,
@@ -308,11 +340,21 @@ impl SimulationUi {
     }
     pub fn toolbar(&mut self, ui: &mut Ui) {
         if ui
-            .button(if self.view.enabled {
-                tr("Pause")
-            } else {
-                tr("Run")
+            .scope(|ui| {
+                let v = &mut ui.visuals_mut().widgets;
+                v.inactive.weak_bg_fill = theme::ACCENT;
+                v.hovered.weak_bg_fill = theme::ACCENT_HOVER;
+                v.active.weak_bg_fill = theme::ACCENT_HOVER;
+                ui.add(
+                    egui::Button::new(
+                        egui::RichText::new(tr(if self.view.enabled { "Pause" } else { "Run" }))
+                            .color(theme::SURFACE)
+                            .strong(),
+                    )
+                    .min_size(egui::vec2(60.0, 30.0)),
+                )
             })
+            .inner
             .on_hover_text(tr("Enable / pause simulation · Ctrl+E"))
             .clicked()
         {
@@ -344,23 +386,64 @@ impl SimulationUi {
         {
             self.actions.push(SimulationAction::Tick);
         }
-        let mut automatic = self.view.automatic_ticks;
-        if ui
-            .add_enabled(
-                self.view.has_clocks,
-                egui::Checkbox::new(&mut automatic, tr("Auto ticks")),
-            )
+        let automatic = self.view.automatic_ticks;
+        let switch = ui
+            .add_enabled_ui(self.view.has_clocks, |ui| {
+                let text = ui.painter().layout_no_wrap(
+                    tr("Auto ticks").into(),
+                    egui::FontId::proportional(13.0),
+                    theme::INK,
+                );
+                let (rect, r) = ui.allocate_exact_size(
+                    egui::vec2(36.0 + text.size().x, 28.0),
+                    egui::Sense::click(),
+                );
+                r.widget_info(|| {
+                    egui::WidgetInfo::selected(
+                        egui::Role::Switch,
+                        ui.is_enabled(),
+                        automatic,
+                        tr("Auto ticks"),
+                    )
+                });
+                let t = ui.ctx().animate_bool_with_time(r.id, automatic, 0.12);
+                let rail = egui::Rect::from_center_size(
+                    rect.left_center() + egui::vec2(15.0, 0.0),
+                    egui::vec2(28.0, 16.0),
+                );
+                ui.painter().rect_filled(
+                    rail,
+                    8,
+                    theme::BORDER_STRONG.lerp_to_gamma(theme::ACCENT, t),
+                );
+                ui.painter().circle_filled(
+                    rail.left_center() + egui::vec2(8.0 + t * 12.0, 0.0),
+                    6.0,
+                    theme::SURFACE,
+                );
+                ui.painter().galley(
+                    rect.left_center() + egui::vec2(36.0, -text.size().y / 2.0),
+                    text,
+                    theme::INK,
+                );
+                theme::focus_ring(ui, &r);
+                r
+            })
+            .inner;
+        if switch
             .on_hover_text(tr("Automatic ticks · Ctrl+K"))
-            .changed()
+            .clicked()
         {
             self.actions.push(SimulationAction::ToggleTicks);
         }
-        ui.separator();
+    }
+
+    pub fn telemetry(&self, ui: &mut Ui) {
         let fps = self
             .view
             .frames_per_second
             .map_or_else(|| "—".into(), |value| format!("{value:.1}"));
-        for (label, hint) in [
+        let metrics = [
             (
                 tf!("FPS: {}", fps),
                 "Completed UI frames per second, measured over about one second. Idle redraws are included.",
@@ -376,13 +459,61 @@ impl SimulationUi {
                 ),
                 "Successful clock ticks per second, measured over about one second. Includes manual ticks; not full clock cycles or propagation steps.",
             ),
-        ] {
-            ui.add(
-                egui::Label::new(egui::RichText::new(label).monospace().size(11.0))
-                    .wrap_mode(egui::TextWrapMode::Extend),
+        ].map(|(label,hint)|(ui.painter().layout_no_wrap(label,egui::FontId::monospace(12.0),theme::MUTED),hint));
+        let width = metrics.iter().map(|(run, _)| run.size().x).sum::<f32>() + 32.0;
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(width, 26.0), egui::Sense::hover());
+        ui.painter().rect(
+            rect,
+            4,
+            theme::SURFACE,
+            egui::Stroke::new(1.0, theme::BORDER),
+            egui::StrokeKind::Inside,
+        );
+        let mut x = rect.left() + 8.0;
+        for (index, (run, hint)) in metrics.into_iter().enumerate() {
+            let at = egui::pos2(x, rect.center().y - run.size().y / 2.0);
+            let area = egui::Rect::from_min_size(at, run.size());
+            ui.interact(
+                area,
+                ui.make_persistent_id(("runtime-metric", index)),
+                egui::Sense::hover(),
             )
             .on_hover_text(tr(hint));
+            x += run.size().x + 8.0;
+            ui.painter().galley(at, run, theme::MUTED);
         }
+    }
+    pub fn status_chip(&self, ui: &mut Ui) {
+        let (name, tone) = if self.view.limited || self.view.plugin_error_count > 0 {
+            (tr("Error").into(), theme::DANGER)
+        } else if self.view.pending > 0 {
+            (
+                self.status(),
+                if self.view.enabled {
+                    theme::SUCCESS
+                } else {
+                    theme::MUTED
+                },
+            )
+        } else if self.view.enabled {
+            (tr("Running").into(), theme::SUCCESS)
+        } else {
+            (tr("Paused").into(), theme::MUTED)
+        };
+        let run = ui
+            .painter()
+            .layout_no_wrap(name, egui::FontId::proportional(13.0), theme::INK);
+        let (rect, r) =
+            ui.allocate_exact_size(egui::vec2(run.size().x + 29.0, 24.0), egui::Sense::hover());
+        ui.painter().rect_filled(rect, 4, tone.gamma_multiply(0.08));
+        ui.painter()
+            .circle_filled(rect.left_center() + egui::vec2(9.0, 0.0), 3.0, tone);
+        ui.painter().galley(
+            rect.left_center() + egui::vec2(18.0, -run.size().y / 2.0),
+            run,
+            theme::INK,
+        );
+        r.on_hover_text(self.status());
     }
     fn can_tick(&self) -> bool {
         self.view.has_clocks && self.view.pending == 0 && !self.view.limited
@@ -458,7 +589,7 @@ impl SimulationUi {
             }
         }
         if let Some(state) = self.view.storage.get(&c.id) {
-            ui.colored_label(state.tone.color(), tf!("Stored value: {}", state.text))
+            ui.colored_label(state.tone.text_color(), tf!("Stored value: {}", state.text))
                 .on_hover_text(&state.binary);
             if matches!(
                 c.kind,
@@ -473,7 +604,7 @@ impl SimulationUi {
             self.actions.push(SimulationAction::PokeClock { id: c.id });
         }
         if let Some(signal) = self.view.ports.get(&(c.id, 0)) {
-            ui.colored_label(signal.tone.color(), tf!("Signal: {}", signal.text))
+            ui.colored_label(signal.tone.text_color(), tf!("Signal: {}", signal.text))
                 .on_hover_text(tf!("{} bit: {}", signal.binary.len(), signal.binary));
         }
         let Some(input) = self.view.inputs.get(&c.id).copied() else {

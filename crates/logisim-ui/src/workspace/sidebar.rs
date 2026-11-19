@@ -36,7 +36,7 @@ impl Workspace {
         Panel::top("project")
             .resizable(true)
             .default_size(height * 0.52)
-            .size_range(144.0..=(height - 98.0).max(144.0))
+            .size_range(144.0..=(height - (height * 0.45).clamp(126.0, 180.0)).max(144.0))
             .frame(
                 Frame::NONE
                     .fill(theme::SURFACE)

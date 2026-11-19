@@ -144,8 +144,8 @@ impl Canvas {
         let origin = rect.min + self.camera.offset;
         if rect.shrink(12.0).contains(origin) {
             let stroke = egui::Stroke::new(1.0, crate::theme::FAINT);
-            painter.line_segment([origin - vec2(5.0, 0.0), origin + vec2(5.0, 0.0)], stroke);
-            painter.line_segment([origin - vec2(0.0, 5.0), origin + vec2(0.0, 5.0)], stroke);
+            painter.line_segment([origin - vec2(3.0, 0.0), origin + vec2(3.0, 0.0)], stroke);
+            painter.line_segment([origin - vec2(0.0, 3.0), origin + vec2(0.0, 3.0)], stroke);
         }
         response
     }

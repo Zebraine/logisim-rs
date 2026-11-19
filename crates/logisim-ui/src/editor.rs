@@ -13,6 +13,7 @@ use std::collections::BTreeSet;
 
 mod history;
 mod session;
+mod signals;
 use history::History;
 pub(crate) use session::{EditSession, Snapshot};
 
@@ -807,108 +808,7 @@ impl Editor {
         if response.hovered()
             && let Some(pointer) = pointer
         {
-            let world = canvas.world(pointer);
-            for c in self.session.circuit.components.iter().filter(|c| {
-                c.kind == Kind::Plugin
-                    || c.kind.is_io()
-                    || c.kind.is_controlled()
-                    || c.kind.is_transistor()
-                    || c.kind == Kind::PullResistor
-                    || c.kind.is_memory()
-                    || c.kind == Kind::PlaRom
-                    || c.kind.is_sequential()
-                    || matches!(
-                        c.kind,
-                        Kind::Plexer(_) | Kind::Arithmetic(_) | Kind::Parity(_)
-                    )
-            }) {
-                for (index, point) in c.ports().iter().enumerate() {
-                    if (drawing::pos(*point).to_vec2() - world).length() <= tolerance {
-                        response.clone().on_hover_ui(|ui| {
-                            ui.label(tf!(
-                                "{} · {} bit(s)",
-                                if c.kind == Kind::Plugin {
-                                    c.plugin.as_ref().expect("plugin definition").tool.ports[index]
-                                        .label
-                                        .clone()
-                                } else if matches!(c.kind, Kind::Plexer(_)) {
-                                    crate::plexers::port_label(c, c.plexer_terminals()[index].role)
-                                } else if matches!(c.kind, Kind::Arithmetic(_)) {
-                                    crate::arithmetic::port_label(c, index)
-                                } else if matches!(c.kind, Kind::Parity(_)) {
-                                    crate::parity::port_label(c, index)
-                                } else if c.kind.is_transistor() {
-                                    tr(crate::transistors::port_label(c, index)).to_owned()
-                                } else if c.kind.is_controlled() || c.kind == Kind::PullResistor {
-                                    tr(crate::bus::port_label(c, index)).to_owned()
-                                } else if c.kind.is_io() {
-                                    tr(crate::io::port_label(c, index)).to_owned()
-                                } else if matches!(c.kind, Kind::Latch(_)) {
-                                    tr(crate::latches::port_label(c, index)).to_owned()
-                                } else if c.kind == Kind::PlaRom {
-                                    tr(crate::pla::port_label(index)).to_owned()
-                                } else if c.kind.is_memory() {
-                                    tr(crate::memory::port_label(c, index)).to_owned()
-                                } else {
-                                    tr(crate::sequential::port_label(c, index)).to_owned()
-                                },
-                                c.port_width(index).unwrap_or_else(|| self
-                                    .simulation
-                                    .view
-                                    .ports
-                                    .get(&(c.id, index))
-                                    .map_or(0, |s| s.binary.len() as u8))
-                            ));
-                            if let Some(signal) = self.simulation.view.ports.get(&(c.id, index)) {
-                                ui.monospace(&signal.binary);
-                            }
-                        });
-                    }
-                }
-            }
-            for c in self
-                .session
-                .circuit
-                .components
-                .iter()
-                .filter(|c| matches!(c.kind, Kind::Subcircuit(_)))
-            {
-                for (index, (point, port)) in c.ports().iter().zip(&c.interface.ports).enumerate() {
-                    if (drawing::pos(*point).to_vec2() - world).length() <= tolerance {
-                        response.clone().on_hover_ui(|ui| {
-                            ui.label(tf!(
-                                "{} · {} · {} bit",
-                                if port.label.is_empty() {
-                                    tf!("Pin #{}", port.pin)
-                                } else {
-                                    port.label.clone()
-                                },
-                                tr(if port.output { "Output" } else { "Input" }),
-                                port.bits
-                            ));
-                            if let Some(signal) = self.simulation.view.ports.get(&(c.id, index)) {
-                                ui.monospace(&signal.binary);
-                            }
-                        });
-                    }
-                }
-            }
-        }
-        if response.hovered()
-            && let Some(pos) = pointer
-            && let Some(id) = self.hit(canvas.world(pos), tolerance)
-            && let Some(signal) = self
-                .simulation
-                .view
-                .wires
-                .get(&id)
-                .or_else(|| self.simulation.view.ports.get(&(id, 0)))
-        {
-            response.clone().on_hover_ui(|ui| {
-                ui.colored_label(signal.tone.color(), tf!("Signal: {}", signal.text));
-                ui.monospace(&signal.binary);
-                ui.weak(tf!("{} bit", signal.binary.len()));
-            });
+            self.signal_hover(response, canvas.world(pointer), tolerance, libraries);
         }
         if response.secondary_clicked() {
             self.context_instance = pointer

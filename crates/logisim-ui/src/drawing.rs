@@ -246,6 +246,7 @@ pub(crate) fn circuit(
 ) {
     cache.synchronize(circuit, selection);
     cache.prepare_view(p, canvas);
+    let mut badges = Vec::new();
     for w in &circuit.wires {
         let selected = selection.contains(&w.id);
         let segment = [canvas.screen(w.a), canvas.screen(w.b)];
@@ -265,17 +266,52 @@ pub(crate) fn circuit(
             );
         }
         let signal = simulation.wires.get(&w.id);
-        p.line_segment(
-            segment,
-            Stroke::new(
-                if signal.is_some_and(|s| s.binary.len() > 1) {
-                    3.0
-                } else {
-                    1.8
-                },
-                signal.map_or(INK, |s| s.tone.color()),
-            ),
-        );
+        let tone = signal.map(|s| s.tone);
+        let bus = signal.is_some_and(|s| s.binary.len() > 1);
+        let width = if bus { 3.0 } else { 1.8 };
+        let ink = tone.map_or(INK, crate::SignalTone::color);
+        if tone == Some(crate::SignalTone::High) && !selected && !cache.selected_net.contains(&w.id)
+        {
+            p.line_segment(segment, Stroke::new(width + 2.5, ink.gamma_multiply(0.13)));
+        }
+        let stroke = Stroke::new(width, ink);
+        if tone == Some(crate::SignalTone::Error) {
+            let clip = p.clip_rect().expand(6.0);
+            let visible = segment.map(|point| clip.clamp(point));
+            p.extend(Shape::dashed_line(&visible, stroke, 5.0, 3.0));
+        } else {
+            p.line_segment(segment, stroke);
+        }
+        if let Some(value) = signal
+            && bus
+            && (selected
+                || cache.selected_net.contains(&w.id)
+                || (canvas.camera.zoom >= 0.8 && segment[0].distance(segment[1]) >= 96.0))
+        {
+            let midpoint = segment[0].lerp(segment[1], 0.5);
+            let label = p.layout_no_wrap(
+                value.text.clone(),
+                FontId::monospace(12.0),
+                crate::theme::INK,
+            );
+            let badge = Rect::from_center_size(midpoint, label.size() + vec2(8.0, 4.0));
+            if segment[0].distance(segment[1]) >= badge.width() + 12.0
+                && p.clip_rect().contains_rect(badge)
+                && !badges
+                    .iter()
+                    .any(|r: &Rect| r.intersects(badge.expand(4.0)))
+            {
+                p.rect(
+                    badge,
+                    4,
+                    crate::theme::SURFACE,
+                    Stroke::new(1.0, crate::theme::BORDER_STRONG),
+                    StrokeKind::Inside,
+                );
+                p.galley(midpoint - label.size() / 2.0, label, crate::theme::INK);
+                badges.push(badge);
+            }
+        }
         if selected {
             for endpoint in [w.a, w.b] {
                 p.rect_filled(
@@ -593,7 +629,7 @@ pub(crate) fn component(
             body_text(
                 at(-width / 2.0 - 3.0, 0.0),
                 text,
-                signal.map_or(color, |s| s.tone.color()),
+                signal.map_or(color, |s| s.tone.text_color()),
             );
         }
         Kind::Splitter => {
@@ -678,7 +714,7 @@ pub(crate) fn component(
                 .map(|v| v.text())
                 .or_else(|| signal.map(|s| s.text.clone()))
                 .unwrap_or_else(|| if c.output { "OUT".into() } else { "IN".into() });
-            let color = signal.map_or(color, |s| s.tone.color());
+            let color = signal.map_or(color, |s| s.tone.text_color());
             let galley =
                 p.layout_no_wrap(text, FontId::monospace(12.0 * canvas.camera.zoom), color);
             let angle = match c.facing {

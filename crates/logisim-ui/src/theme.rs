@@ -14,6 +14,11 @@ pub(crate) const ACCENT: Color32 = Color32::from_rgb(79, 70, 229);
 pub(crate) const ACCENT_HOVER: Color32 = Color32::from_rgb(67, 56, 202);
 pub(crate) const ACCENT_SOFT: Color32 = Color32::from_rgb(238, 242, 255);
 pub(crate) const SELECTED: Color32 = Color32::from_rgb(224, 231, 255);
+pub(crate) const SUCCESS: Color32 = Color32::from_rgb(21, 128, 61);
+pub(crate) const LOW: Color32 = Color32::from_rgb(11, 107, 58);
+pub(crate) const HIGH: Color32 = Color32::from_rgb(22, 163, 74);
+pub(crate) const BUS: Color32 = Color32::from_rgb(71, 85, 105);
+pub(crate) const UNKNOWN: Color32 = Color32::from_rgb(124, 58, 237);
 pub(crate) const WARNING: Color32 = Color32::from_rgb(180, 83, 9);
 pub(crate) const DANGER: Color32 = Color32::from_rgb(220, 38, 38);
 
@@ -122,3 +127,6 @@ pub(crate) fn card<R>(ui: &mut Ui, label: &str, body: impl FnOnce(&mut Ui) -> R)
         })
         .inner
 }
+
+#[cfg(test)]
+mod tests;

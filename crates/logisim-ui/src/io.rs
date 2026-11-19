@@ -235,6 +235,11 @@ pub(crate) fn draw(
     let body = Rect::from_two_pos(at(min), at(max));
     let z = canvas.camera.zoom;
     let stroke = Stroke::new(1.5, ink);
+    let input_stroke = |index| {
+        simulation
+            .and_then(|s| s.ports.get(&(c.id, index)))
+            .map_or(stroke, |s| Stroke::new(stroke.width, s.tone.color()))
+    };
     let lights = simulation
         .and_then(|s| s.indicators.get(&c.id))
         .copied()
@@ -264,10 +269,7 @@ pub(crate) fn draw(
         }
         Kind::RgbLed => {
             for (i, point) in c.io_ports().into_iter().enumerate() {
-                p.line_segment(
-                    [at(point), at(Point::new(-15, point.y))],
-                    Stroke::new(2.0 * z, [Color32::RED, Color32::GREEN, Color32::BLUE][i]),
-                );
+                p.line_segment([at(point), at(Point::new(-15, point.y))], input_stroke(i));
             }
             let rgb = simulation
                 .and_then(|s| s.rgb.get(&c.id))
@@ -295,7 +297,7 @@ pub(crate) fn draw(
                     let fill = match state {
                         Some(true) => color(c.io.on_color),
                         Some(false) => color(c.io.off_color),
-                        None => Color32::from_rgb(192, 0, 0),
+                        None => crate::SignalTone::Unknown.color(),
                     };
                     let center =
                         at(min + Point::new(i32::from(col) * 10 + 5, i32::from(row) * 10 + 5));
@@ -448,7 +450,7 @@ pub(crate) fn draw(
                 } else {
                     c.io.off_color
                 }),
-                stroke,
+                input_stroke(0),
             );
         }
         Kind::SevenSegment | Kind::HexDisplay => {
@@ -456,7 +458,7 @@ pub(crate) fn draw(
                 body,
                 3.0 * z,
                 color(c.io.background),
-                stroke,
+                input_stroke(0),
                 StrokeKind::Inside,
             );
             // The seven visual segments share the measured standalone display geometry.
