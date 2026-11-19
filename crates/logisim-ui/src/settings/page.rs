@@ -36,7 +36,7 @@ impl Page {
         let maximum = limit - margin;
         let target = vec2(760., 560.).min(limit);
         let min = vec2(640., 440.).min(limit) - margin;
-        let compact = screen.width() < 850.;
+        let compact = screen.width() < 850. || screen.width() * ctx.zoom_factor() <= 720.;
         let search_id = Id::unique("preference-search");
         let find = ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::F));
         if !ctx.any_popup_open() && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape)) {
@@ -59,9 +59,9 @@ impl Page {
             .frame(egui::Frame::window(&ctx.global_style()).inner_margin(12))
             .default_pos(screen.center() - target * 0.5)
             .constrain_to(egui::Rect::from_center_size(screen.center(), limit))
-            .min_size(min)
-            .max_size(maximum)
-            .default_size(target - margin)
+            .min_size(min + margin)
+            .max_size(limit)
+            .default_size(target)
             .resizable(true)
             .show(ctx, |ui| {
                 let available = ui.available_size().clamp(min, maximum);
@@ -85,7 +85,11 @@ impl Page {
                 if compact {
                     egui::ComboBox::from_id_salt("settings-category")
                         .width(168.)
-                        .selected_text(self.category.label())
+                        .selected_text(if self.query.trim().is_empty() {
+                            self.category.label()
+                        } else {
+                            tr("Search results")
+                        })
                         .show_ui(ui, |ui| {
                             for cat in Category::ALL {
                                 if ui
@@ -298,3 +302,6 @@ fn path_line(ui: &mut Ui, path: Option<&str>) {
         ui.weak(tr("User configuration directory is unavailable."));
     }
 }
+
+#[cfg(test)]
+mod tests;
