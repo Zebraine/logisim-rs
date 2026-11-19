@@ -157,8 +157,7 @@ impl Workspace {
         self.appearance.reset_context();
         self.name_dialog = None;
         self.remove_dialog = false;
-        self.canvas.reset();
-        self.fit_pending = self.preferences.default_zoom == crate::DefaultZoom::Fit;
+        self.reset_canvas_for_navigation();
     }
     pub(crate) fn circuit_command(&mut self, command: CircuitCommand) {
         self.finish_edit();

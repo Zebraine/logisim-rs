@@ -17,11 +17,7 @@ impl Workspace {
         i18n::with_language(self.preferences.language, || self.show_localized(ui));
     }
     fn show_localized(&mut self, ui: &mut Ui) {
-        let before = (
-            self.editor.session.context.active,
-            self.editor.session.context.path.clone(),
-            self.editor.session.context.appearance_mode,
-        );
+        let before = self.editor.session.context.clone();
         let modal = self.editor.memory_target.is_some()
             || self.analysis.open()
             || self.generator.open
@@ -63,20 +59,18 @@ impl Workspace {
             ui.ctx().request_repaint();
         }
         self.editor.sync_project();
-        if before
-            != (
-                self.editor.session.context.active,
-                self.editor.session.context.path.clone(),
-                self.editor.session.context.appearance_mode,
-            )
-        {
+        if before != self.editor.session.context {
             self.editor.simulation.release_momentary();
             self.editor.simulation.release_keyboard();
             self.appearance.reset_context();
-            self.canvas.reset();
-            self.fit_pending = true;
+            self.reset_canvas_for_navigation();
             ui.ctx().request_repaint();
         }
+    }
+    pub(crate) fn reset_canvas_for_navigation(&mut self) {
+        self.canvas.reset();
+        self.fit_pending = self.editor.session.context.appearance_mode
+            || self.preferences.default_zoom == crate::DefaultZoom::Fit;
     }
     fn show_inner(&mut self, ui: &mut Ui) {
         if ui.is_enabled()

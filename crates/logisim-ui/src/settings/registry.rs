@@ -92,7 +92,7 @@ registry![
         "editor.default_zoom",
         Editor,
         "Initial canvas zoom",
-        "Choose the view for newly opened projects.",
+        "Set the zoom when opening a circuit or entering a subcircuit.",
         Control::Zoom
     ),
     (

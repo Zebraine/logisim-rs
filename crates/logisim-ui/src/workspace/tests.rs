@@ -257,3 +257,63 @@ fn add_circuit_shortcut_takes_precedence_over_new_file_and_modal_blocks_other_co
     app.editor.redo();
     assert_eq!(app.circuit_name(), "Pass");
 }
+
+#[test]
+fn initial_zoom_follows_instance_navigation_in_both_directions() {
+    use logisim_core::{Point, Project};
+    let mut project = Project::default();
+    let main = project.main;
+    let child = project.add("child".into()).unwrap();
+    for (id, width) in [(main, 1600), (child, 2600)] {
+        project
+            .circuit_mut(id)
+            .unwrap()
+            .circuit
+            .add_wire(Point::ZERO, Point::new(width, 0))
+            .unwrap();
+    }
+    let instance = project.instance(child, Point::new(210, 140)).unwrap();
+    let instance = project.main_circuit_mut().circuit.add_component(instance);
+    let size = vec2(1200., 820.);
+    for default_zoom in [DefaultZoom::Actual, DefaultZoom::Fit] {
+        let ctx = Context::default();
+        configure(&ctx);
+        let mut app = Workspace::default();
+        app.apply_settings(Settings {
+            default_zoom,
+            ..Settings::default()
+        });
+        app.replace_project(project.clone());
+        let check_zoom = |app: &Workspace, width: f32| {
+            let expected = match default_zoom {
+                DefaultZoom::Actual => 1.0,
+                DefaultZoom::Fit => (app.canvas.rect.width() - 80.) / width,
+            };
+            assert!((app.canvas.camera.zoom - expected).abs() < 0.001);
+        };
+        frame(&ctx, &mut app, size, vec![]);
+        check_zoom(&app, 1600.);
+        app.canvas.set_zoom(2.0);
+        app.editor.open_instance = Some(instance);
+        frame(&ctx, &mut app, size, vec![]);
+        frame(&ctx, &mut app, size, vec![]);
+        assert_eq!(app.simulation_path(), &[instance]);
+        check_zoom(&app, 2600.);
+        frame(
+            &ctx,
+            &mut app,
+            size,
+            vec![Event::Key {
+                key: egui::Key::ArrowLeft,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: Modifiers::ALT,
+            }],
+        );
+        frame(&ctx, &mut app, size, vec![]);
+        assert!(app.simulation_path().is_empty());
+        assert_eq!(app.active_circuit(), main);
+        check_zoom(&app, 1600.);
+    }
+}
