@@ -1,12 +1,13 @@
 //! Workspace layout; document and simulation commands stay in their existing layers.
 use crate::{
-    CHROME, FileAction, Workspace, appearance,
+    FileAction, Workspace, appearance,
     canvas::{MAX_ZOOM, MIN_ZOOM},
     drawing,
     editor::Tool,
     i18n::{self, tr},
     icons::{self, Icon},
     project::CircuitCommand,
+    theme::CHROME,
 };
 use egui::{Frame, Margin, Panel, Ui, vec2};
 
@@ -119,16 +120,16 @@ impl Workspace {
             }
         }
         Panel::top("menus")
-            .exact_size(29.0)
+            .exact_size(30.0)
             .frame(
                 Frame::NONE
                     .fill(CHROME)
-                    .inner_margin(Margin::symmetric(8, 2)),
+                    .inner_margin(Margin::symmetric(8, 1)),
             )
             .show(ui, |ui| self.menus(ui));
 
         Panel::top("tools")
-            .min_size(42.0)
+            .min_size(50.0)
             .frame(
                 Frame::NONE
                     .fill(CHROME)
@@ -136,10 +137,10 @@ impl Workspace {
             )
             .show(ui, |ui| self.toolbar(ui));
 
-        let available_width = ui.available_width();
+        let side_max = (ui.available_width() - 452.0).clamp(230.0, 380.0);
         Panel::left("inspector")
-            .default_size((available_width * 0.25).clamp(230.0, 360.0))
-            .size_range(230.0..=(available_width * 0.5).max(230.0))
+            .default_size(320.0_f32.min(side_max))
+            .size_range(230.0..=side_max)
             .frame(Frame::NONE.fill(CHROME))
             .show(ui, |ui| self.sidebar(ui));
 

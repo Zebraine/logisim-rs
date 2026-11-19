@@ -335,7 +335,7 @@ pub(crate) fn draw(
                 at(Point::new(-10, 9)),
                 2.0 * z,
                 if closed {
-                    crate::ACCENT
+                    crate::theme::ACCENT
                 } else {
                     Color32::from_gray(150)
                 },
@@ -367,7 +367,7 @@ pub(crate) fn draw(
                     Rect::from_center_size(center, size),
                     2.0 * z,
                     if on {
-                        crate::ACCENT
+                        crate::theme::ACCENT
                     } else {
                         Color32::from_gray(100)
                     },
@@ -403,7 +403,7 @@ pub(crate) fn draw(
             p.circle(
                 canvas.screen_vec(slider_knob(c)),
                 5.0 * z,
-                crate::ACCENT,
+                crate::theme::ACCENT,
                 Stroke::new(1.0, ink),
             );
             let text = slider_text(c);

@@ -331,7 +331,7 @@ pub(crate) fn draw(
         p.rect_stroke(
             bounds.expand(2.0),
             3.0,
-            Stroke::new(2.0, crate::ACCENT),
+            Stroke::new(2.0, crate::theme::ACCENT),
             StrokeKind::Outside,
         );
     }

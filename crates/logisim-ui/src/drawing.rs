@@ -1,6 +1,10 @@
 //! Original vector artwork and editor hit geometry.
 mod cache;
-use crate::{ACCENT, INK, canvas::Canvas, simulation::SimulationView};
+use crate::{
+    canvas::Canvas,
+    simulation::SimulationView,
+    theme::{ACCENT, INK},
+};
 use crate::{i18n::tr, tf};
 pub(crate) use cache::CircuitCache;
 use egui::{

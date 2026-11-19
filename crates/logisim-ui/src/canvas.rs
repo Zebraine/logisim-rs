@@ -1,6 +1,6 @@
 //! Viewport navigation, independent of circuit or simulator state.
 
-use egui::{Color32, Event, MouseWheelUnit, PointerButton, Rect, Sense, Ui, Vec2, vec2};
+use egui::{Event, MouseWheelUnit, PointerButton, Rect, Sense, Ui, Vec2, vec2};
 
 pub(crate) const MIN_ZOOM: f32 = 0.2;
 pub(crate) const MAX_ZOOM: f32 = 4.0;
@@ -135,7 +135,7 @@ impl Canvas {
         }
 
         let painter = ui.painter_at(rect);
-        painter.rect_filled(rect, 0, Color32::WHITE);
+        painter.rect_filled(rect, 0, crate::theme::CANVAS);
         if self.show_grid {
             self.paint_grid(&painter, rect);
         }
@@ -143,7 +143,7 @@ impl Canvas {
         // A subtle world-origin marker makes an otherwise empty viewport navigable.
         let origin = rect.min + self.camera.offset;
         if rect.shrink(12.0).contains(origin) {
-            let stroke = egui::Stroke::new(1.0, Color32::from_rgb(160, 174, 193));
+            let stroke = egui::Stroke::new(1.0, crate::theme::FAINT);
             painter.line_segment([origin - vec2(5.0, 0.0), origin + vec2(5.0, 0.0)], stroke);
             painter.line_segment([origin - vec2(0.0, 5.0), origin + vec2(0.0, 5.0)], stroke);
         }
@@ -164,7 +164,7 @@ impl Canvas {
         let columns = (rect.width() / spacing).ceil() as usize;
         let rows = (rect.height() / spacing).ceil() as usize;
         let mut mesh = egui::Mesh::default();
-        let color = Color32::from_rgb(207, 215, 226);
+        let color = crate::theme::BORDER_STRONG;
         for column in 0..=columns {
             for row in 0..=rows {
                 let point = start + vec2(column as f32, row as f32) * spacing;

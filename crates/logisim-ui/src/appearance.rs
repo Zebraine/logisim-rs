@@ -1,8 +1,9 @@
 //! Appearance gestures are previews until release, then join the project undo timeline.
 use crate::{
-    ACCENT, artwork,
+    artwork,
     canvas::Canvas,
     editor::{Editor, Snapshot},
+    theme::ACCENT,
 };
 use crate::{i18n::tr, tf};
 use egui::{Key, Modifiers, PointerButton, Rect, Response, Stroke, Ui, Vec2};

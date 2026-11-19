@@ -1,11 +1,12 @@
 //! Workspace sidebar; document and simulation commands stay in their existing layers.
 use crate::{
-    CHROME, Workspace,
+    Workspace,
     editor::Tool,
     i18n::tr,
     icons::{self, Icon},
     project::CircuitCommand,
     properties,
+    theme::CHROME,
 };
 use egui::{Color32, Frame, Margin, Panel, RichText, ScrollArea, Ui};
 use logisim_core::Kind;
@@ -13,7 +14,7 @@ use logisim_core::Kind;
 impl Workspace {
     pub(super) fn sidebar(&mut self, ui: &mut Ui) {
         Panel::bottom("zoom")
-            .exact_size(37.0)
+            .exact_size(40.0)
             .frame(
                 Frame::NONE
                     .fill(CHROME)

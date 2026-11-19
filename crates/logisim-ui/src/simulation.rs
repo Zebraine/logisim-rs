@@ -20,7 +20,7 @@ impl SignalTone {
         match self {
             Self::Low => Color32::from_rgb(21, 110, 65),
             Self::High => Color32::from_rgb(22, 180, 87),
-            Self::Bus => crate::INK,
+            Self::Bus => crate::theme::INK,
             Self::Unknown => Color32::from_rgb(80, 91, 210),
             Self::Error => Color32::from_rgb(210, 45, 58),
             Self::WidthMismatch => Color32::from_rgb(211, 115, 12),

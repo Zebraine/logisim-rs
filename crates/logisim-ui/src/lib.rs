@@ -46,31 +46,10 @@ pub use simulation::{
 
 use canvas::Canvas;
 use editor::Editor;
-use egui::{Color32, Stroke, vec2};
-
-const INK: Color32 = Color32::from_rgb(51, 65, 85);
-const ACCENT: Color32 = Color32::from_rgb(37, 99, 235);
-const BORDER: Color32 = Color32::from_rgb(220, 225, 233);
-const CHROME: Color32 = Color32::from_rgb(246, 248, 251);
-
-/// Apply the application's light visual style once, when creating the window.
-pub fn configure(ctx: &egui::Context) {
-    ctx.set_theme(egui::Theme::Light);
-    ctx.options_mut(|options| options.zoom_with_keyboard = false);
-    let mut style = (*ctx.global_style()).clone();
-    style.visuals = egui::Visuals::light();
-    style.visuals.override_text_color = Some(INK);
-    style.visuals.panel_fill = CHROME;
-    style.visuals.selection.bg_fill = Color32::from_rgb(225, 235, 255);
-    style.visuals.selection.stroke = Stroke::new(1.0, ACCENT);
-    style.visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0, BORDER);
-    style.spacing.item_spacing = vec2(6.0, 5.0);
-    style.spacing.button_padding = vec2(8.0, 4.0);
-    style.spacing.interact_size.y = 24.0;
-    style.animation_time = 0.12;
-    ctx.set_global_style(style);
-}
-
+mod theme;
+#[cfg(test)]
+use egui::vec2;
+pub use theme::configure;
 /// Circuit editing and viewport state. Signal simulation is not part of this layer.
 #[derive(Default)]
 pub struct Workspace {

@@ -28,18 +28,19 @@ pub(crate) fn button(
     hint: &str,
 ) -> Response {
     ui.add_enabled_ui(enabled, |ui| {
-        let (rect, response) = ui.allocate_exact_size(vec2(30.0, 30.0), Sense::click());
+        let (rect, response) = ui.allocate_exact_size(vec2(28.0, 28.0), Sense::click());
         let visuals = ui.style().interact_selectable(&response, selected);
-        if response.hovered() || selected {
+        if response.hovered() || selected || response.has_focus() {
             ui.painter()
-                .rect_filled(rect.shrink(1.0), 5, visuals.bg_fill);
+                .rect_filled(rect.shrink(1.0), 4, visuals.bg_fill);
         }
+        crate::theme::focus_ring(ui, &response);
         let color = if selected {
-            super::ACCENT
+            crate::theme::ACCENT
         } else if enabled {
-            super::INK
+            crate::theme::INK
         } else {
-            Color32::from_rgb(155, 165, 179)
+            crate::theme::MUTED
         };
         paint(ui.painter(), rect.shrink(7.0), icon, color);
         response.on_hover_text(crate::i18n::tr(hint))

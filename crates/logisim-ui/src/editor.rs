@@ -1008,11 +1008,11 @@ impl Editor {
                 canvas.screen_vec(start.to_vec2()),
                 canvas.screen_vec(current.to_vec2()),
             );
-            painter.rect_filled(rect, 0, crate::ACCENT.gamma_multiply(0.08));
+            painter.rect_filled(rect, 0, crate::theme::ACCENT.gamma_multiply(0.08));
             painter.rect_stroke(
                 rect,
                 0,
-                egui::Stroke::new(1.0, crate::ACCENT),
+                egui::Stroke::new(1.0, crate::theme::ACCENT),
                 egui::StrokeKind::Inside,
             );
         }
@@ -1038,7 +1038,7 @@ impl Editor {
             for pair in Circuit::route(a, b, horizontal).windows(2) {
                 painter.line_segment(
                     [canvas.screen(pair[0]), canvas.screen(pair[1])],
-                    egui::Stroke::new(2.0, crate::ACCENT),
+                    egui::Stroke::new(2.0, crate::theme::ACCENT),
                 );
             }
         }
@@ -1069,7 +1069,7 @@ impl Editor {
                 painter.circle_stroke(
                     canvas.screen(port),
                     6.0,
-                    egui::Stroke::new(1.5, crate::ACCENT),
+                    egui::Stroke::new(1.5, crate::theme::ACCENT),
                 );
                 ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
             } else if self.tool == Tool::Wire {
