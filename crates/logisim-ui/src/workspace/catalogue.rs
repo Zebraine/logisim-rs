@@ -4,12 +4,12 @@ use crate::{
     Workspace,
     editor::Tool,
     i18n::tr,
-    icons::{self, Icon},
+    icons::{self, ComponentIcon, Icon},
     plugins,
     project::CircuitCommand,
     tf, theme,
 };
-use egui::{Align2, FontId, Rect, Response, Sense, Ui, pos2, vec2};
+use egui::{Align2, FontId, Rect, Response, Sense, Ui, Vec2, pos2, vec2};
 use logisim_core::{Component, Id, Kind, Point};
 
 fn matches(name: &str, query: &str) -> bool {
@@ -88,6 +88,24 @@ fn row(
             ui.painter()
                 .galley(r.center() - badge_run.size() / 2.0, badge_run, theme::MUTED);
         }
+    }
+    response
+}
+
+fn component_row(ui: &mut Ui, name: &str, selected: bool, icon: ComponentIcon<'_>) -> Response {
+    let response = row(ui, name, selected, 38.0, 28.0, "");
+    if ui.is_rect_visible(response.rect) {
+        let center = response.rect.left_center() + vec2(25.0, 0.0);
+        let rect = Rect::from_center_size(center, Vec2::splat(18.0));
+        icon.paint(
+            ui.painter(),
+            rect,
+            if selected {
+                theme::ACCENT
+            } else {
+                theme::MUTED
+            },
+        );
     }
     response
 }
@@ -194,13 +212,11 @@ impl Workspace {
                     let tool = Tool::Place(kind);
                     if ui
                         .push_id(kind.name(), |ui| {
-                            row(
+                            component_row(
                                 ui,
                                 tr(kind.name()),
                                 self.editor.tool == tool,
-                                38.0,
-                                28.0,
-                                "",
+                                ComponentIcon::Builtin(kind),
                             )
                         })
                         .inner
@@ -257,7 +273,7 @@ impl Workspace {
                         });
                     if ui
                         .push_id((&m.id, &m.version, &t.id), |ui| {
-                            row(ui, &local(&t.name), active, 38.0, 28.0, "")
+                            component_row(ui, &local(&t.name), active, ComponentIcon::Plugin(t))
                         })
                         .inner
                         .on_hover_text(tf!("{} · {} ports", &name, t.ports.len()))

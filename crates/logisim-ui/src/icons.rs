@@ -1,5 +1,8 @@
 //! Small original line icons; no upstream artwork is bundled.
 
+mod components;
+pub(crate) use components::ComponentIcon;
+
 use egui::{Color32, Rect, Response, Sense, Shape, Stroke, StrokeKind, Ui, pos2, vec2};
 
 #[derive(Clone, Copy)]
