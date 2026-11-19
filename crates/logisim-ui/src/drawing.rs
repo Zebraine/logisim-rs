@@ -1,5 +1,6 @@
 //! Original vector artwork and editor hit geometry.
 mod cache;
+pub(crate) mod thumbnails;
 use crate::{
     canvas::Canvas,
     simulation::SimulationView,

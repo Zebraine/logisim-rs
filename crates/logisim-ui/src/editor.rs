@@ -26,16 +26,6 @@ pub(crate) enum Tool {
     Poke,
     Place(Kind),
 }
-impl Tool {
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Select => "Select",
-            Self::Wire => "Wire",
-            Self::Poke => "Poke",
-            Self::Place(kind) => kind.name(),
-        }
-    }
-}
 enum Gesture {
     Slider {
         id: Id,
@@ -81,6 +71,7 @@ pub(crate) struct Editor {
     paste_count: i32,
     gesture: Option<Gesture>,
     wire_start: Option<Point>,
+    pub thumbnails: drawing::thumbnails::Thumbnails,
     drawing_cache: drawing::CircuitCache,
 }
 impl Default for Editor {
@@ -108,6 +99,7 @@ impl Editor {
             paste_count: 0,
             gesture: None,
             wire_start: None,
+            thumbnails: Default::default(),
             drawing_cache: drawing::CircuitCache::default(),
         }
     }
@@ -115,6 +107,8 @@ impl Editor {
         self.session.snapshot()
     }
     fn restore(&mut self, state: Snapshot) {
+        self.thumbnails
+            .advance(&self.session.project, &state.project);
         self.session.restore(state);
         if let Tool::Place(Kind::Subcircuit(id)) = self.tool
             && !self
@@ -128,6 +122,8 @@ impl Editor {
     pub fn record(&mut self, before: Snapshot) {
         self.sync_project();
         self.session.normalize_wires_since(&before);
+        self.thumbnails
+            .advance(&before.project, &self.session.project);
         self.history.record(before, &self.session);
     }
     pub fn commit_properties(&mut self) {

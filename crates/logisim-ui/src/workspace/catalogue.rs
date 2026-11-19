@@ -319,7 +319,12 @@ impl Workspace {
     }
 
     fn circuit_row(&mut self, ui: &mut Ui, id: Id) {
-        let d = self.project().circuit(id).expect("listed circuit");
+        let d = self
+            .editor
+            .session
+            .project
+            .circuit(id)
+            .expect("listed circuit");
         let active = self.active_circuit() == id;
         let response = ui
             .push_id(id, |ui| {
@@ -327,8 +332,8 @@ impl Workspace {
                     ui,
                     &d.name,
                     active,
-                    28.0,
-                    30.0,
+                    72.0,
+                    42.0,
                     if self.project().main == id {
                         tr("Main circuit")
                     } else {
@@ -337,15 +342,25 @@ impl Workspace {
                 )
             })
             .inner;
-        icons::paint(
-            ui.painter(),
-            Rect::from_center_size(
-                response.rect.left_center() + vec2(16.0, 0.0),
-                vec2(14.0, 14.0),
-            ),
-            Icon::Document,
-            theme::MUTED,
-        );
+        if ui.is_rect_visible(response.rect) {
+            let preview = Rect::from_center_size(
+                response.rect.left_center() + vec2(36.0, 0.0),
+                crate::drawing::thumbnails::SIZE,
+            );
+            if self
+                .editor
+                .thumbnails
+                .paint(ui.painter(), id, &d.circuit, preview, active)
+            {
+                icons::paint(
+                    ui.painter(),
+                    Rect::from_center_size(preview.center(), vec2(16.0, 16.0)),
+                    Icon::Chip,
+                    theme::WARNING,
+                );
+                response.clone().on_hover_text(tr("Missing plugin"));
+            }
+        }
         let response = response.on_hover_text(tr(
             "Double-click to edit; single-click another circuit to place an instance.",
         ));
