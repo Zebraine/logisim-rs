@@ -6,6 +6,7 @@ mod appearance_properties;
 mod artwork;
 mod bus;
 mod canvas;
+pub mod dialog;
 mod document;
 mod fonts;
 pub mod generation;

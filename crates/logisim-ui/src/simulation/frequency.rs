@@ -1,7 +1,8 @@
 //! Runtime frequency controls; changing them never edits the circuit document.
 use super::{SimulationAction, SimulationUi};
+use crate::dialog::{Dialog, Dismiss};
 use crate::{TickHz, i18n::tr, tf};
-use egui::{Context, Id, Key, Modal, TextEdit, Ui};
+use egui::{Context, Key, TextEdit, Ui};
 
 pub const DEFAULT_TICK_HZ: u32 = 4;
 pub const MAX_TICK_HZ: u32 = 32768;
@@ -78,46 +79,51 @@ impl SimulationUi {
             return;
         };
         let mut apply = None;
-        let mut cancel = false;
-        let modal = Modal::new(Id::unique("custom-tick-frequency")).show(ctx, |ui| {
-            ui.set_width(300.0);
-            ui.heading(tr("Custom tick frequency"));
-            ui.label(tr("Frequency (Hz)"));
-            let input = ui.add(
-                TextEdit::singleline(draft)
-                    .id_salt("tick-frequency-value")
-                    .char_limit(16),
-            );
-            if self.tick_rate_focus {
-                input.request_focus();
-                self.tick_rate_focus = false;
-            }
-            let value = draft
-                .trim()
-                .parse::<u32>()
-                .ok()
-                .filter(|hz| (1..=MAX_TICK_HZ).contains(hz));
-            if value.is_none() {
-                ui.colored_label(
-                    crate::theme::DANGER,
-                    tf!("Enter a whole number from 1 to {}.", MAX_TICK_HZ),
-                );
-            }
-            ui.horizontal(|ui| {
-                if ui
-                    .add_enabled(value.is_some(), egui::Button::new(tr("Apply")))
-                    .clicked()
-                    || (input.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)))
-                {
-                    apply = value;
-                }
-                cancel = ui.button(tr("Cancel")).clicked();
-            });
-        });
+        let dismiss = Dialog::prompt("custom-tick-frequency").show(
+            ctx,
+            tr("Custom tick frequency"),
+            |dialog| {
+                let value = dialog.body(|ui| {
+                    ui.label(tr("Frequency (Hz)"));
+                    let input = ui.add(
+                        TextEdit::singleline(draft)
+                            .id_salt("tick-frequency-value")
+                            .char_limit(16),
+                    );
+                    if self.tick_rate_focus {
+                        input.request_focus();
+                        self.tick_rate_focus = false;
+                    }
+                    let value = draft
+                        .trim()
+                        .parse::<u32>()
+                        .ok()
+                        .filter(|hz| (1..=MAX_TICK_HZ).contains(hz));
+                    if value.is_none() {
+                        ui.colored_label(
+                            crate::theme::DANGER,
+                            tf!("Enter a whole number from 1 to {}.", MAX_TICK_HZ),
+                        );
+                    }
+                    if input.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
+                        apply = value;
+                    }
+                    value
+                });
+                dialog.footer("Cancel", |ui| {
+                    if ui
+                        .add_enabled(value.is_some(), egui::Button::new(tr("Apply")))
+                        .clicked()
+                    {
+                        apply = value;
+                    }
+                });
+            },
+        );
         if let Some(hz) = apply {
             self.set_tick_rate(rate, TickHz::new(hz).expect("valid frequency"));
         }
-        if apply.is_some() || cancel || modal.should_close() {
+        if apply.is_some() || dismiss != Dismiss::Open {
             self.tick_rate_draft = None;
         }
     }

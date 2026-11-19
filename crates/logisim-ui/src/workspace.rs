@@ -1,4 +1,5 @@
 //! Workspace regions, tool catalogue and frame-level interaction tests.
+mod dialogs;
 mod layout;
 mod library;
 mod menus;

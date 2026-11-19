@@ -3,6 +3,7 @@ use super::{
     *,
 };
 use crate::{
+    dialog::{Dialog, Dismiss},
     icons::{self, Icon},
     tf,
 };
@@ -31,123 +32,111 @@ impl Page {
         retry: &mut bool,
     ) {
         let screen = ctx.content_rect();
-        let limit = screen.size() * 0.9;
-        let frame = egui::Frame::window(&ctx.global_style()).inner_margin(12);
-        let margin = frame.total_margin().sum();
-        let maximum = limit - margin;
-        let target = vec2(760., 560.).min(limit);
-        let min = vec2(640., 440.).min(limit) - margin;
-        let compact = screen.width() < 850. || screen.width() * ctx.zoom_factor() <= 720.;
         let search_id = Id::unique("preference-search");
         let find = ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::F));
         if find {
             ctx.memory_mut(|m| m.request_focus(search_id));
         }
-        let resize = egui::Resize::default()
-            .id_salt("settings-size")
-            .with_stroke(false)
-            .min_size(min)
-            .max_size(maximum)
-            .default_size(target - margin);
-        let dialog = egui::Modal::new(Id::unique("settings-window")).frame(frame);
-        let modal = dialog.show(ctx, |ui| {
-            resize.show(ui, |ui| {
-                let available = ui.available_size().clamp(min, maximum);
-                ui.set_min_size(available);
-                ui.set_max_size(available);
-                ui.horizontal(|ui| {
-                    ui.heading(tr("Settings"));
-                    ui.add_space(8.);
-                    let search = ui.add(
-                        egui::TextEdit::singleline(&mut self.query)
-                            .id(search_id)
-                            .desired_width((ui.available_width() - 4.).min(330.))
-                            .hint_text(tr("Search settings · Ctrl+F")),
-                    );
-                    theme::focus_ring(ui, &search);
-                    if search.changed() {
-                        self.confirm_reset = false;
-                    }
-                });
-                ui.separator();
-                if compact {
-                    egui::ComboBox::from_id_salt("settings-category")
-                        .width(168.)
-                        .selected_text(if self.query.trim().is_empty() {
-                            self.category.label()
-                        } else {
-                            tr("Search results")
-                        })
-                        .show_ui(ui, |ui| {
-                            for cat in Category::ALL {
-                                if ui
-                                    .selectable_label(self.category == cat, cat.label())
-                                    .clicked()
-                                {
-                                    self.select(cat);
-                                }
-                            }
-                        });
-                }
-                let size = vec2(ui.available_width(), (ui.available_height() - 46.).max(32.));
-                ui.allocate_ui_with_layout(size, Layout::left_to_right(Align::Min), |ui| {
-                    ui.set_height(size.y);
-                    if !compact {
-                        ui.allocate_ui_with_layout(
-                            vec2(158., size.y),
-                            Layout::top_down(Align::Min),
-                            |ui| {
-                                ui.set_width(158.);
+        let dismiss =
+            Dialog::editor("settings-window", 760., 560.).show(ctx, tr("Settings"), |dialog| {
+                dialog.panes(|ui| {
+                    let compact =
+                        ui.available_width() < 610. || screen.width() * ctx.zoom_factor() <= 720.;
+                    ui.horizontal(|ui| {
+                        let search = ui.add(
+                            egui::TextEdit::singleline(&mut self.query)
+                                .id(search_id)
+                                .desired_width((ui.available_width() - 4.).min(330.))
+                                .hint_text(tr("Search settings · Ctrl+F")),
+                        );
+                        theme::focus_ring(ui, &search);
+                        if search.changed() {
+                            self.confirm_reset = false;
+                        }
+                    });
+                    ui.separator();
+                    if compact {
+                        egui::ComboBox::from_id_salt("settings-category")
+                            .width(168.)
+                            .selected_text(if self.query.trim().is_empty() {
+                                self.category.label()
+                            } else {
+                                tr("Search results")
+                            })
+                            .show_ui(ui, |ui| {
                                 for cat in Category::ALL {
-                                    let r = ui.add_sized(
-                                        [156., 30.],
-                                        egui::Button::selectable(
-                                            self.category == cat && self.query.is_empty(),
-                                            cat.label(),
-                                        ),
-                                    );
-                                    theme::focus_ring(ui, &r);
-                                    if r.clicked() {
+                                    if ui
+                                        .selectable_label(self.category == cat, cat.label())
+                                        .clicked()
+                                    {
                                         self.select(cat);
                                     }
                                 }
+                            });
+                    }
+                    let size = ui.available_size();
+                    ui.allocate_ui_with_layout(size, Layout::left_to_right(Align::Min), |ui| {
+                        ui.set_height(size.y);
+                        if !compact {
+                            ui.allocate_ui_with_layout(
+                                vec2(158., size.y),
+                                Layout::top_down(Align::Min),
+                                |ui| {
+                                    ui.set_width(158.);
+                                    for cat in Category::ALL {
+                                        let r = ui.add_sized(
+                                            [156., 30.],
+                                            egui::Button::selectable(
+                                                self.category == cat && self.query.is_empty(),
+                                                cat.label(),
+                                            ),
+                                        );
+                                        theme::focus_ring(ui, &r);
+                                        if r.clicked() {
+                                            self.select(cat);
+                                        }
+                                    }
+                                },
+                            );
+                            ui.separator();
+                        }
+                        ui.allocate_ui_with_layout(
+                            ui.available_size(),
+                            Layout::top_down(Align::Min),
+                            |ui| {
+                                egui::ScrollArea::vertical()
+                                    .id_salt((
+                                        "settings-content",
+                                        self.category,
+                                        self.query.is_empty(),
+                                    ))
+                                    .auto_shrink([false, false])
+                                    .show(ui, |ui| {
+                                        if let Some(error) = error {
+                                            egui::Frame::NONE
+                                                .fill(theme::SUNKEN)
+                                                .corner_radius(6)
+                                                .inner_margin(8)
+                                                .show(ui, |ui| {
+                                                    ui.colored_label(
+                                                        theme::DANGER,
+                                                        tr("Settings need attention."),
+                                                    );
+                                                    ui.label(tr(error));
+                                                    path_line(ui, path);
+                                                    if ui.button(tr("Retry")).clicked() {
+                                                        *retry = true;
+                                                    }
+                                                });
+                                            ui.add_space(4.);
+                                        }
+                                        self.content(ui, values, path);
+                                    });
                             },
                         );
-                        ui.separator();
-                    }
-                    ui.allocate_ui_with_layout(
-                        ui.available_size(),
-                        Layout::top_down(Align::Min),
-                        |ui| {
-                            egui::ScrollArea::vertical()
-                                .id_salt(("settings-content", self.category, self.query.is_empty()))
-                                .auto_shrink([false, false])
-                                .show(ui, |ui| {
-                                    if let Some(error) = error {
-                                        egui::Frame::NONE
-                                            .fill(theme::SUNKEN)
-                                            .corner_radius(6)
-                                            .inner_margin(8)
-                                            .show(ui, |ui| {
-                                                ui.colored_label(
-                                                    theme::DANGER,
-                                                    tr("Settings need attention."),
-                                                );
-                                                ui.label(tr(error));
-                                                path_line(ui, path);
-                                                if ui.button(tr("Retry")).clicked() {
-                                                    *retry = true;
-                                                }
-                                            });
-                                        ui.add_space(4.);
-                                    }
-                                    self.content(ui, values, path);
-                                });
-                        },
-                    );
+                    });
                 });
-                ui.separator();
-                ui.horizontal(|ui| {
+                dialog.footer("Close", |ui| {
                     ui.label(
                         RichText::new(tr(if error.is_some() {
                             "Settings need attention."
@@ -161,35 +150,23 @@ impl Page {
                             theme::MUTED
                         }),
                     );
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        ui.add_space(ui.visuals().resize_corner_size);
-                        if ui.button(tr("Close")).clicked() {
-                            *open = false;
+                    if let Some(path) = path {
+                        let r = ui.add(
+                            egui::Label::new(RichText::new(path).size(12.).color(theme::MUTED))
+                                .truncate()
+                                .sense(egui::Sense::click()),
+                        );
+                        if r.on_hover_text(tr("Copy path")).clicked() {
+                            ctx.copy_text(path.to_owned());
                         }
-                        if let Some(path) = path {
-                            let r = ui.add(
-                                egui::Label::new(RichText::new(path).size(12.).color(theme::MUTED))
-                                    .truncate()
-                                    .sense(egui::Sense::click()),
-                            );
-                            if r.clone().on_hover_text(tr("Copy path")).clicked() {
-                                ctx.copy_text(path.to_owned());
-                            }
-                        }
-                    });
+                    }
                 });
             });
-        });
-        if modal.should_close() {
-            if modal.backdrop_response.clicked() {
-                *open = false;
-            } else if self.confirm_reset {
-                self.confirm_reset = false;
-            } else if !self.query.is_empty() {
-                self.query.clear();
-            } else {
-                *open = false;
-            }
+        match dismiss {
+            Dismiss::Escape if self.confirm_reset => self.confirm_reset = false,
+            Dismiss::Escape if !self.query.is_empty() => self.query.clear(),
+            Dismiss::Escape | Dismiss::Close => *open = false,
+            Dismiss::Open => {}
         }
     }
     fn select(&mut self, cat: Category) {

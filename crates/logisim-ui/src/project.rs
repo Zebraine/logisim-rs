@@ -3,7 +3,11 @@ use crate::{
     Workspace,
     editor::{Editor, Tool},
 };
-use crate::{i18n::tr, tf};
+use crate::{
+    dialog::{Dialog, Dismiss},
+    i18n::tr,
+    tf,
+};
 use logisim_core::{Id, Kind, Project};
 
 #[derive(Clone, Copy)]
@@ -17,6 +21,7 @@ pub(crate) enum CircuitCommand {
 }
 pub(crate) struct NameDialog {
     pub rename: bool,
+    focus: bool,
     pub name: String,
     pub error: String,
 }
@@ -166,6 +171,7 @@ impl Workspace {
                 let rename = matches!(command, CircuitCommand::Rename);
                 self.name_dialog = Some(NameDialog {
                     rename,
+                    focus: true,
                     name: if rename {
                         self.circuit_name().into()
                     } else {
@@ -185,32 +191,28 @@ impl Workspace {
     pub(crate) fn project_dialogs(&mut self, ctx: &egui::Context) {
         if let Some(mut dialog) = self.name_dialog.take() {
             let mut apply = false;
-            let mut cancel = false;
-            let response = egui::Modal::new(egui::Id::unique("circuit-name")).show(ctx, |ui| {
-                ui.heading(if dialog.rename {
-                    tr("Rename circuit")
-                } else {
-                    tr("Add circuit")
+            let title = tr(if dialog.rename {
+                "Rename circuit"
+            } else {
+                "Add circuit"
+            });
+            let dismiss = Dialog::prompt("circuit-name").show(ctx, title, |window| {
+                window.body(|ui| {
+                    ui.label(tr("Circuit name"));
+                    let response = ui.text_edit_singleline(&mut dialog.name);
+                    if std::mem::take(&mut dialog.focus) {
+                        response.request_focus();
+                    }
+                    if !dialog.error.is_empty() {
+                        ui.colored_label(crate::theme::DANGER, tr(&dialog.error));
+                    }
+                    apply = response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
                 });
-                ui.label(tr("Circuit name"));
-                let response = ui.text_edit_singleline(&mut dialog.name);
-                if !ctx.memory(|m| m.has_focus(response.id)) && dialog.name.is_empty() {
-                    response.request_focus();
-                }
-                if !dialog.error.is_empty() {
-                    ui.colored_label(crate::theme::DANGER, tr(&dialog.error));
-                }
-                ui.horizontal(|ui| {
-                    apply = ui
-                        .button(if dialog.rename {
-                            tr("Rename")
-                        } else {
-                            tr("Add")
-                        })
+                window.footer("Cancel", |ui| {
+                    apply |= ui
+                        .button(tr(if dialog.rename { "Rename" } else { "Add" }))
                         .clicked();
-                    cancel = ui.button(tr("Cancel")).clicked();
                 });
-                apply |= ui.input(|i| i.key_pressed(egui::Key::Enter));
             });
             if apply {
                 match self.editor.edit_project(
@@ -230,47 +232,37 @@ impl Workspace {
                         self.name_dialog = Some(dialog);
                     }
                 }
-            } else if !cancel && !response.should_close() {
+            } else if dismiss == Dismiss::Open {
                 self.name_dialog = Some(dialog);
             }
         }
         if self.remove_dialog {
-            let mut remove = false;
-            let mut cancel = false;
-            let response = egui::Modal::new(egui::Id::unique("remove-circuit")).show(ctx, |ui| {
-                ui.heading(tf!("Remove '{}' ?", self.circuit_name()));
-                ui.label(tr(
-                    "This removes the circuit and its contents. You can undo this change.",
-                ));
-                ui.horizontal(|ui| {
-                    remove = ui.button(tr("Remove")).clicked();
-                    cancel = ui.button(tr("Cancel")).clicked();
-                });
-            });
-            if remove {
-                self.remove_dialog = false;
-                if let Err(e) = self
-                    .editor
-                    .edit_project(CircuitCommand::Remove, String::new())
-                {
-                    self.editor.project_error = Some(e);
-                }
-                self.canvas.reset();
-                self.fit_pending = true;
-            } else if cancel || response.should_close() {
-                self.remove_dialog = false;
-            }
+            let dismiss = Dialog::prompt("remove-circuit").confirm(
+                ctx,
+                &tf!("Remove '{}' ?", self.circuit_name()),
+                tr("This removes the circuit and its contents. You can undo this change."),
+                tr("Remove"),
+                || {
+                    if let Err(e) = self
+                        .editor
+                        .edit_project(CircuitCommand::Remove, String::new())
+                    {
+                        self.editor.project_error = Some(e);
+                    }
+                    self.canvas.reset();
+                    self.fit_pending = true;
+                },
+            );
+            self.remove_dialog = dismiss == Dismiss::Open;
         }
-        if let Some(message) = self.editor.project_error.clone() {
-            let mut close = false;
-            let response = egui::Modal::new(egui::Id::unique("project-error")).show(ctx, |ui| {
-                ui.heading(tr("Circuit operation unavailable"));
-                ui.label(tr(&message));
-                close = ui.button(tr("OK")).clicked();
-            });
-            if close || response.should_close() {
-                self.editor.project_error = None;
-            }
+        if let Some(message) = &self.editor.project_error
+            && Dialog::prompt("project-error").message(
+                ctx,
+                tr("Circuit operation unavailable"),
+                tr(message),
+            ) != Dismiss::Open
+        {
+            self.editor.project_error = None;
         }
     }
 }

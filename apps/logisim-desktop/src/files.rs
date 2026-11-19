@@ -1,15 +1,14 @@
 //! File workflow: unsaved actions, protected imports and transactional saves.
 mod dialog;
+mod picker;
 #[cfg(test)]
 mod tests;
 
 use dialog::{Dialog, Response};
+use picker::{Mode, Picker};
 
 use crate::simulation::Host;
-use crate::{
-    file_picker::{Mode, Picker},
-    storage::{self, SaveMode, Storage},
-};
+use crate::storage::{self, SaveMode, Storage};
 use eframe::egui;
 use logisim_ui::{DocumentView, FileAction, Workspace};
 use logisim_ui::{i18n::tr, tf};

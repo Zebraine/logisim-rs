@@ -298,60 +298,45 @@ impl MemoryEditor {
         if self.value.is_empty() {
             self.value = format!("{:X}", contents.get(self.address));
         }
+        let title = tr(if c.kind == Kind::Rom {
+            "ROM contents"
+        } else {
+            "RAM contents"
+        });
+        let window = crate::dialog::Dialog::editor("memory_contents_editor", 660., 550.);
         let mut edit = None;
-        let mut close = false;
-        let modal=egui::Modal::new(egui::Id::unique("memory_contents_editor")).show(ctx,|ui| {
-            ui.set_width(610.0);
-            ui.heading(tr(if c.kind==Kind::Rom {"ROM contents"} else {"RAM contents"}));
-            if !c.label.is_empty() {ui.label(&c.label);}
-            ui.weak(tr(if c.kind==Kind::Rom {"ROM contents are saved with the circuit. Edits support Undo."} else {"RAM contents belong to this simulation instance. Reset clears them; circuit files do not save them."}));
-            ui.label(tf!("{} words · {} bits per word",capacity,c.bits));
-            ui.horizontal(|ui| {
-                if ui.button(tr("Import .hex…")).clicked() { files.push(crate::FileAction::ImportMemory); }
-                ui.weak(tr("Replaces all words; missing addresses become zero."));
-            });
-            ui.separator();
-            ui.horizontal(|ui| {
-                ui.label(tr("Address (hex)"));
-                let r=ui.add(egui::DragValue::new(&mut self.address).range(0..=capacity-1).hexadecimal(c.memory.address_bits.div_ceil(4) as usize,false,true));
-                if r.changed() {
-                    self.page=self.address/32;
-                    self.last=self.address;
-                    self.value=format!("{:X}",contents.get(self.address));
+        let dismiss = window.show(ctx, title, |dialog| {
+            dialog.body(|ui| {
+                if !c.label.is_empty() {
+                    ui.label(&c.label);
                 }
-                ui.label(tr("Value (hex)"));
-                ui.add(egui::TextEdit::singleline(&mut self.value).id_salt("memory_word").desired_width(105.0).char_limit(8));
-                let value=parse_word(&self.value,c.bits);
-                if ui.add_enabled(value.is_some(),egui::Button::new(tr("Write word"))).clicked() {edit=Some((self.address,self.address+1,value.unwrap()));}
-            });
-            let value=parse_word(&self.value,c.bits);
-            if value.is_none() {ui.colored_label(crate::theme::DANGER,tf!("Enter a hexadecimal value within {} bits.",c.bits));}
-            ui.horizontal(|ui| {
-                ui.label(tr("Through address (hex)"));
-                ui.add(egui::DragValue::new(&mut self.last).range(self.address..=capacity-1).hexadecimal(c.memory.address_bits.div_ceil(4) as usize,false,true));
-                if ui.add_enabled(value.is_some(),egui::Button::new(tr("Fill range"))).clicked() {edit=Some((self.address,self.last+1,value.unwrap()));}
-                if ui.button(tr("Clear contents")).clicked() {edit=Some((0,capacity,0));}
-            });
-            ui.separator();
-            egui::Grid::new("memory_words").min_col_width(105.0).striped(true).show(ui,|ui| {
-                for row in 0..8 {
-                    let base=self.page*32+row*4;
-                    if base>=capacity {break;}
-                    ui.monospace(format!("{:0width$X}",base,width=c.memory.address_bits.div_ceil(4) as usize));
-                    for column in 0..4 {
-                        let address=base+column;
-                        if address<capacity && ui.selectable_label(self.address==address,egui::RichText::new(format!("{:0width$X}",contents.get(address),width=c.bits.div_ceil(4) as usize)).monospace()).clicked() {
-                            self.address=address;self.last=address;self.value=format!("{:X}",contents.get(address));
-                        }
+                let help = if c.kind == Kind::Rom {
+                    "ROM contents are saved with the circuit. Edits support Undo."
+                } else {
+                    "RAM contents belong to this simulation instance. Reset clears them; circuit files do not save them."
+                };
+                ui.weak(tr(help));
+                ui.label(tf!("{} words · {} bits per word", capacity, c.bits));
+                ui.horizontal_wrapped(|ui| {
+                    if ui.button(tr("Import .hex…")).clicked() {
+                        files.push(crate::FileAction::ImportMemory);
                     }
-                    ui.end_row();
-                }
+                    ui.weak(tr("Replaces all words; missing addresses become zero."));
+                });
+                ui.separator();
+                edit = self.edit_range(ui, &c, &contents);
+                ui.separator();
+                self.words(ui, &c, &contents);
             });
-            ui.horizontal(|ui| {
-                if ui.add_enabled(self.page>0,egui::Button::new(tr("Previous page"))).clicked() {self.page-=1;}
-                ui.monospace(format!("{} / {}",self.page+1,capacity.div_ceil(32)));
-                if ui.add_enabled((self.page+1)*32<capacity,egui::Button::new(tr("Next page"))).clicked() {self.page+=1;}
-                if ui.button(tr("Close")).clicked() {close=true;}
+            dialog.footer("Close", |ui| {
+                let pages = capacity.div_ceil(32);
+                if ui.add_enabled(self.page + 1 < pages, egui::Button::new(tr("Next page"))).clicked() {
+                    self.page += 1;
+                }
+                ui.monospace(format!("{} / {}", self.page + 1, pages));
+                if ui.add_enabled(self.page > 0, egui::Button::new(tr("Previous page"))).clicked() {
+                    self.page -= 1;
+                }
             });
         });
         if let Some((start, end, value)) = edit {
@@ -376,10 +361,118 @@ impl MemoryEditor {
                     });
             }
         }
-        if close || modal.should_close() {
+        if dismiss != crate::dialog::Dismiss::Open {
             editor.memory_target = None;
             self.context = None;
         }
+    }
+    fn edit_range(
+        &mut self,
+        ui: &mut Ui,
+        c: &Component,
+        contents: &MemoryContents,
+    ) -> Option<(u32, u32, u32)> {
+        let capacity = c.memory_capacity();
+        let digits = c.memory.address_bits.div_ceil(4) as usize;
+        let mut edit = None;
+        let value = ui
+            .horizontal_wrapped(|ui| {
+                ui.label(tr("Address (hex)"));
+                let address = egui::DragValue::new(&mut self.address)
+                    .range(0..=capacity - 1)
+                    .hexadecimal(digits, false, true);
+                if ui.add(address).changed() {
+                    self.select_address(self.address, contents);
+                }
+                ui.label(tr("Value (hex)"));
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.value)
+                        .id_salt("memory_word")
+                        .desired_width(105.)
+                        .char_limit(8),
+                );
+                let value = parse_word(&self.value, c.bits);
+                if ui
+                    .add_enabled(value.is_some(), egui::Button::new(tr("Write word")))
+                    .clicked()
+                {
+                    edit = value.map(|v| (self.address, self.address + 1, v));
+                }
+                value
+            })
+            .inner;
+        if value.is_none() {
+            ui.colored_label(
+                crate::theme::DANGER,
+                tf!("Enter a hexadecimal value within {} bits.", c.bits),
+            );
+        }
+        ui.horizontal_wrapped(|ui| {
+            ui.label(tr("Through address (hex)"));
+            ui.add(
+                egui::DragValue::new(&mut self.last)
+                    .range(self.address..=capacity - 1)
+                    .hexadecimal(digits, false, true),
+            );
+            if ui
+                .add_enabled(value.is_some(), egui::Button::new(tr("Fill range")))
+                .clicked()
+            {
+                edit = value.map(|v| (self.address, self.last + 1, v));
+            }
+            if ui.button(tr("Clear contents")).clicked() {
+                edit = Some((0, capacity, 0));
+            }
+        });
+        edit
+    }
+
+    fn select_address(&mut self, address: u32, contents: &MemoryContents) {
+        self.address = address;
+        self.last = address;
+        self.page = address / 32;
+        self.value = format!("{:X}", contents.get(address));
+    }
+
+    fn words(&mut self, ui: &mut Ui, c: &Component, contents: &MemoryContents) {
+        let capacity = c.memory_capacity();
+        egui::Grid::new("memory_words")
+            .min_col_width(
+                (ui.available_width() / 5. - ui.spacing().item_spacing.x).clamp(28., 105.),
+            )
+            .striped(true)
+            .show(ui, |ui| {
+                for row in 0..8 {
+                    let base = self.page * 32 + row * 4;
+                    if base >= capacity {
+                        break;
+                    }
+                    ui.monospace(format!(
+                        "{:0width$X}",
+                        base,
+                        width = c.memory.address_bits.div_ceil(4) as usize
+                    ));
+                    for column in 0..4 {
+                        let address = base + column;
+                        if address < capacity
+                            && ui
+                                .selectable_label(
+                                    self.address == address,
+                                    egui::RichText::new(format!(
+                                        "{:0width$X}",
+                                        contents.get(address),
+                                        width = c.bits.div_ceil(4) as usize
+                                    ))
+                                    .monospace(),
+                                )
+                                .clicked()
+                        {
+                            self.select_address(address, contents);
+                        }
+                    }
+                    ui.end_row();
+                }
+            });
     }
 }
 fn parse_word(text: &str, bits: u8) -> Option<u32> {

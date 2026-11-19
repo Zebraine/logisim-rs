@@ -137,121 +137,139 @@ impl Generator {
         if !truth_table_generation {
             self.hide_truth_table();
         }
-        let mut close = false;
-        let modal = egui::Modal::new(egui::Id::unique("circuit-generator")).show(ctx, |ui| {
-            let available = ctx.content_rect().size();
-            ui.set_width((available.x - 80.0).clamp(280.0, 760.0));
-            ui.heading(tr("Combinational Circuit Generator"));
-            if truth_table_generation {
-                ui.weak(tr("Truth tables: 12 inputs · Expressions: 32 inputs · Outputs: 32"));
-            } else {
-                let inputs = if self.analysis.is_expression_mode() {
-                    logisim_core::generation::MAX_INPUTS
-                } else {
-                    logisim_core::generation::MAX_TABLE_INPUTS
-                };
-                ui.weak(tf!("Inputs: {} · Outputs: {}", inputs, logisim_core::generation::MAX_OUTPUTS));
-            }
-            let pending = self.pending();
-            let mut expression_mode = self.analysis.is_expression_mode();
-            if truth_table_generation && ui.add_enabled(!pending && !self.computing, egui::Checkbox::new(&mut expression_mode, tr("Expression mode"))).on_hover_text(tr("Switching to expressions resolves all x entries to 0 or 1.")).changed() {
-                self.request_mode(expression_mode);
-            }
-            ui.horizontal_wrapped(|ui| {
-                for (tab, label) in [
-                    (Tab::Inputs, "Input variables"),
-                    (Tab::Outputs, "Output variables"),
-                    (Tab::Table, "Truth Table"),
-                    (Tab::Expression, "Expression"),
-                ] {
-                    if tab == Tab::Table && !truth_table_generation {
-                        continue;
-                    }
+        let dismiss = crate::dialog::Dialog::editor("circuit-generator", 800., 620.).show(
+            ctx,
+            tr("Combinational Circuit Generator"),
+            |dialog| {
+                let height = (dialog.body_height() - 160.).clamp(100., 380.);
+                dialog.body(|ui| self.controls(ui, truth_table_generation, height));
+                dialog.footer("Close", |ui| {
                     if ui
                         .add_enabled(
-                            !pending || tab == Tab::Expression,
-                            egui::Button::selectable(self.tab == tab, tr(label)),
+                            !self.pending()
+                                && !self.building
+                                && !self.analysis.outputs().is_empty(),
+                            egui::Button::new(tr("Build Circuit")),
                         )
                         .clicked()
                     {
-                        self.tab = tab;
-                        self.error = None;
+                        self.request_build();
                     }
-                }
-            });
-            ui.separator();
-            let height = (available.y - 280.0).clamp(120.0, 380.0);
-            ui.add_enabled_ui(!self.building, |ui| {
-                if self.tab == Tab::Table {
-                    self.table(ui, height);
-                } else {
-                    egui::ScrollArea::vertical().id_salt("generator-body")
-                        .max_height(height).min_scrolled_height(height).show(ui, |ui| {
-                            ui.set_min_height(height);
-                            match self.tab {
-                                Tab::Inputs => self.variables(ui, true, height),
-                                Tab::Outputs => self.variables(ui, false, height),
-                                Tab::Expression => self.expression(ui),
-                                Tab::Table => unreachable!(),
-                            }
-                        });
-                }
-            });
-            ui.separator();
-            ui.add_enabled_ui(!self.building, |ui| {
-                ui.horizontal_wrapped(|ui| {
-                    ui.checkbox(&mut self.two_input_only, tr("Use two-input gates only"));
-                    ui.checkbox(&mut self.nand_only, tr("Use NAND gates only"))
-                        .on_hover_text(tr("Convert all logic gates, including XOR, to NAND gates. Pins and constants are retained."));
+                    if self.computing {
+                        if ui.button(tr("Cancel")).clicked() {
+                            self.cancel_computation();
+                        }
+                        ui.label(tr("Computing…"));
+                        ui.spinner();
+                    }
                 });
-            });
-            if pending {
-                ui.weak(tr("Apply or revert the expression before continuing."));
-            }
-            if let Some(error) = &self.error {
-                ui.colored_label(
-                    crate::theme::DANGER,
-                    format!("{} {}", tr(error.message), error.detail),
-                );
-            }
-            ui.horizontal_wrapped(|ui| {
-                if let Some(target) = &self.target {
-                    ui.add_enabled(!self.building, egui::Checkbox::new(
-                        &mut self.replace_target, tf!("Replace circuit: {}", target.name()),
-                    ));
-                }
-                if !self.replace_target {
-                    ui.label(tr("New circuit name"));
-                    ui.add(
-                        egui::TextEdit::singleline(&mut self.name)
-                            .id_salt("generated-name")
-                            .char_limit(1024)
-                            .desired_width(200.0),
-                    );
-                }
-                if ui
-                    .add_enabled(
-                        !self.pending() && !self.building && !self.analysis.outputs().is_empty(),
-                        egui::Button::new(tr("Build Circuit")),
-                    )
-                    .clicked()
-                {
-                    self.request_build();
-                }
-                if self.computing {
-                    ui.spinner();
-                    ui.label(tr("Computing…"));
-                    if ui.button(tr("Cancel")).clicked() { self.cancel_computation(); }
-                }
-                if ui.button(tr("Close")).clicked() {
-                    close = true;
-                }
-            });
-        });
-        if close || modal.should_close() {
+            },
+        );
+        if dismiss != crate::dialog::Dismiss::Open {
             self.cancel_computation();
             self.open = false;
         }
+    }
+
+    fn controls(&mut self, ui: &mut Ui, truth_table_generation: bool, height: f32) {
+        if truth_table_generation {
+            ui.weak(tr(
+                "Truth tables: 12 inputs · Expressions: 32 inputs · Outputs: 32",
+            ));
+        } else {
+            let inputs = if self.analysis.is_expression_mode() {
+                logisim_core::generation::MAX_INPUTS
+            } else {
+                logisim_core::generation::MAX_TABLE_INPUTS
+            };
+            ui.weak(tf!(
+                "Inputs: {} · Outputs: {}",
+                inputs,
+                logisim_core::generation::MAX_OUTPUTS
+            ));
+        }
+        let pending = self.pending();
+        let mut expression_mode = self.analysis.is_expression_mode();
+        if truth_table_generation
+            && ui
+                .add_enabled(
+                    !pending && !self.computing,
+                    egui::Checkbox::new(&mut expression_mode, tr("Expression mode")),
+                )
+                .on_hover_text(tr(
+                    "Switching to expressions resolves all x entries to 0 or 1.",
+                ))
+                .changed()
+        {
+            self.request_mode(expression_mode);
+        }
+        ui.horizontal_wrapped(|ui| {
+            for (tab, label) in [
+                (Tab::Inputs, "Input variables"),
+                (Tab::Outputs, "Output variables"),
+                (Tab::Table, "Truth Table"),
+                (Tab::Expression, "Expression"),
+            ] {
+                if tab == Tab::Table && !truth_table_generation {
+                    continue;
+                }
+                if ui
+                    .add_enabled(
+                        !pending || tab == Tab::Expression,
+                        egui::Button::selectable(self.tab == tab, tr(label)),
+                    )
+                    .clicked()
+                {
+                    self.tab = tab;
+                    self.error = None;
+                }
+            }
+        });
+        ui.separator();
+        ui.add_enabled_ui(!self.building, |ui| match self.tab {
+            Tab::Inputs => self.variables(ui, true, height),
+            Tab::Outputs => self.variables(ui, false, height),
+            Tab::Expression => self.expression(ui),
+            Tab::Table => self.table(ui, height),
+        });
+        ui.separator();
+        ui.add_enabled_ui(!self.building, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.checkbox(&mut self.two_input_only, tr("Use two-input gates only"));
+                ui.checkbox(&mut self.nand_only, tr("Use NAND gates only")).on_hover_text(tr(
+                    "Convert all logic gates, including XOR, to NAND gates. Pins and constants are retained.",
+                ));
+            });
+        });
+        if pending {
+            ui.weak(tr("Apply or revert the expression before continuing."));
+        }
+        if let Some(error) = &self.error {
+            ui.colored_label(
+                crate::theme::DANGER,
+                format!("{} {}", tr(error.message), error.detail),
+            );
+        }
+        ui.horizontal_wrapped(|ui| {
+            if let Some(target) = &self.target {
+                ui.add_enabled(
+                    !self.building,
+                    egui::Checkbox::new(
+                        &mut self.replace_target,
+                        tf!("Replace circuit: {}", target.name()),
+                    ),
+                );
+            }
+            if !self.replace_target {
+                ui.label(tr("New circuit name"));
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.name)
+                        .id_salt("generated-name")
+                        .char_limit(1024)
+                        .desired_width(200.0),
+                );
+            }
+        });
     }
     fn variables(&mut self, ui: &mut Ui, input: bool, height: f32) {
         let limit = if !input {

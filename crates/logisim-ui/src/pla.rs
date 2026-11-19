@@ -136,113 +136,112 @@ impl PlaEditor {
         }
         let (inputs, terms, outputs) = self.draft.dimensions();
         let mut apply = false;
-        let mut cancel = false;
-        let modal = egui::Modal::new(egui::Id::unique("pla_program_editor")).show(ctx, |ui| {
-            let width = (100.0 + f32::from(inputs + outputs) * 44.0)
-                .clamp(640.0, 1100.0)
-                .min((ctx.content_rect().width() - 80.0).max(260.0));
-            ui.set_width(width);
-            ui.heading(tr("PLA programming table"));
-            if !c.label.is_empty() {
-                ui.label(&c.label);
-            }
-            ui.label(tf!(
-                "{} inputs · {} AND terms · {} outputs",
-                inputs,
-                terms,
-                outputs
-            ));
-            ui.weak(tr(
+        let width = (100.0 + f32::from(inputs + outputs) * 44.0).clamp(640.0, 1100.0);
+        let dismiss = crate::dialog::Dialog::editor("pla_program_editor", width, 520.).show(
+            ctx,
+            tr("PLA programming table"),
+            |dialog| {
+                dialog.body(|ui| {
+                    if !c.label.is_empty() {
+                        ui.label(&c.label);
+                    }
+                    ui.label(tf!(
+                        "{} inputs · {} AND terms · {} outputs",
+                        inputs,
+                        terms,
+                        outputs
+                    ));
+                    ui.weak(tr(
                 "Input: — disconnected, 1 direct, 0 inverted. Click to cycle. Output: ● connected.",
             ));
-            ui.weak(tr(
+                    ui.weak(tr(
                 "Columns run from high bit to low bit. Empty terms or outputs evaluate to E.",
             ));
-            ui.separator();
-            egui::ScrollArea::both()
-                .id_salt("pla_planes_scroll")
-                .max_height((ctx.content_rect().height() - 280.0).clamp(100.0, 600.0))
-                .auto_shrink([false, true])
-                .show(ui, |ui| {
-                    egui::Grid::new("pla_planes")
-                        .spacing(egui::vec2(4.0, 4.0))
-                        .striped(true)
+                    ui.separator();
+                    egui::ScrollArea::horizontal()
+                        .id_salt("pla_planes_scroll")
+                        .auto_shrink([false, true])
                         .show(ui, |ui| {
-                            ui.strong(tr("Term"));
-                            for col in 0..inputs {
-                                ui.monospace(format!("I{}", inputs - 1 - col));
-                            }
-                            ui.label("→");
-                            for col in 0..outputs {
-                                ui.monospace(format!("Q{}", outputs - 1 - col));
-                            }
-                            ui.end_row();
-                            for row in 0..terms {
-                                ui.monospace(format!("{}", row + 1));
-                                for col in 0..inputs {
-                                    ui.push_id(("input", row, col), |ui| {
-                                        let value = self.draft.input(row, col);
-                                        let label = match value {
-                                            PlaInput::Disconnected => "—",
-                                            PlaInput::Direct => "1",
-                                            PlaInput::Inverted => "0",
-                                        };
-                                        if ui
-                                            .add_sized(
-                                                [30.0, 25.0],
-                                                egui::Button::new(label)
-                                                    .selected(value != PlaInput::Disconnected),
-                                            )
-                                            .on_hover_text(tf!(
-                                                "Term {} · input bit {}",
-                                                row + 1,
-                                                inputs - 1 - col
-                                            ))
-                                            .clicked()
-                                        {
-                                            self.draft.set_input(row, col, value.next());
+                            egui::Grid::new("pla_planes")
+                                .spacing(egui::vec2(4.0, 4.0))
+                                .striped(true)
+                                .show(ui, |ui| {
+                                    ui.strong(tr("Term"));
+                                    for col in 0..inputs {
+                                        ui.monospace(format!("I{}", inputs - 1 - col));
+                                    }
+                                    ui.label("→");
+                                    for col in 0..outputs {
+                                        ui.monospace(format!("Q{}", outputs - 1 - col));
+                                    }
+                                    ui.end_row();
+                                    for row in 0..terms {
+                                        ui.monospace(format!("{}", row + 1));
+                                        for col in 0..inputs {
+                                            ui.push_id(("input", row, col), |ui| {
+                                                let value = self.draft.input(row, col);
+                                                let label = match value {
+                                                    PlaInput::Disconnected => "—",
+                                                    PlaInput::Direct => "1",
+                                                    PlaInput::Inverted => "0",
+                                                };
+                                                if ui
+                                                    .add_sized(
+                                                        [30.0, 25.0],
+                                                        egui::Button::new(label).selected(
+                                                            value != PlaInput::Disconnected,
+                                                        ),
+                                                    )
+                                                    .on_hover_text(tf!(
+                                                        "Term {} · input bit {}",
+                                                        row + 1,
+                                                        inputs - 1 - col
+                                                    ))
+                                                    .clicked()
+                                                {
+                                                    self.draft.set_input(row, col, value.next());
+                                                }
+                                            });
                                         }
-                                    });
-                                }
-                                ui.label("→");
-                                for col in 0..outputs {
-                                    ui.push_id(("output", row, col), |ui| {
-                                        let value = self.draft.output(row, col);
-                                        if ui
-                                            .add_sized(
-                                                [30.0, 25.0],
-                                                egui::Button::new(if value { "●" } else { "·" })
-                                                    .selected(value),
-                                            )
-                                            .on_hover_text(tf!(
-                                                "Term {} · output bit {}",
-                                                row + 1,
-                                                outputs - 1 - col
-                                            ))
-                                            .clicked()
-                                        {
-                                            self.draft.set_output(row, col, !value);
+                                        ui.label("→");
+                                        for col in 0..outputs {
+                                            ui.push_id(("output", row, col), |ui| {
+                                                let value = self.draft.output(row, col);
+                                                if ui
+                                                    .add_sized(
+                                                        [30.0, 25.0],
+                                                        egui::Button::new(if value {
+                                                            "●"
+                                                        } else {
+                                                            "·"
+                                                        })
+                                                        .selected(value),
+                                                    )
+                                                    .on_hover_text(tf!(
+                                                        "Term {} · output bit {}",
+                                                        row + 1,
+                                                        outputs - 1 - col
+                                                    ))
+                                                    .clicked()
+                                                {
+                                                    self.draft.set_output(row, col, !value);
+                                                }
+                                            });
                                         }
-                                    });
-                                }
-                                ui.end_row();
-                            }
+                                        ui.end_row();
+                                    }
+                                });
                         });
+                    apply = ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Enter));
                 });
-            ui.separator();
-            ui.horizontal(|ui| {
-                if ui.button(tr("Clear contents")).clicked() {
-                    self.draft.clear();
-                }
-                if ui.button(tr("Cancel")).clicked() {
-                    cancel = true;
-                }
-                if ui.button(tr("Apply")).on_hover_text("Ctrl+Enter").clicked() {
-                    apply = true;
-                }
-            });
-            apply |= ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Enter));
-        });
+                dialog.footer("Cancel", |ui| {
+                    apply |= ui.button(tr("Apply")).on_hover_text("Ctrl+Enter").clicked();
+                    if ui.button(tr("Clear contents")).clicked() {
+                        self.draft.clear();
+                    }
+                });
+            },
+        );
         if apply {
             let mut changed = c;
             changed.pla = self.draft.clone();
@@ -253,7 +252,7 @@ impl PlaEditor {
                 editor.commit_properties();
             }
         }
-        if apply || cancel || modal.should_close() {
+        if apply || dismiss != crate::dialog::Dismiss::Open {
             editor.pla_target = None;
             self.context = None;
         }

@@ -18,15 +18,7 @@ impl Workspace {
     }
     fn show_localized(&mut self, ui: &mut Ui) {
         let before = self.editor.session.context.clone();
-        let modal = self.editor.memory_target.is_some()
-            || self.analysis.open()
-            || self.generator.open
-            || self.editor.simulation.tick_rate_draft.is_some()
-            || self.editor.pla_target.is_some()
-            || self.settings_open
-            || self.name_dialog.is_some()
-            || self.remove_dialog
-            || self.editor.project_error.is_some();
+        let modal = self.dialog_open();
         if modal || !ui.is_enabled() || ui.input(|i| !i.focused) {
             self.editor.cancel_slider();
             self.editor.simulation.release_keyboard();
@@ -40,16 +32,7 @@ impl Workspace {
         }
         ui.add_enabled_ui(!modal, |ui| self.show_inner(ui));
         if ui.is_enabled() {
-            self.project_dialogs(ui.ctx());
-            self.analysis_dialog(ui.ctx());
-            self.settings(ui.ctx());
-            self.editor
-                .simulation
-                .frequency_dialog(ui.ctx(), &mut self.preferences.tick_hz);
-            self.memory_editor
-                .show(ui.ctx(), &mut self.editor, &mut self.file_actions);
-            self.pla_editor.show(ui.ctx(), &mut self.editor);
-            self.generator.show(ui.ctx(), self.preferences.truth_table);
+            self.show_dialogs(ui.ctx());
         }
         if let Some(id) = self.editor.open_instance.take() {
             self.editor.enter_instance(id);
@@ -206,19 +189,6 @@ impl Workspace {
                         &mut self.preferences.show_grid,
                     );
                 }
-            });
-
-        egui::Window::new(tr("About logisim-rs"))
-            .id(egui::Id::unique("about-window"))
-            .open(&mut self.about_open)
-            .collapsible(false)
-            .resizable(false)
-            .show(ui.ctx(), |ui| {
-                ui.heading("Logisim rs");
-                ui.label(tr("A cleanroom digital circuit workspace."));
-                ui.separator();
-                ui.label(tr("Component editing, wiring and canvas navigation are available."));
-                ui.label(tr("Combinational and sequential simulation is available. Open and save the supported .circ components."));
             });
     }
 

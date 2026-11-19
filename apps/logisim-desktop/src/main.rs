@@ -2,7 +2,6 @@
 mod analysis;
 mod background;
 mod clocks;
-mod file_picker;
 mod files;
 mod generation;
 mod library_import;

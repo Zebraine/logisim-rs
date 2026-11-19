@@ -122,8 +122,8 @@ fn real_memory_picker_cancels_retries_and_preserves_document_file_and_ram() {
     h.click("Edit contents…");
     h.click("Import .hex…");
     let labels = h.frame(vec![]);
-    assert!(labels.iter().any(|(s, _)| s == "· contents.HEX"));
-    assert!(!labels.iter().any(|(s, _)| s == "· source.circ"));
+    assert!(labels.iter().any(|(s, _)| s == "contents.HEX"));
+    assert!(!labels.iter().any(|(s, _)| s == "source.circ"));
     h.click("Cancel");
     assert_eq!(h.ws.project(), &original);
     h.open_image(&invalid);

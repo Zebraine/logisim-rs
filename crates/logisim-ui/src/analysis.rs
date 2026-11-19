@@ -97,21 +97,19 @@ impl Workspace {
         if !self.analysis.open {
             return;
         }
-        let mut close = false;
-        let response = egui::Modal::new(egui::Id::unique("circuit-analysis")).show(ctx, |ui| {
-            ui.set_width((ctx.content_rect().width() - 80.0).clamp(280.0, 560.0));
-            ui.heading(tr("Analyze Circuit"));
-            if let Some(error) = &self.analysis.error {
-                ui.colored_label(crate::theme::DANGER, tr(error.message));
-                egui::ScrollArea::vertical().max_height(140.0).show(ui, |ui| { ui.label(&error.detail); });
-                close = ui.button(tr("Close")).clicked();
-            } else {
-                ui.horizontal(|ui| { ui.spinner(); ui.label(tr("Analyzing circuit…")); });
-                ui.weak(tr("Only stateless combinational circuits are supported. The current simulation is unchanged."));
-                close = ui.button(tr("Cancel")).clicked();
-            }
+        let dismiss = crate::dialog::Dialog::prompt("circuit-analysis").show(ctx, tr("Analyze Circuit"), |dialog| {
+            dialog.body(|ui| {
+                if let Some(error) = &self.analysis.error {
+                    ui.colored_label(crate::theme::DANGER, tr(error.message));
+                    ui.label(&error.detail);
+                } else {
+                    ui.horizontal(|ui| { ui.spinner(); ui.label(tr("Analyzing circuit…")); });
+                    ui.weak(tr("Only stateless combinational circuits are supported. The current simulation is unchanged."));
+                }
+            });
+            dialog.footer(if self.analysis.error.is_some() { "Close" } else { "Cancel" }, |_| {});
         });
-        if close || response.should_close() {
+        if dismiss != crate::dialog::Dismiss::Open {
             self.analysis.cancel();
         }
     }
