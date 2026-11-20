@@ -212,3 +212,16 @@ fn both_workbench_palettes_and_dark_signal_contrast_are_context_local() {
     configure(&ctx);
     assert_eq!(palette(&ctx), palette(&other));
 }
+
+#[test]
+fn dark_artwork_rim_uses_one_device_pixel_and_the_canvas_contrast_threshold() {
+    let dark = ThemeMode::Dark.palette();
+    for scale in [0.8, 1., 1.5, 2.] {
+        let outline = ArtworkContrast::new(dark, scale, true).unwrap();
+        assert_eq!(outline.edge.width * scale, 1.);
+        assert!(!outline.low_contrast(outline.edge.color));
+        assert!(outline.low_contrast(dark.canvas) && !outline.low_contrast(dark.ink));
+        assert!(ArtworkContrast::new(dark, scale, false).is_none());
+        assert!(ArtworkContrast::new(ThemeMode::Light.palette(), scale, true).is_none());
+    }
+}

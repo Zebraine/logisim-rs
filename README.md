@@ -42,6 +42,7 @@ cargo run -p logisim-rs --release --locked -- examples/course/redirect-pipeline.
 - 使用 Poke（`P`）操作输入，`Ctrl+T` 推进一个 tick，`Ctrl+K` 开关自动时钟。
 - 自动时钟默认 4 Hz，可在 Simulate 菜单设置 1–4096 Hz；一个 tick 不等于完整时钟周期。
 - 在 File → Settings 切换语言与仿真模式；默认英语、稳定态。
+- Settings → Appearance 中的“深色模式图形轮廓”默认开启，可增强低对比自定义封装的边缘。插件仅显示附加外框，内部线条、填充和透明度由插件作者决定。
 - 在 Project 菜单添加子电路、编辑封装、加载 `.circ` 库或 Wasm 插件。
 - Project → Analyze Circuit 分析无状态组合电路，生成默认回写原定义；Generate Circuit 支持独立生成，可选仅使用 NAND 门。
 - ROM/RAM 的内容编辑器提供 `.hex` 导入；ROM 内容随电路保存，RAM 内容复位后清零。

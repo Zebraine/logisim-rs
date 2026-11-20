@@ -293,3 +293,55 @@ fn startup_honors_cli_and_reopen_and_removes_only_the_failed_entry() {
     );
     assert_eq!(ws.recent()[0], bad.to_str().unwrap());
 }
+
+#[test]
+fn dark_artwork_preference_preserves_saved_project_bytes_on_reopen() {
+    use logisim_core::{Geometry, Paint};
+    let temp = crate::tests::support::Temp::new();
+    let (mut project, wasm) = crate::tests::support::plugins::fixture("test.contrast", 1);
+    let module = temp.path("ink.wasm");
+    std::fs::write(&module, wasm).unwrap();
+    let module = module.canonicalize().unwrap().to_str().unwrap().to_owned();
+    project.plugin_sources[0].path = module.clone();
+    project.plugin_sources[0].fallback = module;
+    let child = project.add("Artwork".into()).unwrap();
+    let def = project.circuit_mut(child).unwrap();
+    let mut artwork = def.editable_appearance();
+    artwork
+        .add(
+            Geometry::Poly {
+                points: vec![Point::ZERO, Point::new(10, 30)],
+                closed: false,
+            },
+            Paint::default(),
+        )
+        .unwrap();
+    def.circuit.appearance = Some(artwork);
+    let instance = project.instance(child, Point::new(220, 160)).unwrap();
+    project.main_circuit_mut().circuit.add_component(instance);
+
+    let path = temp.path("artwork.circ");
+    let mut h = super::Harness::default();
+    h.files
+        .storage
+        .save(&project, &path, SaveMode::Current, false)
+        .unwrap();
+    let original = std::fs::read(&path).unwrap();
+    assert!(h.files.load(&path, &mut h.ws, &mut h.sim));
+    let loaded = h.ws.project().clone();
+    for enabled in [false, true] {
+        h.ws.apply_settings(logisim_ui::Settings {
+            theme: logisim_ui::ThemeMode::Dark,
+            dark_artwork_contrast: enabled,
+            ..h.ws.preferences()
+        });
+        h.frame(vec![]);
+        assert!(!h.files.present(&h.ws).dirty);
+        h.files
+            .request(FileAction::Save, &h.ctx, &mut h.ws, &mut h.sim);
+        assert!(!h.files.busy());
+        assert_eq!(std::fs::read(&path).unwrap(), original);
+        assert!(h.files.load(&path, &mut h.ws, &mut h.sim));
+        assert_eq!(h.ws.project(), &loaded);
+    }
+}

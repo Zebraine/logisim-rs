@@ -109,7 +109,7 @@ fn registry_restores_each_field_without_changing_other_preferences() {
         language: Language::SimplifiedChinese,
         density: crate::Density::Compact,
         theme: crate::ThemeMode::Dark,
-        dark_artwork_contrast: defaults.dark_artwork_contrast,
+        dark_artwork_contrast: false,
         accent: crate::Accent::Teal,
         ui_scale: UiScale::P150,
         reduce_motion: true,
@@ -1744,6 +1744,99 @@ fn fallback_directory_search_choose_and_clear_fit_both_languages_and_themes() {
                     );
                     assert!(!w.document.dirty && !w.editor.can_undo());
                 }
+            }
+        }
+    }
+}
+
+#[test]
+fn dark_artwork_toggle_and_resets_preserve_the_workspace_in_both_layouts() {
+    use crate::ThemeMode;
+    use logisim_core::{Point, Project};
+    let entry = REGISTRY
+        .iter()
+        .find(|e| e.key == "appearance.dark_artwork_contrast")
+        .unwrap();
+    for language in Language::ALL {
+        let t = |key| crate::i18n::with_language(language, || tr(key));
+        for theme in [ThemeMode::Dark, ThemeMode::Light] {
+            for size in [vec2(720., 480.), vec2(1200., 820.)] {
+                let ctx = Context::default();
+                crate::configure(&ctx);
+                let mut app = Workspace::default();
+                app.apply_settings(Settings {
+                    language,
+                    theme,
+                    ..Default::default()
+                });
+                let mut project = Project::default();
+                let wire = project
+                    .main_circuit_mut()
+                    .circuit
+                    .add_wire(Point::ZERO, Point::new(90, 0))
+                    .unwrap();
+                app.replace_project(project.clone());
+                app.settings_open = true;
+                app.settings_page.query = entry.key.into();
+                app.editor.session.selection.insert(wire);
+                app.simulation_mut().ticks = 27;
+                app.simulation_mut().enabled = false;
+                app.fit_pending = false;
+                app.canvas.camera.offset = vec2(57., 26.);
+                app.canvas.camera.zoom = 1.35;
+                let render = |app: &mut Workspace| {
+                    for _ in 0..2 {
+                        frame_at_size(&ctx, app, vec![], size);
+                    }
+                    frame_at_size(&ctx, app, vec![], size)
+                };
+                let labels = render(&mut app);
+                let rect = |labels: &[(String, egui::Rect)], s: &str| {
+                    labels.iter().rfind(|(v, _)| v == s).unwrap().1
+                };
+                let bounds = ctx
+                    .memory(|m| m.area_rect(Id::unique("settings-window")))
+                    .unwrap();
+                let on = rect(&labels, t("On"));
+                let help = rect(&labels, t(entry.help));
+                assert!(bounds.contains_rect(help) && help.right() < on.left());
+                assert!(bounds.contains_rect(rect(&labels, t(entry.label))));
+                tap(&ctx, size, &mut app, on.center());
+                assert!(
+                    !app.preferences().dark_artwork_contrast
+                        && !app.editor.display.dark_artwork_contrast
+                );
+                let labels = render(&mut app);
+                let off = rect(&labels, t("Off"));
+                tap(
+                    &ctx,
+                    size,
+                    &mut app,
+                    egui::pos2(bounds.right() - 36., off.center().y),
+                );
+                assert!(app.preferences().dark_artwork_contrast);
+                let on = rect(&render(&mut app), t("On"));
+                tap(&ctx, size, &mut app, on.center());
+                assert!(!app.preferences().dark_artwork_contrast);
+                app.settings_page.select(Category::Advanced);
+                for label in ["Reset all", "Confirm reset"] {
+                    let pos = rect(&render(&mut app), t(label)).center();
+                    tap(&ctx, size, &mut app, pos);
+                }
+                assert!(
+                    app.preferences().dark_artwork_contrast
+                        && app.editor.display.dark_artwork_contrast
+                );
+                assert_eq!(app.project(), &project);
+                assert_eq!(app.canvas.camera.offset, vec2(57., 26.));
+                assert_eq!(app.canvas.camera.zoom, 1.35);
+                assert_eq!(
+                    app.editor.session.selection,
+                    std::collections::BTreeSet::from([wire])
+                );
+                assert!(!app.document.dirty && !app.editor.can_undo());
+                assert!(!app.simulation_mut().enabled && app.simulation_mut().ticks == 27);
+                assert!(app.take_simulation_actions().is_empty());
             }
         }
     }

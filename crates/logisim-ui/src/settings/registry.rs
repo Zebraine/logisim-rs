@@ -137,6 +137,13 @@ registry![
         Control::Accent
     ),
     (
+        "appearance.dark_artwork_contrast",
+        Appearance,
+        "Dark artwork outlines",
+        "In Dark, outline low-contrast custom artwork and plugin bounds. Document colors and plugin interiors stay as drawn.",
+        Control::Toggle(|s| &mut s.dark_artwork_contrast)
+    ),
+    (
         "appearance.reduce_motion",
         Appearance,
         "Reduce motion",
