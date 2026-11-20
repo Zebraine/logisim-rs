@@ -49,7 +49,8 @@ impl Workspace {
                     self.file_actions.push(FileAction::ExportImage);
                     ui.close();
                 }
-                ui.add_enabled(false, egui::Button::new(tr("Print…")));
+                ui.add_enabled(false, egui::Button::new(tr("Print…")))
+                    .on_disabled_hover_text(tr("Print is not implemented in this build."));
                 ui.separator();
                 if ui.button(tr("Settings")).clicked() {
                     self.finish_edit();

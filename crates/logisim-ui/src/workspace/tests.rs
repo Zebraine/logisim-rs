@@ -906,3 +906,70 @@ fn export_image_menu_keeps_the_selected_component_camera_simulation_and_history(
     app.editor.undo();
     assert!(app.circuit().components.is_empty() && !app.editor.can_undo());
 }
+
+#[test]
+fn disabled_print_explains_itself_in_both_languages_and_window_sizes() {
+    use crate::tests::support::widgets::frame_at_size;
+
+    let rect = |labels: &[(String, Rect)], label: &str| {
+        labels
+            .iter()
+            .find(|(s, _)| s == label)
+            .unwrap_or_else(|| panic!("Missing {label}"))
+            .1
+    };
+    for language in Language::ALL {
+        for theme in [ThemeMode::Light, ThemeMode::Dark] {
+            for size in [vec2(720., 480.), vec2(1200., 820.)] {
+                let ctx = Context::default();
+                let mut app = Workspace::default();
+                app.apply_settings(Settings {
+                    language,
+                    theme,
+                    ..app.preferences()
+                });
+                let mut render = |events| frame_at_size(&ctx, &mut app, events, size);
+                let labels = render(vec![]);
+                ctx.global_style_mut(|s| {
+                    s.interaction.tooltip_delay = 0.;
+                    s.interaction.show_tooltips_only_when_still = false;
+                });
+                let click = |pos, pressed| {
+                    vec![
+                        Event::PointerMoved(pos),
+                        Event::PointerButton {
+                            pos,
+                            pressed,
+                            button: PointerButton::Primary,
+                            modifiers: Modifiers::NONE,
+                        },
+                    ]
+                };
+                let file = rect(&labels, language.translate("File")).center();
+                render(click(file, true));
+                render(click(file, false));
+                // egui suppresses tooltips for pointer moves within 100 ms of a click.
+                for _ in 0..8 {
+                    render(vec![]);
+                }
+                let menu = render(vec![]);
+                let print = rect(&menu, language.translate("Print…"));
+                assert!(rect(&menu, language.translate("Export Image…")).bottom() < print.top());
+                assert!(print.bottom() < rect(&menu, language.translate("Settings")).top());
+                render(vec![Event::PointerMoved(print.center())]);
+                render(vec![]);
+                let hovered = render(vec![]);
+                let help = match language {
+                    Language::English => "Print is not implemented in this build.",
+                    Language::SimplifiedChinese => "此版本尚未实现打印功能。",
+                };
+                let viewport = Rect::from_min_size(Pos2::ZERO, size);
+                assert!(viewport.contains_rect(rect(&hovered, help)));
+                render(click(print.center(), true));
+                render(click(print.center(), false));
+                assert!(app.take_file_actions().is_empty());
+                assert!(!app.dialog_open());
+            }
+        }
+    }
+}

@@ -626,6 +626,7 @@
     "Preset: set all bits": "置位：异步置为全 1",
     "Press a shortcut… Esc to cancel": "请按下快捷键… 按 Esc 取消",
     "Previous page": "上一页",
+    "Print is not implemented in this build.": "此版本尚未实现打印功能。",
     "Print…": "打印…",
     "Priority Encoder": "优先编码器",
     "Probe": "探针",
