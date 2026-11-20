@@ -239,3 +239,62 @@ fn editor_keys_find_the_same_control_in_both_languages() {
         }
     }
 }
+
+#[test]
+fn compact_editor_scroll_exposes_every_setting_in_both_languages() {
+    use egui::{Event, MouseWheelSource, MouseWheelUnit, TouchPhase};
+    for lang in Language::ALL {
+        let ctx = Context::default();
+        crate::configure(&ctx);
+        let mut app = Workspace {
+            settings_open: true,
+            ..Default::default()
+        };
+        app.set_language(lang);
+        app.settings_page.select(Category::Editor);
+        let size = vec2(720., 480.);
+        let entries: Vec<_> = REGISTRY
+            .iter()
+            .filter(|e| e.category == Category::Editor)
+            .collect();
+        let mut visible = std::collections::BTreeSet::new();
+        for step in 0..18 {
+            let mut events = vec![Event::PointerMoved(egui::pos2(420., 330.))];
+            if step >= 3 {
+                events.push(Event::MouseWheel {
+                    unit: MouseWheelUnit::Line,
+                    delta: vec2(0., -1.),
+                    phase: TouchPhase::Move,
+                    source: MouseWheelSource::Unknown,
+                    modifiers: Modifiers::NONE,
+                });
+            }
+            let labels = frame_at_size(&ctx, &mut app, events, size);
+            if step < 2 {
+                continue;
+            }
+            // Use the fixed category picker and footer as the scrollable pane's bounds.
+            let close = crate::i18n::with_language(lang, || tr("Close"));
+            let close_rect = labels.iter().rfind(|(s, _)| s == close).unwrap().1;
+            let picker = crate::i18n::with_language(lang, || tr("Editor"));
+            let picker_rect = labels
+                .iter()
+                .find(|(s, r)| s == picker && r.center().y > 100.)
+                .unwrap()
+                .1;
+            for e in &entries {
+                let label = crate::i18n::with_language(lang, || tr(e.label));
+                if labels.iter().any(|(s, r)| {
+                    s == label
+                        && r.top() > picker_rect.bottom()
+                        && r.bottom() < close_rect.top()
+                        && r.left() >= 0.
+                        && r.right() <= size.x
+                }) {
+                    visible.insert(e.key);
+                }
+            }
+        }
+        assert_eq!(visible.len(), entries.len(), "{lang:?}: {visible:?}");
+    }
+}

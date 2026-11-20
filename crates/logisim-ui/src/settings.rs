@@ -4,8 +4,8 @@ mod page;
 pub(crate) use page::Page;
 mod model;
 use crate::{Language, Workspace, i18n::tr, theme};
-pub(crate) use model::EditorDisplay;
 pub use model::{DefaultZoom, Settings, TickHz, UiScale, WorkspaceSettings};
+pub(crate) use model::{EditorDisplay, PlacementDefaults};
 
 /// Host execution preference, independent of the document and its undo history.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -45,6 +45,7 @@ impl Workspace {
             .simulation
             .set_tick_rate(&mut self.preferences.tick_hz, settings.tick_hz);
         self.editor.display = settings.editor_display();
+        self.editor.placement_defaults = settings.placement_defaults();
         self.preferences = settings;
     }
     pub fn set_config_path(&mut self, path: Option<String>) {

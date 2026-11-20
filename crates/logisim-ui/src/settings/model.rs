@@ -122,7 +122,20 @@ pub(crate) struct EditorDisplay {
     pub show_connection_markers: bool,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct PlacementDefaults {
+    pub probe_radix: Radix,
+    pub pin_bits: u8,
+}
+
 impl Settings {
+    pub(crate) fn placement_defaults(self) -> PlacementDefaults {
+        PlacementDefaults {
+            probe_radix: self.default_probe_radix,
+            pin_bits: self.default_pin_bits,
+        }
+    }
+
     pub(crate) fn editor_display(self) -> EditorDisplay {
         EditorDisplay {
             highlight_net: self.highlight_net,

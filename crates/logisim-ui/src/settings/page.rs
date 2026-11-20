@@ -253,26 +253,35 @@ impl Page {
                 if recent.is_empty() {
                     ui.weak(tr("No recent projects"));
                 } else {
-                    for (index, path) in recent.iter().take(5).enumerate() {
-                        if crate::document::recent_button(ui, path) {
-                            *action = Some(PageAction::OpenRecent(index));
-                        }
-                    }
+                    egui::ScrollArea::vertical()
+                        .id_salt("settings-recent-projects")
+                        .max_height(120.)
+                        .auto_shrink([false, true])
+                        .show(ui, |ui| {
+                            for (index, path) in recent
+                                .iter()
+                                .take(values.workspace.recent_limit)
+                                .enumerate()
+                            {
+                                if crate::document::recent_button(ui, path) {
+                                    *action = Some(PageAction::OpenRecent(index));
+                                }
+                            }
+                        });
                     if ui.button(tr("Clear recent")).clicked() {
                         *action = Some(PageAction::ClearRecent);
                     }
                 }
             });
             ui.add_space(4.);
-            if ui
-                .button(tr("Reset workspace layout"))
-                .on_hover_text(tr(
+            theme::card(ui, tr("Workspace layout"), |ui| {
+                ui.weak(tr(
                     "Center the window and restore the default inspector layout.",
-                ))
-                .clicked()
-            {
-                *action = Some(PageAction::ResetLayout);
-            }
+                ));
+                if ui.button(tr("Reset workspace layout")).clicked() {
+                    *action = Some(PageAction::ResetLayout);
+                }
+            });
         }
         if !found {
             ui.label(tr("No settings match"));

@@ -76,7 +76,7 @@ registry![
     (
         "workspace.recent_limit",
         Workspace,
-        "Recent projects",
+        "Recent project limit",
         "Number of files to keep in the recent list.",
         Control::RecentLimit
     ),

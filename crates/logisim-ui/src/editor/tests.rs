@@ -208,3 +208,51 @@ fn display_switches_change_wire_paint_only() {
         assert!(app.take_simulation_actions().is_empty());
     }
 }
+
+#[test]
+fn placement_defaults_apply_only_when_rebuilding_a_pin_or_probe_template() {
+    use crate::{Settings, Workspace};
+    use logisim_core::Radix;
+    let mut app = Workspace::default();
+    app.editor.set_tool(Tool::Place(Kind::Pin));
+    app.editor.template.bits = 3;
+    app.editor.template.label = "manual".into();
+    let manual = app.editor.template.clone();
+    app.editor.place(Point::new(20, 20));
+    let old_id = *app.editor.session.selection.first().unwrap();
+    let original = app.project().clone();
+    app.editor.copy();
+    app.editor.set_tool(Tool::Place(Kind::Pin));
+    app.apply_settings(Settings {
+        default_pin_bits: 8,
+        default_probe_radix: Radix::Hex,
+        ..app.preferences()
+    });
+    assert_eq!(app.editor.template, manual);
+    assert_eq!(app.project(), &original);
+    app.editor.set_tool(Tool::Place(Kind::Probe));
+    assert_eq!(app.editor.template.radix, Radix::Hex);
+    app.editor.template.radix = Radix::Octal;
+    app.apply_settings(Settings {
+        default_probe_radix: Radix::Unsigned,
+        ..app.preferences()
+    });
+    app.editor.set_tool(Tool::Place(Kind::Probe));
+    assert_eq!(app.editor.template.radix, Radix::Octal);
+    app.editor.place(Point::new(80, 80));
+    let probe = *app.editor.session.selection.first().unwrap();
+    app.editor.set_tool(Tool::Place(Kind::Pin));
+    let mut expected = Component::new(Kind::Pin, Point::ZERO);
+    expected.bits = 8;
+    assert_eq!(app.editor.template, expected);
+    app.editor.place(Point::new(100, 100));
+    assert_eq!(app.circuit().components.last().unwrap().bits, 8);
+    app.editor.paste();
+    assert_eq!(app.circuit().components.last().unwrap().bits, 3);
+    assert_eq!(app.circuit().component(old_id).unwrap().bits, 3);
+    assert_eq!(app.circuit().component(probe).unwrap().radix, Radix::Octal);
+    app.replace_project(original);
+    app.editor.set_tool(Tool::Place(Kind::Probe));
+    assert_eq!(app.editor.template.radix, Radix::Unsigned);
+    assert!(!app.editor.can_undo());
+}

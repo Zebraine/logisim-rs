@@ -63,6 +63,7 @@ pub(crate) struct Editor {
     pub project_error: Option<String>,
     pub tool: Tool,
     pub display: crate::settings::EditorDisplay,
+    pub placement_defaults: crate::settings::PlacementDefaults,
     pub template: Component,
     pub memory_target: Option<(bool, Id)>,
     pub pla_target: Option<(bool, Id)>,
@@ -86,6 +87,7 @@ impl Editor {
         Self {
             session: EditSession::new(project),
             display: settings.editor_display(),
+            placement_defaults: settings.placement_defaults(),
             history: History::default(),
             open_instance: None,
             analyze_circuit: None,
@@ -224,7 +226,13 @@ impl Editor {
                         .instance(id, Point::ZERO)
                         .unwrap_or_else(|| Component::new(kind, Point::ZERO))
                 } else {
-                    Component::new(kind, Point::ZERO)
+                    let mut template = Component::new(kind, Point::ZERO);
+                    match kind {
+                        Kind::Pin => template.bits = self.placement_defaults.pin_bits,
+                        Kind::Probe => template.radix = self.placement_defaults.probe_radix,
+                        _ => {}
+                    }
+                    template
                 };
             }
             self.session.selection.clear();
