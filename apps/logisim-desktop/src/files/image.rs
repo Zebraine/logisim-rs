@@ -29,11 +29,9 @@ impl ImageTarget {
         }
     }
 
-    pub(super) fn write(&self, width: u32, height: u32, rgba: &[u8]) -> Result<(), String> {
+    pub(super) fn write(&self, image: &egui::ColorImage) -> Result<(), String> {
         let mut png = Vec::new();
-        PngEncoder::new(&mut png)
-            .write_image(rgba, width, height, ColorType::Rgba8.into())
-            .map_err(|e| e.to_string())?;
+        encode_png(&mut png, image)?;
         storage::atomic_replace(&self.path, &png, None, || {
             if storage::destination(&self.path)? != self.path
                 || Self::inspect(&self.path)? != self.existing
@@ -56,6 +54,25 @@ impl ImageTarget {
             Ok(())
         })
     }
+}
+
+pub(super) fn encode_png(
+    writer: impl std::io::Write,
+    image: &egui::ColorImage,
+) -> Result<(), String> {
+    let rgba: Vec<_> = image
+        .pixels
+        .iter()
+        .flat_map(|p| p.to_srgba_unmultiplied())
+        .collect();
+    PngEncoder::new(writer)
+        .write_image(
+            &rgba,
+            image.width() as u32,
+            image.height() as u32,
+            ColorType::Rgba8.into(),
+        )
+        .map_err(|e| e.to_string())
 }
 
 impl Files {
@@ -116,8 +133,10 @@ impl Files {
             (Dialog::ReplaceImage(target), Response::Replace) => target,
             _ => unreachable!("image export dialog returned an unrelated response"),
         };
-        self.image_export = Some(super::capture::Capture::new(target));
-        ctx.request_repaint();
+        self.capture = Some(super::capture::Capture::new(
+            super::capture::Target::Export(target),
+            ctx,
+        ));
     }
 
     pub(super) fn image_result(&mut self, path: &Path, result: Result<(), String>) {

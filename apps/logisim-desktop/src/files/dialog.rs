@@ -33,6 +33,8 @@ pub(super) enum Dialog {
         path: PathBuf,
         bytes: Vec<u8>,
     },
+    PrintPreview(super::print::Preview),
+    Printing(std::thread::JoinHandle<Result<(), String>>),
     ReplaceImage(super::image::ImageTarget),
     ImageMessage {
         title: &'static str,
@@ -56,6 +58,8 @@ pub(super) enum Dialog {
     },
 }
 pub(super) enum Response {
+    Print,
+    Printed,
     Import,
     Recover,
     ConfirmPlugins,
@@ -75,7 +79,9 @@ impl Dialog {
             Self::Picker(Picker {
                 mode: super::Mode::ExportImage,
                 ..
-            }) | Self::ReplaceImage(_)
+            }) | Self::PrintPreview(_)
+                | Self::Printing(_)
+                | Self::ReplaceImage(_)
                 | Self::ImageMessage { .. }
         )
     }
@@ -97,6 +103,16 @@ impl Dialog {
             | Dialog::MemoryPicker { picker, .. }
             | Dialog::PluginPicker { picker, .. }
             | Dialog::PluginImportPicker { picker, .. } => return picker.show(ctx),
+            Dialog::PrintPreview(preview) => preview.show(ctx, &mut answer),
+            Dialog::Printing(job) => {
+                if job.is_finished() {
+                    return Response::Printed;
+                }
+                Window::prompt("print-progress").show(ctx, tr("Print"), |dialog| {
+                    dialog.body(|ui| ui.label(tr("Sending to the default printer…")));
+                });
+                return Response::Wait;
+            }
             Dialog::Plugins(resolution) => resolve_plugins(ctx, resolution, &mut answer),
             Dialog::Recovery { view, .. } => Window::prompt("startup-recovery").show(
                 ctx,

@@ -3,6 +3,32 @@ use crate::tests::support::Temp;
 use std::fs;
 
 #[test]
+fn print_can_cancel_before_readback_and_reports_a_missing_renderer() {
+    let mut h = Harness::default();
+    let original = h.ws.project().clone();
+    h.files
+        .request(FileAction::Print, &h.ctx, &mut h.ws, &mut h.sim);
+    h.frame(vec![Event::Key {
+        key: egui::Key::Escape,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: Modifiers::NONE,
+    }]);
+    assert!(!h.files.busy());
+    h.files
+        .request(FileAction::Print, &h.ctx, &mut h.ws, &mut h.sim);
+    for _ in 0..4 {
+        h.frame(vec![]);
+    }
+    assert!(
+        matches!(&h.files.dialog, Some(Dialog::ImageMessage { title: "Print failed", body }) if body.contains("renderer"))
+    );
+    assert!(!h.files.suspends_simulation() && !h.files.present(&h.ws).dirty);
+    assert_eq!(h.ws.project(), &original);
+}
+
+#[test]
 fn dropped_renderer_callback_reports_error_without_replacing_existing_file() {
     let temp = Temp::new();
     let path = temp.path("chosen.png");
@@ -120,9 +146,8 @@ fn png_picker_filters_extends_and_rejects_names_and_localizes_the_controls() {
                     size,
                 );
                 click_in(&mut h, size, t("Save"));
-                assert_eq!(
-                    h.files.image_export.as_ref().unwrap().target.path,
-                    dir.path("added.png")
+                assert!(
+                    matches!(&h.files.capture.as_ref().unwrap().target, capture::Target::Export(target) if target.path == dir.path("added.png"))
                 );
             }
         }

@@ -58,6 +58,8 @@ Useful starting points:
 - `Ctrl+Z` / `Ctrl+Shift+Z` undo and redo.
 - `Ctrl+F` searches the catalogue or settings, depending on the focused panel.
 - **File → Settings** changes language, simulation mode, theme, density, editor defaults, autosave, and recovery behavior.
+- **File → Print…** previews the current canvas and sends that image to the system default printer. Linux and macOS require `lp`. Windows uses the registered PNG print handler through PowerShell. Paper size, copies and other page settings follow the system defaults.
+- **Settings → Editor** sets the family (Dialog, Monospace or Serif), size, bold and italic for new component labels. A remembered placement template keeps its edited font. The canvas uses its existing proportional face for Serif.
 - Shortcuts can be rebound under **Settings → Shortcuts**.
 
 ## Plugins
@@ -128,7 +130,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the development and release workflow.
 
 ## Known limitations
 
-- **Print** is not implemented. The File menu item is disabled and explains this in a tooltip.
 - A Joystick's label font is not serialized in the existing `.circ` format; it keeps its intrinsic size of 12 after reopening, even if a different default label size is configured.
 - In Dark mode, custom subcircuit artwork receives a contrast outline, but plugin interiors are drawn by the plugin author. The host only adds a boundary around the plugin component.
 - The UI has been manually validated on Linux X11. Windows, macOS, and native Wayland have not been manually UI-tested in this release.

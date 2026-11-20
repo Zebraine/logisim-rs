@@ -3,6 +3,7 @@ mod capture;
 mod dialog;
 mod image;
 mod picker;
+mod print;
 mod settings;
 #[cfg(test)]
 mod tests;
@@ -36,7 +37,7 @@ pub(crate) struct Files {
     pub storage: Storage,
     pub autosave: crate::recovery::Autosave,
     dialog: Option<Dialog>,
-    image_export: Option<capture::Capture>,
+    capture: Option<capture::Capture>,
     after_save: Option<NextDocument>,
     directory: PathBuf,
     pub allow_close: bool,
@@ -49,7 +50,7 @@ impl Default for Files {
             storage: Storage::new(),
             autosave: Default::default(),
             dialog: None,
-            image_export: None,
+            capture: None,
             after_save: None,
             directory: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
             allow_close: false,
@@ -73,10 +74,10 @@ impl Files {
         self.autosave.publish(w);
     }
     pub fn busy(&self) -> bool {
-        self.dialog.is_some() || self.image_export.is_some()
+        self.dialog.is_some() || self.capture.is_some()
     }
     pub fn capturing_image(&self) -> bool {
-        self.image_export.is_some()
+        self.capture.is_some()
     }
     pub fn suspends_simulation(&self) -> bool {
         self.dialog
@@ -249,6 +250,7 @@ impl Files {
                 FileAction::ClearRecent
                     | FileAction::Settings(_)
                     | FileAction::ChoosePluginFallback
+                    | FileAction::Print
                     | FileAction::ExportImage
             )
         {
@@ -298,6 +300,9 @@ impl Files {
                 )));
             }
             FileAction::Settings(action) => self.picker(Mode::Settings(action)),
+            FileAction::Print => {
+                self.capture = Some(capture::Capture::new(capture::Target::Print, ctx))
+            }
             FileAction::ExportImage => self.picker(Mode::ExportImage),
             FileAction::SaveAs => self.picker(Mode::Save),
             FileAction::ClearRecovery { disabled_autosave } => {
@@ -441,11 +446,16 @@ impl Files {
         sim: &mut impl Host,
         preferences: &mut crate::preferences::Preferences,
     ) {
-        if let Some(mut capture) = self.image_export.take() {
+        if let Some(mut capture) = self.capture.take() {
+            if matches!(capture.target, capture::Target::Print)
+                && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
+            {
+                return;
+            }
             if let Some(result) = capture.poll(ctx, workspace.canvas_rect()) {
-                self.image_result(&capture.target.path, result);
+                self.captured(ctx, capture.target, result);
             } else {
-                self.image_export = Some(capture);
+                self.capture = Some(capture);
             }
             return;
         }
@@ -453,13 +463,34 @@ impl Files {
             return;
         };
         let response = dialog.show(ctx);
-        if dialog.is_image() {
+        if matches!(dialog, Dialog::PrintPreview(_) | Dialog::Printing(_)) {
+            self.respond_to_print(dialog, response, ctx, workspace.language());
+        } else if dialog.is_image() {
             self.respond_to_image(dialog, response, preferences, ctx);
         } else if dialog.is_settings() {
             self.respond_to_settings(dialog, response, preferences, workspace);
         } else {
             self.respond(dialog, response, ctx, workspace, sim);
         }
+    }
+    fn captured(
+        &mut self,
+        ctx: &egui::Context,
+        target: capture::Target,
+        pixels: Result<egui::ColorImage, String>,
+    ) {
+        match target {
+            capture::Target::Export(target) => {
+                self.image_result(&target.path, pixels.and_then(|image| target.write(&image)))
+            }
+            capture::Target::Print => match pixels {
+                Ok(image) => {
+                    self.dialog = Some(Dialog::PrintPreview(print::Preview::new(ctx, image)))
+                }
+                Err(error) => self.print_result(Err(tr(&error).to_owned())),
+            },
+        }
+        ctx.request_repaint();
     }
     fn respond(
         &mut self,

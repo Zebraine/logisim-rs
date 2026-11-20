@@ -11,7 +11,7 @@ use std::{
 
 const READBACK_TIMEOUT: Duration = Duration::from_secs(5);
 const UNAVAILABLE: &str = "The renderer could not capture the canvas.";
-const RESIZED: &str = "The viewport changed during capture. Export the image again.";
+const RESIZED: &str = "The viewport changed during capture. Please try again.";
 
 #[derive(Clone, Copy, PartialEq)]
 struct Geometry {
@@ -58,20 +58,36 @@ struct Readback {
     pixels: Receiver<Arc<ColorImage>>,
     started: Instant,
 }
+pub(super) enum Target {
+    Export(ImageTarget),
+    Print,
+}
 pub(super) struct Capture {
-    pub(super) target: ImageTarget,
+    pub(super) target: Target,
+    requested_frame: u64,
     readback: Option<Readback>,
 }
 
 impl Capture {
-    pub(super) fn new(target: ImageTarget) -> Self {
+    pub(super) fn new(target: Target, ctx: &Context) -> Self {
+        ctx.request_repaint();
         Self {
+            requested_frame: ctx.cumulative_frame_nr(),
             target,
             readback: None,
         }
     }
 
-    pub(super) fn poll(&mut self, ctx: &Context, canvas: Rect) -> Option<Result<(), String>> {
+    pub(super) fn poll(
+        &mut self,
+        ctx: &Context,
+        canvas: Rect,
+    ) -> Option<Result<ColorImage, String>> {
+        // The request frame can still contain the menu or picker that initiated capture.
+        if ctx.cumulative_frame_nr() == self.requested_frame {
+            ctx.request_repaint();
+            return None;
+        }
         let geometry = Geometry {
             canvas,
             viewport: ctx.input(|i| i.viewport_rect()),
@@ -96,15 +112,7 @@ impl Capture {
             return Some(Err(RESIZED.into()));
         }
         match readback.pixels.try_recv() {
-            Ok(frame) => Some(geometry.crop(&frame).and_then(|image| {
-                let rgba: Vec<_> = image
-                    .pixels
-                    .iter()
-                    .flat_map(|p| p.to_srgba_unmultiplied())
-                    .collect();
-                self.target
-                    .write(image.width() as u32, image.height() as u32, &rgba)
-            })),
+            Ok(frame) => Some(geometry.crop(&frame)),
             Err(TryRecvError::Empty) if readback.started.elapsed() < READBACK_TIMEOUT => None,
             Err(_) => Some(Err(UNAVAILABLE.into())),
         }

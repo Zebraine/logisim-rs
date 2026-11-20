@@ -18,7 +18,7 @@ fn png_export_confirms_before_capture_and_atomically_replaces_only_the_chosen_ta
         assert!(!files.suspends_simulation());
         let dialog = files.dialog.take().unwrap();
         files.respond_to_image(dialog, Response::Pick(path.clone()), &preferences, &ctx);
-        assert!(files.image_export.is_none());
+        assert!(files.capture.is_none());
         files.dialog.take().unwrap()
     };
     let dialog = pick(&mut files, &mut ws, &mut sim);
@@ -28,7 +28,7 @@ fn png_export_confirms_before_capture_and_atomically_replaces_only_the_chosen_ta
     assert_eq!(fs::read(&path).unwrap(), b"previous image");
     let dialog = pick(&mut files, &mut ws, &mut sim);
     files.respond_to_image(dialog, Response::Replace, &preferences, &ctx);
-    let mut capture = files.image_export.take().unwrap();
+    let mut capture = files.capture.take().unwrap();
     let input = egui::RawInput {
         screen_rect: Some(egui::Rect::from_min_max(
             egui::Pos2::ZERO,
@@ -37,6 +37,7 @@ fn png_export_confirms_before_capture_and_atomically_replaces_only_the_chosen_ta
         ..Default::default()
     };
     let canvas = egui::Rect::from_min_max(egui::pos2(3., 1.), egui::pos2(4., 2.));
+    ctx.run_ui(input.clone(), |_| {}).textures_delta.clear();
     let mut output = ctx.run_ui(input.clone(), |ui| {
         assert!(capture.poll(ui.ctx(), canvas).is_none());
     });
@@ -55,11 +56,11 @@ fn png_export_confirms_before_capture_and_atomically_replaces_only_the_chosen_ta
     let mut frame = egui::ColorImage::filled([4, 2], egui::Color32::RED);
     frame[(3, 1)] = egui::Color32::from_rgb(0, 128, 255);
     callback.complete(std::sync::Arc::new(frame));
+    files.capture = Some(capture);
     ctx.run_ui(input, |ui| {
-        capture
-            .poll(ui.ctx(), canvas)
-            .expect("readback completed")
-            .unwrap();
+        let mut capture = files.capture.take().unwrap();
+        let pixels = capture.poll(ui.ctx(), canvas).expect("readback completed");
+        files.captured(ui.ctx(), capture.target, pixels);
     })
     .textures_delta
     .clear();
@@ -78,16 +79,28 @@ fn png_export_protects_changed_files_read_only_targets_and_recovery_directory() 
     let path = temp.path("existing.png");
     let target = files.image_target(&path, &preferences).unwrap();
     fs::write(&path, b"created after picker").unwrap();
-    assert!(target.write(1, 1, &[0; 4]).is_err());
+    assert!(
+        target
+            .write(&egui::ColorImage::filled([1, 1], egui::Color32::BLUE))
+            .is_err()
+    );
     let target = files.image_target(&path, &preferences).unwrap();
     fs::write(&path, b"modified externally").unwrap();
-    assert!(target.write(1, 1, &[0; 4]).is_err());
+    assert!(
+        target
+            .write(&egui::ColorImage::filled([1, 1], egui::Color32::BLUE))
+            .is_err()
+    );
     let target = files.image_target(&path, &preferences).unwrap();
     let writable = fs::metadata(&path).unwrap().permissions();
     let mut readonly = writable.clone();
     readonly.set_readonly(true);
     fs::set_permissions(&path, readonly).unwrap();
-    assert!(target.write(1, 1, &[0; 4]).is_err());
+    assert!(
+        target
+            .write(&egui::ColorImage::filled([1, 1], egui::Color32::BLUE))
+            .is_err()
+    );
     fs::set_permissions(&path, writable).unwrap();
     assert_eq!(fs::read(&path).unwrap(), b"modified externally");
     fs::create_dir_all(temp.path("recovery/subdir")).unwrap();

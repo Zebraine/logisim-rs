@@ -893,9 +893,14 @@ fn export_image_menu_keeps_the_selected_component_camera_simulation_and_history(
     app.simulation_mut().ticks = 41;
     let project = app.project().clone();
     let camera = app.canvas.camera;
-    click(&ctx, &mut app, "File");
-    click(&ctx, &mut app, "Export Image…");
-    assert_eq!(app.take_file_actions(), [FileAction::ExportImage]);
+    for (label, action) in [
+        ("Export Image…", FileAction::ExportImage),
+        ("Print…", FileAction::Print),
+    ] {
+        click(&ctx, &mut app, "File");
+        click(&ctx, &mut app, label);
+        assert_eq!(app.take_file_actions(), [action]);
+    }
     assert_eq!(app.project(), &project);
     assert_eq!(app.editor.session.selection, [id].into());
     assert_eq!(app.canvas.camera.offset, camera.offset);
@@ -908,7 +913,7 @@ fn export_image_menu_keeps_the_selected_component_camera_simulation_and_history(
 }
 
 #[test]
-fn disabled_print_explains_itself_in_both_languages_and_window_sizes() {
+fn print_queues_a_preview_in_both_languages_themes_and_window_sizes() {
     use crate::tests::support::widgets::frame_at_size;
 
     let rect = |labels: &[(String, Rect)], label: &str| {
@@ -930,10 +935,6 @@ fn disabled_print_explains_itself_in_both_languages_and_window_sizes() {
                 });
                 let mut render = |events| frame_at_size(&ctx, &mut app, events, size);
                 let labels = render(vec![]);
-                ctx.global_style_mut(|s| {
-                    s.interaction.tooltip_delay = 0.;
-                    s.interaction.show_tooltips_only_when_still = false;
-                });
                 let click = |pos, pressed| {
                     vec![
                         Event::PointerMoved(pos),
@@ -948,26 +949,15 @@ fn disabled_print_explains_itself_in_both_languages_and_window_sizes() {
                 let file = rect(&labels, language.translate("File")).center();
                 render(click(file, true));
                 render(click(file, false));
-                // egui suppresses tooltips for pointer moves within 100 ms of a click.
-                for _ in 0..8 {
-                    render(vec![]);
-                }
                 let menu = render(vec![]);
                 let print = rect(&menu, language.translate("Print…"));
                 assert!(rect(&menu, language.translate("Export Image…")).bottom() < print.top());
                 assert!(print.bottom() < rect(&menu, language.translate("Settings")).top());
-                render(vec![Event::PointerMoved(print.center())]);
-                render(vec![]);
-                let hovered = render(vec![]);
-                let help = match language {
-                    Language::English => "Print is not implemented in this build.",
-                    Language::SimplifiedChinese => "此版本尚未实现打印功能。",
-                };
                 let viewport = Rect::from_min_size(Pos2::ZERO, size);
-                assert!(viewport.contains_rect(rect(&hovered, help)));
+                assert!(viewport.contains_rect(print));
                 render(click(print.center(), true));
                 render(click(print.center(), false));
-                assert!(app.take_file_actions().is_empty());
+                assert_eq!(app.take_file_actions(), vec![crate::FileAction::Print]);
                 assert!(!app.dialog_open());
             }
         }
