@@ -6,12 +6,12 @@ use crate::{
     theme,
 };
 use egui::{Align, Context, Label, Layout, Ui, vec2};
-use logisim_core::Id;
+use logisim_core::{Id, plugin::PluginSource};
 
 enum Action {
     Open(Id),
     SetMain(Id),
-    LoadPlugin,
+    File(FileAction),
 }
 
 impl Workspace {
@@ -41,8 +41,8 @@ impl Workspace {
                 self.project_options_open = false;
             }
             Some(Action::SetMain(id)) => self.set_main_circuit(id),
-            Some(Action::LoadPlugin) => {
-                self.file_actions.push(FileAction::LoadPlugin);
+            Some(Action::File(action)) => {
+                self.file_actions.push(action);
                 self.project_options_open = false;
             }
             None => self.project_options_open = dismiss == Dismiss::Open,
@@ -170,18 +170,26 @@ impl Workspace {
         }
     }
 
-    fn dependency_list(&self, ui: &mut Ui, action: &mut Option<Action>) {
-        let sources = &self.project().plugin_sources;
-        if sources.is_empty() {
-            ui.weak(tr("No plugin dependencies."));
-        }
-        for (i, source) in sources.iter().enumerate() {
-            if i > 0 {
-                ui.separator();
-            }
+    /// Document dependencies paired with their current catalogue status (matching ID and version).
+    pub fn plugin_dependencies(&self) -> impl Iterator<Item = (&PluginSource, bool)> {
+        self.project().plugin_sources.iter().map(|source| {
             let loaded = self.plugins.iter().any(|lib| {
                 lib.manifest.id == source.plugin && lib.manifest.version == source.version
             });
+            (source, loaded)
+        })
+    }
+
+    fn dependency_list(&self, ui: &mut Ui, action: &mut Option<Action>) {
+        if self.project().plugin_sources.is_empty() {
+            ui.weak(tr("No plugin dependencies."));
+        }
+        let mut missing = false;
+        for (i, (source, loaded)) in self.plugin_dependencies().enumerate() {
+            missing |= !loaded;
+            if i > 0 {
+                ui.separator();
+            }
             row_with_end(
                 ui,
                 |ui| {
@@ -199,9 +207,14 @@ impl Workspace {
                 ui.horizontal(|ui| field(ui, "Fallback path", &source.fallback));
             }
         }
-        if ui.button(tr("Load Plugin…")).clicked() {
-            *action = Some(Action::LoadPlugin);
-        }
+        ui.horizontal_wrapped(|ui| {
+            if ui.button(tr("Load Plugin…")).clicked() {
+                *action = Some(Action::File(FileAction::LoadPlugin));
+            }
+            if missing && ui.button(tr("Resolve missing…")).clicked() {
+                *action = Some(Action::File(FileAction::ResolvePlugins));
+            }
+        });
     }
     fn library_list(&self, ui: &mut Ui) {
         let mut libraries = self.imported_library_counts().peekable();

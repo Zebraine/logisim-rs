@@ -216,6 +216,11 @@ impl Files {
             }
             FileAction::ImportLibrary => self.picker(Mode::Library),
             FileAction::LoadPlugin => self.picker(Mode::Plugin),
+            FileAction::ResolvePlugins => {
+                if workspace.plugin_dependencies().any(|(_, loaded)| !loaded) {
+                    self.resolve_plugins(workspace, sim, Vec::new());
+                }
+            }
             FileAction::ImportPlugin { component, import } => {
                 if let Some(target) = workspace.plugin_import_target(component, import) {
                     self.dialog = Some(Dialog::PluginImportPicker {

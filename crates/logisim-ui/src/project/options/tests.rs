@@ -1,5 +1,5 @@
 use crate::{
-    DocumentView, Language, Workspace,
+    DocumentView, FileAction, Language, Workspace,
     i18n::{tr, with_language},
     tests::support::widgets::{click, frame_at_size, has},
 };
@@ -98,6 +98,43 @@ fn browsing_blocks_canvas_edits_and_opening_a_definition_keeps_history_empty() {
     assert!(!app.project_options_open && !app.editor.can_undo());
     assert_eq!(app.active_circuit(), child);
     assert_eq!(app.project(), &project);
+}
+
+#[test]
+fn missing_dependency_opens_file_workflow_without_editing_the_project() {
+    let ctx = Context::default();
+    let mut project = Project::default();
+    project.plugin_sources.push(PluginSource {
+        plugin: "test.module".into(),
+        version: "1".into(),
+        path: "previous/module.wasm".into(),
+        fallback: String::new(),
+    });
+    let mut app = Workspace::default();
+    app.replace_project(project.clone());
+    app.project_options_open = true;
+    click(&ctx, &mut app, "Resolve missing…");
+    assert!(!app.project_options_open);
+    assert_eq!(app.take_file_actions(), [FileAction::ResolvePlugins]);
+    assert_eq!(app.project(), &project);
+    assert!(!app.editor.can_undo());
+
+    let source = &project.plugin_sources[0];
+    app.set_plugin_catalogue(vec![Manifest {
+        abi: 1,
+        id: source.plugin.clone(),
+        version: source.version.clone(),
+        name: "Test module".into(),
+        tools: Vec::new(),
+    }
+    .into()]);
+    app.project_options_open = true;
+    let labels = overview(&ctx, &mut app, vec2(1200., 820.));
+    assert!(has(&labels, "Loaded"));
+    assert!(!has(&labels, "Resolve missing…"));
+    click(&ctx, &mut app, "Load Plugin…");
+    assert_eq!(app.take_file_actions(), [FileAction::LoadPlugin]);
+    assert!(!app.project_options_open);
 }
 
 #[test]

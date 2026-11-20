@@ -24,6 +24,7 @@ pub enum FileAction {
     },
     ImportLibrary,
     LoadPlugin,
+    ResolvePlugins,
     Close,
 }
 #[derive(Clone, Debug)]
