@@ -33,6 +33,8 @@ fn registry_restores_each_field_without_changing_other_preferences() {
         default_probe_radix: logisim_core::Radix::Hex,
         default_pin_bits: 8,
         default_gate_size: logisim_core::GateSize::Medium,
+        default_font_size: None,
+        default_gate_inputs: 2,
         default_tunnel_width: 13,
         remember_last_properties: true,
         simulation_mode: SimulationMode::Event,

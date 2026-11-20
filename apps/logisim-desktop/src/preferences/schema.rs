@@ -118,6 +118,8 @@ struct Editor {
     default_pin_bits: u8,
     #[serde(with = "GateSizeCode")]
     default_gate_size: GateSize,
+    default_font_size: Option<u8>,
+    default_gate_inputs: u8,
     default_tunnel_width: u8,
     remember_last_properties: bool,
 }
@@ -141,6 +143,8 @@ impl Default for Editor {
             default_probe_radix: settings.default_probe_radix,
             default_pin_bits: settings.default_pin_bits,
             default_gate_size: settings.default_gate_size,
+            default_font_size: settings.default_font_size,
+            default_gate_inputs: settings.default_gate_inputs,
             default_tunnel_width: settings.default_tunnel_width,
             remember_last_properties: settings.remember_last_properties,
         }
@@ -228,6 +232,11 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Config, &'static str> {
     if !file.files.valid_interval()
         || !(1..=32).contains(&file.editor.default_pin_bits)
         || !(1..=32).contains(&file.editor.default_tunnel_width)
+        || file
+            .editor
+            .default_font_size
+            .is_some_and(|size| !Settings::DEFAULT_FONT_SIZE_RANGE.contains(&size))
+        || !Settings::DEFAULT_GATE_INPUTS_RANGE.contains(&file.editor.default_gate_inputs)
         || !window.valid()
         || !(230.0..=380.0).contains(&panels.sidebar_width)
         || !(0.25..=0.75).contains(&panels.split)
@@ -270,6 +279,8 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Config, &'static str> {
             default_probe_radix: file.editor.default_probe_radix,
             default_pin_bits: file.editor.default_pin_bits,
             default_gate_size: file.editor.default_gate_size,
+            default_font_size: file.editor.default_font_size,
+            default_gate_inputs: file.editor.default_gate_inputs,
             default_tunnel_width: file.editor.default_tunnel_width,
             remember_last_properties: file.editor.remember_last_properties,
             simulation_mode: file.simulation.mode,
@@ -310,6 +321,8 @@ pub(super) fn encode(config: &Config) -> Vec<u8> {
             default_probe_radix: s.default_probe_radix,
             default_pin_bits: s.default_pin_bits,
             default_gate_size: s.default_gate_size,
+            default_font_size: s.default_font_size,
+            default_gate_inputs: s.default_gate_inputs,
             default_tunnel_width: s.default_tunnel_width,
             remember_last_properties: s.remember_last_properties,
         },

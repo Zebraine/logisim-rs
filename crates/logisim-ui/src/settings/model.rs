@@ -124,6 +124,8 @@ pub struct Settings {
     pub default_probe_radix: Radix,
     pub default_pin_bits: u8,
     pub default_gate_size: GateSize,
+    pub default_font_size: Option<u8>,
+    pub default_gate_inputs: u8,
     pub default_tunnel_width: u8,
     pub remember_last_properties: bool,
     pub simulation_mode: SimulationMode,
@@ -153,6 +155,8 @@ impl Default for Settings {
             default_probe_radix: Radix::Binary,
             default_pin_bits: 1,
             default_gate_size: GateSize::Narrow,
+            default_font_size: None,
+            default_gate_inputs: 2,
             default_tunnel_width: 1,
             remember_last_properties: false,
             simulation_mode: SimulationMode::default(),
@@ -178,6 +182,9 @@ pub(crate) struct PlacementDefaults {
 }
 
 impl Settings {
+    pub const DEFAULT_FONT_SIZE_RANGE: std::ops::RangeInclusive<u8> = 8..=32;
+    pub const DEFAULT_GATE_INPUTS_RANGE: std::ops::RangeInclusive<u8> = 2..=32;
+
     pub(crate) fn placement_defaults(self) -> PlacementDefaults {
         PlacementDefaults {
             probe_radix: self.default_probe_radix,

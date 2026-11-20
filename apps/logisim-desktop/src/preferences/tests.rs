@@ -125,7 +125,16 @@ fn missing_fields_default_and_invalid_json_stays_intact_after_edits() {
     for json in [
         "{",
         "{}",
-        r#"{"version":11}"#,
+        r#"{"version":12}"#,
+        r#"{"version":11,"editor":{"default_font_size":7}}"#,
+        r#"{"version":11,"editor":{"default_font_size":33}}"#,
+        r#"{"version":11,"editor":{"default_font_size":14.5}}"#,
+        r#"{"version":11,"editor":{"default_font_size":"auto"}}"#,
+        r#"{"version":11,"editor":{"default_gate_inputs":null}}"#,
+        r#"{"version":11,"editor":{"default_gate_inputs":1}}"#,
+        r#"{"version":11,"editor":{"default_gate_inputs":33}}"#,
+        r#"{"version":11,"editor":{"default_gate_inputs":4.5}}"#,
+        r#"{"version":11,"editor":{"default_gate_inputs":"4"}}"#,
         r#"{"version":8,"editor":{"default_gate_size":"large"}}"#,
         r#"{"version":8,"editor":{"default_tunnel_width":0}}"#,
         r#"{"version":8,"editor":{"default_tunnel_width":33}}"#,
@@ -209,6 +218,8 @@ fn all_fields_restart_reset_and_atomic_conflict_protection() {
         default_probe_radix: logisim_core::Radix::Hex,
         default_pin_bits: 8,
         default_gate_size: logisim_core::GateSize::Wide,
+        default_font_size: Some(24),
+        default_gate_inputs: 4,
         default_tunnel_width: 32,
         remember_last_properties: true,
         simulation_mode: SimulationMode::Event,
@@ -349,8 +360,8 @@ fn layout_waits_for_idle_or_close_and_restores_only_when_enabled() {
 }
 
 #[test]
-fn earlier_preferences_migrate_to_v10_and_editor_defaults_round_trip() {
-    for version in 1..=9 {
+fn earlier_preferences_migrate_to_v11_and_editor_defaults_round_trip() {
+    for version in 1..=10 {
         let json = serde_json::json!({"version":version,"editor":{"show_grid":false}});
         let config = schema::decode(json.to_string().as_bytes()).unwrap();
         assert_eq!(
@@ -361,7 +372,7 @@ fn earlier_preferences_migrate_to_v10_and_editor_defaults_round_trip() {
             }
         );
         let encoded: serde_json::Value = serde_json::from_slice(&schema::encode(&config)).unwrap();
-        assert_eq!(encoded["version"], 10);
+        assert_eq!(encoded["version"], 11);
         assert_eq!(encoded["appearance"]["density"], "comfortable");
         assert_eq!(encoded["appearance"]["accent"], "indigo");
         assert_eq!(
@@ -375,7 +386,22 @@ fn earlier_preferences_migrate_to_v10_and_editor_defaults_round_trip() {
         assert_eq!(encoded["editor"]["default_pin_bits"], 1);
         assert_eq!(encoded["editor"]["default_gate_size"], "narrow");
         assert_eq!(encoded["editor"]["default_tunnel_width"], 1);
+        assert_eq!(
+            encoded["editor"].get("default_font_size"),
+            Some(&serde_json::Value::Null)
+        );
+        assert_eq!(encoded["editor"]["default_gate_inputs"], 2);
         assert_eq!(encoded["editor"]["remember_last_properties"], false);
+    }
+    for (font, inputs) in [(None, 2), (Some(8), 32), (Some(32), 4)] {
+        let json = serde_json::json!({"version":11,"editor":{"default_font_size":font,"default_gate_inputs":inputs}});
+        let config = schema::decode(json.to_string().as_bytes()).unwrap();
+        assert_eq!(config.settings.default_font_size, font);
+        assert_eq!(config.settings.default_gate_inputs, inputs);
+        assert_eq!(
+            schema::decode(&schema::encode(&config)).unwrap().settings,
+            config.settings
+        );
     }
     for (code, size) in [
         ("narrow", logisim_core::GateSize::Narrow),
@@ -548,7 +574,7 @@ fn partial_shortcut_bindings_round_trip_and_survive_retry() {
     assert_eq!(schema::decode(&saved).unwrap().settings.shortcuts, expected);
     assert_eq!(w.language(), Language::SimplifiedChinese);
     let json: serde_json::Value = serde_json::from_slice(&saved).unwrap();
-    assert_eq!(json["version"], 10);
+    assert_eq!(json["version"], logisim_ui::CONFIG_VERSION);
     assert_eq!(json["shortcuts"].as_object().unwrap().len(), Command::COUNT);
 }
 
@@ -556,7 +582,7 @@ fn partial_shortcut_bindings_round_trip_and_survive_retry() {
 fn v9_shift_arrow_save_migrates_alongside_restored_layer_defaults() {
     let config = schema::decode(br#"{"version":9,"shortcuts":{"file.save":"shift+up"}}"#).unwrap();
     let saved: serde_json::Value = serde_json::from_slice(&schema::encode(&config)).unwrap();
-    assert_eq!(saved["version"], 10);
+    assert_eq!(saved["version"], logisim_ui::CONFIG_VERSION);
     let bindings = saved["shortcuts"].as_object().unwrap();
     assert_eq!(bindings.len(), 37);
     assert_eq!(bindings["file.save"], "shift+up");
@@ -593,7 +619,7 @@ fn complete_v8_and_v9_shortcuts_keep_custom_keys_and_gain_missing_defaults() {
         let file = serde_json::json!({"version":version,"shortcuts":legacy});
         let config = schema::decode(file.to_string().as_bytes()).unwrap();
         let saved: serde_json::Value = serde_json::from_slice(&schema::encode(&config)).unwrap();
-        assert_eq!(saved["version"], 10);
+        assert_eq!(saved["version"], logisim_ui::CONFIG_VERSION);
         for (id, chord) in file["shortcuts"].as_object().unwrap() {
             assert_eq!(&saved["shortcuts"][id], chord, "{id}");
         }
