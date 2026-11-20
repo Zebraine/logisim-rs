@@ -758,8 +758,21 @@ impl AppearanceEditor {
         };
         let painter = ui.painter_at(canvas.rect);
         let accent = theme::colors(painter.ctx()).base;
+        let custom = editor.session.circuit.appearance.is_some();
+        let contrast = theme::ArtworkContrast::new(
+            theme::palette(painter.ctx()),
+            painter.pixels_per_point(),
+            custom && editor.display.dark_artwork_contrast,
+        );
         for shape in &preview.shapes {
-            artwork::paint(&painter, canvas, shape, |p| p, 0.0);
+            artwork::paint(
+                &painter,
+                canvas,
+                shape,
+                |p| p,
+                0.0,
+                contrast.filter(|_| !self.selected.contains(&Target::Shape(shape.id))),
+            );
         }
         for (id, at) in &preview.ports {
             let output = editor
@@ -869,6 +882,7 @@ impl AppearanceEditor {
                 },
                 |p| p,
                 0.0,
+                None,
             );
         }
         response.context_menu(|ui| self.edit_menu(ui, editor, shortcuts));

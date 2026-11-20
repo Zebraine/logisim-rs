@@ -7,7 +7,7 @@ fn white_fill(c: &Component, zoom: f32, ghost: bool) -> (Canvas, Vec<[Pos2; 3]>)
     canvas.camera.zoom = zoom;
     let mut output = ctx.run_ui(Default::default(), |ui| {
         canvas.rect = ui.max_rect();
-        component(ui.painter(), &canvas, c, false, ghost, None);
+        component(ui.painter(), &canvas, c, false, ghost, None, None);
     });
     output.textures_delta.clear();
     let mut triangles = vec![];
@@ -211,7 +211,7 @@ fn live_component_ink_tracks_palette_and_preserves_document_artwork() {
                 crate::theme::apply_chrome(&ctx, mode, crate::Density::Compact, accent);
                 palette.apply(&ctx);
                 let mut out = ctx.run_ui(Default::default(), |ui| {
-                    component(ui.painter(), &canvas, &c, false, false, Some(&view))
+                    component(ui.painter(), &canvas, &c, false, false, Some(&view), None)
                 });
                 out.textures_delta.clear();
                 let shapes = || out.shapes.iter().map(|s| &s.shape);
@@ -269,7 +269,7 @@ fn dark_default_bodies_selection_and_ghost_preserve_stored_colors() {
         let original = c.clone();
         for ghost in [false, true] {
             let mut output = ctx.run_ui(Default::default(), |ui| {
-                component(ui.painter(), &canvas, &c, !ghost, ghost, None)
+                component(ui.painter(), &canvas, &c, !ghost, ghost, None, None)
             });
             output.textures_delta.clear();
             let shapes = || output.shapes.iter().map(|s| &s.shape);
@@ -286,4 +286,197 @@ fn dark_default_bodies_selection_and_ghost_preserve_stored_colors() {
             assert_eq!(c, original);
         }
     }
+}
+
+fn render_artwork(
+    c: &Component,
+    settings: crate::Settings,
+    zoom: f32,
+    selected: bool,
+    view: &SimulationView,
+) -> Vec<Shape> {
+    let ctx = egui::Context::default();
+    settings.apply_appearance(&ctx);
+    let mut doc = Circuit::default();
+    let id = doc.add_component(c.clone());
+    let mut selection = BTreeSet::new();
+    if selected {
+        selection.insert(id);
+    }
+    let mut canvas = Canvas::default();
+    canvas.camera.zoom = zoom;
+    let mut out = ctx.run_ui(Default::default(), |ui| {
+        canvas.rect = ui.max_rect();
+        circuit(
+            ui.painter(),
+            &canvas,
+            &doc,
+            &selection,
+            view,
+            &mut CircuitCache::default(),
+            settings.editor_display(),
+        );
+    });
+    out.textures_delta.clear();
+    out.shapes.into_iter().map(|s| s.shape).collect()
+}
+
+#[test]
+fn only_low_contrast_authored_edges_gain_one_screen_pixel() {
+    use logisim_core::{Appearance, Geometry, Paint};
+    let mut c = Component::new(Kind::Subcircuit(2), Point::new(60, 60));
+    let mut art = Appearance {
+        anchor: Point::ZERO,
+        facing: Facing::East,
+        ports: Default::default(),
+        shapes: vec![],
+    };
+    for (stroke, fill) in [
+        (Some([0; 3]), None),
+        (None, Some([13, 15, 20])),
+        (Some([240; 3]), None),
+        (Some([0; 3]), Some([240; 3])),
+        (Some([240; 3]), Some([0; 3])),
+        (None, None),
+    ] {
+        let x = 20 * art.shapes.len() as i32;
+        art.add(
+            Geometry::Rect {
+                a: Point::new(x, 0),
+                b: Point::new(x + 10, 10),
+                radius: 0,
+            },
+            Paint {
+                stroke,
+                fill,
+                width: 2,
+            },
+        )
+        .unwrap();
+    }
+    c.interface.appearance = Some(art);
+    let original = c.clone();
+    for mode in [crate::ThemeMode::Light, crate::ThemeMode::Dark] {
+        for zoom in [0.5, 1., 2.] {
+            for selected in [false, true] {
+                let render = |enabled| {
+                    render_artwork(
+                        &c,
+                        crate::Settings {
+                            theme: mode,
+                            dark_artwork_contrast: enabled,
+                            ..Default::default()
+                        },
+                        zoom,
+                        selected,
+                        &SimulationView::default(),
+                    )
+                };
+                let baseline = render(false);
+                let mut shapes = render(true);
+                if mode == crate::ThemeMode::Dark && !selected {
+                    let edge = theme::ArtworkContrast::new(mode.palette(), 1., true)
+                        .unwrap()
+                        .edge;
+                    let mut widths = vec![];
+                    shapes.retain(|s| {
+                        if let Shape::Path(path) = s
+                            && path.stroke.color == egui::epaint::ColorMode::Solid(edge.color)
+                        {
+                            assert!(path.closed && path.fill == Color32::TRANSPARENT);
+                            widths.push(path.stroke.width);
+                            false
+                        } else {
+                            true
+                        }
+                    });
+                    assert_eq!(widths, [2. * zoom + 2., 2.]); // stroke and fill-only
+                }
+                assert_eq!(shapes, baseline);
+            }
+        }
+    }
+    assert_eq!(c, original);
+}
+
+#[test]
+fn plugin_boundary_is_outside_and_preserves_authored_rgba_and_runtime_overlays() {
+    use logisim_core::plugin::api;
+    let tint = [13, 22, 30, 93];
+    let c = Component::from_plugin(
+        api::Component {
+            plugin: "test.outline".into(),
+            version: "1".into(),
+            properties: Default::default(),
+            tool: api::Tool {
+                id: "display".into(),
+                name: "Display".into(),
+                bounds: [[-30, -10], [30, 10]],
+                ports: vec![],
+                properties: vec![],
+                actions: vec![],
+                graphics: vec![api::Shape::Rect {
+                    min: [-30, -10],
+                    max: [30, 10],
+                    fill: tint,
+                    stroke: [0, 0, 0, 255],
+                }],
+            },
+        },
+        Point::new(100, 100),
+    );
+    let original = c.clone();
+    let id = Circuit::default().add_component(c.clone());
+    let mut view = SimulationView::default();
+    view.plugin_graphics.insert(
+        id,
+        vec![api::Shape::Line {
+            a: [-20, 0],
+            b: [20, 0],
+            color: [0, 0, 0, 175],
+        }],
+    );
+    for state in ["idle", "selected", "focused", "failed"] {
+        view.keyboard_focus = (state == "focused").then_some(id);
+        if state == "failed" {
+            view.plugin_errors.insert(id, "test".into());
+        }
+        for mode in [crate::ThemeMode::Light, crate::ThemeMode::Dark] {
+            let render = |enabled| {
+                render_artwork(
+                    &c,
+                    crate::Settings {
+                        theme: mode,
+                        dark_artwork_contrast: enabled,
+                        ..Default::default()
+                    },
+                    1.5,
+                    state == "selected",
+                    &view,
+                )
+            };
+            let baseline = render(false);
+            let mut shapes = render(true);
+            let body = baseline
+                .iter()
+                .find_map(|s| match s {
+                    Shape::Rect(r)
+                        if r.fill
+                            == Color32::from_rgba_unmultiplied(
+                                tint[0], tint[1], tint[2], tint[3],
+                            ) =>
+                    {
+                        Some(r.rect)
+                    }
+                    _ => None,
+                })
+                .unwrap();
+            if mode == crate::ThemeMode::Dark && state == "idle" {
+                let index = shapes.iter().position(|s| matches!(s,Shape::Rect(r) if r.rect == body && r.stroke_kind == StrokeKind::Outside && r.fill == Color32::TRANSPARENT && r.stroke.width == 1.)).unwrap();
+                let _ = shapes.remove(index);
+            }
+            assert_eq!(shapes, baseline);
+        }
+    }
+    assert_eq!(c, original);
 }

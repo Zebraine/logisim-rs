@@ -352,8 +352,10 @@ pub(crate) fn circuit(
             p.circle_filled(screen, 3.0, color);
         }
     }
+    let contrast =
+        theme::ArtworkContrast::new(paint, p.pixels_per_point(), display.dark_artwork_contrast);
     for (index, c) in circuit.components.iter().enumerate() {
-        cache.component(index, p, canvas, c, selection.contains(&c.id), simulation);
+        cache.component(index, p, canvas, c, simulation, contrast);
     }
 }
 pub(crate) fn component(
@@ -363,7 +365,9 @@ pub(crate) fn component(
     selected: bool,
     ghost: bool,
     simulation: Option<&SimulationView>,
+    contrast: Option<theme::ArtworkContrast>,
 ) {
+    let contrast = contrast.filter(|_| !selected && !ghost);
     let paint = theme::palette(p.ctx());
     let accent = theme::colors(p.ctx()).base;
     let color = if ghost {
@@ -415,7 +419,7 @@ pub(crate) fn component(
         );
     };
     match c.kind {
-        Kind::Plugin => crate::plugins::draw(p, canvas, c, simulation, ghost),
+        Kind::Plugin => crate::plugins::draw(p, canvas, c, simulation, ghost, contrast),
         Kind::Transistor | Kind::TransmissionGate => {
             crate::transistors::draw(p, canvas, c, color, fill)
         }
@@ -462,6 +466,7 @@ pub(crate) fn component(
                             )
                         },
                         crate::artwork::angle(c.facing) - crate::artwork::angle(appearance.facing),
+                        contrast,
                     );
                 }
             } else {

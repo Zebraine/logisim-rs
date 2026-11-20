@@ -140,9 +140,9 @@ fn triangles(points: &[Pos2]) -> Vec<[usize; 3]> {
     }
     out
 }
-pub(crate) fn fill_polygon(p: &Painter, points: &[Pos2], fill: Color32) {
+fn polygon_fill(points: &[Pos2], fill: Color32) -> Option<Shape> {
     if fill == Color32::TRANSPARENT || points.len() < 3 {
-        return;
+        return None;
     }
     let mut mesh = egui::epaint::Mesh::default();
     for point in points {
@@ -151,8 +151,11 @@ pub(crate) fn fill_polygon(p: &Painter, points: &[Pos2], fill: Color32) {
     for [a, b, c] in triangles(points) {
         mesh.add_triangle(a as u32, b as u32, c as u32);
     }
-    if !mesh.indices.is_empty() {
-        p.add(Shape::mesh(mesh));
+    (!mesh.indices.is_empty()).then(|| Shape::mesh(mesh))
+}
+pub(crate) fn fill_polygon(p: &Painter, points: &[Pos2], fill: Color32) {
+    if let Some(shape) = polygon_fill(points, fill) {
+        p.add(shape);
     }
 }
 pub(crate) fn paint(
@@ -161,6 +164,7 @@ pub(crate) fn paint(
     art: &Artwork,
     map: impl Fn(Vec2) -> Vec2,
     text_angle: f32,
+    contrast: Option<crate::theme::ArtworkContrast>,
 ) {
     if let Geometry::Text {
         at,
@@ -197,21 +201,48 @@ pub(crate) fn paint(
         .into_iter()
         .map(|v| canvas.screen_vec(map(v)))
         .collect();
-    if let Some(fill) = art.paint.fill {
-        fill_polygon(p, &points, color(fill));
+    if points.len() < 2 {
+        return;
     }
-    if let Some(stroke) = art.paint.stroke
-        && points.len() >= 2
-    {
-        let stroke = Stroke::new(
-            f32::from(art.paint.width) * canvas.camera.zoom,
-            color(stroke),
-        );
-        p.add(if closed {
+    let fill = art.paint.fill.map(color);
+    let mesh = fill.and_then(|ink| polygon_fill(&points, ink));
+    let stroke = art
+        .paint
+        .stroke
+        .map(|ink| Stroke::new(f32::from(art.paint.width) * canvas.camera.zoom, color(ink)));
+    let path = |points, stroke, closed| {
+        if closed {
             Shape::closed_line(points, stroke)
         } else {
             Shape::line(points, stroke)
-        });
+        }
+    };
+    if let Some(contrast) = contrast
+        && (stroke.is_some() || mesh.is_some())
+        && stroke.is_none_or(|s| contrast.low_contrast(s.color))
+        && (mesh.is_none() || fill.is_none_or(|c| contrast.low_contrast(c)))
+    {
+        let rim = contrast.edge;
+        // Painting first leaves exactly one pixel outside the authored stroke or fill.
+        let width = stroke.map_or(0., |s| s.width) + 2. * rim.width;
+        p.add(path(
+            points.clone(),
+            Stroke::new(width, rim.color),
+            closed || stroke.is_none(),
+        ));
+        if !closed && mesh.is_some() && stroke.is_some() {
+            // Filling an open path implicitly closes its last edge, without an author stroke there.
+            p.line_segment(
+                [points[0], points[points.len() - 1]],
+                Stroke::new(2. * rim.width, rim.color),
+            );
+        }
+    }
+    if let Some(mesh) = mesh {
+        p.add(mesh);
+    }
+    if let Some(stroke) = stroke {
+        p.add(path(points, stroke, closed));
     }
 }
 pub(crate) fn hit(art: &Artwork, at: Vec2, tolerance: f32) -> bool {

@@ -71,6 +71,38 @@ const DARK: Palette = Palette {
     danger: rgb(0xF87171),
 };
 
+fn contrast(a: Color32, b: Color32) -> f32 {
+    let luminance = |c| {
+        let rgb = egui::Rgba::from(c);
+        0.2126 * rgb.r() + 0.7152 * rgb.g() + 0.0722 * rgb.b()
+    };
+    let (a, b) = (luminance(a), luminance(b));
+    (a.max(b) + 0.05) / (a.min(b) + 0.05)
+}
+
+/// A one-device-pixel edge, independent of camera zoom and UI scale.
+#[derive(Clone, Copy)]
+pub(crate) struct ArtworkContrast {
+    canvas: Color32,
+    pub edge: Stroke,
+}
+
+impl ArtworkContrast {
+    pub fn new(paint: &Palette, pixels_per_point: f32, enabled: bool) -> Option<Self> {
+        (enabled && paint.mode == ThemeMode::Dark).then(|| Self {
+            canvas: paint.canvas,
+            edge: Stroke::new(
+                pixels_per_point.recip(),
+                paint.border_strong.lerp_to_gamma(paint.ink, 0.16),
+            ),
+        })
+    }
+
+    pub fn low_contrast(self, color: Color32) -> bool {
+        contrast(color, self.canvas) < 3.0
+    }
+}
+
 impl Palette {
     pub(crate) fn grid(&self) -> Color32 {
         match self.mode {

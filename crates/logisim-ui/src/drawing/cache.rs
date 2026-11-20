@@ -93,9 +93,10 @@ impl CircuitCache {
         p: &Painter,
         canvas: &Canvas,
         c: &Component,
-        selected: bool,
         simulation: &SimulationView,
+        contrast: Option<theme::ArtworkContrast>,
     ) {
+        let selected = self.selection.contains(&c.id);
         // Positive list: newly added kinds and all runtime-sized artwork must use the
         // normal renderer until their visual extent is known to be independent of state.
         let static_extent = matches!(
@@ -120,7 +121,7 @@ impl CircuitCache {
                 | Kind::Subcircuit(_)
         );
         if !static_extent || !p.is_visible() || p.opacity() < 1.0 {
-            super::component(p, canvas, c, selected, false, Some(simulation));
+            super::component(p, canvas, c, selected, false, Some(simulation), contrast);
             return;
         }
         if let Some(bounds) = self.visual_bounds[index] {
@@ -128,16 +129,19 @@ impl CircuitCache {
                 canvas.screen_vec(bounds.min.to_vec2()),
                 canvas.screen_vec(bounds.max.to_vec2()),
             );
-            if !screen.expand(1.0).intersects(p.clip_rect()) {
+            if !screen
+                .expand(1.0_f32.max(p.pixels_per_point().recip()))
+                .intersects(p.clip_rect())
+            {
                 return;
             }
-            super::component(p, canvas, c, selected, false, Some(simulation));
+            super::component(p, canvas, c, selected, false, Some(simulation), contrast);
             return;
         }
         let start = p
             .ctx()
             .graphics(|g| g.get(p.layer_id()).map_or(0, |l| l.next_idx().0));
-        super::component(p, canvas, c, selected, false, Some(simulation));
+        super::component(p, canvas, c, selected, false, Some(simulation), contrast);
         // Measure the actual unclipped shapes once, including rotated/multiline text,
         // artwork outside hit bounds and port dots. Keep no galleys/atlas UVs across frames.
         let painted = p.ctx().graphics(|g| {

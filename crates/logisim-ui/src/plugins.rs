@@ -234,12 +234,22 @@ pub(crate) fn draw(
     c: &Component,
     view: Option<&SimulationView>,
     ghost: bool,
+    contrast: Option<crate::theme::ArtworkContrast>,
 ) {
     let Some(plugin) = &c.plugin else {
         return;
     };
     let at = |p: [i32; 2]| canvas.screen(c.position + c.facing.transform(Point::new(p[0], p[1])));
     let bounds = Rect::from_two_pos(at(plugin.tool.bounds[0]), at(plugin.tool.bounds[1]));
+    let focused = view.is_some_and(|v| v.keyboard_focus == Some(c.id));
+    let failed = view.is_some_and(|v| v.plugin_errors.contains_key(&c.id));
+    if let Some(contrast) = contrast
+        && !focused
+        && !failed
+    {
+        // Plugin RGBA, runtime graphics and rasters remain entirely inside their original draw path.
+        p.rect_stroke(bounds, 0, contrast.edge, StrokeKind::Outside);
+    }
     let p = p.with_clip_rect(p.clip_rect().intersect(bounds.expand(2.0)));
     let color = |rgba: [u8; 4]| {
         let c = Color32::from_rgba_unmultiplied(rgba[0], rgba[1], rgba[2], rgba[3]);
@@ -319,7 +329,7 @@ pub(crate) fn draw(
     if let Some(image) = view.and_then(|v| v.plugin_rasters.get(&c.id)) {
         raster::draw(&p, canvas, c, image, ghost);
     }
-    if view.is_some_and(|v| v.keyboard_focus == Some(c.id)) {
+    if focused {
         p.rect_stroke(
             bounds.expand(2.0),
             3.0,
@@ -327,7 +337,7 @@ pub(crate) fn draw(
             StrokeKind::Outside,
         );
     }
-    if view.is_some_and(|v| v.plugin_errors.contains_key(&c.id)) {
+    if failed {
         p.rect_stroke(
             bounds,
             0,

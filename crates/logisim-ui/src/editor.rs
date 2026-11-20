@@ -1062,7 +1062,7 @@ impl Editor {
             if let Tool::Place(_) = self.tool {
                 let mut ghost = self.template.clone();
                 ghost.position = self.snap(world, tolerance);
-                drawing::component(&painter, canvas, &ghost, false, true, None);
+                drawing::component(&painter, canvas, &ghost, false, true, None, None);
                 ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
             } else if self.tool == Tool::Poke {
                 if self.hit(world, tolerance).is_some() {
