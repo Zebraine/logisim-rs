@@ -4,6 +4,39 @@ use egui::{Context, Event, Modifiers, PointerButton, Pos2};
 use logisim_core::{Component, Kind, Point};
 
 #[test]
+fn inspecting_existing_unary_gates_only_offers_supported_sizes() {
+    use logisim_core::{Circuit, Gate, GateSize};
+    let ctx = Context::default();
+    configure(&ctx);
+    let mut app = Workspace::default();
+    let mut circuit = Circuit::default();
+    for gate in [Gate::Buffer, Gate::Not] {
+        let mut component = Component::new(Kind::Gate(gate), Point::new(100, 100));
+        component.gate_options.size = GateSize::Medium;
+        circuit.add_component(component);
+    }
+    app.replace_circuit(circuit.clone());
+    for component in &circuit.components {
+        app.editor.session.selection = [component.id].into();
+        for _ in 0..3 {
+            frame(&ctx, &mut app, vec![]);
+        }
+        let rows = frame(&ctx, &mut app, vec![]);
+        if component.kind == Kind::Gate(Gate::Buffer) {
+            assert!(!has(&rows, "Gate size"));
+        } else {
+            assert!(has(&rows, "Gate size") && has(&rows, "Narrow"));
+            click(&ctx, &mut app, "Narrow");
+            let options = frame(&ctx, &mut app, vec![]);
+            assert!(has(&options, "Wide"));
+            assert!(!has(&options, "Medium"));
+        }
+    }
+    assert_eq!(app.circuit(), &circuit);
+    assert!(!app.editor.can_undo());
+}
+
+#[test]
 fn parity_properties_and_library_tools_work_in_both_languages() {
     use logisim_core::{Circuit, GateSize, Parity, ParityOutput};
     for language in Language::ALL {

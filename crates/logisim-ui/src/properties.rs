@@ -1,4 +1,4 @@
-use crate::editor::{Editor, Tool};
+use crate::editor::{Editor, Tool, supported_gate_size};
 use crate::{i18n::tr, tf, theme};
 use egui::{Frame, RichText, ScrollArea, Ui};
 use logisim_core::{
@@ -453,12 +453,17 @@ fn fields(
         && gate != Gate::Buffer
     {
         ui.label(tr("Gate size"));
+        let mut selected = supported_gate_size(gate, c.gate_options.size);
         egui::ComboBox::from_id_salt("gate_size")
-            .selected_text(tr(c.gate_options.size.name()))
+            .selected_text(tr(selected.name()))
             .show_ui(ui, |ui| {
                 for size in [GateSize::Narrow, GateSize::Medium, GateSize::Wide] {
-                    if gate != Gate::Not || size != GateSize::Medium {
-                        ui.selectable_value(&mut c.gate_options.size, size, tr(size.name()));
+                    if supported_gate_size(gate, size) == size
+                        && ui
+                            .selectable_value(&mut selected, size, tr(size.name()))
+                            .clicked()
+                    {
+                        c.gate_options.size = size;
                     }
                 }
             });

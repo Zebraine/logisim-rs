@@ -3,6 +3,49 @@ use logisim_core::{Circuit, Component, Kind, Point, Project};
 use logisim_sim::ProjectSimulator as Simulator;
 
 #[test]
+fn placing_and_reopening_unary_gates_preserves_their_sizes() {
+    use egui::pos2;
+    use logisim_core::{Gate, GateSize};
+    let dir = crate::tests::support::Temp::new();
+    let path = dir.path("unary.circ");
+    let mut h = super::Harness::default();
+    logisim_ui::configure(&h.ctx);
+    h.click("Components");
+    h.click("Gates");
+    for (gate, default, x) in [
+        (Gate::Not, GateSize::Medium, 650.0),
+        (Gate::Buffer, GateSize::Wide, 750.0),
+        (Gate::Not, GateSize::Wide, 850.0),
+    ] {
+        h.ws.apply_settings(logisim_ui::Settings {
+            default_gate_size: default,
+            ..h.ws.preferences()
+        });
+        h.click(gate.name());
+        h.click_at(pos2(x, 300.0));
+    }
+    let components = &h.ws.circuit().components;
+    let expected = [
+        (Kind::Gate(Gate::Not), GateSize::Narrow),
+        (Kind::Gate(Gate::Buffer), GateSize::Narrow),
+        (Kind::Gate(Gate::Not), GateSize::Wide),
+    ];
+    assert!(
+        components
+            .iter()
+            .map(|c| (c.kind, c.gate_options.size))
+            .eq(expected)
+    );
+    h.files
+        .storage
+        .save(h.ws.project(), &path, SaveMode::Current)
+        .unwrap();
+    let (loaded, warnings) = Storage::new().load(&path).unwrap();
+    assert!(warnings.is_empty());
+    assert_eq!(&loaded.main_circuit().circuit.components, components);
+}
+
+#[test]
 fn library_picker_is_additive_and_failure_or_cancel_keeps_document_baseline() {
     let temp = crate::tests::support::Temp::new();
     let current = temp.path("current.circ");

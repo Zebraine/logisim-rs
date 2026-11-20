@@ -8,7 +8,7 @@ use crate::{
 };
 
 use egui::{Key, Modifiers, PointerButton, Pos2, Rect, Response, Ui, Vec2};
-use logisim_core::{Circuit, Component, GRID, Gate, Id, Kind, Point, Project};
+use logisim_core::{Circuit, Component, GRID, Gate, GateSize, Id, Kind, Point, Project};
 use std::collections::BTreeSet;
 
 mod history;
@@ -18,6 +18,13 @@ use history::History;
 pub(crate) use session::{EditSession, Snapshot};
 
 pub(crate) const CLIPBOARD_MARKER: &str = "logisim-rs selection (paste into the same window)";
+
+pub(crate) fn supported_gate_size(gate: Gate, size: GateSize) -> GateSize {
+    match (gate, size) {
+        (Gate::Buffer, _) | (Gate::Not, GateSize::Medium) => GateSize::Narrow,
+        _ => size,
+    }
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum Tool {
@@ -242,8 +249,10 @@ impl Editor {
 
     pub fn replace_document(&mut self, project: Project, settings: crate::Settings) {
         let old = std::mem::replace(self, Self::new(project, settings));
-        self.remembered_templates = old.remembered_templates;
-        self.remember_template(old.template, old.template_chosen);
+        if settings.remember_last_properties {
+            self.remembered_templates = Some(old.remembered_templates.unwrap_or_default());
+            self.remember_template(old.template, old.template_chosen);
+        }
     }
 
     fn placement_template(&mut self, kind: Kind) -> Component {
@@ -263,7 +272,10 @@ impl Editor {
         match kind {
             Kind::Pin => template.bits = self.placement_defaults.pin_bits,
             Kind::Probe => template.radix = self.placement_defaults.probe_radix,
-            Kind::Gate(_) => template.gate_options.size = self.placement_defaults.gate_size,
+            Kind::Gate(gate) => {
+                template.gate_options.size =
+                    supported_gate_size(gate, self.placement_defaults.gate_size);
+            }
             Kind::Parity(_) => template.parity.size = self.placement_defaults.gate_size,
             Kind::Tunnel => template.bits = self.placement_defaults.tunnel_bits,
             _ => {}

@@ -363,19 +363,8 @@ fn new_gate_parity_and_tunnel_templates_use_current_defaults_only_on_creation() 
         ..app.preferences()
     });
     // AND also happens to be the editor's initial, unused fallback.
-    for gate in [
-        Gate::And,
-        Gate::Not,
-        Gate::Buffer,
-        Gate::Or,
-        Gate::Nand,
-        Gate::Nor,
-        Gate::Xor,
-        Gate::Xnor,
-    ] {
-        app.editor.set_tool(Tool::Place(Kind::Gate(gate)));
-        assert_eq!(app.editor.template.gate_options.size, GateSize::Wide);
-    }
+    app.editor.set_tool(Tool::Place(Kind::Gate(Gate::And)));
+    assert_eq!(app.editor.template.gate_options.size, GateSize::Wide);
     for parity in Parity::ALL {
         app.editor.set_tool(Tool::Place(Kind::Parity(parity)));
         assert_eq!(app.editor.template.parity.size, GateSize::Wide);
@@ -507,6 +496,127 @@ fn project_and_plugin_templates_stay_out_of_builtin_memory() {
                 e.template,
                 e.session.project.instance(id, Point::ZERO).unwrap()
             );
+        }
+    }
+}
+
+#[test]
+fn a_manually_wide_not_survives_defaults_tool_switches_and_paste() {
+    let settings = crate::Settings {
+        remember_last_properties: true,
+        ..Default::default()
+    };
+    let mut app = crate::Workspace::default();
+    app.apply_settings(settings);
+    let not = Tool::Place(Kind::Gate(Gate::Not));
+    app.editor.set_tool(not);
+    app.editor.template.gate_options.size = GateSize::Wide;
+    app.editor.place(Point::new(100, 100));
+    app.editor.copy();
+    app.apply_settings(crate::Settings {
+        default_gate_size: GateSize::Medium,
+        ..settings
+    });
+    assert_eq!(app.editor.template.gate_options.size, GateSize::Wide);
+    app.editor.set_tool(Tool::Place(Kind::Gate(Gate::Buffer)));
+    app.editor.set_tool(not);
+    assert_eq!(app.editor.template.gate_options.size, GateSize::Wide);
+    app.editor.paste();
+    assert_eq!(app.circuit().components.len(), 2);
+    assert!(
+        app.circuit()
+            .components
+            .iter()
+            .all(|c| c.kind == Kind::Gate(Gate::Not) && c.gate_options.size == GateSize::Wide)
+    );
+}
+
+#[test]
+fn document_replacement_uses_incoming_template_memory_setting() {
+    use crate::Settings;
+    for old_enabled in [false, true] {
+        for new_enabled in [false, true] {
+            let settings = Settings {
+                remember_last_properties: old_enabled,
+                ..Default::default()
+            };
+            let incoming = Settings {
+                remember_last_properties: new_enabled,
+                ..settings
+            };
+            let mut editor = Editor::new(Project::default(), settings);
+            let mut project = Project::default();
+            let id = project
+                .main_circuit_mut()
+                .circuit
+                .add_component(Component::new(Kind::Pin, Point::new(100, 80)));
+            editor.replace_document(project.clone(), incoming);
+            assert_eq!(
+                editor.remembered_templates.as_deref(),
+                new_enabled.then_some([].as_slice()),
+                "{old_enabled} -> {new_enabled}"
+            );
+            assert_eq!(editor.session.project, project);
+            assert!(editor.session.selection.is_empty() && !editor.can_undo());
+            assert_eq!(editor.tool, Tool::Select);
+            assert!(editor.simulation.actions.is_empty());
+            editor.set_tool(Tool::Place(Kind::Pin));
+            editor.template.bits = 9;
+            editor.set_tool(Tool::Place(Kind::Tunnel));
+            editor.set_tool(Tool::Place(Kind::Pin));
+            assert_eq!(editor.template.bits, if new_enabled { 9 } else { 1 });
+            assert_eq!(editor.session.circuit.component(id).unwrap().bits, 1);
+
+            let mut editor = Editor::new(Project::default(), settings);
+            editor.set_tool(Tool::Place(Kind::Pin));
+            editor.template.bits = 6;
+            editor.set_tool(Tool::Place(Kind::Tunnel));
+            editor.template.label = "current".into();
+            editor.replace_document(project.clone(), incoming);
+            editor.set_tool(Tool::Place(Kind::Tunnel));
+            assert_eq!(
+                editor.template.label,
+                if new_enabled { "current" } else { "tunnel" }
+            );
+            editor.set_tool(Tool::Place(Kind::Pin));
+            assert_eq!(
+                editor.template.bits,
+                if old_enabled && new_enabled { 6 } else { 1 }
+            );
+            assert_eq!(editor.session.project, project);
+        }
+    }
+}
+
+#[test]
+fn supported_size_defaults_are_used_for_each_new_gate_template() {
+    use logisim_core::{
+        GateSize::{Medium, Narrow, Wide},
+        Parity,
+    };
+    for (default, not_size) in [(Narrow, Narrow), (Medium, Narrow), (Wide, Wide)] {
+        let mut editor = Editor::new(
+            Project::default(),
+            crate::Settings {
+                default_gate_size: default,
+                ..Default::default()
+            },
+        );
+        for gate in Gate::ALL {
+            editor.set_tool(Tool::Place(Kind::Gate(gate)));
+            let expected = match gate {
+                Gate::Buffer => Narrow,
+                Gate::Not => not_size,
+                _ => default,
+            };
+            assert_eq!(
+                editor.template.gate_options.size, expected,
+                "{gate:?} / {default:?}"
+            );
+        }
+        for parity in Parity::ALL {
+            editor.set_tool(Tool::Place(Kind::Parity(parity)));
+            assert_eq!(editor.template.parity.size, default);
         }
     }
 }
