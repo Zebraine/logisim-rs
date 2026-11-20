@@ -80,6 +80,12 @@ fn plugin_keys_preserve_order_ignore_repeat_and_leave_document_untouched() {
     let (ctx, mut app, id) = setup_input();
     let before = app.circuit().clone();
     let camera = app.canvas.camera.offset;
+    app.preferences
+        .shortcuts
+        .bind(crate::shortcuts::Command::ToolSelect, "f5".parse().unwrap())
+        .unwrap();
+    key(&ctx, &mut app, Key::F5, Modifiers::NONE);
+    assert_eq!(app.editor.tool, Tool::Poke);
     frame(
         &ctx,
         &mut app,

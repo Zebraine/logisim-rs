@@ -1067,24 +1067,6 @@ impl Editor {
             self.delete();
         }
         if !ui.input(|i| i.modifiers.command || i.modifiers.alt) {
-            if consume(Key::R, Modifiers::NONE) {
-                self.rotate();
-            }
-            if consume(Key::P, Modifiers::NONE) {
-                self.set_tool(Tool::Poke);
-            }
-            if consume(Key::V, Modifiers::NONE) {
-                self.set_tool(Tool::Select);
-            }
-            if consume(Key::W, Modifiers::NONE) {
-                self.set_tool(Tool::Wire);
-            }
-            if consume(Key::T, Modifiers::NONE) {
-                self.set_tool(Tool::Place(Kind::Text));
-            }
-            if consume(Key::U, Modifiers::NONE) {
-                self.set_tool(Tool::Place(Kind::Tunnel));
-            }
             for (key, delta) in [
                 (Key::ArrowLeft, Point::new(-GRID, 0)),
                 (Key::ArrowRight, Point::new(GRID, 0)),

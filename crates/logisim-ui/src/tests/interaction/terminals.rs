@@ -21,6 +21,12 @@ fn keyboard_poke_routes_text_and_controls_without_editor_shortcuts_or_history() 
     assert_eq!(app.editor.simulation.keyboard_focus, Some(k));
     let before = app.editor.session.circuit.clone();
     let camera = app.canvas.camera.offset;
+    app.preferences
+        .shortcuts
+        .bind(crate::shortcuts::Command::ToolSelect, "f5".parse().unwrap())
+        .unwrap();
+    key(&ctx, &mut app, Key::F5, Modifiers::NONE);
+    assert_eq!(app.editor.tool, Tool::Poke);
     for (key, text) in [
         (Key::W, "w"),
         (Key::R, "r"),
