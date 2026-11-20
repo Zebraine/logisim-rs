@@ -144,14 +144,20 @@ impl DialogUi<'_> {
 
     /// The dismiss button sits at the trailing edge. Additional actions follow inward.
     pub fn footer(&mut self, dismiss: &'static str, actions: impl FnOnce(&mut Ui)) {
+        self.actions(|ui| {
+            if ui.button(tr(dismiss)).clicked() {
+                ui.close();
+            }
+            actions(ui);
+        });
+    }
+    /// A prompt that requires an explicit decision supplies both of its actions.
+    pub fn actions(&mut self, actions: impl FnOnce(&mut Ui)) {
         self.ui.separator();
         self.ui.horizontal(|ui| {
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 if self.editor {
                     ui.add_space(ui.visuals().resize_corner_size);
-                }
-                if ui.button(tr(dismiss)).clicked() {
-                    ui.close();
                 }
                 actions(ui);
             });

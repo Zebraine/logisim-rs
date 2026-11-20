@@ -92,3 +92,21 @@ fn untitled_snapshots_use_null_source_and_windows_cannot_replace_another_slot() 
     assert!(pair.metadata().unwrap().source.is_none());
     assert_eq!(pair, first.observed);
 }
+
+#[test]
+fn malformed_xml_with_consistent_metadata_is_damaged_and_survives_restarts() {
+    let tmp = Temp::new();
+    let dir = tmp.path("recovery");
+    let mut pair = Pair::default();
+    pair.write(&dir, b"<project>".to_vec(), None, None).unwrap();
+    let mut auto = Autosave::at(Some(dir.clone()));
+    assert!(auto.pending());
+    assert!(matches!(
+        auto.view().state,
+        logisim_ui::SnapshotState::Damaged
+    ));
+    let mut disk = Storage::default();
+    assert!(auto.recover(&mut disk).is_err());
+    auto.finish_document();
+    assert_eq!(Pair::read(&dir).unwrap(), pair);
+}

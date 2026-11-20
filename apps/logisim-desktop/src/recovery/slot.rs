@@ -22,6 +22,7 @@ pub(crate) fn checksum(bytes: &[u8]) -> u64 {
 #[derive(Debug, Serialize, Deserialize)]
 pub(super) struct Metadata {
     format: u8,
+    #[serde(deserialize_with = "source_path")]
     pub source: Option<PathBuf>,
     pub saved_at: u64,
     app: String,
@@ -30,12 +31,20 @@ pub(super) struct Metadata {
     pub source_fnv1a64: Option<u64>,
 }
 
+// Unlike a missing field, JSON null explicitly identifies an untitled document.
+fn source_path<'de, D: serde::Deserializer<'de>>(
+    de: D,
+) -> std::result::Result<Option<PathBuf>, D::Error> {
+    Option::deserialize(de)
+}
+
 #[derive(Debug, Default, PartialEq, Eq)]
 enum Entry {
     #[default]
     Missing,
     Bytes(Vec<u8>),
     Invalid,
+    Unreadable(String),
 }
 impl Entry {
     fn read(path: &Path, limit: usize) -> Result<Self> {
@@ -43,13 +52,17 @@ impl Entry {
             Err(e) if e.kind() == ErrorKind::NotFound => Ok(Self::Missing),
             Err(e) => Err(e.to_string()),
             Ok(m) if !m.is_file() || m.len() > limit as u64 => Ok(Self::Invalid),
-            Ok(_) => storage::read(path).map(Self::Bytes),
+            Ok(_) => Ok(match storage::read(path) {
+                Ok(bytes) => Self::Bytes(bytes),
+                Err(e) => Self::Unreadable(e),
+            }),
         }
     }
     fn bytes(&self) -> Result<Option<&[u8]>> {
         match self {
             Self::Missing => Ok(None),
             Self::Bytes(b) => Ok(Some(b)),
+            Self::Unreadable(e) => Err(e.clone()),
             Self::Invalid => Err("The recovery file is invalid or too large.".into()),
         }
     }
@@ -71,6 +84,19 @@ impl Pair {
             data: Entry::read(&dir.join(DATA), logisim_file::MAX_BYTES)?,
             meta: Entry::read(&dir.join(META), 64 * 1024)?,
         })
+    }
+    pub fn project(&self, dir: &Path) -> Result<logisim_core::Project> {
+        let bytes = self.data.bytes()?.ok_or("Recovery circuit is missing.")?;
+        let text = std::str::from_utf8(bytes).map_err(|_| "Invalid recovery circuit.")?;
+        let mut import = logisim_file::parse(text).map_err(|_| "Invalid recovery circuit.")?;
+        if !import.warnings.is_empty() {
+            return Err("The recovery circuit contains unsupported content.".into());
+        }
+        crate::plugins::absolutize(&mut import.document, dir);
+        Ok(import.document)
+    }
+    pub fn unreadable(&self) -> bool {
+        matches!(self.data, Entry::Unreadable(_)) || matches!(self.meta, Entry::Unreadable(_))
     }
     pub fn empty(&self) -> bool {
         self.data == Entry::Missing && self.meta == Entry::Missing

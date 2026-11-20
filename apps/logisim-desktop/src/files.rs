@@ -29,6 +29,7 @@ pub(crate) struct Files {
     after_save: Option<NextDocument>,
     directory: PathBuf,
     pub allow_close: bool,
+    recovery_page_open: bool,
 }
 impl Default for Files {
     fn default() -> Self {
@@ -40,6 +41,7 @@ impl Default for Files {
             after_save: None,
             directory: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
             allow_close: false,
+            recovery_page_open: false,
         }
     }
 }
@@ -49,6 +51,14 @@ impl Files {
             autosave: crate::recovery::Autosave::at(directory),
             ..Default::default()
         }
+    }
+    pub fn present_recovery(&mut self, w: &mut Workspace) {
+        let open = w.recovery_settings_open();
+        if open && !self.recovery_page_open {
+            self.autosave.refresh();
+        }
+        self.recovery_page_open = open;
+        self.autosave.publish(w);
     }
     pub fn busy(&self) -> bool {
         self.dialog.is_some()
@@ -112,6 +122,21 @@ impl Files {
         workspace: &mut Workspace,
         sim: &mut impl Host,
     ) {
+        if self.autosave.pending() {
+            self.dialog = Some(Dialog::Recovery {
+                cli,
+                view: self.autosave.view(),
+            });
+        } else {
+            self.open_startup(cli, workspace, sim);
+        }
+    }
+    fn open_startup(
+        &mut self,
+        cli: Option<PathBuf>,
+        workspace: &mut Workspace,
+        sim: &mut impl Host,
+    ) {
         if let Some(path) = cli {
             self.load(&path, workspace, sim);
         } else if workspace.preferences().workspace.reopen_last
@@ -161,10 +186,15 @@ impl Files {
         workspace: &mut Workspace,
         sim: &mut impl Host,
     ) {
+        if action == FileAction::Close && matches!(self.dialog, Some(Dialog::Recovery { .. })) {
+            self.allow_close = true;
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            return;
+        }
         if self.busy() {
             return;
         }
-        if action != FileAction::ClearRecent {
+        if !matches!(action, FileAction::ClearRecent | FileAction::ClearRecovery) {
             workspace.finish_edit();
         }
         match action {
@@ -195,6 +225,9 @@ impl Files {
                 }
             }
             FileAction::SaveAs => self.picker(Mode::Save),
+            FileAction::ClearRecovery => {
+                self.autosave.clear();
+            }
             FileAction::ClearRecent => workspace.set_recent(Vec::new()),
             FileAction::Save => {
                 if let Some(path) = self
@@ -317,6 +350,7 @@ impl Files {
         if matches!(response, Response::Cancel) {
             self.after_save = None;
             match dialog {
+                d @ Dialog::Recovery { .. } => self.dialog = Some(d),
                 Dialog::PluginPicker { resolution, .. } => {
                     self.dialog = Some(Dialog::Plugins(resolution))
                 }
@@ -326,6 +360,30 @@ impl Files {
             return;
         }
         match (dialog, response) {
+            (Dialog::Recovery { cli, .. }, Response::Recover) => {
+                match self.autosave.recover(&mut self.storage) {
+                    Ok(project) => {
+                        if let Some(parent) = self.storage.path.as_deref().and_then(Path::parent) {
+                            self.directory = parent.into();
+                        }
+                        workspace.replace_project(project);
+                        sim.new_document();
+                        self.resolve_plugins(workspace, sim, Vec::new());
+                    }
+                    Err(e) => {
+                        self.autosave.refresh();
+                        self.autosave.report(e);
+                        self.dialog = Some(Dialog::Recovery {
+                            cli,
+                            view: self.autosave.view(),
+                        });
+                    }
+                }
+            }
+            (Dialog::Recovery { cli, .. }, Response::Discard) => {
+                self.autosave.clear();
+                self.open_startup(cli, workspace, sim);
+            }
             (Dialog::Plugins(mut resolution), Response::ConfirmPlugins) => {
                 for i in 0..resolution.rows.len() {
                     resolution.check(i);

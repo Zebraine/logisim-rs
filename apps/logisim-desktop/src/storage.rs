@@ -20,18 +20,42 @@ pub(crate) struct Storage {
     pub protected: Option<PathBuf>,
     baseline: Project,
     disk: Vec<u8>,
+    recovered: bool,
+    // The source changed between the last normal load/save and crash recovery.
+    conflicting_source: Option<u64>,
 }
 impl Storage {
     pub fn source_checksum(&self) -> Option<u64> {
-        self.path
-            .as_ref()
-            .map(|_| crate::recovery::checksum(&self.disk))
+        self.path.as_ref().map(|_| {
+            self.conflicting_source
+                .unwrap_or_else(|| crate::recovery::checksum(&self.disk))
+        })
     }
     pub fn new() -> Self {
         Self::default()
     }
     pub fn dirty(&self, project: &Project) -> bool {
-        *project != self.baseline
+        self.recovered || *project != self.baseline
+    }
+    pub fn recovered(source: Option<&Path>, expected: Option<u64>) -> Result<Self> {
+        let mut state = Self {
+            recovered: true,
+            ..Default::default()
+        };
+        if let Some(path) = source {
+            match fs::metadata(path) {
+                Ok(_) => {
+                    let disk = read(path)?;
+                    state.conflicting_source =
+                        expected.filter(|hash| *hash != crate::recovery::checksum(&disk));
+                    state.path = Some(path.to_owned());
+                    state.disk = disk;
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(e.to_string()),
+            }
+        }
+        Ok(state)
     }
     pub fn load(&mut self, path: &Path) -> Result<(Project, Vec<String>)> {
         let path = destination(path)?;
@@ -39,6 +63,8 @@ impl Storage {
         let text = std::str::from_utf8(&bytes).map_err(|e| format!("File is not UTF-8: {e}"))?;
         let mut import = logisim_file::parse(text).map_err(|e| e.to_string())?;
         crate::plugins::absolutize(&mut import.document, &crate::plugins::base(Some(&path)));
+        self.recovered = false;
+        self.conflicting_source = None;
         self.baseline = import.document.clone();
         self.protected = (!import.warnings.is_empty()).then(|| path.clone());
         self.path = Some(path);
@@ -51,6 +77,7 @@ impl Storage {
             return Err("This import omitted unsupported content. Save to a different file to protect the original.".into());
         }
         let expected = match mode {
+            SaveMode::Current if self.conflicting_source.is_some() => return Err(CHANGED.into()),
             SaveMode::Current if self.path.as_ref() == Some(&path) => Some(self.disk.as_slice()),
             SaveMode::Current => None,
             SaveMode::Selected(expected) => expected,
@@ -65,6 +92,8 @@ impl Storage {
         atomic_write(&path, text.as_bytes(), expected)?;
         self.path = Some(path);
         self.disk = text.into_bytes();
+        self.recovered = false;
+        self.conflicting_source = None;
         self.baseline = project.clone();
         self.protected = None;
         Ok(())
@@ -108,11 +137,17 @@ pub(crate) fn destination(path: &Path) -> Result<PathBuf> {
         .unwrap_or(Path::new("."));
     Ok(parent.canonicalize().map_err(|e| e.to_string())?.join(name))
 }
+const CHANGED: &str = "The destination changed, cannot be read, or needs overwrite confirmation. Use Save As and choose the file again.";
 fn check_expected(path: &Path, expected: Option<&[u8]>) -> Result<()> {
-    match (read(path),expected) {
-        (Ok(actual),Some(expected)) if actual==expected => Ok(()),
-        (Err(_),None) if fs::symlink_metadata(path).is_err_and(|e|e.kind()==std::io::ErrorKind::NotFound) => Ok(()),
-        _ => Err("The destination changed, cannot be read, or needs overwrite confirmation. Use Save As and choose the file again.".into()),
+    match (read(path), expected) {
+        (Ok(actual), Some(expected)) if actual == expected => Ok(()),
+        (Err(_), None)
+            if fs::symlink_metadata(path)
+                .is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound) =>
+        {
+            Ok(())
+        }
+        _ => Err(CHANGED.into()),
     }
 }
 pub(crate) fn atomic_write(path: &Path, bytes: &[u8], expected: Option<&[u8]>) -> Result<()> {

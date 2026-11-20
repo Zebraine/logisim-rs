@@ -361,3 +361,21 @@ fn appearance_codes_round_trip_without_changing_other_preferences() {
         }
     }
 }
+
+#[test]
+fn individual_file_preferences_default_independently() {
+    for (json, enabled, minutes) in [
+        (r#"{"version":5,"files":{"autosave":false}}"#, false, 5),
+        (r#"{"version":5,"files":{"autosave_minutes":1}}"#, true, 1),
+        (r#"{"version":5,"files":{"autosave_minutes":30}}"#, true, 30),
+    ] {
+        let config = schema::decode(json.as_bytes()).unwrap();
+        assert_eq!(
+            config.settings.files,
+            logisim_ui::FileSettings {
+                autosave: enabled,
+                autosave_minutes: minutes
+            }
+        );
+    }
+}

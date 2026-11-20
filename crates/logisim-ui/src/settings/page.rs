@@ -18,6 +18,7 @@ pub(super) enum PageAction {
     Retry,
     OpenRecent(usize),
     ClearRecent,
+    ClearRecovery,
     ResetLayout,
 }
 
@@ -26,10 +27,22 @@ pub(crate) struct Page {
     category: Category,
     query: String,
     confirm_reset: bool,
+    confirm_clear: bool,
+    recovery: RecoveryView,
     frequency_draft: Option<u32>,
 }
 impl Page {
+    pub(super) fn showing_files(&self) -> bool {
+        self.category == Category::Files && self.query.trim().is_empty()
+    }
+    pub(super) fn set_recovery(&mut self, view: RecoveryView) {
+        if self.recovery != view {
+            self.confirm_clear = false;
+            self.recovery = view;
+        }
+    }
     pub(super) fn clear_transient(&mut self) {
+        self.confirm_clear = false;
         self.query.clear();
         self.confirm_reset = false;
         self.frequency_draft = None;
@@ -67,6 +80,7 @@ impl Page {
                         );
                         theme::focus_ring(ui, &search);
                         if search.changed() {
+                            self.confirm_clear = false;
                             self.confirm_reset = false;
                         }
                     });
@@ -179,6 +193,7 @@ impl Page {
                 });
             });
         match dismiss {
+            Dismiss::Escape if self.confirm_clear => self.confirm_clear = false,
             Dismiss::Escape if self.confirm_reset => self.confirm_reset = false,
             Dismiss::Escape if !self.query.is_empty() => self.query.clear(),
             Dismiss::Escape | Dismiss::Close => *open = false,
@@ -188,6 +203,7 @@ impl Page {
     }
     fn select(&mut self, cat: Category) {
         self.category = cat;
+        self.confirm_clear = false;
         self.query.clear();
         self.confirm_reset = false;
         self.frequency_draft = None;
@@ -248,6 +264,27 @@ impl Page {
             });
             ui.add_space(4.);
         }
+        if self.showing_files() {
+            theme::card(ui, tr("Recovery snapshot"), |ui| {
+                self.recovery.details(ui);
+                if self.recovery.can_clear() {
+                    if self.confirm_clear {
+                        ui.label(tr("Delete this recovery copy?"));
+                        ui.horizontal_wrapped(|ui| {
+                            if ui.button(tr("Confirm clear")).clicked() {
+                                self.confirm_clear = false;
+                                *action = Some(PageAction::ClearRecovery);
+                            }
+                            if ui.button(tr("Cancel")).clicked() {
+                                self.confirm_clear = false;
+                            }
+                        });
+                    } else if ui.button(tr("Clear recovery")).clicked() {
+                        self.confirm_clear = true;
+                    }
+                }
+            });
+        }
         if active == Category::Workspace && q.is_empty() {
             theme::card(ui, tr("Recent Projects"), |ui| {
                 if recent.is_empty() {
@@ -286,6 +323,7 @@ impl Page {
         if !found {
             ui.label(tr("No settings match"));
             if ui.button(tr("Clear")).clicked() {
+                self.confirm_clear = false;
                 self.query.clear();
             }
         }

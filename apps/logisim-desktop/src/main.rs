@@ -96,6 +96,7 @@ impl DesktopApp {
                 &mut self.simulator,
             );
         }
+        self.files.present_recovery(&mut self.workspace);
         self.workspace
             .set_document(self.files.present(&self.workspace));
         ui.add_enabled_ui(!self.files.busy(), |ui| self.workspace.show(ui));

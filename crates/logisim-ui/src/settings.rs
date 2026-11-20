@@ -1,4 +1,6 @@
+mod recovery;
 mod registry;
+pub use recovery::{RecoveryView, SnapshotState};
 pub const CONFIG_VERSION: u32 = 5;
 mod page;
 pub(crate) use page::Page;
@@ -35,6 +37,12 @@ impl SimulationMode {
 }
 
 impl Workspace {
+    pub fn set_recovery_view(&mut self, view: RecoveryView) {
+        self.settings_page.set_recovery(view);
+    }
+    pub fn recovery_settings_open(&self) -> bool {
+        self.settings_open && self.settings_page.showing_files()
+    }
     pub fn preferences(&self) -> Settings {
         self.preferences
     }
@@ -104,6 +112,9 @@ impl Workspace {
                 page::PageAction::OpenRecent(index) => {
                     self.settings_open = false;
                     self.file_actions.push(crate::FileAction::OpenRecent(index));
+                }
+                page::PageAction::ClearRecovery => {
+                    self.file_actions.push(crate::FileAction::ClearRecovery)
                 }
                 page::PageAction::ClearRecent => {
                     self.file_actions.push(crate::FileAction::ClearRecent)

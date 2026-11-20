@@ -5,6 +5,7 @@ pub enum FileAction {
     Open,
     OpenRecent(usize),
     ClearRecent,
+    ClearRecovery,
     Save,
     SaveAs,
     ImportMemory,

@@ -16,6 +16,7 @@ pub(crate) struct Autosave {
     observed: Pair,
     metadata: Option<Metadata>,
     unavailable: bool,
+    changed: bool,
     owned: bool,
     last_success: Option<Instant>,
     next_due: Option<Instant>,
@@ -28,22 +29,87 @@ impl Autosave {
             directory,
             ..Self::default()
         };
-        match state.dir().and_then(Pair::read) {
+        state.refresh();
+        state
+    }
+    pub fn refresh(&mut self) {
+        self.changed = true;
+        match self.dir().and_then(Pair::read) {
             Ok(pair) => {
-                if !pair.empty() {
-                    match pair.metadata() {
-                        Ok(meta) => state.metadata = Some(meta),
-                        Err(e) => state.error = Some(e),
+                let was_unavailable = std::mem::take(&mut self.unavailable);
+                if pair != self.observed || was_unavailable {
+                    self.owned &= pair == self.observed;
+                    self.metadata = None;
+                    self.error = None;
+                    if !pair.empty() {
+                        let inspected = pair.metadata().and_then(|meta| {
+                            if meta.source.as_ref().is_some_and(|p| self.reserved(p)) {
+                                return Err("Invalid recovery metadata.".into());
+                            }
+                            pair.project(self.dir()?)?;
+                            Ok(meta)
+                        });
+                        match inspected {
+                            Ok(meta) => self.metadata = Some(meta),
+                            Err(e) => self.error = Some(e),
+                        }
                     }
+                    self.observed = pair;
                 }
-                state.observed = pair;
             }
             Err(e) => {
-                state.unavailable = true;
-                state.error = Some(e);
+                self.unavailable = true;
+                self.error = Some(e);
             }
         }
-        state
+    }
+    pub fn pending(&self) -> bool {
+        !self.observed.empty()
+    }
+    pub fn view(&self) -> logisim_ui::RecoveryView {
+        use logisim_ui::SnapshotState;
+        let state = if self.unavailable || self.observed.unreadable() {
+            SnapshotState::Unavailable {
+                snapshot_present: self.pending(),
+            }
+        } else if let Some(meta) = &self.metadata {
+            SnapshotState::Available {
+                source: meta.source.as_ref().map(|p| p.display().to_string()),
+                saved_at: meta.saved_at,
+            }
+        } else if self.pending() {
+            SnapshotState::Damaged
+        } else {
+            SnapshotState::Empty
+        };
+        logisim_ui::RecoveryView {
+            state,
+            directory: self.directory.as_ref().map(|p| p.display().to_string()),
+            error: self.error.clone(),
+        }
+    }
+    pub fn publish(&mut self, w: &mut logisim_ui::Workspace) {
+        if std::mem::take(&mut self.changed) {
+            w.set_recovery_view(self.view());
+        }
+    }
+    pub fn recover(&mut self, storage: &mut Storage) -> Result<Project, String> {
+        let dir = self.dir()?;
+        self.observed.verify(dir)?;
+        let meta = self
+            .metadata
+            .as_ref()
+            .ok_or("The recovery files are damaged or incomplete.")?;
+        let project = self.observed.project(dir)?;
+        *storage = Storage::recovered(meta.source.as_deref(), meta.source_fnv1a64)?;
+        self.owned = true;
+        self.error = None;
+        self.changed = true;
+        Ok(project)
+    }
+    pub fn report(&mut self, error: String) {
+        self.error = Some(error);
+        self.changed = true;
     }
     fn dir(&self) -> Result<&Path, String> {
         self.directory
@@ -73,7 +139,6 @@ impl Autosave {
         if !options.autosave
             || !dirty
             || storage.protected.is_some()
-            || self.unavailable
             || (!self.owned && !self.observed.empty())
         {
             self.next_due = None;
@@ -83,6 +148,14 @@ impl Autosave {
         if now < *self.next_due.get_or_insert(now + interval) {
             return;
         }
+        if self.unavailable {
+            self.refresh();
+            if self.unavailable || self.pending() {
+                self.next_due = Some(now + interval);
+                return;
+            }
+        }
+        self.changed = true;
         let result = self.write(storage, project);
         match result {
             Ok(()) => {
@@ -90,7 +163,10 @@ impl Autosave {
                 self.last_success = Some(now);
                 self.error = None;
             }
-            Err(e) => self.error = Some(e),
+            Err(e) => {
+                self.refresh();
+                self.report(e);
+            }
         }
         self.next_due = Some(now + interval);
     }
@@ -116,10 +192,11 @@ impl Autosave {
         self.last_success = None;
         if self.owned {
             self.clear();
-            self.owned = false;
         }
     }
-    fn clear(&mut self) -> bool {
+    pub fn clear(&mut self) {
+        self.changed = true;
+        self.owned = false;
         let result = self
             .dir()
             .map(Path::to_owned)
@@ -127,14 +204,15 @@ impl Autosave {
         match result {
             Ok(()) => {
                 self.metadata = None;
-                self.owned = false;
                 self.error = None;
                 self.next_due = None;
-                true
             }
             Err(e) => {
-                self.error = Some(e);
-                false
+                self.refresh();
+                if !self.observed.empty() && self.observed.metadata().is_err() {
+                    self.metadata = None;
+                }
+                self.report(e);
             }
         }
     }

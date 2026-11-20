@@ -305,3 +305,70 @@ fn compact_appearance_and_editor_scroll_exposes_every_setting_in_both_languages(
         assert_eq!(visible.len(), entries.len(), "{lang:?}: {visible:?}");
     }
 }
+
+#[test]
+fn recovery_status_and_explicit_clear_leave_document_and_simulation_intact() {
+    use crate::tests::support::widgets::{click, frame, has};
+    for language in Language::ALL {
+        let ctx = Context::default();
+        crate::configure(&ctx);
+        let mut app = Workspace {
+            settings_open: true,
+            ..Default::default()
+        };
+        app.set_language(language);
+        app.settings_page.select(Category::Files);
+        let label = |key: &'static str| crate::i18n::with_language(language, || tr(key));
+        let project = app.project().clone();
+        app.simulation_mut().ticks = 31;
+        for state in [
+            SnapshotState::Empty,
+            SnapshotState::Unavailable {
+                snapshot_present: false,
+            },
+            SnapshotState::Damaged,
+            SnapshotState::Available {
+                source: None,
+                saved_at: 0,
+            },
+        ] {
+            app.set_recovery_view(RecoveryView {
+                directory: Some("/config/recovery".into()),
+                error: matches!(
+                    state,
+                    SnapshotState::Damaged | SnapshotState::Unavailable { .. }
+                )
+                .then(|| "Recovery storage is busy.".into()),
+                state: state.clone(),
+            });
+            let mut labels = Vec::new();
+            for _ in 0..3 {
+                labels = frame_at_size(&ctx, &mut app, vec![], vec2(720., 480.));
+            }
+            let message = match state {
+                SnapshotState::Empty => "No recovery snapshot",
+                SnapshotState::Unavailable { .. } => "Recovery storage unavailable",
+                SnapshotState::Damaged => "Damaged recovery snapshot",
+                SnapshotState::Available { .. } => "Untitled",
+            };
+            assert!(has(&labels, label(message)));
+            if matches!(
+                state,
+                SnapshotState::Available { .. } | SnapshotState::Damaged
+            ) {
+                click(&ctx, &mut app, label("Clear recovery"));
+                assert!(app.take_file_actions().is_empty());
+                click(&ctx, &mut app, label("Cancel"));
+                assert!(app.take_file_actions().is_empty());
+                click(&ctx, &mut app, label("Clear recovery"));
+                click(&ctx, &mut app, label("Confirm clear"));
+                assert_eq!(app.take_file_actions(), [crate::FileAction::ClearRecovery]);
+            }
+            frame(&ctx, &mut app, vec![]);
+            assert_eq!(app.project(), &project);
+            assert!(!app.editor.can_undo());
+            assert_eq!(app.simulation_mut().ticks, 31);
+            assert!(app.take_simulation_actions().is_empty());
+        }
+    }
+}

@@ -9,6 +9,10 @@ use logisim_ui::{
 use std::path::PathBuf;
 
 pub(super) enum Dialog {
+    Recovery {
+        cli: Option<PathBuf>,
+        view: logisim_ui::RecoveryView,
+    },
     Plugins(Box<crate::plugins::Resolution>),
     PluginPicker {
         picker: Picker,
@@ -35,6 +39,7 @@ pub(super) enum Dialog {
     },
 }
 pub(super) enum Response {
+    Recover,
     ConfirmPlugins,
     BrowsePlugin(usize),
     CheckPlugin(usize),
@@ -54,6 +59,30 @@ impl Dialog {
             | Dialog::PluginPicker { picker, .. }
             | Dialog::PluginImportPicker { picker, .. } => return picker.show(ctx),
             Dialog::Plugins(resolution) => resolve_plugins(ctx, resolution, &mut answer),
+            Dialog::Recovery { view, .. } => Window::prompt("startup-recovery").show(
+                ctx,
+                tr("Recover unsaved changes?"),
+                |dialog| {
+                    dialog.body(|ui| {
+                        view.details(ui);
+                        ui.weak(tr("Discard deletes the recovery copy."));
+                    });
+                    dialog.actions(|ui| {
+                        if ui
+                            .add_enabled(
+                                matches!(view.state, logisim_ui::SnapshotState::Available { .. }),
+                                egui::Button::new(tr("Recover")),
+                            )
+                            .clicked()
+                        {
+                            answer = Response::Recover;
+                        }
+                        if ui.button(tr("Discard")).clicked() {
+                            answer = Response::Discard;
+                        }
+                    });
+                },
+            ),
             Dialog::Unsaved(_) => {
                 Window::prompt("unsaved-project").show(ctx, tr("Save changes?"), |dialog| {
                     dialog.body(|ui| ui.label(tr("This project has unsaved changes.")));
