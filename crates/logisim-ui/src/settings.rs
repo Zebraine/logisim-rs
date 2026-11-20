@@ -73,6 +73,9 @@ impl Workspace {
     pub fn set_settings_error(&mut self, error: Option<String>) {
         self.settings_error = error;
     }
+    pub fn take_window_reset(&mut self) -> bool {
+        std::mem::take(&mut self.reset_window)
+    }
     pub fn take_settings_retry(&mut self) -> bool {
         std::mem::take(&mut self.retry_settings)
     }
@@ -81,14 +84,33 @@ impl Workspace {
             return;
         }
         let mut values = self.preferences;
-        self.settings_page.show(
+        let action = self.settings_page.show(
             ctx,
             &mut self.settings_open,
             &mut values,
-            self.config_path.as_deref(),
-            self.settings_error.as_deref(),
-            &mut self.retry_settings,
+            page::PageInfo {
+                path: self.config_path.as_deref(),
+                error: self.settings_error.as_deref(),
+                recent: &self.recent,
+            },
         );
+        if let Some(action) = action {
+            match action {
+                page::PageAction::Retry => self.retry_settings = true,
+                page::PageAction::OpenRecent(index) => {
+                    self.settings_open = false;
+                    self.file_actions.push(crate::FileAction::OpenRecent(index));
+                }
+                page::PageAction::ClearRecent => {
+                    self.file_actions.push(crate::FileAction::ClearRecent)
+                }
+                page::PageAction::ResetLayout => {
+                    self.set_layout(crate::WorkspaceLayout::default());
+                    self.reset_window = true;
+                    ctx.request_repaint();
+                }
+            }
+        }
         if !self.settings_open {
             self.settings_page.clear_transient();
         }

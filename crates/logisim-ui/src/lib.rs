@@ -59,6 +59,7 @@ pub use theme::configure;
 pub struct Workspace {
     navigation: workspace::Navigation,
     layout: WorkspaceLayout,
+    reset_window: bool,
     analysis: analysis::AnalysisUi,
     generator: generation::Generator,
     generated_expressions: generation::Memory,

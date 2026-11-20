@@ -32,7 +32,7 @@ fn main() -> eframe::Result {
                 workspace,
                 preferences,
                 window,
-                restore_window: true,
+                initial_geometry_pending: true,
                 simulator: simulation::worker::Worker::new({
                     let ctx = cc.egui_ctx.clone();
                     move || ctx.request_repaint()
@@ -63,7 +63,7 @@ struct DesktopApp {
     files: files::Files,
     window_title: String,
     window: window::WindowState,
-    restore_window: bool,
+    initial_geometry_pending: bool,
     last_panels: logisim_ui::WorkspaceLayout,
 }
 
@@ -103,27 +103,7 @@ impl DesktopApp {
         }
         self.files
             .show(ui.ctx(), &mut self.workspace, &mut self.simulator);
-        let before_window = self.window;
-        if std::mem::take(&mut self.restore_window) {
-            self.window = self.window.restore(ui.ctx());
-        } else {
-            let zoom = ui.ctx().zoom_factor();
-            ui.input(|i| {
-                self.window
-                    .observe(i.viewport(), i.viewport_rect().size(), zoom)
-            });
-        }
-        let panels = self.workspace.layout();
-        let options = self.workspace.preferences().workspace;
-        self.preferences.observe_layout(
-            (options.restore_window && before_window != self.window).then_some(self.window),
-            (options.restore_panels && self.last_panels != panels).then_some(panels),
-            std::time::Instant::now(),
-        );
-        self.last_panels = panels;
-        if self.files.allow_close {
-            self.preferences.flush_layout();
-        }
+        self.sync_layout(ui);
         self.preferences.synchronize(&mut self.workspace);
         let context = ui.ctx().clone();
         self.analysis
@@ -153,6 +133,39 @@ impl DesktopApp {
             .synchronize(&mut self.workspace, self.files.busy());
         for action in self.workspace.take_simulation_actions() {
             self.simulator.action(action);
+        }
+    }
+
+    fn sync_layout(&mut self, ui: &eframe::egui::Ui) {
+        let before_window = self.window;
+        let reset = self.workspace.take_window_reset();
+        if reset {
+            self.window = window::WindowState::default();
+        }
+        if self.initial_geometry_pending && ui.ctx().cumulative_frame_nr() == 0 {
+            // egui-winit sampled the initial monitor before applying the user's UI scale.
+            ui.ctx().request_repaint();
+        } else if self.initial_geometry_pending || reset {
+            self.initial_geometry_pending = false;
+            self.window = self.window.restore(ui.ctx());
+        } else {
+            let zoom = ui.ctx().zoom_factor();
+            ui.input(|i| {
+                self.window
+                    .observe(i.viewport(), i.viewport_rect().size(), zoom)
+            });
+        }
+        let panels = self.workspace.layout();
+        let options = self.workspace.preferences().workspace;
+        self.preferences.observe_layout(
+            (reset || options.restore_window && before_window != self.window)
+                .then_some(self.window),
+            (reset || options.restore_panels && self.last_panels != panels).then_some(panels),
+            std::time::Instant::now(),
+        );
+        self.last_panels = panels;
+        if self.files.allow_close {
+            self.preferences.flush_layout();
         }
     }
 }

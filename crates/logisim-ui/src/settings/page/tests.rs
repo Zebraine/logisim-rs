@@ -5,7 +5,12 @@ use crate::tests::support::widgets::frame_at_size;
 fn registry_restores_each_field_without_changing_other_preferences() {
     let defaults = Settings::default();
     let alternative = Settings {
-        workspace: Default::default(),
+        workspace: WorkspaceSettings {
+            recent_limit: 3,
+            reopen_last: true,
+            restore_window: false,
+            restore_panels: false,
+        },
         language: Language::SimplifiedChinese,
         ui_scale: UiScale::P150,
         reduce_motion: true,
@@ -152,4 +157,57 @@ fn dragging_frequency_commits_only_on_release() {
         app.take_simulation_actions(),
         [crate::SimulationAction::SetTickRate(rate.get())]
     );
+}
+
+#[test]
+fn workspace_history_actions_and_resets_leave_document_and_runtime_intact() {
+    use crate::tests::support::widgets::{click, frame, has};
+    let ctx = Context::default();
+    crate::configure(&ctx);
+    let mut app = Workspace {
+        settings_open: true,
+        ..Default::default()
+    };
+    app.settings_page.select(Category::Workspace);
+    app.set_recent(vec!["/work/first.circ".into()]);
+    let layout = crate::WorkspaceLayout {
+        tab: crate::LayoutTab::Components,
+        sidebar_width: 370.,
+        split: 0.62,
+    };
+    app.set_layout(layout);
+    app.editor.simulation.view.steps = 19;
+    let project = app.project().clone();
+    click(&ctx, &mut app, "Off");
+    assert!(app.preferences().workspace.reopen_last);
+    click(&ctx, &mut app, "first.circ");
+    assert!(!app.settings_open);
+    assert_eq!(app.take_file_actions(), [crate::FileAction::OpenRecent(0)]);
+    app.settings_open = true;
+    click(&ctx, &mut app, "Clear recent");
+    assert_eq!(app.take_file_actions(), [crate::FileAction::ClearRecent]);
+    app.settings_page.select(Category::Advanced);
+    app.settings_page.frequency_draft = Some(36);
+    click(&ctx, &mut app, "Reset all");
+    click(&ctx, &mut app, "Confirm reset");
+    assert_eq!(app.settings_page.frequency_draft, None);
+    assert_eq!(app.preferences(), Settings::default());
+    assert_eq!(app.recent(), ["/work/first.circ"]);
+    assert_eq!(app.layout(), layout);
+    app.settings_page.select(Category::Workspace);
+    click(&ctx, &mut app, "Reset workspace layout");
+    assert_eq!(app.layout(), crate::WorkspaceLayout::default());
+    assert!(app.take_window_reset());
+    assert!(!app.take_window_reset());
+    assert_eq!(&project, app.project());
+    assert!(!app.editor.can_undo());
+    assert_eq!(app.editor.simulation.view.steps, 19);
+    assert!(app.take_simulation_actions().is_empty());
+    for language in Language::ALL {
+        app.set_language(language);
+        app.settings_page.query = "workspace.restore_panels".into();
+        let labels = frame(&ctx, &mut app, vec![]);
+        let label = crate::i18n::with_language(language, || tr("Restore inspector layout"));
+        assert!(has(&labels, label));
+    }
 }

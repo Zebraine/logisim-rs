@@ -9,6 +9,18 @@ use crate::{
 };
 use egui::{Align, Context, Id, Key, Layout, Modifiers, RichText, Ui, vec2};
 
+pub(super) struct PageInfo<'a> {
+    pub path: Option<&'a str>,
+    pub error: Option<&'a str>,
+    pub recent: &'a [String],
+}
+pub(super) enum PageAction {
+    Retry,
+    OpenRecent(usize),
+    ClearRecent,
+    ResetLayout,
+}
+
 #[derive(Default)]
 pub(crate) struct Page {
     category: Category,
@@ -27,10 +39,14 @@ impl Page {
         ctx: &Context,
         open: &mut bool,
         values: &mut Settings,
-        path: Option<&str>,
-        error: Option<&str>,
-        retry: &mut bool,
-    ) {
+        info: PageInfo<'_>,
+    ) -> Option<PageAction> {
+        let PageInfo {
+            path,
+            error,
+            recent,
+        } = info;
+        let mut action = None;
         let screen = ctx.content_rect();
         let search_id = Id::unique("preference-search");
         let find = ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::F));
@@ -125,12 +141,12 @@ impl Page {
                                                     ui.label(tr(error));
                                                     path_line(ui, path);
                                                     if ui.button(tr("Retry")).clicked() {
-                                                        *retry = true;
+                                                        action = Some(PageAction::Retry);
                                                     }
                                                 });
                                             ui.add_space(4.);
                                         }
-                                        self.content(ui, values, path);
+                                        self.content(ui, values, path, recent, &mut action);
                                     });
                             },
                         );
@@ -168,6 +184,7 @@ impl Page {
             Dismiss::Escape | Dismiss::Close => *open = false,
             Dismiss::Open => {}
         }
+        action
     }
     fn select(&mut self, cat: Category) {
         self.category = cat;
@@ -175,7 +192,14 @@ impl Page {
         self.confirm_reset = false;
         self.frequency_draft = None;
     }
-    fn content(&mut self, ui: &mut Ui, values: &mut Settings, path: Option<&str>) {
+    fn content(
+        &mut self,
+        ui: &mut Ui,
+        values: &mut Settings,
+        path: Option<&str>,
+        recent: &[String],
+        action: &mut Option<PageAction>,
+    ) {
         let q = self.query.trim().to_lowercase();
         if q.is_empty() && self.category == Category::Advanced {
             theme::card(ui, tr("Configuration"), |ui| {
@@ -184,12 +208,13 @@ impl Page {
             });
             ui.add_space(4.);
             theme::card(ui, tr("Reset preferences"), |ui| {
-                ui.label(tr("Reset language, appearance, editor, simulation and generation preferences. Your current circuit is preserved."));
+                ui.label(tr("Restore default preferences. Your current circuit and workspace layout are preserved."));
                 if self.confirm_reset {
                     ui.strong(tr("Reset all settings to their defaults?"));
                     ui.horizontal(|ui| {
                         if ui.button(tr("Confirm reset")).clicked() {
                             *values = Settings::default();
+                            self.frequency_draft = None;
                             self.confirm_reset = false;
                         }
                         if ui.button(tr("Cancel")).clicked() {
@@ -222,6 +247,32 @@ impl Page {
                 }
             });
             ui.add_space(4.);
+        }
+        if active == Category::Workspace && q.is_empty() {
+            theme::card(ui, tr("Recent Projects"), |ui| {
+                if recent.is_empty() {
+                    ui.weak(tr("No recent projects"));
+                } else {
+                    for (index, path) in recent.iter().take(5).enumerate() {
+                        if crate::document::recent_button(ui, path) {
+                            *action = Some(PageAction::OpenRecent(index));
+                        }
+                    }
+                    if ui.button(tr("Clear recent")).clicked() {
+                        *action = Some(PageAction::ClearRecent);
+                    }
+                }
+            });
+            ui.add_space(4.);
+            if ui
+                .button(tr("Reset workspace layout"))
+                .on_hover_text(tr(
+                    "Center the window and restore the default inspector layout.",
+                ))
+                .clicked()
+            {
+                *action = Some(PageAction::ResetLayout);
+            }
         }
         if !found {
             ui.label(tr("No settings match"));

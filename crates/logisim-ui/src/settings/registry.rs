@@ -6,6 +6,7 @@ use egui::Ui;
 pub(super) enum Category {
     #[default]
     General,
+    Workspace,
     Appearance,
     Editor,
     Simulation,
@@ -13,8 +14,9 @@ pub(super) enum Category {
     Advanced,
 }
 impl Category {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::General,
+        Self::Workspace,
         Self::Appearance,
         Self::Editor,
         Self::Simulation,
@@ -24,6 +26,7 @@ impl Category {
     pub fn label(self) -> &'static str {
         tr(match self {
             Self::General => "General",
+            Self::Workspace => "Workspace",
             Self::Appearance => "Appearance",
             Self::Editor => "Editor",
             Self::Simulation => "Simulation",
@@ -39,6 +42,7 @@ pub(super) enum Control {
     Zoom,
     Mode,
     Frequency,
+    RecentLimit,
 }
 pub(super) struct Entry {
     pub key: &'static str,
@@ -59,6 +63,34 @@ registry![
         "Language",
         "Choose the language used by the workbench.",
         Control::Language
+    ),
+    (
+        "workspace.reopen_last",
+        Workspace,
+        "Reopen last project",
+        "Open the most recent project on startup.",
+        Control::Toggle(|s| &mut s.workspace.reopen_last)
+    ),
+    (
+        "workspace.recent_limit",
+        Workspace,
+        "Recent projects",
+        "Number of files to keep in the recent list.",
+        Control::RecentLimit
+    ),
+    (
+        "workspace.restore_window",
+        Workspace,
+        "Restore window geometry",
+        "Remember the window size, position and maximized state.",
+        Control::Toggle(|s| &mut s.workspace.restore_window)
+    ),
+    (
+        "workspace.restore_panels",
+        Workspace,
+        "Restore inspector layout",
+        "Remember both dividers and the selected catalogue tab.",
+        Control::Toggle(|s| &mut s.workspace.restore_panels)
     ),
     (
         "appearance.ui_scale",
@@ -119,7 +151,7 @@ registry![
 ];
 impl Entry {
     pub fn matches(&self, query: &str) -> bool {
-        [tr(self.label), tr(self.help)]
+        [self.key, tr(self.label), tr(self.help)]
             .iter()
             .any(|s| s.to_lowercase().contains(query))
     }
@@ -137,6 +169,7 @@ impl Entry {
             Control::Toggle(field) => *field(target) = *field(&mut source),
             Control::Zoom => target.default_zoom = source.default_zoom,
             Control::Mode => target.simulation_mode = source.simulation_mode,
+            Control::RecentLimit => target.workspace.recent_limit = source.workspace.recent_limit,
             Control::Frequency => target.tick_hz = source.tick_hz,
         }
     }
@@ -178,6 +211,14 @@ impl Entry {
                     )
                 });
                 theme::focus_ring(ui, &response);
+            }
+            Control::RecentLimit => {
+                let r = ui.add(
+                    egui::DragValue::new(&mut values.workspace.recent_limit)
+                        .range(1..=20)
+                        .update_while_editing(false),
+                );
+                theme::focus_ring(ui, &r);
             }
             Control::Frequency => {
                 let mut hz = draft.unwrap_or(values.tick_hz.get());
