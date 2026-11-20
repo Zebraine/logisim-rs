@@ -20,7 +20,7 @@ fn selection_inspector_and_both_appearance_menus_use_the_active_bindings() {
         for (command, chord) in [
             (Command::ToolRotate, "f10"),
             (Command::AppearanceUndo, "f6"),
-            (Command::AppearanceCopy, "f5"),
+            (Command::AppearanceCopy, "f8"),
             (Command::AppearanceRaise, "f7"),
         ] {
             settings
@@ -46,10 +46,14 @@ fn selection_inspector_and_both_appearance_menus_use_the_active_bindings() {
         frame(&ctx, &mut app, vec![]);
         app.appearance
             .command(&mut app.editor, crate::appearance::Command::All);
-        assert!(has(
-            &frame(&ctx, &mut app, vec![]),
-            &caption(Command::AppearanceRaise)
-        ));
+        let inspector = frame(&ctx, &mut app, vec![]);
+        for command in [
+            Command::AppearanceRaise,
+            Command::AppearanceFront,
+            Command::AppearanceBack,
+        ] {
+            assert!(has(&inspector, &caption(command)));
+        }
 
         let expected: Vec<_> = Command::ALL
             .into_iter()
@@ -88,6 +92,22 @@ fn selection_inspector_and_both_appearance_menus_use_the_active_bindings() {
                 menu.iter()
                     .any(|(s, rect)| s == text && rect.left() >= app.canvas.rect.left()),
                 "{text}"
+            );
+        }
+        for (command, chord) in [
+            (Command::AppearanceFront, "F5"),
+            (Command::AppearanceBack, "F9"),
+        ] {
+            settings
+                .shortcuts
+                .bind(command, chord.parse().unwrap())
+                .unwrap();
+            app.apply_settings(settings);
+            let menu = frame(&ctx, &mut app, vec![]);
+            let remapped = format!("{} · {chord}", label(command.label()));
+            assert!(
+                menu.iter()
+                    .any(|(s, rect)| s == &remapped && rect.left() >= app.canvas.rect.left())
             );
         }
     }

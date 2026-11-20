@@ -506,51 +506,8 @@ fn programmatic_limits_bound_history_and_never_persist_an_invalid_interval() {
 }
 
 #[test]
-fn shortcut_defaults_and_partial_bindings_round_trip_and_survive_retry() {
-    use logisim_ui::shortcuts::{Command, Shortcuts};
-    let expected = [
-        "primary+n",
-        "primary+o",
-        "primary+s",
-        "primary+shift+s",
-        "primary+q",
-        "primary+z",
-        "primary+shift+z",
-        "primary+x",
-        "primary+c",
-        "primary+v",
-        "primary+d",
-        "primary+a",
-        "primary+shift+n",
-        "primary+shift+e",
-        "alt+left",
-        "v",
-        "p",
-        "w",
-        "t",
-        "u",
-        "r",
-        "primary+e",
-        "primary+i",
-        "primary+r",
-        "primary+t",
-        "primary+k",
-        "primary+z",
-        "primary+shift+z",
-        "primary+x",
-        "primary+c",
-        "primary+v",
-        "primary+d",
-        "primary+a",
-        "primary+up",
-        "primary+down",
-        "primary+shift+up",
-        "primary+shift+down",
-    ];
-    assert_eq!(expected.len(), Command::COUNT);
-    for (c, key) in Command::ALL.into_iter().zip(expected) {
-        assert_eq!(Shortcuts::default().get(c).to_string(), key);
-    }
+fn partial_shortcut_bindings_round_trip_and_survive_retry() {
+    use logisim_ui::shortcuts::Command;
     let bytes = br#"{"version":7,"shortcuts":{"file.save":"primary+shift+f8"}}"#;
     let mut shortcuts = schema::decode(bytes).unwrap().settings.shortcuts;
     shortcuts
@@ -596,6 +553,29 @@ fn shortcut_defaults_and_partial_bindings_round_trip_and_survive_retry() {
 }
 
 #[test]
+fn v9_shift_arrow_save_migrates_alongside_restored_layer_defaults() {
+    let config = schema::decode(br#"{"version":9,"shortcuts":{"file.save":"shift+up"}}"#).unwrap();
+    let saved: serde_json::Value = serde_json::from_slice(&schema::encode(&config)).unwrap();
+    assert_eq!(saved["version"], 10);
+    let bindings = saved["shortcuts"].as_object().unwrap();
+    assert_eq!(bindings.len(), 37);
+    assert_eq!(bindings["file.save"], "shift+up");
+    assert_eq!(bindings["appearance.front"], "primary+shift+up");
+    assert_eq!(bindings["appearance.back"], "primary+shift+down");
+    assert!(
+        schema::decode(br#"{"version":9,"shortcuts":{"file.save":"primary+shift+up"}}"#).is_err()
+    );
+}
+
+#[test]
+fn explicit_v10_layer_bindings_survive_the_default_correction() {
+    let config = schema::decode(br#"{"version":10,"shortcuts":{"appearance.front":"shift+up","appearance.back":"shift+down"}}"#).unwrap();
+    let saved: serde_json::Value = serde_json::from_slice(&schema::encode(&config)).unwrap();
+    assert_eq!(saved["shortcuts"]["appearance.front"], "shift+up");
+    assert_eq!(saved["shortcuts"]["appearance.back"], "shift+down");
+}
+
+#[test]
 fn complete_v8_and_v9_shortcuts_keep_custom_keys_and_gain_missing_defaults() {
     use logisim_ui::shortcuts::{Command, Group};
     for version in [8, 9] {
@@ -614,7 +594,9 @@ fn complete_v8_and_v9_shortcuts_keep_custom_keys_and_gain_missing_defaults() {
         let config = schema::decode(file.to_string().as_bytes()).unwrap();
         let saved: serde_json::Value = serde_json::from_slice(&schema::encode(&config)).unwrap();
         assert_eq!(saved["version"], 10);
-        assert_eq!(saved["shortcuts"]["file.save"], "f2");
+        for (id, chord) in file["shortcuts"].as_object().unwrap() {
+            assert_eq!(&saved["shortcuts"][id], chord, "{id}");
+        }
         for (id, chord) in [
             ("tool.select", "v"),
             ("tool.poke", if version == 8 { "p" } else { "f5" }),

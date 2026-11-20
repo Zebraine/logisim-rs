@@ -815,6 +815,10 @@ fn shortcut_search_matches_both_languages_and_restores_individual_bindings() {
                 .shortcuts
                 .bind(Command::AppearanceFront, "f10".parse().unwrap())
                 .unwrap();
+            app.preferences
+                .shortcuts
+                .bind(Command::AppearanceBack, "f7".parse().unwrap())
+                .unwrap();
             for (query, group, chord, reset) in [
                 ("tools", "Tools", "F6", false),
                 ("工具", "Tools", "F6", false),
@@ -825,6 +829,7 @@ fn shortcut_search_matches_both_languages_and_restores_individual_bindings() {
                 ("bring to front", "Appearance", "F10", false),
                 ("置于顶层", "Appearance", "F10", false),
                 ("appearance.front", "Appearance", "F10", true),
+                ("appearance.back", "Appearance", "F7", true),
             ] {
                 app.settings_page.query = query.into();
                 let mut labels = vec![];
@@ -865,10 +870,18 @@ fn shortcut_search_matches_both_languages_and_restores_individual_bindings() {
                 app.preferences.shortcuts.get(Command::ToolRotate),
                 Command::ToolRotate.default_chord()
             );
-            assert_eq!(
-                app.preferences.shortcuts.get(Command::AppearanceFront),
-                Command::AppearanceFront.default_chord()
-            );
+            for command in [Command::AppearanceFront, Command::AppearanceBack] {
+                app.settings_page.query = command.id().into();
+                let labels = frame_at_size(&ctx, &mut app, vec![], size);
+                assert!(has(
+                    &labels,
+                    &command.default_chord().label(ctx.os().is_mac())
+                ));
+                assert_eq!(
+                    app.preferences.shortcuts.get(command),
+                    command.default_chord()
+                );
+            }
             assert_eq!(
                 app.preferences.shortcuts.get(Command::ToolPoke).to_string(),
                 "f6"
