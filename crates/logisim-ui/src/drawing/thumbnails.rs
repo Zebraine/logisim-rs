@@ -60,7 +60,14 @@ impl Thumbnails {
         p.rect_stroke(
             rect,
             3,
-            Stroke::new(1.0, if active { theme::ACCENT } else { theme::BORDER }),
+            Stroke::new(
+                1.0,
+                if active {
+                    theme::colors(p.ctx()).base
+                } else {
+                    theme::BORDER
+                },
+            ),
             StrokeKind::Inside,
         );
         preview.missing

@@ -63,7 +63,7 @@ pub(crate) fn show(
         .id_salt("inspector-scroll")
         .auto_shrink([false, false])
         .show(ui, |ui| {
-            Frame::NONE.inner_margin(8).show(ui, |ui| {
+            Frame::NONE.inner_margin(crate::theme::metrics(ui.ctx()).card_margin).show(ui, |ui| {
                 ui.set_min_width(ui.available_width());
                 ui.spacing_mut().text_edit_width = (ui.available_width() * 0.45).max(72.0);
                 ui.spacing_mut().combo_width = ui.spacing().text_edit_width;
@@ -146,7 +146,7 @@ fn selection_info(ui: &mut Ui, editor: &mut Editor) {
                 "Connected wires: {}",
                 editor.session.circuit.connected_wires(w.id).len()
             ));
-            ui.weak(tr("Click or drag the wire to branch. Ctrl-drag moves; drag blue endpoint handles to reshape."));
+            ui.weak(tr("Click or drag the wire to branch. Ctrl-drag to move it. Drag an endpoint to reshape it."));
             if let Some(signal) = editor.simulation.view.wires.get(&w.id) {
                 ui.colored_label(
                     crate::theme::signal_text(ui.ctx(), signal.tone),

@@ -3,7 +3,7 @@ use crate::{
     artwork,
     canvas::Canvas,
     editor::{Editor, Snapshot},
-    theme::ACCENT,
+    theme,
 };
 use crate::{i18n::tr, tf};
 use egui::{Key, Modifiers, PointerButton, Rect, Response, Stroke, Ui, Vec2};
@@ -782,6 +782,7 @@ impl AppearanceEditor {
             _ => Self::current(editor),
         };
         let painter = ui.painter_at(canvas.rect);
+        let accent = theme::colors(painter.ctx()).base;
         for shape in &preview.shapes {
             artwork::paint(&painter, canvas, shape, |p| p, 0.0);
         }
@@ -793,7 +794,7 @@ impl AppearanceEditor {
                 .is_some_and(|p| p.output);
             let center = canvas.screen(*at);
             let radius = if output { 5.0 } else { 4.0 } * canvas.camera.zoom;
-            let stroke = Stroke::new(1.5, ACCENT);
+            let stroke = Stroke::new(1.5, accent);
             if output {
                 painter.circle_stroke(center, radius, stroke);
             } else {
@@ -804,7 +805,7 @@ impl AppearanceEditor {
                     egui::StrokeKind::Middle,
                 );
             }
-            painter.circle_filled(center, 2.0, ACCENT);
+            painter.circle_filled(center, 2.0, accent);
         }
         let center = canvas.screen(preview.anchor);
         let green = crate::theme::SUCCESS;
@@ -838,7 +839,7 @@ impl AppearanceEditor {
                             _ => None,
                         }
                     {
-                        ACCENT
+                        accent
                     } else {
                         egui::Color32::WHITE
                     },
@@ -846,7 +847,7 @@ impl AppearanceEditor {
                 painter.rect_stroke(
                     rect,
                     1.0,
-                    Stroke::new(1.0, ACCENT),
+                    Stroke::new(1.0, accent),
                     egui::StrokeKind::Middle,
                 );
             }
@@ -855,7 +856,7 @@ impl AppearanceEditor {
             painter.rect_stroke(
                 Rect::from_two_pos(canvas.screen_vec(*start), canvas.screen_vec(*end)),
                 0.0,
-                Stroke::new(1.0, ACCENT),
+                Stroke::new(1.0, accent),
                 egui::StrokeKind::Middle,
             );
         }

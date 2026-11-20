@@ -66,8 +66,11 @@ impl Page {
         if find {
             ctx.memory_mut(|m| m.request_focus(search_id));
         }
-        let dismiss =
-            Dialog::editor("settings-window", 760., 560.).show(ctx, tr("Settings"), |dialog| {
+        let m = theme::metrics(ctx);
+        let dismiss = Dialog::editor("settings-window", m.settings_size.x, m.settings_size.y).show(
+            ctx,
+            tr("Settings"),
+            |dialog| {
                 dialog.panes(|ui| {
                     let compact =
                         ui.available_width() < 610. || screen.width() * ctx.zoom_factor() <= 720.;
@@ -115,7 +118,7 @@ impl Page {
                                     ui.set_width(158.);
                                     for cat in Category::ALL {
                                         let r = ui.add_sized(
-                                            [156., 30.],
+                                            [156., m.row],
                                             egui::Button::selectable(
                                                 self.category == cat && self.query.is_empty(),
                                                 cat.label(),
@@ -146,7 +149,7 @@ impl Page {
                                             egui::Frame::NONE
                                                 .fill(theme::SUNKEN)
                                                 .corner_radius(6)
-                                                .inner_margin(8)
+                                                .inner_margin(m.card_margin)
                                                 .show(ui, |ui| {
                                                     ui.colored_label(
                                                         theme::DANGER,
@@ -158,7 +161,7 @@ impl Page {
                                                         action = Some(PageAction::Retry);
                                                     }
                                                 });
-                                            ui.add_space(4.);
+                                            ui.add_space(f32::from(theme::metrics(ui.ctx()).gap));
                                         }
                                         self.content(ui, values, path, recent, &mut action);
                                     });
@@ -191,7 +194,8 @@ impl Page {
                         }
                     }
                 });
-            });
+            },
+        );
         match dismiss {
             Dismiss::Escape if self.confirm_clear => self.confirm_clear = false,
             Dismiss::Escape if self.confirm_reset => self.confirm_reset = false,
@@ -222,7 +226,7 @@ impl Page {
                 path_line(ui, path);
                 theme::chip(ui, &tf!("Configuration version {}", super::CONFIG_VERSION));
             });
-            ui.add_space(4.);
+            ui.add_space(f32::from(theme::metrics(ui.ctx()).gap));
             theme::card(ui, tr("Reset preferences"), |ui| {
                 ui.label(tr("Restore default preferences. Your current circuit and workspace layout are preserved."));
                 if self.confirm_reset {
@@ -262,7 +266,7 @@ impl Page {
                     ui.push_id(e.key, |ui| self.row(ui, e, values));
                 }
             });
-            ui.add_space(4.);
+            ui.add_space(f32::from(theme::metrics(ui.ctx()).gap));
         }
         if self.showing_files() {
             theme::card(ui, tr("Recovery snapshot"), |ui| {
@@ -310,7 +314,7 @@ impl Page {
                     }
                 }
             });
-            ui.add_space(4.);
+            ui.add_space(f32::from(theme::metrics(ui.ctx()).gap));
             theme::card(ui, tr("Workspace layout"), |ui| {
                 ui.weak(tr(
                     "Center the window and restore the default inspector layout.",
@@ -337,7 +341,7 @@ impl Page {
         };
         ui.horizontal(|ui| {
             ui.allocate_ui_with_layout(
-                vec2((width - right - 4.).max(40.), 30.),
+                vec2((width - right - 4.).max(40.), theme::metrics(ui.ctx()).row),
                 Layout::top_down(Align::Min),
                 |ui| {
                     ui.label(RichText::new(tr(e.label)).strong());
@@ -356,7 +360,7 @@ impl Page {
                         self.frequency_draft = None;
                     }
                 } else {
-                    ui.add_space(28.);
+                    ui.add_space(theme::metrics(ui.ctx()).icon_button);
                 }
                 e.show(ui, values, &mut self.frequency_draft);
             });

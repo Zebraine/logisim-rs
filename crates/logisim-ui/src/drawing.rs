@@ -4,7 +4,7 @@ pub(crate) mod thumbnails;
 use crate::{
     canvas::Canvas,
     simulation::SimulationView,
-    theme::{ACCENT, INK},
+    theme::{self, INK},
 };
 use crate::{i18n::tr, tf};
 pub(crate) use cache::CircuitCache;
@@ -256,6 +256,7 @@ pub(crate) fn circuit(
 ) {
     cache.synchronize(circuit, selection);
     cache.prepare_view(p, canvas);
+    let accent = theme::colors(p.ctx()).base;
     let palette = crate::theme::active_palette(p.ctx());
     let mut badges = Vec::new();
     for w in &circuit.wires {
@@ -273,7 +274,7 @@ pub(crate) fn circuit(
                 segment,
                 Stroke::new(
                     if selected { 7.0 } else { 5.0 },
-                    ACCENT.gamma_multiply(if selected { 0.25 } else { 0.12 }),
+                    accent.gamma_multiply(if selected { 0.25 } else { 0.12 }),
                 ),
             );
         }
@@ -334,7 +335,7 @@ pub(crate) fn circuit(
                 p.rect_filled(
                     Rect::from_center_size(canvas.screen(endpoint), vec2(6.0, 6.0)),
                     1,
-                    ACCENT,
+                    accent,
                 );
             }
         }
@@ -363,8 +364,9 @@ pub(crate) fn component(
     ghost: bool,
     simulation: Option<&SimulationView>,
 ) {
+    let accent = theme::colors(p.ctx()).base;
     let color = if ghost {
-        ACCENT.gamma_multiply(0.45)
+        accent.gamma_multiply(0.45)
     } else {
         Color32::from_rgba_unmultiplied(c.color[0], c.color[1], c.color[2], c.color_alpha)
     };
@@ -846,7 +848,7 @@ pub(crate) fn component(
             if ghost {
                 color
             } else {
-                signal.map_or(ACCENT, |s| crate::theme::signal(p.ctx(), s.tone))
+                signal.map_or(accent, |s| crate::theme::signal(p.ctx(), s.tone))
             },
         );
     }
@@ -860,7 +862,7 @@ pub(crate) fn component(
         p.rect_stroke(
             r,
             2,
-            Stroke::new(1.0, ACCENT.gamma_multiply(0.65)),
+            Stroke::new(1.0, accent.gamma_multiply(0.65)),
             StrokeKind::Outside,
         );
         for at in [
@@ -869,7 +871,7 @@ pub(crate) fn component(
             r.left_bottom(),
             r.right_bottom(),
         ] {
-            p.rect_filled(Rect::from_center_size(at, vec2(5.0, 5.0)), 1, ACCENT);
+            p.rect_filled(Rect::from_center_size(at, vec2(5.0, 5.0)), 1, accent);
         }
     }
 }

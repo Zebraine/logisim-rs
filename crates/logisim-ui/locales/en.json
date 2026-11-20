@@ -164,7 +164,7 @@
     "Clear: restart from seed": "Clear: restart from seed",
     "Click an output: 0 → 1 → x. x is a don't-care and will become 0 or 1 in the generated circuit.": "Click an output: 0 → 1 → x. x is a don't-care and will become 0 or 1 in the generated circuit.",
     "Click or drag a wire to branch. Ctrl-click selects; Ctrl-drag moves.": "Click or drag a wire to branch. Ctrl-click selects; Ctrl-drag moves.",
-    "Click or drag the wire to branch. Ctrl-drag moves; drag blue endpoint handles to reshape.": "Click or drag the wire to branch. Ctrl-drag moves; drag blue endpoint handles to reshape.",
+    "Click or drag the wire to branch. Ctrl-drag to move it. Drag an endpoint to reshape it.": "Click or drag the wire to branch. Ctrl-drag to move it. Drag an endpoint to reshape it.",
     "Click to add text, then edit its content here.": "Click to add text, then edit its content here.",
     "Click two points or drag to connect. Shift changes the bend. Esc cancels.": "Click two points or drag to connect. Shift changes the bend. Esc cancels.",
     "Click vertices. Double-click or Enter to finish. Escape cancels.": "Click vertices. Double-click or Enter to finish. Escape cancels.",

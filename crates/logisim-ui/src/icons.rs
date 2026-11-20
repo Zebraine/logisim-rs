@@ -34,7 +34,10 @@ pub(crate) fn button(
     hint: &str,
 ) -> Response {
     ui.add_enabled_ui(enabled, |ui| {
-        let (rect, response) = ui.allocate_exact_size(vec2(28.0, 28.0), Sense::click());
+        let (rect, response) = ui.allocate_exact_size(
+            egui::Vec2::splat(crate::theme::metrics(ui.ctx()).icon_button),
+            Sense::click(),
+        );
         let visuals = ui.style().interact_selectable(&response, selected);
         if response.hovered() || selected || response.has_focus() {
             ui.painter()
@@ -42,13 +45,13 @@ pub(crate) fn button(
         }
         crate::theme::focus_ring(ui, &response);
         let color = if selected {
-            crate::theme::ACCENT
+            crate::theme::colors(ui.ctx()).base
         } else if enabled {
             crate::theme::INK
         } else {
             crate::theme::MUTED
         };
-        paint(ui.painter(), rect.shrink(7.0), icon, color);
+        paint(ui.painter(), rect.shrink(rect.width() * 0.25), icon, color);
         response.on_hover_text(crate::i18n::tr(hint))
     })
     .inner

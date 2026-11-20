@@ -8,14 +8,45 @@ use crate::{
 use egui::{Align, Layout, Ui};
 use logisim_core::{Gate, Kind};
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum ToolbarLayout {
+    Wide,
+    Wrapped,
+    Narrow,
+}
+
+impl ToolbarLayout {
+    pub(super) fn for_width(width: f32) -> Self {
+        if width < 620. {
+            Self::Narrow
+        } else if width < 1100. {
+            Self::Wrapped
+        } else {
+            Self::Wide
+        }
+    }
+    pub(super) fn height(self, m: crate::theme::Metrics, telemetry: bool) -> f32 {
+        match self {
+            Self::Wide => m.toolbar_wide,
+            Self::Narrow if telemetry => m.toolbar_wrapped + m.row,
+            _ => m.toolbar_wrapped,
+        }
+    }
+    pub(super) fn padding(self, m: crate::theme::Metrics) -> i8 {
+        let rows = if self == Self::Wide { 1. } else { 2. };
+        let gap = (rows - 1.) * f32::from(m.gap);
+        ((self.height(m, false) - rows * m.row - gap) / 2.).floor() as i8
+    }
+}
+
 impl Workspace {
-    pub(super) fn toolbar(&mut self, ui: &mut Ui) {
+    pub(super) fn toolbar(&mut self, ui: &mut Ui, layout: ToolbarLayout) {
         if self.editor.session.context.appearance_mode {
             self.appearance.toolbar(ui, &mut self.editor);
             return;
         }
-        let narrow = ui.available_width() < 620.0;
-        let compact = ui.available_width() < 1100.0;
+        let narrow = layout == ToolbarLayout::Narrow;
+        let compact = layout != ToolbarLayout::Wide;
         ui.horizontal(|ui| {
             self.edit_tools(ui);
             if narrow {

@@ -52,7 +52,7 @@ fn row(
                 rect,
                 4,
                 if selected {
-                    theme::ACCENT_SOFT
+                    theme::colors(ui.ctx()).soft
                 } else {
                     theme::CHROME
                 },
@@ -62,7 +62,7 @@ fn row(
             ui.painter().rect_filled(
                 Rect::from_min_size(rect.min + vec2(0.0, 4.0), vec2(3.0, rect.height() - 8.0)),
                 2,
-                theme::ACCENT,
+                theme::colors(ui.ctx()).base,
             );
         }
         theme::focus_ring(ui, &response);
@@ -80,7 +80,7 @@ fn row(
                 r,
                 4,
                 if selected {
-                    theme::SELECTED
+                    theme::colors(ui.ctx()).selected
                 } else {
                     theme::SUNKEN
                 },
@@ -93,7 +93,14 @@ fn row(
 }
 
 fn component_row(ui: &mut Ui, name: &str, selected: bool, icon: ComponentIcon<'_>) -> Response {
-    let response = row(ui, name, selected, 38.0, 28.0, "");
+    let response = row(
+        ui,
+        name,
+        selected,
+        38.0,
+        theme::metrics(ui.ctx()).control,
+        "",
+    );
     if ui.is_rect_visible(response.rect) {
         let center = response.rect.left_center() + vec2(25.0, 0.0);
         let rect = Rect::from_center_size(center, Vec2::splat(18.0));
@@ -101,7 +108,7 @@ fn component_row(ui: &mut Ui, name: &str, selected: bool, icon: ComponentIcon<'_
             ui.painter(),
             rect,
             if selected {
-                theme::ACCENT
+                theme::colors(ui.ctx()).base
             } else {
                 theme::MUTED
             },
@@ -120,7 +127,7 @@ fn group(
 ) -> (bool, Response) {
     let id = ui.make_persistent_id(key);
     let opened = ui.data(|d| d.get_temp::<bool>(id)).unwrap_or(false);
-    let response = row(ui, name, false, 38.0, 30.0, badge);
+    let response = row(ui, name, false, 38.0, theme::metrics(ui.ctx()).row, badge);
     let open = opened ^ response.clicked();
     if response.clicked() {
         ui.data_mut(|d| d.insert_temp(id, open));
@@ -349,7 +356,7 @@ impl Workspace {
                     &d.name,
                     active,
                     72.0,
-                    42.0,
+                    crate::drawing::thumbnails::SIZE.y + f32::from(theme::metrics(ui.ctx()).gap),
                     if self.project().main == id {
                         tr("Main circuit")
                     } else {

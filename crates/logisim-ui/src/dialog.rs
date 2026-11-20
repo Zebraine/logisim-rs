@@ -37,7 +37,8 @@ impl Dialog {
         title: &str,
         contents: impl FnOnce(&mut DialogUi<'_>),
     ) -> Dismiss {
-        let frame = Frame::window(&ctx.global_style()).inner_margin(12);
+        let frame = Frame::window(&ctx.global_style())
+            .inner_margin(crate::theme::metrics(ctx).dialog_margin);
         let margin = frame.total_margin().sum();
         let limit = (ctx.content_rect().size() * 0.9 - margin).max(Vec2::splat(1.));
         let modal = egui::Modal::new(self.id).frame(frame).show(ctx, |ui| {
@@ -53,7 +54,7 @@ impl Dialog {
             if let Some(size) = self.size {
                 let min = (vec2(640., 440.).min(size) - margin).min(limit);
                 egui::Resize::default()
-                    .id_salt("dialog-size")
+                    .id_salt(("dialog-size", size.x.to_bits(), size.y.to_bits()))
                     .with_stroke(false)
                     .min_size(min)
                     .max_size(limit)

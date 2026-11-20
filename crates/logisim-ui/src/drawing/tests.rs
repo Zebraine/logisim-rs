@@ -202,7 +202,12 @@ fn live_component_ink_tracks_palette_and_preserves_document_artwork() {
         view.indicators.insert(c.id, [true; 8]);
         view.storage.insert(c.id, high);
         view.memories.entry(c.id).or_default().fill(0, 1, 1);
-        for palette in SignalPalette::ALL {
+        for (palette, accent) in SignalPalette::ALL.into_iter().zip([
+            crate::Accent::Teal,
+            crate::Accent::Indigo,
+            crate::Accent::Blue,
+        ]) {
+            crate::theme::apply_chrome(&ctx, crate::Density::Compact, accent);
             palette.apply(&ctx);
             let mut out = ctx.run_ui(Default::default(), |ui| {
                 component(ui.painter(), &canvas, &c, false, false, Some(&view))

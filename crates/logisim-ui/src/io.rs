@@ -416,7 +416,7 @@ pub(crate) fn draw(
             p.circle(
                 canvas.screen_vec(slider_knob(c)),
                 5.0 * z,
-                crate::theme::ACCENT,
+                ink,
                 Stroke::new(1.0, ink),
             );
             let text = slider_text(c);

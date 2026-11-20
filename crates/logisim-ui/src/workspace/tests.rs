@@ -35,25 +35,27 @@ fn canvas_keeps_the_right_hand_layout_when_resizing_in_both_languages() {
         configure(&ctx);
         let mut app = Workspace::default();
         app.set_language(language);
-        for size in [vec2(1440.0, 900.0), vec2(1200.0, 820.0), vec2(720.0, 480.0)] {
-            for _ in 0..3 {
-                frame(&ctx, &mut app, size, vec![]);
+        for density in [Density::Comfortable, Density::Compact] {
+            app.apply_settings(Settings {
+                density,
+                ..app.preferences()
+            });
+            let m = density.metrics();
+            for size in [vec2(1440., 900.), vec2(1200., 820.), vec2(720., 480.)] {
+                for _ in 0..3 {
+                    frame(&ctx, &mut app, size, vec![]);
+                }
+                let canvas = app.canvas.rect;
+                assert_eq!(canvas.left(), m.sidebar.default.min(size.x - 452.));
+                assert!(canvas.width() > 450.);
+                let toolbar = if size.x == 720. {
+                    m.toolbar_wrapped
+                } else {
+                    m.toolbar_wide
+                };
+                assert_eq!(canvas.top(), m.menu + toolbar, "{density:?} {size:?}");
+                assert_eq!(canvas.right_bottom(), size.to_pos2());
             }
-            let canvas = app.canvas.rect;
-            assert!(
-                (230.0..=381.0).contains(&canvas.left()),
-                "{size:?} {canvas:?}"
-            );
-            assert!(canvas.width() > 450.0);
-            let toolbar_height = canvas.top() - 30.0;
-            let expected = if size.x == 720.0 {
-                64.0..=84.0
-            } else {
-                48.0..=52.0
-            };
-            assert!(expected.contains(&toolbar_height), "{size:?} {canvas:?}");
-            assert_eq!(canvas.right(), size.x);
-            assert_eq!(canvas.bottom(), size.y);
         }
     }
 }
@@ -384,5 +386,91 @@ fn inverted_wheel_keeps_anchor_limits_and_pinch_direction() {
             }
         );
         assert!((app.canvas.camera.world_at(anchor) - world).length() < 0.002);
+    }
+}
+
+#[test]
+fn chrome_switches_preserve_document_selection_history_camera_and_simulation() {
+    let ctx = Context::default();
+    configure(&ctx);
+    let mut app = Workspace::default();
+    let mut circuit = logisim_core::Circuit::default();
+    circuit.add_wire(
+        logisim_core::Point::new(40, 40),
+        logisim_core::Point::new(140, 40),
+    );
+    let wire = circuit.wires[0].id;
+    app.replace_circuit(circuit);
+    let size = vec2(1200., 820.);
+    frame(&ctx, &mut app, size, vec![]);
+    app.editor.session.selection.insert(wire);
+    app.canvas.camera.zoom = 1.25;
+    app.canvas.camera.offset = vec2(73., -61.);
+    app.simulation_mut().ticks = 41;
+    app.simulation_mut().enabled = false;
+    let document = app.project().clone();
+    for density in [Density::Comfortable, Density::Compact] {
+        for accent in [Accent::Indigo, Accent::Blue, Accent::Teal] {
+            app.apply_settings(Settings {
+                density,
+                accent,
+                ..app.preferences()
+            });
+            frame(&ctx, &mut app, size, vec![]);
+            assert_eq!(app.project(), &document);
+            assert!(!app.document.dirty && !app.editor.can_undo());
+            assert_eq!(
+                app.editor
+                    .session
+                    .selection
+                    .iter()
+                    .copied()
+                    .collect::<Vec<_>>(),
+                [wire]
+            );
+            assert_eq!(app.canvas.camera.zoom, 1.25);
+            assert_eq!(app.canvas.camera.offset, vec2(73., -61.));
+            assert_eq!(app.simulation_mut().ticks, 41);
+            assert!(!app.simulation_mut().enabled);
+            assert!(app.take_simulation_actions().is_empty());
+        }
+    }
+}
+
+#[test]
+fn selection_and_primary_button_paint_with_each_accent() {
+    use egui::Shape;
+    let ctx = Context::default();
+    configure(&ctx);
+    let mut app = Workspace::default();
+    let mut circuit = logisim_core::Circuit::default();
+    circuit.add_wire(
+        logisim_core::Point::new(50, 50),
+        logisim_core::Point::new(200, 50),
+    );
+    let wire = circuit.wires[0].id;
+    app.replace_circuit(circuit);
+    app.editor.session.selection.insert(wire);
+    let size = vec2(1200., 820.);
+    for accent in [Accent::Indigo, Accent::Blue, Accent::Teal] {
+        app.apply_settings(Settings {
+            accent,
+            ..app.preferences()
+        });
+        frame(&ctx, &mut app, size, vec![]);
+        let output = ctx.run_ui(
+            RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, size)),
+                ..Default::default()
+            },
+            |ui| app.show(ui),
+        );
+        let c = accent.colors();
+        let shapes = || output.shapes.iter().map(|s| &s.shape);
+        assert!(shapes().any(|s| matches!(s,Shape::Rect(r) if r.fill==c.base && r.rect.width()>=59. && r.rect.top()<80.)), "primary button");
+        assert!(shapes().any(|s| matches!(s,Shape::Rect(r) if r.fill==c.selected && r.rect.width()>80. && r.rect.left()<320.)), "selected catalogue tab");
+        assert!(shapes().any(|s| matches!(s,Shape::Rect(r) if r.rect.size()==crate::drawing::thumbnails::SIZE && r.stroke.color==c.base)), "thumbnail");
+        assert!(shapes().any(|s| matches!(s,Shape::LineSegment{stroke,..} if stroke.color==c.base.gamma_multiply(0.25))), "selected wire halo");
+        assert_eq!(shapes().filter(|s|matches!(s,Shape::Rect(r) if r.fill==c.base && r.rect.size()==Vec2::splat(6.))).count(),2);
     }
 }

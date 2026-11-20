@@ -1,19 +1,12 @@
 //! Shared desktop chrome. Document artwork supplies its own colors and fonts.
 use egui::{Color32, Context, FontId, Response, Stroke, StrokeKind, TextStyle, Ui, vec2};
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub enum Density {
-    #[default]
-    Comfortable,
-    Compact,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Accent {
-    #[default]
-    Indigo,
-    Blue,
-    Teal,
+mod chrome;
+pub use chrome::{Accent, Density};
+pub(crate) use chrome::{Metrics, apply_chrome, colors, metrics};
+const fn rgb(hex: u32) -> Color32 {
+    let [_, r, g, b] = hex.to_be_bytes();
+    Color32::from_rgb(r, g, b)
 }
 
 mod signal;
@@ -29,10 +22,6 @@ pub(crate) const BORDER_STRONG: Color32 = Color32::from_rgb(203, 213, 225);
 pub(crate) const INK: Color32 = Color32::from_rgb(15, 23, 42);
 pub(crate) const MUTED: Color32 = Color32::from_rgb(91, 107, 127);
 pub(crate) const FAINT: Color32 = Color32::from_rgb(148, 163, 184);
-pub(crate) const ACCENT: Color32 = Color32::from_rgb(79, 70, 229);
-pub(crate) const ACCENT_HOVER: Color32 = Color32::from_rgb(67, 56, 202);
-pub(crate) const ACCENT_SOFT: Color32 = Color32::from_rgb(238, 242, 255);
-pub(crate) const SELECTED: Color32 = Color32::from_rgb(224, 231, 255);
 pub(crate) const SUCCESS: Color32 = Color32::from_rgb(21, 128, 61);
 pub(crate) const WARNING: Color32 = Color32::from_rgb(180, 83, 9);
 pub(crate) const DANGER: Color32 = Color32::from_rgb(220, 38, 38);
@@ -51,9 +40,6 @@ pub fn configure(ctx: &Context) {
         (TextStyle::Heading, FontId::proportional(16.0)),
         (TextStyle::Monospace, FontId::monospace(12.0)),
     ]);
-    style.spacing.item_spacing = vec2(4.0, 4.0);
-    style.spacing.button_padding = vec2(8.0, 4.0);
-    style.spacing.interact_size.y = 28.0;
     style.spacing.window_margin = 16.into();
     style.spacing.menu_margin = 4.into();
     style.spacing.scroll.bar_width = 6.0;
@@ -69,23 +55,38 @@ pub fn configure(ctx: &Context) {
     v.extreme_bg_color = SURFACE;
     v.text_edit_bg_color = Some(SURFACE);
     v.weak_text_color = Some(MUTED);
-    v.hyperlink_color = ACCENT;
     v.warn_fg_color = WARNING;
     v.error_fg_color = DANGER;
-    v.selection.bg_fill = SELECTED;
-    v.selection.stroke = Stroke::new(2.0, ACCENT);
     v.disabled_alpha = 0.64;
+    ctx.set_global_style(style);
+    // Configure can be called again on a context previously using a different preset.
+    apply_chrome(ctx, Density::default(), Accent::default());
+}
+
+fn style_chrome(style: &mut egui::Style, m: chrome::Metrics, colors: chrome::AccentColors) {
+    style.spacing.item_spacing = vec2(4., f32::from(m.gap));
+    style.spacing.button_padding = vec2(f32::from(m.card_margin), f32::from(m.gap));
+    style.spacing.interact_size.y = m.control;
+    let v = &mut style.visuals;
+    v.hyperlink_color = colors.base;
+    v.selection.bg_fill = colors.selected;
+    v.selection.stroke = Stroke::new(2.0, colors.base);
     for (widget, fill, border, ink) in [
         (&mut v.widgets.noninteractive, CHROME, BORDER, INK),
         (&mut v.widgets.inactive, SURFACE, BORDER_STRONG, INK),
         (
             &mut v.widgets.hovered,
-            ACCENT_SOFT,
+            colors.soft,
             BORDER_STRONG,
-            ACCENT_HOVER,
+            colors.hover,
         ),
-        (&mut v.widgets.open, SELECTED, ACCENT, ACCENT),
-        (&mut v.widgets.active, SELECTED, ACCENT, INK),
+        (
+            &mut v.widgets.open,
+            colors.selected,
+            colors.base,
+            colors.base,
+        ),
+        (&mut v.widgets.active, colors.selected, colors.base, INK),
     ] {
         widget.bg_fill = fill;
         widget.weak_bg_fill = fill;
@@ -95,7 +96,6 @@ pub fn configure(ctx: &Context) {
         widget.expansion = 0.0;
     }
     v.widgets.active.bg_stroke.width = 2.0;
-    ctx.set_global_style(style);
 }
 
 pub(crate) fn focus_ring(ui: &Ui, response: &Response) {
@@ -103,7 +103,7 @@ pub(crate) fn focus_ring(ui: &Ui, response: &Response) {
         ui.painter().rect_stroke(
             response.rect,
             4,
-            Stroke::new(2.0, ACCENT),
+            Stroke::new(2.0, colors(ui.ctx()).base),
             StrokeKind::Inside,
         );
     }
@@ -112,7 +112,7 @@ pub(crate) fn focus_ring(ui: &Ui, response: &Response) {
 pub(crate) fn section(ui: &mut Ui, label: &str) -> Response {
     ui.label(
         egui::RichText::new(label.to_uppercase())
-            .size(11.0)
+            .size(12.0)
             .extra_letter_spacing(0.4)
             .strong()
             .color(MUTED),
@@ -135,7 +135,7 @@ pub(crate) fn card<R>(ui: &mut Ui, label: &str, body: impl FnOnce(&mut Ui) -> R)
         .fill(SURFACE)
         .stroke(Stroke::new(1.0, BORDER))
         .corner_radius(6)
-        .inner_margin(8)
+        .inner_margin(metrics(ui.ctx()).card_margin)
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
             section(ui, label);

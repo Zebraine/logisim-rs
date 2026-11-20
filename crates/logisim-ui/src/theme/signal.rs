@@ -22,10 +22,7 @@ impl SignalPalette {
     }
 }
 
-const fn rgb(hex: u32) -> Color32 {
-    let [_, r, g, b] = hex.to_be_bytes();
-    Color32::from_rgb(r, g, b)
-}
+use super::rgb;
 
 impl SignalPalette {
     pub(crate) fn color(self, tone: SignalTone) -> Color32 {

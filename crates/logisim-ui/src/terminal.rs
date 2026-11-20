@@ -124,7 +124,11 @@ pub(crate) fn draw(
         },
         Stroke::new(
             if focused { 2.0 } else { 1.5 },
-            if focused { crate::theme::ACCENT } else { ink },
+            if focused {
+                crate::theme::colors(p.ctx()).base
+            } else {
+                ink
+            },
         ),
         StrokeKind::Inside,
     );

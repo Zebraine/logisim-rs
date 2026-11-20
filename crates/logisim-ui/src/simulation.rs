@@ -344,17 +344,18 @@ impl SimulationUi {
     pub fn toolbar(&mut self, ui: &mut Ui) {
         if ui
             .scope(|ui| {
+                let colors = theme::colors(ui.ctx());
                 let v = &mut ui.visuals_mut().widgets;
-                v.inactive.weak_bg_fill = theme::ACCENT;
-                v.hovered.weak_bg_fill = theme::ACCENT_HOVER;
-                v.active.weak_bg_fill = theme::ACCENT_HOVER;
+                v.inactive.weak_bg_fill = colors.base;
+                v.hovered.weak_bg_fill = colors.hover;
+                v.active.weak_bg_fill = colors.hover;
                 ui.add(
                     egui::Button::new(
                         egui::RichText::new(tr(if self.view.enabled { "Pause" } else { "Run" }))
                             .color(theme::SURFACE)
                             .strong(),
                     )
-                    .min_size(egui::vec2(60.0, 30.0)),
+                    .min_size(egui::vec2(60.0, theme::metrics(ui.ctx()).row)),
                 )
             })
             .inner
@@ -398,7 +399,7 @@ impl SimulationUi {
                     theme::INK,
                 );
                 let (rect, r) = ui.allocate_exact_size(
-                    egui::vec2(36.0 + text.size().x, 28.0),
+                    egui::vec2(36.0 + text.size().x, theme::metrics(ui.ctx()).control),
                     egui::Sense::click(),
                 );
                 r.widget_info(|| {
@@ -417,7 +418,7 @@ impl SimulationUi {
                 ui.painter().rect_filled(
                     rail,
                     8,
-                    theme::BORDER_STRONG.lerp_to_gamma(theme::ACCENT, t),
+                    theme::BORDER_STRONG.lerp_to_gamma(theme::colors(ui.ctx()).base, t),
                 );
                 ui.painter().circle_filled(
                     rail.left_center() + egui::vec2(8.0 + t * 12.0, 0.0),

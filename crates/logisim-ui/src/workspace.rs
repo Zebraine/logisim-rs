@@ -28,7 +28,7 @@ pub struct WorkspaceLayout {
 impl Default for WorkspaceLayout {
     fn default() -> Self {
         Self {
-            sidebar_width: 320.,
+            sidebar_width: crate::Density::Comfortable.metrics().sidebar.default,
             split: 0.52,
             tab: LayoutTab::Circuits,
         }

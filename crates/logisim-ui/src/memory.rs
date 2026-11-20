@@ -182,7 +182,7 @@ pub(crate) fn draw(
             p.rect_filled(
                 Rect::from_min_max(at(-125, y - 5), at(-15, y + 5)),
                 1.0,
-                crate::theme::SELECTED,
+                crate::theme::colors(p.ctx()).selected,
             );
         }
         text(

@@ -7,7 +7,7 @@ use crate::{
     i18n::{self, tr},
     icons::{self, Icon},
     project::CircuitCommand,
-    theme::CHROME,
+    theme::{self, CHROME},
 };
 use egui::{Frame, Margin, Panel, Ui, vec2};
 
@@ -99,8 +99,9 @@ impl Workspace {
                 }
             }
         }
+        let m = theme::metrics(ui.ctx());
         Panel::top("menus")
-            .exact_size(30.0)
+            .exact_size(m.menu)
             .frame(
                 Frame::NONE
                     .fill(CHROME)
@@ -109,36 +110,35 @@ impl Workspace {
             .show(ui, |ui| self.menus(ui));
 
         let width = ui.available_width() - 16.;
-        let compact = width < 1100.;
-        let toolbar_height = if width < 620. && self.preferences.show_telemetry {
-            108.
-        } else if compact {
-            78.
-        } else {
-            50.
-        };
+        let toolbar = super::toolbar::ToolbarLayout::for_width(width);
+        let height = toolbar.height(m, self.preferences.show_telemetry);
         Panel::top("tools")
-            .exact_size(toolbar_height)
+            .exact_size(height)
             .frame(
                 Frame::NONE
                     .fill(CHROME)
-                    .inner_margin(Margin::symmetric(8, if compact { 6 } else { 10 })),
+                    .inner_margin(Margin::symmetric(8, toolbar.padding(m))),
             )
-            .show(ui, |ui| self.toolbar(ui));
+            .show(ui, |ui| self.toolbar(ui, toolbar));
 
-        let side_max = (ui.available_width() - 452.0).clamp(230.0, 380.0);
-        let size = self.layout.sidebar_width.min(side_max);
+        let sidebar = m.sidebar;
+        let canonical = crate::Density::Comfortable.metrics().sidebar;
+        let side_max = (ui.available_width() - 452.).clamp(sidebar.min, sidebar.max);
+        let size = canonical
+            .project(self.layout.sidebar_width, sidebar)
+            .min(side_max);
         let panel = prepare_panel(ui, "inspector", size, &mut self.navigation.last_width);
         Panel::left("inspector")
             .default_size(size)
-            .size_range(230.0..=side_max)
+            .size_range(sidebar.min..=side_max)
             .frame(Frame::NONE.fill(CHROME))
             .show(ui, |ui| {
                 let mut bounded = panel_contents(ui);
                 self.sidebar(&mut bounded);
             });
         if let Some(new_size) = panel.committed(ui, 0) {
-            self.layout.sidebar_width = new_size.clamp(230., side_max);
+            self.layout.sidebar_width =
+                sidebar.project(new_size.clamp(sidebar.min, side_max), canonical);
         }
 
         egui::CentralPanel::default()

@@ -17,12 +17,16 @@ pub(crate) struct Navigation {
 
 impl Workspace {
     pub(super) fn sidebar(&mut self, ui: &mut Ui) {
+        let m = theme::metrics(ui.ctx());
         Panel::bottom("zoom")
-            .exact_size(40.0)
+            .exact_size(m.zoom_bar)
             .frame(
                 Frame::NONE
                     .fill(theme::CHROME)
-                    .inner_margin(Margin::symmetric(8, 5)),
+                    .inner_margin(Margin::symmetric(
+                        m.card_margin,
+                        ((m.zoom_bar - m.control) / 2.) as i8,
+                    )),
             )
             .show(ui, |ui| self.zoom_controls(ui));
 
@@ -39,66 +43,25 @@ impl Workspace {
             .frame(
                 Frame::NONE
                     .fill(theme::SURFACE)
-                    .inner_margin(Margin::symmetric(8, 4)),
+                    .inner_margin(Margin::symmetric(m.card_margin, m.gap)),
             )
             .show(ui, |ui| {
                 let mut contents = super::layout::panel_contents(ui);
-                let ui = &mut contents;
-                self.document_header(ui);
-                ui.horizontal(|ui| {
-                    let width = (ui.available_width() - 4.0) / 2.0;
-                    for (tab, label) in [
-                        (super::LayoutTab::Circuits, "Circuits"),
-                        (super::LayoutTab::Components, "Components"),
-                    ] {
-                        if ui
-                            .add_sized(
-                                [width, 28.0],
-                                egui::Button::selectable(self.layout.tab == tab, tr(label)),
-                            )
-                            .clicked()
-                        {
-                            self.layout.tab = tab;
-                        }
-                    }
-                });
-                let components = self.layout.tab == super::LayoutTab::Components;
-                let query = self.navigation.query.trim().to_lowercase();
-                let count = self.result_count(components, &query);
-                ui.horizontal(|ui| {
-                    let (rect, _) = ui.allocate_exact_size(vec2(16.0, 16.0), egui::Sense::hover());
-                    icons::paint(ui.painter(), rect.shrink(1.0), Icon::Search, theme::MUTED);
-                    let response = ui.add(
-                        egui::TextEdit::singleline(&mut self.navigation.query)
-                            .id_salt("catalogue-search")
-                            .hint_text(tr("Search · Ctrl+F"))
-                            .desired_width((ui.available_width() - 42.0).max(50.0)),
-                    );
-                    if ui.is_enabled()
-                        && !ui.ctx().any_popup_open()
-                        && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::F))
-                    {
-                        response.request_focus();
-                    }
-                    theme::chip(ui, &count.to_string()).on_hover_text(tr("Results"));
-                });
-                ui.separator();
-                ScrollArea::vertical()
-                    .id_salt(("catalogue-scroll", components))
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        if count == 0 {
-                            ui.add_space(4.0);
-                            ui.label(tr("No results"));
-                            if ui.button(tr("Clear search")).clicked() {
-                                self.navigation.query.clear();
-                            }
-                        } else if components {
-                            self.components(ui, &query);
-                        } else {
-                            self.circuits(ui, &query);
-                        }
-                    });
+                // Below one full result row, let the catalogue header scroll with the list.
+                let short = contents.available_height()
+                    < 3. * (m.control + f32::from(m.gap))
+                        + crate::drawing::thumbnails::SIZE.y
+                        + 12.;
+                if short {
+                    ScrollArea::vertical()
+                        .id_salt("short-catalogue")
+                        .auto_shrink([false, false])
+                        .show(&mut contents, |ui| {
+                            self.catalogue_panel(ui, false);
+                        });
+                } else {
+                    self.catalogue_panel(&mut contents, true);
+                }
             });
         if let Some(new_size) = panel.committed(ui, 1) {
             self.layout.split = (new_size / height).clamp(0.25, 0.75);
@@ -121,6 +84,70 @@ impl Workspace {
             });
     }
 
+    fn catalogue_panel(&mut self, ui: &mut Ui, fixed_header: bool) {
+        let m = theme::metrics(ui.ctx());
+        self.document_header(ui);
+        ui.horizontal(|ui| {
+            let width = (ui.available_width() - 4.0) / 2.0;
+            for (tab, label) in [
+                (super::LayoutTab::Circuits, "Circuits"),
+                (super::LayoutTab::Components, "Components"),
+            ] {
+                if ui
+                    .add_sized(
+                        [width, m.control],
+                        egui::Button::selectable(self.layout.tab == tab, tr(label)),
+                    )
+                    .clicked()
+                {
+                    self.layout.tab = tab;
+                }
+            }
+        });
+        let components = self.layout.tab == super::LayoutTab::Components;
+        let query = self.navigation.query.trim().to_lowercase();
+        let count = self.result_count(components, &query);
+        ui.horizontal(|ui| {
+            let (rect, _) = ui.allocate_exact_size(vec2(16.0, 16.0), egui::Sense::hover());
+            icons::paint(ui.painter(), rect.shrink(1.0), Icon::Search, theme::MUTED);
+            let response = ui.add(
+                egui::TextEdit::singleline(&mut self.navigation.query)
+                    .id_salt("catalogue-search")
+                    .hint_text(tr("Search · Ctrl+F"))
+                    .desired_width((ui.available_width() - 42.0).max(50.0)),
+            );
+            if ui.is_enabled()
+                && !ui.ctx().any_popup_open()
+                && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::F))
+            {
+                response.request_focus();
+            }
+            theme::chip(ui, &count.to_string()).on_hover_text(tr("Results"));
+        });
+        ui.separator();
+        let mut results = |ui: &mut Ui| {
+            if count == 0 {
+                ui.add_space(4.0);
+                ui.label(tr("No results"));
+                if ui.button(tr("Clear search")).clicked() {
+                    self.navigation.query.clear();
+                }
+            } else if components {
+                self.components(ui, &query);
+            } else {
+                self.circuits(ui, &query);
+            }
+        };
+        if fixed_header {
+            ScrollArea::vertical()
+                .id_salt(("catalogue-scroll", components))
+                .auto_shrink([false, false])
+                .show(ui, results);
+        } else {
+            results(ui);
+        }
+    }
+
     fn document_header(&mut self, ui: &mut Ui) {
         ui.horizontal(|ui| {
             let (rect, _) = ui.allocate_exact_size(vec2(20.0, 24.0), egui::Sense::hover());
@@ -128,7 +155,7 @@ impl Workspace {
                 ui.painter(),
                 rect.shrink2(vec2(2.0, 4.0)),
                 Icon::Document,
-                theme::ACCENT,
+                theme::colors(ui.ctx()).base,
             );
             if self.document.dirty {
                 let (r, response) = ui.allocate_exact_size(vec2(8.0, 12.0), egui::Sense::hover());
@@ -145,7 +172,10 @@ impl Workspace {
                 }
             );
             ui.allocate_ui_with_layout(
-                vec2(ui.available_width() - 36.0, 28.0),
+                vec2(
+                    ui.available_width() - theme::metrics(ui.ctx()).icon_button - 8.,
+                    theme::metrics(ui.ctx()).control,
+                ),
                 egui::Layout::left_to_right(egui::Align::Center),
                 |ui| {
                     ui.set_min_width(ui.available_width());
