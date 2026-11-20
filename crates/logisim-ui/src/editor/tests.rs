@@ -256,3 +256,83 @@ fn placement_defaults_apply_only_when_rebuilding_a_pin_or_probe_template() {
     assert_eq!(app.editor.template.radix, Radix::Unsigned);
     assert!(!app.editor.can_undo());
 }
+
+#[test]
+fn wire_badges_leave_inspection_hit_selection_and_simulation_available() {
+    use crate::{Settings, SignalPalette, SignalTone, SignalView, Workspace};
+    use egui::{Context, Event, RawInput, Shape, vec2};
+    let ctx = Context::default();
+    ctx.global_style_mut(|style| style.interaction.tooltip_delay = 0.0);
+    let mut project = Project::default();
+    let id = project
+        .main_circuit_mut()
+        .circuit
+        .add_wire(Point::new(50, 80), Point::new(350, 80))
+        .unwrap();
+    let mut app = Workspace::default();
+    app.replace_project(project.clone());
+    app.editor.session.selection.insert(id);
+    app.simulation_mut().wires.insert(
+        id,
+        SignalView {
+            text: "A5".into(),
+            binary: "10100101".into(),
+            tone: SignalTone::Bus,
+        }
+        .into(),
+    );
+    app.simulation_mut().ticks = 19;
+    let mut now = 0.;
+    let mut frame = |app: &mut Workspace, events| {
+        now += 0.2;
+        let mut output = ctx.run_ui(
+            RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1200., 820.))),
+                time: Some(now),
+                events,
+                ..Default::default()
+            },
+            |ui| app.show(ui),
+        );
+        output.textures_delta.clear();
+        output.shapes
+    };
+    for (palette, visible) in [
+        (SignalPalette::Default, true),
+        (SignalPalette::HighContrast, false),
+        (SignalPalette::ColorblindSafe, true),
+    ] {
+        app.apply_settings(Settings {
+            signal_palette: palette,
+            show_wire_values: visible,
+            ..app.preferences()
+        });
+        frame(&mut app, vec![Event::PointerGone]);
+        let painted = frame(&mut app, vec![]);
+        let text =
+            |s: &Shape, expected: &str| matches!(s,Shape::Text(t) if t.galley.job.text==expected);
+        assert_eq!(painted.iter().any(|s| text(&s.shape, "A5")), visible);
+        assert!(painted.iter().any(|s| text(&s.shape, "Signal: A5")));
+        let segment = [
+            app.canvas.screen(Point::new(50, 80)),
+            app.canvas.screen(Point::new(350, 80)),
+        ];
+        assert!(painted.iter().any(|s| matches!(&s.shape,Shape::LineSegment{points,stroke} if *points==segment && stroke.width==3. && stroke.color==palette.color(SignalTone::Bus))));
+        assert_eq!(app.editor.hit(vec2(100., 80.), 2.), Some(id));
+        let pointer = app.canvas.screen(Point::new(100, 80));
+        frame(&mut app, vec![Event::PointerMoved(pointer)]);
+        for _ in 0..3 {
+            frame(&mut app, vec![]);
+        }
+        let hover = frame(&mut app, vec![]);
+        assert!(
+            hover.iter().any(|s| text(&s.shape, "8 bit")),
+            "bus hover remains available"
+        );
+        assert_eq!(app.editor.session.selection, BTreeSet::from([id]));
+        assert_eq!(app.project(), &project);
+        assert!(!app.document.dirty && !app.editor.can_undo());
+        assert_eq!(app.simulation_mut().ticks, 19);
+        assert!(app.take_simulation_actions().is_empty());
+    }
+}

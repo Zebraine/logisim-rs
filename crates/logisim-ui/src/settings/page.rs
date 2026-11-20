@@ -292,7 +292,11 @@ impl Page {
     }
     fn row(&mut self, ui: &mut Ui, e: &Entry, values: &mut Settings) {
         let width = ui.available_width();
-        let right = (width * 0.37).clamp(140., 190.);
+        let right = if matches!(e.control, super::registry::Control::SignalPalette) {
+            (width - 120.).clamp(216., 282.)
+        } else {
+            (width * 0.37).clamp(140., 190.)
+        };
         ui.horizontal(|ui| {
             ui.allocate_ui_with_layout(
                 vec2((width - right - 4.).max(40.), 30.),

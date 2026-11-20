@@ -35,6 +35,12 @@ pub struct SignalView {
     pub tone: SignalTone,
 }
 impl SignalView {
+    pub(crate) fn value_text(&self, ctx: &egui::Context, value: &str) -> egui::RichText {
+        egui::RichText::new(value)
+            .monospace()
+            .color(theme::signal_text(ctx, self.tone))
+    }
+
     pub(crate) fn pill(&self, ui: &mut Ui) {
         egui::Frame::NONE
             .fill(theme::SUNKEN)
@@ -49,11 +55,7 @@ impl SignalView {
                         3.5,
                         theme::signal(ui.ctx(), self.tone),
                     );
-                    ui.label(
-                        egui::RichText::new(&self.text)
-                            .monospace()
-                            .color(theme::signal_text(ui.ctx(), self.tone)),
-                    );
+                    ui.label(self.value_text(ui.ctx(), &self.text));
                     ui.separator();
                     ui.label(
                         egui::RichText::new(tf!("{} bit", self.binary.len())).color(theme::MUTED),
@@ -61,7 +63,7 @@ impl SignalView {
                 });
             });
         if self.text != self.binary {
-            ui.monospace(&self.binary);
+            ui.label(self.value_text(ui.ctx(), &self.binary));
         }
     }
 }
@@ -601,7 +603,7 @@ impl SimulationUi {
                 theme::signal_text(ui.ctx(), state.tone),
                 tf!("Stored value: {}", state.text),
             )
-            .on_hover_text(&state.binary);
+            .on_hover_ui(|ui| state.pill(ui));
             if matches!(
                 c.kind,
                 logisim_core::Kind::FlipFlop(_) | logisim_core::Kind::Latch(_)
@@ -619,7 +621,7 @@ impl SimulationUi {
                 theme::signal_text(ui.ctx(), signal.tone),
                 tf!("Signal: {}", signal.text),
             )
-            .on_hover_text(tf!("{} bit: {}", signal.binary.len(), signal.binary));
+            .on_hover_ui(|ui| signal.pill(ui));
         }
         let Some(input) = self.view.inputs.get(&c.id).copied() else {
             return;

@@ -246,6 +246,7 @@ impl Entry {
                 v.name().to_owned()
             }),
             Control::SignalPalette => {
+                palette_preview(ui, values.signal_palette);
                 choice(ui, &mut values.signal_palette, SignalPalette::ALL, |v| {
                     v.name().to_owned()
                 })
@@ -322,6 +323,34 @@ impl Entry {
         }
     }
 }
+fn palette_preview(ui: &mut Ui, palette: SignalPalette) {
+    use crate::SignalTone::*;
+    let swatches = [
+        (Low, "Low signal"),
+        (High, "High signal"),
+        (Bus, "Bus signal"),
+        (Unknown, "Unknown signal"),
+        (Error, "Signal error"),
+        (WidthMismatch, "Width mismatch"),
+    ];
+    let cell = egui::vec2(14., 26.);
+    let (area, _) = ui.allocate_exact_size(
+        egui::vec2(cell.x * swatches.len() as f32, cell.y),
+        egui::Sense::hover(),
+    );
+    for (i, (tone, label)) in swatches.into_iter().enumerate() {
+        let rect = egui::Rect::from_min_size(area.min + egui::vec2(i as f32 * cell.x, 0.), cell);
+        ui.painter()
+            .circle_filled(rect.center(), 4.5, palette.color(tone));
+        ui.interact(
+            rect,
+            ui.make_persistent_id(("signal-swatch", i)),
+            egui::Sense::hover(),
+        )
+        .on_hover_text(tr(label));
+    }
+}
+
 fn choice<T: Copy + PartialEq, const N: usize>(
     ui: &mut Ui,
     current: &mut T,

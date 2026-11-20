@@ -82,12 +82,7 @@ impl Canvas {
         self.camera.zoom_at(zoom, anchor);
     }
 
-    pub fn show(
-        &mut self,
-        ui: &mut Ui,
-        show_grid: bool,
-        invert_wheel_zoom: bool,
-    ) -> egui::Response {
+    pub fn show(&mut self, ui: &mut Ui, preferences: &crate::Settings) -> egui::Response {
         let (rect, response) = ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
         self.rect = rect;
         if response.clicked() || response.is_pointer_button_down_on() {
@@ -123,7 +118,11 @@ impl Canvas {
                                 MouseWheelUnit::Point => delta.y / 40.0,
                                 MouseWheelUnit::Page => delta.y * 5.0,
                             };
-                            let steps = if invert_wheel_zoom { -steps } else { steps };
+                            let steps = if preferences.invert_wheel_zoom {
+                                -steps
+                            } else {
+                                steps
+                            };
                             self.camera.zoom_at(
                                 self.camera.zoom * 1.1_f32.powf(steps.clamp(-8.0, 8.0)),
                                 anchor,
@@ -140,13 +139,13 @@ impl Canvas {
 
         let painter = ui.painter_at(rect);
         painter.rect_filled(rect, 0, crate::theme::CANVAS);
-        if show_grid {
+        if preferences.show_grid {
             self.paint_grid(&painter, rect);
         }
 
         // A subtle world-origin marker makes an otherwise empty viewport navigable.
         let origin = rect.min + self.camera.offset;
-        if rect.shrink(12.0).contains(origin) {
+        if preferences.show_origin_marker && rect.shrink(12.0).contains(origin) {
             let stroke = egui::Stroke::new(1.0, crate::theme::FAINT);
             painter.line_segment([origin - vec2(3.0, 0.0), origin + vec2(3.0, 0.0)], stroke);
             painter.line_segment([origin - vec2(0.0, 3.0), origin + vec2(0.0, 3.0)], stroke);

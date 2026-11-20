@@ -244,9 +244,12 @@ fn editor_keys_find_the_same_control_in_both_languages() {
 }
 
 #[test]
-fn compact_editor_scroll_exposes_every_setting_in_both_languages() {
+fn compact_appearance_and_editor_scroll_exposes_every_setting_in_both_languages() {
     use egui::{Event, MouseWheelSource, MouseWheelUnit, TouchPhase};
-    for lang in Language::ALL {
+    for (lang, category) in Language::ALL
+        .into_iter()
+        .flat_map(|lang| [Category::Editor, Category::Appearance].map(|category| (lang, category)))
+    {
         let ctx = Context::default();
         crate::configure(&ctx);
         let mut app = Workspace {
@@ -254,12 +257,9 @@ fn compact_editor_scroll_exposes_every_setting_in_both_languages() {
             ..Default::default()
         };
         app.set_language(lang);
-        app.settings_page.select(Category::Editor);
+        app.settings_page.select(category);
         let size = vec2(720., 480.);
-        let entries: Vec<_> = REGISTRY
-            .iter()
-            .filter(|e| e.category == Category::Editor)
-            .collect();
+        let entries: Vec<_> = REGISTRY.iter().filter(|e| e.category == category).collect();
         let mut visible = std::collections::BTreeSet::new();
         for step in 0..18 {
             let mut events = vec![Event::PointerMoved(egui::pos2(420., 330.))];
@@ -279,7 +279,7 @@ fn compact_editor_scroll_exposes_every_setting_in_both_languages() {
             // Use the fixed category picker and footer as the scrollable pane's bounds.
             let close = crate::i18n::with_language(lang, || tr("Close"));
             let close_rect = labels.iter().rfind(|(s, _)| s == close).unwrap().1;
-            let picker = crate::i18n::with_language(lang, || tr("Editor"));
+            let picker = crate::i18n::with_language(lang, || category.label());
             let picker_rect = labels
                 .iter()
                 .find(|(s, r)| s == picker && r.center().y > 100.)

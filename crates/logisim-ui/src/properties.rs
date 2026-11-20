@@ -152,7 +152,7 @@ fn selection_info(ui: &mut Ui, editor: &mut Editor) {
                     crate::theme::signal_text(ui.ctx(), signal.tone),
                     tf!("Signal: {}", signal.text),
                 );
-                ui.monospace(&signal.binary);
+                ui.label(signal.value_text(ui.ctx(), &signal.binary));
             }
             if editor.display.highlight_net {
                 ui.weak(tr(

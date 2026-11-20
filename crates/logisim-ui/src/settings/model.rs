@@ -125,6 +125,7 @@ impl Default for Settings {
 
 #[derive(Clone, Copy)]
 pub(crate) struct EditorDisplay {
+    pub show_wire_values: bool,
     pub highlight_net: bool,
     pub show_connection_markers: bool,
 }
@@ -145,6 +146,7 @@ impl Settings {
 
     pub(crate) fn editor_display(self) -> EditorDisplay {
         EditorDisplay {
+            show_wire_values: self.show_wire_values,
             highlight_net: self.highlight_net,
             show_connection_markers: self.show_connection_markers,
         }

@@ -280,7 +280,14 @@ pub(crate) fn circuit(
         let signal = simulation.wires.get(&w.id);
         let tone = signal.map(|s| s.tone);
         let bus = signal.is_some_and(|s| s.binary.len() > 1);
-        let width = if bus { 3.0 } else { 1.8 };
+        let width = if bus {
+            3.0
+        } else if tone == Some(crate::SignalTone::High) {
+            // Keep a full-coverage core inside the light halo at 1x DPI.
+            2.0
+        } else {
+            1.8
+        };
         let ink = tone.map_or(INK, |t| palette.color(t));
         if tone == Some(crate::SignalTone::High) && !highlighted {
             p.line_segment(segment, Stroke::new(width + 2.5, ink.gamma_multiply(0.13)));
@@ -295,8 +302,9 @@ pub(crate) fn circuit(
         } else {
             p.line_segment(segment, stroke);
         }
-        if let Some(value) = signal
+        if display.show_wire_values
             && bus
+            && let Some(value) = signal
             && (highlighted
                 || (canvas.camera.zoom >= 0.8 && segment[0].distance(segment[1]) >= 96.0))
         {

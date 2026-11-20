@@ -38,3 +38,50 @@ fn invalid_input_does_not_poison_camera() {
     assert_eq!(camera.zoom, 1.0);
     assert!(camera.offset.is_finite());
 }
+
+#[test]
+fn toggling_origin_changes_only_the_two_cross_strokes() {
+    let ctx = egui::Context::default();
+    let mut canvas = Canvas::default();
+    canvas.camera.zoom_at(1.75, vec2(0., 0.));
+    canvas.camera.pan(vec2(11., 19.));
+    let camera = canvas.camera;
+    for show_grid in [false, true] {
+        let mut render = |show_origin_marker| {
+            let mut out = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(240., 200.))),
+                    ..Default::default()
+                },
+                |ui| {
+                    canvas.show(
+                        ui,
+                        &crate::Settings {
+                            show_grid,
+                            show_origin_marker,
+                            ..Default::default()
+                        },
+                    );
+                },
+            );
+            out.textures_delta.clear();
+            out.shapes.into_iter().map(|s| s.shape).collect::<Vec<_>>()
+        };
+        let off = render(false);
+        let mut on = render(true);
+        let origin = canvas.screen(logisim_core::Point::ZERO);
+        for delta in [vec2(0., 3.), vec2(3., 0.)] {
+            assert_eq!(
+                on.pop(),
+                Some(egui::Shape::line_segment(
+                    [origin - delta, origin + delta],
+                    egui::Stroke::new(1., crate::theme::FAINT)
+                ))
+            );
+        }
+        assert_eq!(on, off);
+        assert_eq!(canvas.camera.zoom, camera.zoom);
+        assert_eq!(canvas.camera.offset, camera.offset);
+        assert_near(canvas.world(origin), Vec2::ZERO);
+    }
+}
