@@ -487,7 +487,7 @@ impl Files {
                 Ok(image) => {
                     self.dialog = Some(Dialog::PrintPreview(print::Preview::new(ctx, image)))
                 }
-                Err(error) => self.print_result(Err(tr(&error).to_owned())),
+                Err(error) => self.print_result(Err(tr(&error).to_owned()).into()),
             },
         }
         ctx.request_repaint();

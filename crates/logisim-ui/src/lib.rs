@@ -9,6 +9,7 @@ mod canvas;
 pub mod dialog;
 mod document;
 mod fonts;
+pub use fonts::system_fonts_available;
 pub mod generation;
 mod latches;
 mod parity;

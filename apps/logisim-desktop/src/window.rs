@@ -64,6 +64,7 @@ impl WindowState {
         }
         eframe::NativeOptions {
             viewport,
+            system_font_fallback: logisim_ui::system_fonts_available(),
             centered: self.position().is_none(),
             ..Default::default()
         }

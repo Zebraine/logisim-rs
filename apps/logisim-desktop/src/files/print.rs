@@ -4,19 +4,15 @@ use eframe::egui::{self, ColorImage, Context};
 use logisim_ui::{
     Language,
     dialog::{Dialog as Window, Dismiss},
-    i18n::{tr, with_language},
+    i18n::tr,
     tf,
 };
-use std::{
-    fs::{self, File, OpenOptions},
-    io,
-    path::{Path, PathBuf},
-    process::Command,
-    sync::{
-        Arc,
-        atomic::{AtomicU64, Ordering},
-    },
-};
+use std::{path::Path, process::Command, sync::Arc};
+
+mod job;
+use job::Delivery;
+pub(super) use job::Job;
+pub(super) use job::Report;
 
 pub(super) struct Preview {
     original: Arc<ColorImage>,
@@ -81,35 +77,33 @@ impl Files {
             (dialog, Response::Wait) => self.dialog = Some(dialog),
             (Dialog::PrintPreview(_), Response::Cancel) => {}
             (Dialog::PrintPreview(preview), Response::Print) => {
-                let wake = ctx.clone();
-                match std::thread::Builder::new()
-                    .name("print-canvas".into())
-                    .spawn(move || {
-                        let result = submit(&std::env::temp_dir(), &preview.original, |path| {
-                            with_language(language, || run(printer_command(path, cfg!(windows))))
-                        });
-                        wake.request_repaint();
-                        result
-                    }) {
+                match Job::start(preview.original, ctx.clone(), language) {
                     Ok(job) => self.dialog = Some(Dialog::Printing(job)),
-                    Err(error) => self.print_result(Err(error.to_string())),
+                    Err(error) => self.print_result(Err(error.to_string()).into()),
                 }
             }
-            (Dialog::Printing(job), Response::Printed) => {
-                self.print_result(
-                    job.join()
-                        .unwrap_or_else(|_| Err(tr("The print worker stopped.").into())),
-                );
+            (Dialog::Printing(job), Response::Cancel) => {
+                job.cancel();
+                self.dialog = Some(Dialog::Printing(job));
             }
+            (Dialog::Printing(job), Response::Printed) => self.print_result(job.finish()),
             _ => unreachable!("unrelated print dialog response"),
         }
     }
 
-    pub(super) fn print_result(&mut self, result: Result<(), String>) {
-        let (title, body) = match result {
-            Ok(()) => ("Print", tr("Sent to the default printer.").to_owned()),
+    pub(super) fn print_result(&mut self, report: Report) {
+        let (title, mut body) = match report.status {
+            Ok(Delivery::Sent) => ("Print", tr("Sent to the default printer.").to_owned()),
+            Ok(Delivery::Cancelled) => ("Print", tr("Print cancelled.").to_owned()),
             Err(error) => ("Print failed", error),
         };
+        if let Some(warning) = report.cleanup_warning {
+            body.push('\n');
+            body.push_str(&tf!(
+                "Could not clean up temporary print files: {}",
+                warning
+            ));
+        }
         self.dialog = Some(Dialog::ImageMessage { title, body });
     }
 }
@@ -126,61 +120,6 @@ fn printer_command(path: &Path, windows: bool) -> Command {
         command.arg(path);
         command
     }
-}
-
-fn run(mut command: Command) -> Result<(), String> {
-    let program = command.get_program().to_string_lossy().into_owned();
-    let output = command.output().map_err(|error| {
-        if error.kind() == io::ErrorKind::NotFound {
-            tf!("The system print command {} was not found.", program)
-        } else {
-            format!("{program}: {error}")
-        }
-    })?;
-    if output.status.success() {
-        Ok(())
-    } else {
-        Err(format!(
-            "{program} ({})\n{}",
-            output.status,
-            String::from_utf8_lossy(&output.stderr).trim()
-        ))
-    }
-}
-
-fn temporary_png(directory: &Path) -> io::Result<(PathBuf, File)> {
-    static SEQUENCE: AtomicU64 = AtomicU64::new(0);
-    let mut options = OpenOptions::new();
-    options.create_new(true).write(true);
-    #[cfg(unix)]
-    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
-    loop {
-        let id = SEQUENCE.fetch_add(1, Ordering::Relaxed);
-        let path = directory.join(format!("logisim-print-{}-{id}.png", std::process::id()));
-        match options.open(&path) {
-            Ok(file) => return Ok((path, file)),
-            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
-            Err(error) => return Err(error),
-        }
-    }
-}
-
-fn submit(
-    directory: &Path,
-    image: &ColorImage,
-    send: impl FnOnce(&Path) -> Result<(), String>,
-) -> Result<(), String> {
-    let (path, file) =
-        temporary_png(directory).map_err(|e| format!("{}: {e}", directory.display()))?;
-    let result = encode_png(file, image).and_then(|()| send(&path));
-    if let Err(error) = fs::remove_file(&path) {
-        let cleanup = format!("{}: {error}", path.display());
-        return Err(match result {
-            Ok(()) => cleanup,
-            Err(cause) => format!("{cause}\n{cleanup}"),
-        });
-    }
-    result
 }
 
 #[cfg(test)]

@@ -6,15 +6,49 @@ use read_fonts::{FontRef, TableProvider};
 use std::sync::LazyLock;
 
 static SERIF: LazyLock<egui::FontFamily> = LazyLock::new(|| egui::FontFamily::Name("Serif".into()));
-static SYSTEM_SERIF: LazyLock<Option<FontInsert>> = LazyLock::new(|| {
-    let face = resolve_serif(&mut Collection::new(Default::default()));
-    if face.is_none() {
+struct SystemFonts {
+    available: bool,
+    serif: Option<FontInsert>,
+}
+
+static SYSTEM_FONTS: LazyLock<SystemFonts> = LazyLock::new(|| {
+    let mut collection = system_collection();
+    let serif = collection.as_mut().and_then(resolve_serif);
+    if serif.is_none() {
         eprintln!(
             "warning: no usable system serif font found; canvas Serif labels will use Proportional."
         );
     }
-    face
+    SystemFonts {
+        available: collection.is_some(),
+        serif,
+    }
 });
+
+// fontique 0.11.1 unwraps Fontconfig's NoMatch when *all* system fonts are absent.
+// Avoid starting either the document resolver or eframe's glyph provider in that case.
+fn system_collection() -> Option<Collection> {
+    #[cfg(target_os = "linux")]
+    {
+        if std::process::Command::new("fc-match")
+            .arg("--format=%{file}")
+            .arg("serif")
+            .output()
+            .is_ok_and(|output| output.stdout.is_empty())
+        {
+            return None;
+        }
+        // Minimal installations can have libfontconfig without the fc-match utility.
+        std::panic::catch_unwind(Collection::default).ok()
+    }
+    #[cfg(not(target_os = "linux"))]
+    Some(Collection::default())
+}
+
+/// Whether the desktop can ask the platform for missing glyphs.
+pub fn system_fonts_available() -> bool {
+    SYSTEM_FONTS.available
+}
 
 fn resolve_serif(collection: &mut Collection) -> Option<FontInsert> {
     let known = [
@@ -58,7 +92,7 @@ fn resolve_serif(collection: &mut Collection) -> Option<FontInsert> {
 }
 
 pub(crate) fn install_serif(ctx: &egui::Context) {
-    if let Some(font) = &*SYSTEM_SERIF {
+    if let Some(font) = &SYSTEM_FONTS.serif {
         ctx.add_font(font.clone());
     }
 }

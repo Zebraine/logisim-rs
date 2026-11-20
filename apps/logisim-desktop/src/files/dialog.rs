@@ -34,7 +34,7 @@ pub(super) enum Dialog {
         bytes: Vec<u8>,
     },
     PrintPreview(super::print::Preview),
-    Printing(std::thread::JoinHandle<Result<(), String>>),
+    Printing(super::print::Job),
     ReplaceImage(super::image::ImageTarget),
     ImageMessage {
         title: &'static str,
@@ -108,10 +108,11 @@ impl Dialog {
                 if job.is_finished() {
                     return Response::Printed;
                 }
+                ctx.request_repaint_after(std::time::Duration::from_millis(50));
                 Window::prompt("print-progress").show(ctx, tr("Print"), |dialog| {
                     dialog.body(|ui| ui.label(tr("Sending to the default printer…")));
-                });
-                return Response::Wait;
+                    dialog.footer("Cancel", |_| {});
+                })
             }
             Dialog::Plugins(resolution) => resolve_plugins(ctx, resolution, &mut answer),
             Dialog::Recovery { view, .. } => Window::prompt("startup-recovery").show(
