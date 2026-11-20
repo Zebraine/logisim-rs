@@ -66,8 +66,9 @@ def package(target, plugins):
     with tempfile.TemporaryDirectory(prefix="logisim-package-") as temporary:
         staging = Path(temporary) / name
         staging.mkdir()
-        for document in ("README.md", "LICENSE"):
+        for document in ("README.md", "README.zh-CN.md", "LICENSE"):
             shutil.copyfile(ROOT / document, staging / document)
+        shutil.copytree(ROOT / "assets", staging / "assets")
         plugin_paths = {f"../../plugins/{name}/{name}.wasm" for name in plugins}
         for group in ("course", "game"):
             examples = staging / "examples" / group

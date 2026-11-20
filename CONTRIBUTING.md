@@ -35,7 +35,7 @@ Git 采用 `.gitignore` 白名单，仅包含：
 
 - 必要的 Rust 源码、Cargo/工具链文件、LICENSE 和 Git/构建配置。
 - `crates/logisim-ui/locales/` 与自带插件 `locales/` 中编译必需的词条。
-- 根目录 `README.md`、`CONTRIBUTING.md`、`AGENTS.md`。
+- 根目录 `README.md`、`README.zh-CN.md`、`CONTRIBUTING.md`、`AGENTS.md` 及 `assets/` 中的 README 截图。
 - `examples/{course,game}/*.circ`、`examples/game/*.{asm,hex}` 和自带插件的 `plugins/*/*.wasm`。
 
 `docs/`、`specs/`、`experiments/`、`fixtures/`、`resources/`、缓存及构建产物留在本地，不作为构建依赖。
@@ -58,5 +58,5 @@ git diff --cached --stat
 3. 标签构建通过后自动创建 Release；说明保持简短，附平台包与 SHA-256 校验文件。
 
 发布流程见 [release.yml](.github/workflows/release.yml)。提供 Linux/Windows x86-64 和 macOS Apple Silicon；
-仅 v0.1.0 额外保留 Intel macOS。各包包含电路示例、同次构建并校验的 Wasm、README 和 LICENSE。
+v0.1.0 额外保留 Intel macOS；v0.2.0 起不再提供 Intel macOS。各包包含电路示例、同次构建并校验的 Wasm、中英文 README、README 截图和 LICENSE。
 普通分支构建不发布 Release；既有标签与资产不强制覆盖，修复先提交到版本分支。

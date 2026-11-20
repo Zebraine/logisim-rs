@@ -1,120 +1,138 @@
 # logisim-rs
 
-[![Rust 1.99.0](https://img.shields.io/badge/Rust-1.99.0-000000?logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[English](README.md) | [简体中文](README.zh-CN.md)
+
+[![Rust 1.99](https://img.shields.io/badge/Rust-1.99.0-000000?logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Total downloads](https://img.shields.io/github/downloads/Zebraine/logisim-rs/total?logo=github)](https://github.com/Zebraine/logisim-rs/releases)
 
-基于 Rust + egui 的桌面数字逻辑电路编辑与仿真工具。
-以 Logisim-ITA v2.16.2.2 的实际运行行为为兼容目标，采用 Cleanroom 方式独立实现。
+A cleanroom desktop digital logic editor and simulator built with Rust and egui.
+It aims for practical compatibility with Logisim-ITA v2.16.2.2 for the features it implements, without using Java or the original implementation.
 
-## 功能
+<p align="center">
+  <img src="assets/workbench-light.png" alt="Light workbench editing a pipelined CPU" width="49%">
+  <img src="assets/workbench-dark.png" alt="Dark workbench showing live signal colors" width="49%">
+</p>
 
-- 电路编辑、子电路、自定义外观与封装设计。
-- 从真值表或表达式生成组合电路；真值表最多 12 输入，表达式最多 32 输入，均支持 32 输出。
-- 门电路、布线、算术、Plexers、时序、存储器及输入/输出元件。
-- 四态与层级仿真，可选择稳定态或事件传播模式。
-- 已实现内容的 `.circ` 读写、ROM/RAM 的 `v2.0 raw` 格式 `.hex` 导入。
-- `.circ` 子电路库与 Wasm 元件插件，支持英语和简体中文。
+## What you can do
 
-## 下载与运行
+- Build hierarchical circuits with subcircuits, custom appearances, and editable packaging.
+- Generate combinational circuits from truth tables or expressions (up to 12/32 inputs and 32 outputs).
+- Work with gates, wiring, arithmetic, plexers, sequential logic, memory, and I/O components.
+- Simulate four-state circuits in stable or event-driven mode, with live wire values and signal colors.
+- Read and write the implemented `.circ` subset; import ROM/RAM images in Logisim `v2.0 raw` `.hex` format.
+- Use `.circ` libraries as editable snapshots and load components from Wasm plugins.
+- Work in English or Simplified Chinese, with Light/Dark themes, three accents, two densities, and configurable shortcuts.
+- Keep work safe with autosave, crash recovery, and optional one-generation `.bak` backups.
+- Export the current canvas view as a PNG image.
 
-从 [Releases](https://github.com/Zebraine/logisim-rs/releases) 下载对应平台包及 `.sha256` 校验文件，完整解压后运行。
+## Get started
 
-| 平台 | 启动方式 |
+### Download and run
+
+Download a package for your platform and its `.sha256` checksum from [Releases](https://github.com/Zebraine/logisim-rs/releases), verify it, and extract the archive completely before running.
+
+| Platform | Start |
 | --- | --- |
-| Linux x86-64 | `./logisim-rs`；基于 Ubuntu 24.04 构建，需要 Fontconfig 和图形驱动 |
+| Linux x86-64 | `./logisim-rs`; built on Ubuntu 24.04, requires Fontconfig and a working graphics driver |
 | Windows x86-64 | `logisim-rs.exe` |
-| macOS 15+ | 打开 `Logisim rs.app`；Apple Silicon，v0.1.0 另提供 Intel 包 |
+| macOS 15+ | Open `Logisim rs.app` (Apple Silicon). v0.2.0 no longer ships an Intel build. |
 
-Windows/macOS 包未签名或公证；目前实机界面验证限于 Linux X11。
-中文显示依赖系统字体，可安装 Noto Sans CJK SC。
+The Windows and macOS packages are not signed or notarized. UI validation for this release was performed on Linux X11; the other packages are built by the same release workflow but have not been manually UI-tested on their platforms.
 
-从源码运行需 Rust 1.99+，仓库工具链固定为 1.99.0。Linux 构建另需 `pkg-config` 和 Fontconfig 开发包。
+Simplified Chinese text uses system fonts; install a CJK font such as Noto Sans CJK SC if needed.
+
+### First circuit
+
+1. Create a circuit from **File → New**, or open a `.circ` example.
+2. Pick a component from the left catalogue, place it on the canvas, and edit its properties in the inspector.
+3. Drag from a port, or from the middle of a wire, to connect components.
+4. Select the Poke tool (`P`) to operate inputs and inspect signals.
+5. Use **Step** / `Ctrl+I`, **Tick** / `Ctrl+T`, or **Automatic ticks** / `Ctrl+K` in the Simulate menu to advance time.
+6. Save with `Ctrl+S`. The title bar shows whether the document has unsaved changes.
+
+A tick is a simulation step, not necessarily a complete clock period. The automatic clock defaults to 4 Hz and can be changed in the Simulate menu.
+
+Useful starting points:
+
+- `V` Select, `P` Poke, `W` Wire, `T` Text, `U` Tunnel, `R` Rotate.
+- `Ctrl+Z` / `Ctrl+Shift+Z` undo and redo.
+- `Ctrl+F` searches the catalogue or settings, depending on the focused panel.
+- **File → Settings** changes language, simulation mode, theme, density, editor defaults, autosave, and recovery behavior.
+- Shortcuts can be rebound under **Settings → Shortcuts**.
+
+## Plugins
+
+logisim-rs uses a versioned Wasm plugin ABI for externally supplied components. A plugin can define its graphics, ports, properties, actions, and simulation behavior; the desktop host handles loading, validation, and integration with the project.
+
+- Plugins are separate `.wasm` files and are not compiled into the desktop binary.
+- A project records its plugin dependencies as source paths. Relative paths are resolved from the circuit directory first, with an absolute fallback.
+- Missing dependencies can be located from **Project Options → Resolve missing…**. **Settings → Advanced → Plugin fallback directory** adds one optional same-name fallback directory for local modules.
+- Plugin paths and definitions are validated before use. Missing or mismatched modules remain visibly unavailable instead of being silently replaced.
+- The host does not execute Java or inspect JAR files.
+
+Optional example modules and their source are kept under `plugins/` in the source repository and in release packages; they are examples, not a requirement for using the editor.
+
+## Examples
+
+The repository includes optional course CPU examples under [`examples/course/`](examples/course/). They share the course Wasm module and are intended as teaching material rather than a fixed benchmark suite.
+
+Representative starting points include:
+
+- [`single-cycle.circ`](examples/course/single-cycle.circ) — a single-cycle CPU.
+- [`ideal-pipeline.circ`](examples/course/ideal-pipeline.circ) — an ideal pipelined CPU.
+- [`redirect-pipeline.circ`](examples/course/redirect-pipeline.circ) — a pipelined CPU with redirect handling.
+- [`dynamic-branch-prediction.circ`](examples/course/dynamic-branch-prediction.circ) — branch prediction.
+- [`single-interrupt.circ`](examples/course/single-interrupt.circ) and [`nested-interrupt.circ`](examples/course/nested-interrupt.circ) — interrupt variants.
+
+The examples illustrate the implemented behavior; they are not a compatibility test for every timing or exception detail. If you move an example, keep the relative layout between `examples/` and `plugins/`, or use the plugin locator.
+
+## Compatibility
+
+This is a practical cleanroom implementation, not a byte-for-byte clone of Logisim-ITA.
+
+- The implemented `.circ` subset can be read and written. Unsupported content is reported and omitted, and the original source is protected against accidental overwrite.
+- Imported `.circ` libraries are editable snapshots; they do not silently link back to the source library.
+- Wasm components are a logisim-rs extension. Such circuits require this application and their plugin modules.
+- Propagation timing, feedback resolution, and some advanced component behavior can differ from the reference program. Compatibility claims apply only to the behavior covered by the repository's tests and experiments.
+- The host does not execute Java/JAR files.
+
+## Build from source
+
+Requirements: Rust 1.99 or newer (the repository pins 1.99.0 via `rust-toolchain.toml`) and the platform libraries needed by eframe/egui.
+
+On Debian/Ubuntu, install the Linux build prerequisites first:
+
+```sh
+sudo apt-get update
+sudo apt-get install -y pkg-config libfontconfig1-dev
+```
+
+Run the application from the workspace:
 
 ```sh
 cargo run -p logisim-rs --release --locked
-# 启动时打开示例
+# Open an example at startup
 cargo run -p logisim-rs --release --locked -- examples/course/redirect-pipeline.circ
 ```
 
-## 快速上手
-
-- 从左侧选择元件，在画布放置；选中后编辑属性，从端口或线段中间拖出连线。
-- 使用 Poke（`P`）操作输入，`Ctrl+T` 推进一个 tick，`Ctrl+K` 开关自动时钟。
-- 自动时钟默认 4 Hz，可在 Simulate 菜单设置 1–4096 Hz；一个 tick 不等于完整时钟周期。
-- File → Export Image… 将当前画布视口导出为 PNG。Print… 尚未实现，菜单项禁用。
-- 在 File → Settings 切换语言与仿真模式；默认英语、稳定态。
-- Settings → Appearance 中的“深色模式图形轮廓”默认开启，可增强低对比自定义封装的边缘。插件仅显示附加外框，内部线条、填充和透明度由插件作者决定。
-- 在 Project 菜单添加子电路、编辑封装、加载 `.circ` 库或 Wasm 插件。
-- Project → Analyze Circuit 分析无状态组合电路，生成默认回写原定义；Generate Circuit 支持独立生成，可选仅使用 NAND 门。
-- ROM/RAM 的内容编辑器提供 `.hex` 导入；ROM 内容随电路保存，RAM 内容复位后清零。
-
-## 自带插件
-
-[`plugins/`](plugins/) 收纳独立 Wasm 插件及源码，通过 Project → Load Wasm Plugin 加载：
-
-- [`course/course.wasm`](plugins/course/course.wasm)：RegisterFile、RiscV Probe；RegisterFile 属性面板支持 `.hex` 导入，内容仅属于当前实例，x0 保持为零，复位清空。
-- [`ttl/ttl.wasm`](plugins/ttl/ttl.wasm)：第一批基础门，7400、7402、7404、7408、7432、7486、747266。
-- [`ttl-combinational/ttl-combinational.wasm`](plugins/ttl-combinational/ttl-combinational.wasm)：第二批组合扩展，7447 七段译码器、7485 比较器、74125 三态缓冲器、74283 加法器。
-- [`ttl-sequential/ttl-sequential.wasm`](plugins/ttl-sequential/ttl-sequential.wasm)：第三批时序扩展，74165；保留参考程序的时钟沿装载和移位输出规则。
-
-- [`display/display.wasm`](plugins/display/display.wasm)：16×16 / 32×32 帧缓冲显示器，时钟写入、清屏与整帧提交，支持 RGB332 和灰度。
-- [`input/input.wasm`](plugins/input/input.wasm)：8 通道按键控制器，可配置映射，提供按住状态和时钟读取的事件队列；Poke 点击后接收输入，Esc/Tab 退出。
-
-TTL 的普通封装和 Vcc/GND 封装可在元件属性中切换。各批次可独立加载或同时使用。旧 `#TTL` 电路需用 `ttl-plugin-convert` 显式迁移，可传入多个批次模块；宿主不再内置 TTL。
-
-## CPU 示例
-
-[`examples/course/`](examples/course/) 包含 8 类 CPU 和 2 个测试，共用 [`plugins/course/course.wasm`](plugins/course/course.wasm)，无需 Java。
-移动示例时请保留 `examples/` 与 `plugins/` 的相对目录；打开后使用 Poke 按下并松开“复位”或“总复位”，再启动自动时钟。
-
-| 文件 | 电路 |
-| --- | --- |
-| [single-cycle.circ](examples/course/single-cycle.circ) | 单周期 |
-| [ideal-pipeline.circ](examples/course/ideal-pipeline.circ) | 理想流水线 |
-| [bubble-pipeline.circ](examples/course/bubble-pipeline.circ) | 气泡流水线 |
-| [redirect-pipeline.circ](examples/course/redirect-pipeline.circ) | 重定向流水线 |
-| [dynamic-branch-prediction.circ](examples/course/dynamic-branch-prediction.circ) | 动态分支预测 |
-| [single-interrupt.circ](examples/course/single-interrupt.circ) | 单级中断 |
-| [nested-interrupt.circ](examples/course/nested-interrupt.circ) | 多级中断 |
-| [pipeline-interrupt.circ](examples/course/pipeline-interrupt.circ) | 流水多级中断 |
-| [pipeline-interrupt-benchmark.circ](examples/course/pipeline-interrupt-benchmark.circ) | 流水中断基准 |
-| [instruction-coverage.circ](examples/course/instruction-coverage.circ) | 指令覆盖 |
-
-重定向流水线和动态分支预测已核对完整运行轨迹，分别为 2298、1766 周期，最终显示 `0000 0038`。
-全部示例已通过导入、往返保存、插件加载和复位后 128 tick 检查；其余示例尚未完成整机验收。
-
-## 可编程游戏电路
-
-`examples/game/` 使用自定义 G16 CPU：16 位数据、8 个寄存器、64K×32 程序 ROM、4K×16 数据 RAM。
-CPU、寄存器堆、ALU 和外设总线均为可编辑子电路；游戏规则与绘图由汇编程序执行。
-
-| 电路 | 程序 | 操作 |
-| --- | --- | --- |
-| [game.circ](examples/game/game.circ)（贪吃蛇） | [snake.asm](examples/game/snake.asm) / [snake.hex](examples/game/snake.hex) | 方向键转向；吃食物增长，碰墙或身体结束，填满棋盘获胜 |
-| [ping-pong.circ](examples/game/ping-pong.circ) | [ping-pong.asm](examples/game/ping-pong.asm) / [ping-pong.hex](examples/game/ping-pong.hex) | ↑/↓ 控制左拍，Z/X 控制右拍；顶部色条计分，先得 7 分获胜 |
-
-启用 4096 Hz 自动时钟，等待画面出现后用 Poke 点击键盘。两款游戏均以空格开始/暂停、Enter 重开，
-Esc 释放键盘。电路使用相同硬件；在 Program ROM 导入另一份 `.hex` 并复位即可换游戏。
-数据 RAM 不随文件保存。另保留 [cpu-demo.asm](examples/game/cpu-demo.asm) / `.hex` 作为 CPU 自检和绘图示例。
+Run the workspace checks:
 
 ```sh
-cargo run -p logisim-examples --release --locked -- assemble examples/game/snake.asm examples/game/snake.hex
+cargo fmt --all -- --check
+cargo check --workspace --all-targets --all-features --locked --offline
+cargo clippy --workspace --all-targets --all-features --locked --offline -- -D warnings
+cargo test --workspace --all-features --locked --offline
 ```
 
-汇编后重新导入 ROM；指令与外设约定见 `cpu-demo.asm`，电路生成和验收命令见 [CI 配置](.github/workflows/ci.yml)。
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development and release workflow. Plugin source builds, ABI checks, and release packaging are documented in [.github/workflows/ci.yml](.github/workflows/ci.yml) and [.github/workflows/release.yml](.github/workflows/release.yml).
 
-## 兼容范围
+## Known limitations
 
-仅保存已实现内容；导入遇到不支持的内容会报告省略并禁止覆盖原文件。
-`.circ` 库以可编辑快照导入。插件路径优先相对电路目录解析；缺失时可补选，未修复的元件显示静态图形、属性报错并输出 E。
+- **Print** is not implemented. The File menu item is disabled and explains this in a tooltip.
+- A Joystick's label font is not serialized in the existing `.circ` format; it keeps its intrinsic size of 12 after reopening, even if a different default label size is configured.
+- In Dark mode, custom subcircuit artwork receives a contrast outline, but plugin interiors are drawn by the plugin author. The host only adds a boundary around the plugin component.
+- The UI has been manually validated on Linux X11. Windows, macOS, and native Wayland have not been manually UI-tested in this release.
 
-默认标签字号仅用于带标签的新元件。摇杆（Joystick）从放置到重新打开均保留固有字号 12。
+## License
 
-宿主不执行 Java/JAR。含 Wasm 元件的 `.circ` 使用本项目扩展，需 logisim-rs 运行并附带模块。
-不承诺完整兼容参考程序的全部元件、传播延迟与反馈行为。
-
-## 开发与许可
-
-开发、检查和发布流程见 [CONTRIBUTING.md](CONTRIBUTING.md)，协作约定见 [AGENTS.md](AGENTS.md)。
-
-原创代码采用 [MIT](LICENSE)。
+Original code is released under the [MIT License](LICENSE).

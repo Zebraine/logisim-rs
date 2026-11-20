@@ -11,6 +11,9 @@
 !/AGENTS.md
 !/CONTRIBUTING.md
 !/README.md
+!/README.zh-CN.md
+!/assets/
+!/assets/*.png
 
 # Git and build-check configuration; do not allow arbitrary dotfiles.
 !/.gitignore
