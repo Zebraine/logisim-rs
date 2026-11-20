@@ -98,6 +98,9 @@ fn joystick_keeps_its_native_font_from_placement_through_save_and_reopen() {
     let mut h = super::Harness::default();
     logisim_ui::configure(&h.ctx);
     h.ws.apply_settings(logisim_ui::Settings {
+        default_font_family: logisim_ui::FontPreset::Serif,
+        default_font_bold: true,
+        default_font_italic: true,
         default_font_size: Some(24),
         ..h.ws.preferences()
     });

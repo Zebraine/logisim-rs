@@ -429,6 +429,7 @@ fn changing_placement_defaults_preserves_manual_templates_clipboard_and_workspac
     app.apply_settings(initial);
     let and = Tool::Place(Kind::Gate(Gate::And));
     app.editor.set_tool(and);
+    app.editor.template.font.family = "Custom label face".into();
     app.editor.template.font.size = 19;
     app.editor.template.gate_options.inputs = 6;
     let manual = app.editor.template.clone();
@@ -440,6 +441,9 @@ fn changing_placement_defaults_preserves_manual_templates_clipboard_and_workspac
     app.editor.simulation.view.steps = 42;
     app.apply_settings(crate::Settings {
         default_font_size: Some(24),
+        default_font_family: crate::FontPreset::Monospace,
+        default_font_bold: true,
+        default_font_italic: true,
         default_gate_inputs: 4,
         ..initial
     });
@@ -467,7 +471,8 @@ fn changing_placement_defaults_preserves_manual_templates_clipboard_and_workspac
     assert_eq!(app.editor.template, manual);
     app.editor.paste();
     let pasted = app.circuit().components.last().unwrap();
-    assert_eq!((pasted.font.size, pasted.gate_options.inputs), (19, 6));
+    assert_eq!(pasted.font, manual.font);
+    assert_eq!(pasted.gate_options.inputs, 6);
     app.editor.undo();
     assert_eq!(app.circuit(), &original);
     app.editor.undo();
