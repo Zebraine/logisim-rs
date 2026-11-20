@@ -1,5 +1,6 @@
 mod backup;
 mod behavior;
+mod image;
 mod memory;
 mod plugin;
 mod recovery;

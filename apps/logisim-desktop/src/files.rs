@@ -1,4 +1,5 @@
 //! File workflow: unsaved actions, protected imports and transactional saves.
+mod capture;
 mod dialog;
 mod image;
 mod picker;
@@ -35,7 +36,7 @@ pub(crate) struct Files {
     pub storage: Storage,
     pub autosave: crate::recovery::Autosave,
     dialog: Option<Dialog>,
-    image_export: Option<image::ImageTarget>,
+    image_export: Option<capture::Capture>,
     after_save: Option<NextDocument>,
     directory: PathBuf,
     pub allow_close: bool,
@@ -73,6 +74,9 @@ impl Files {
     }
     pub fn busy(&self) -> bool {
         self.dialog.is_some() || self.image_export.is_some()
+    }
+    pub fn capturing_image(&self) -> bool {
+        self.image_export.is_some()
     }
     pub fn suspends_simulation(&self) -> bool {
         self.dialog
@@ -413,6 +417,14 @@ impl Files {
         sim: &mut impl Host,
         preferences: &mut crate::preferences::Preferences,
     ) {
+        if let Some(mut capture) = self.image_export.take() {
+            if let Some(result) = capture.poll(ctx, workspace.canvas_rect()) {
+                self.image_result(&capture.target.path, result);
+            } else {
+                self.image_export = Some(capture);
+            }
+            return;
+        }
         let Some(mut dialog) = self.dialog.take() else {
             return;
         };

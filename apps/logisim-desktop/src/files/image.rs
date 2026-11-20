@@ -117,7 +117,7 @@ impl Files {
             (Dialog::ReplaceImage(target), Response::Replace) => target,
             _ => unreachable!("image export dialog returned an unrelated response"),
         };
-        self.image_export = Some(target);
+        self.image_export = Some(super::capture::Capture::new(target));
         ctx.request_repaint();
     }
 

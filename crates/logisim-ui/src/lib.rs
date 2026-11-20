@@ -104,6 +104,10 @@ impl Workspace {
     pub fn replace_circuit(&mut self, circuit: logisim_core::Circuit) {
         self.replace_project(logisim_core::Project::single("main", circuit));
     }
+    /// The drawing viewport in egui points, updated by the current layout pass.
+    pub fn canvas_rect(&self) -> egui::Rect {
+        self.canvas.rect
+    }
     pub fn circuit(&self) -> &logisim_core::Circuit {
         &self.editor.session.circuit
     }

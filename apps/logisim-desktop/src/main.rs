@@ -99,7 +99,13 @@ impl DesktopApp {
         self.files.present_recovery(&mut self.workspace);
         self.workspace
             .set_document(self.files.present(&self.workspace));
-        ui.add_enabled_ui(!self.files.busy(), |ui| self.workspace.show(ui));
+        ui.add_enabled_ui(!self.files.busy(), |ui| {
+            if self.files.capturing_image() {
+                // Suppress interaction and tooltips while painting the original canvas colors.
+                ui.set_opacity(1.);
+            }
+            self.workspace.show(ui);
+        });
         for action in self.workspace.take_file_actions() {
             self.files
                 .request(action, ui.ctx(), &mut self.workspace, &mut self.simulator);

@@ -28,11 +28,44 @@ fn png_export_confirms_before_capture_and_atomically_replaces_only_the_chosen_ta
     assert_eq!(fs::read(&path).unwrap(), b"previous image");
     let dialog = pick(&mut files, &mut ws, &mut sim);
     files.respond_to_image(dialog, Response::Replace, &preferences, &ctx);
-    let target = files.image_export.take().unwrap();
-    target.write(1, 1, &[0, 128, 255, 192]).unwrap();
+    let mut capture = files.image_export.take().unwrap();
+    let input = egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_max(
+            egui::Pos2::ZERO,
+            egui::pos2(4., 2.),
+        )),
+        ..Default::default()
+    };
+    let canvas = egui::Rect::from_min_max(egui::pos2(3., 1.), egui::pos2(4., 2.));
+    let mut output = ctx.run_ui(input.clone(), |ui| {
+        assert!(capture.poll(ui.ctx(), canvas).is_none());
+    });
+    output.textures_delta.clear();
+    let callback = output.viewport_output[&egui::ViewportId::ROOT]
+        .commands
+        .iter()
+        .find_map(|cmd| {
+            if let egui::ViewportCommand::Screenshot(cb) = cmd {
+                Some(cb.clone())
+            } else {
+                None
+            }
+        })
+        .unwrap();
+    let mut frame = egui::ColorImage::filled([4, 2], egui::Color32::RED);
+    frame[(3, 1)] = egui::Color32::from_rgb(0, 128, 255);
+    callback.complete(std::sync::Arc::new(frame));
+    ctx.run_ui(input, |ui| {
+        capture
+            .poll(ui.ctx(), canvas)
+            .expect("readback completed")
+            .unwrap();
+    })
+    .textures_delta
+    .clear();
     let png = ::image::open(&path).unwrap().into_rgba8();
     assert_eq!(png.dimensions(), (1, 1));
-    assert_eq!(png.as_raw(), &[0, 128, 255, 192]);
+    assert_eq!(png.as_raw(), &[0, 128, 255, 255]);
     assert!(ws.recent().is_empty() && !files.present(&ws).dirty);
 }
 

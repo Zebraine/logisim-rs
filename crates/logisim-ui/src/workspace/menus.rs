@@ -45,7 +45,11 @@ impl Workspace {
                     }
                 });
                 ui.separator();
-                disabled_actions(ui, &["Export Image…", "Print…"]);
+                if ui.button(tr("Export Image…")).clicked() {
+                    self.file_actions.push(FileAction::ExportImage);
+                    ui.close();
+                }
+                ui.add_enabled(false, egui::Button::new(tr("Print…")));
                 ui.separator();
                 if ui.button(tr("Settings")).clicked() {
                     self.finish_edit();
@@ -223,11 +227,5 @@ impl Workspace {
             self.project_options_open = true;
             ui.close();
         }
-    }
-}
-
-fn disabled_actions(ui: &mut Ui, labels: &[&str]) {
-    for label in labels {
-        ui.add_enabled(false, egui::Button::new(tr(label)));
     }
 }
