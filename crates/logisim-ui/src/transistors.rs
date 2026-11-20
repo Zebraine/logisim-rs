@@ -87,7 +87,7 @@ pub(crate) fn draw(p: &Painter, canvas: &Canvas, c: &Component, color: Color32, 
         p.circle(
             at(-20, sign * 13),
             3.0 * canvas.camera.zoom,
-            Color32::WHITE,
+            crate::theme::palette(p.ctx()).surface,
             stroke,
         );
         line((-20, sign * 16), (-20, sign * 20));

@@ -783,7 +783,7 @@ impl AppearanceEditor {
             painter.circle_filled(center, 2.0, accent);
         }
         let center = canvas.screen(preview.anchor);
-        let green = crate::theme::SUCCESS;
+        let green = crate::theme::palette(painter.ctx()).success;
         painter.circle_stroke(center, 4.0 * canvas.camera.zoom, Stroke::new(1.7, green));
         painter.line_segment(
             [
@@ -816,7 +816,7 @@ impl AppearanceEditor {
                     {
                         accent
                     } else {
-                        egui::Color32::WHITE
+                        theme::palette(painter.ctx()).surface
                     },
                 );
                 painter.rect_stroke(

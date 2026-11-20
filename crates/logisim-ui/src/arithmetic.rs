@@ -111,7 +111,7 @@ pub(crate) fn draw(p: &Painter, canvas: &Canvas, c: &Component, color: Color32) 
     p.rect(
         Rect::from_min_max(at(min.x, min.y), at(max.x, max.y)),
         3.0,
-        crate::theme::CHROME,
+        crate::theme::palette(p.ctx()).chrome,
         Stroke::new(1.6, color),
         StrokeKind::Inside,
     );

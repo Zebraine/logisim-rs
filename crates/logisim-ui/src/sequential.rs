@@ -208,7 +208,7 @@ pub(crate) fn draw(
     p.rect(
         screen,
         3.0 * z,
-        crate::theme::CHROME,
+        crate::theme::palette(p.ctx()).chrome,
         stroke,
         StrokeKind::Inside,
     );

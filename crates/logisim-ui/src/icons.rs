@@ -41,9 +41,9 @@ pub(crate) fn button(ui: &mut Ui, icon: Icon, selected: bool, enabled: bool) -> 
         let color = if selected {
             crate::theme::colors(ui.ctx()).base
         } else if enabled {
-            crate::theme::INK
+            crate::theme::palette(ui.ctx()).ink
         } else {
-            crate::theme::MUTED
+            crate::theme::palette(ui.ctx()).muted
         };
         paint(ui.painter(), rect.shrink(rect.width() * 0.25), icon, color);
         response

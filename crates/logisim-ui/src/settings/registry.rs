@@ -341,7 +341,10 @@ impl Entry {
                 v.label().to_owned()
             }),
             Control::Accent => {
-                swatches(ui, Accent::ALL.map(|a| (a.colors().base, a.label())));
+                swatches(
+                    ui,
+                    Accent::ALL.map(|a| (a.colors(values.theme).base, a.label())),
+                );
                 choice(ui, &mut values.accent, Accent::ALL, |v| {
                     v.label().to_owned()
                 })
@@ -466,7 +469,10 @@ fn palette_preview(ui: &mut Ui, palette: SignalPalette) {
         (Error, "Signal error"),
         (WidthMismatch, "Width mismatch"),
     ];
-    swatches(ui, tones.map(|(tone, key)| (palette.color(tone), tr(key))));
+    swatches(
+        ui,
+        tones.map(|(tone, key)| (palette.color(theme::palette(ui.ctx()).mode, tone), tr(key))),
+    );
 }
 
 fn swatches<const N: usize>(ui: &mut Ui, swatches: [(egui::Color32, &str); N]) {

@@ -25,10 +25,16 @@ fn row(
     height: f32,
     badge: &str,
 ) -> Response {
+    let paint = theme::palette(ui.ctx());
     let font = FontId::proportional(13.0);
+    let badge_ink = if selected && paint.mode == crate::ThemeMode::Dark {
+        paint.ink
+    } else {
+        paint.muted
+    };
     let badge_run =
         ui.painter()
-            .layout_no_wrap(badge.to_owned(), FontId::proportional(12.0), theme::MUTED);
+            .layout_no_wrap(badge.to_owned(), FontId::proportional(12.0), badge_ink);
     let badge_width = if badge.is_empty() {
         0.0
     } else {
@@ -45,7 +51,7 @@ fn row(
     let badge_size = vec2(badge_width, 20.);
     let run = ui
         .painter()
-        .layout(name.to_owned(), font, theme::INK, text_width.max(24.));
+        .layout(name.to_owned(), font, paint.ink, text_width.max(24.));
     let content_height = run.size().y + if stacked { badge_size.y + 2. } else { 0. };
     let (rect, response) =
         ui.allocate_exact_size(vec2(width, height.max(content_height + 4.)), Sense::click());
@@ -60,7 +66,7 @@ fn row(
                 if selected {
                     theme::colors(ui.ctx()).soft
                 } else {
-                    theme::CHROME
+                    paint.chrome
                 },
             );
         }
@@ -75,7 +81,7 @@ fn row(
         ui.painter().galley(
             pos2(rect.left() + leading, rect.center().y - content_height / 2.),
             run,
-            theme::INK,
+            paint.ink,
         );
         if !badge.is_empty() {
             let r = if stacked {
@@ -92,11 +98,11 @@ fn row(
                 if selected {
                     theme::colors(ui.ctx()).selected
                 } else {
-                    theme::SUNKEN
+                    paint.sunken
                 },
             );
             ui.painter()
-                .galley(r.center() - badge_run.size() / 2.0, badge_run, theme::MUTED);
+                .galley(r.center() - badge_run.size() / 2.0, badge_run, badge_ink);
         }
     }
     response
@@ -120,7 +126,7 @@ fn component_row(ui: &mut Ui, name: &str, selected: bool, icon: ComponentIcon<'_
             if selected {
                 theme::colors(ui.ctx()).base
             } else {
-                theme::MUTED
+                theme::palette(ui.ctx()).muted
             },
         );
     }
@@ -151,13 +157,13 @@ fn group(
     };
     ui.painter().add(egui::Shape::line(
         arrow.iter().map(|v| p + *v).collect(),
-        egui::Stroke::new(1.5, theme::MUTED),
+        egui::Stroke::new(1.5, theme::palette(ui.ctx()).muted),
     ));
     icons::paint(
         ui.painter(),
         Rect::from_center_size(p + vec2(17.0, 0.0), vec2(15.0, 15.0)),
         icon,
-        theme::MUTED,
+        theme::palette(ui.ctx()).muted,
     );
     (expanded, response)
 }
@@ -387,7 +393,7 @@ impl Workspace {
                     ui.painter(),
                     Rect::from_center_size(preview.center(), vec2(16.0, 16.0)),
                     Icon::Chip,
-                    theme::WARNING,
+                    theme::palette(ui.ctx()).warning,
                 );
                 response.clone().on_hover_text(tr("Missing plugin"));
             }

@@ -42,11 +42,14 @@ impl Accent {
         })
     }
 
-    pub(crate) fn colors(self) -> AccentColors {
-        let [base, hover, soft, selected] = match self {
-            Self::Indigo => [0x4F46E5, 0x4338CA, 0xEEF2FF, 0xE0E7FF],
-            Self::Blue => [0x2563EB, 0x1D4ED8, 0xEFF6FF, 0xDBEAFE],
-            Self::Teal => [0x0F766E, 0x115E59, 0xF0FDFA, 0xCCFBF1],
+    pub(crate) fn colors(self, mode: ThemeMode) -> AccentColors {
+        let [base, hover, soft, selected] = match (mode, self) {
+            (ThemeMode::Light, Self::Indigo) => [0x4F46E5, 0x4338CA, 0xEEF2FF, 0xE0E7FF],
+            (ThemeMode::Light, Self::Blue) => [0x2563EB, 0x1D4ED8, 0xEFF6FF, 0xDBEAFE],
+            (ThemeMode::Light, Self::Teal) => [0x0F766E, 0x115E59, 0xF0FDFA, 0xCCFBF1],
+            (ThemeMode::Dark, Self::Indigo) => [0x818CF8, 0xA5B4FC, 0x1E1B4B, 0x312E81],
+            (ThemeMode::Dark, Self::Blue) => [0x60A5FA, 0x93C5FD, 0x172554, 0x1E3A8A],
+            (ThemeMode::Dark, Self::Teal) => [0x2DD4BF, 0x5EEAD4, 0x042F2E, 0x134E4A],
         }
         .map(super::rgb);
         AccentColors {
@@ -146,6 +149,7 @@ impl Density {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct Chrome {
+    mode: ThemeMode,
     density: Density,
     accent: Accent,
 }
@@ -154,8 +158,12 @@ fn id() -> Id {
     Id::unique("workbench.chrome")
 }
 
-pub(crate) fn apply_chrome(ctx: &Context, density: Density, accent: Accent) {
-    let chrome = Chrome { density, accent };
+pub(crate) fn apply_chrome(ctx: &Context, mode: ThemeMode, density: Density, accent: Accent) {
+    let chrome = Chrome {
+        mode,
+        density,
+        accent,
+    };
     let changed = ctx.data_mut(|d| {
         if d.get_temp::<Chrome>(id()) == Some(chrome) {
             return false;
@@ -164,7 +172,14 @@ pub(crate) fn apply_chrome(ctx: &Context, density: Density, accent: Accent) {
         true
     });
     if changed {
-        ctx.global_style_mut(|s| super::style_chrome(s, density.metrics(), accent.colors()));
+        ctx.set_theme(match mode {
+            ThemeMode::Light => egui::Theme::Light,
+            ThemeMode::Dark => egui::Theme::Dark,
+        });
+        ctx.global_style_mut(|s| {
+            super::style_chrome(s, density.metrics(), accent.colors(mode), mode.palette())
+        });
+        ctx.request_repaint();
     }
 }
 
@@ -173,8 +188,13 @@ fn current(ctx: &Context) -> Chrome {
 }
 
 pub(crate) fn colors(ctx: &Context) -> AccentColors {
-    current(ctx).accent.colors()
+    let chrome = current(ctx);
+    chrome.accent.colors(chrome.mode)
 }
+pub(crate) fn palette(ctx: &Context) -> &'static super::Palette {
+    current(ctx).mode.palette()
+}
+
 pub(crate) fn metrics(ctx: &Context) -> Metrics {
     current(ctx).density.metrics()
 }

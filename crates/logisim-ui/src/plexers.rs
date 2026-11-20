@@ -111,7 +111,7 @@ pub(crate) fn draw(p: &Painter, canvas: &Canvas, c: &Component, color: Color32) 
         / body.len() as f32;
     p.add(egui::Shape::convex_polygon(
         body,
-        crate::theme::CHROME,
+        crate::theme::palette(p.ctx()).chrome,
         Stroke::new(1.6, color),
     ));
     let label = match kind {

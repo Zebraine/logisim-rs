@@ -58,7 +58,7 @@ pub(crate) fn draw(
     let (min, max) = crate::sequential::body(c);
     let z = canvas.camera.zoom;
     let stroke = Stroke::new(1.6, color);
-    let fill = crate::theme::CHROME;
+    let fill = crate::theme::palette(p.ctx()).chrome;
     p.rect(
         Rect::from_two_pos(at(min), at(max)),
         3.0 * z,

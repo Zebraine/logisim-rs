@@ -138,7 +138,7 @@ impl Canvas {
         }
 
         let painter = ui.painter_at(rect);
-        painter.rect_filled(rect, 0, crate::theme::CANVAS);
+        painter.rect_filled(rect, 0, crate::theme::palette(painter.ctx()).canvas);
         if preferences.show_grid {
             self.paint_grid(&painter, rect);
         }
@@ -146,7 +146,7 @@ impl Canvas {
         // A subtle world-origin marker makes an otherwise empty viewport navigable.
         let origin = rect.min + self.camera.offset;
         if preferences.show_origin_marker && rect.shrink(12.0).contains(origin) {
-            let stroke = egui::Stroke::new(1.0, crate::theme::FAINT);
+            let stroke = egui::Stroke::new(1.0, crate::theme::palette(painter.ctx()).faint);
             painter.line_segment([origin - vec2(3.0, 0.0), origin + vec2(3.0, 0.0)], stroke);
             painter.line_segment([origin - vec2(0.0, 3.0), origin + vec2(0.0, 3.0)], stroke);
         }
@@ -167,7 +167,7 @@ impl Canvas {
         let columns = (rect.width() / spacing).ceil() as usize;
         let rows = (rect.height() / spacing).ceil() as usize;
         let mut mesh = egui::Mesh::default();
-        let color = crate::theme::BORDER_STRONG;
+        let color = crate::theme::palette(painter.ctx()).grid();
         for column in 0..=columns {
             for row in 0..=rows {
                 let point = start + vec2(column as f32, row as f32) * spacing;

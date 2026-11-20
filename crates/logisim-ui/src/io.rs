@@ -235,6 +235,8 @@ pub(crate) fn draw(
     let body = Rect::from_two_pos(at(min), at(max));
     let z = canvas.camera.zoom;
     let stroke = Stroke::new(1.5, ink);
+    let paint = crate::theme::palette(p.ctx());
+    let mode = paint.mode;
     let palette = crate::theme::active_palette(p.ctx());
     let input_tone = |index| {
         simulation
@@ -243,7 +245,7 @@ pub(crate) fn draw(
     };
     let input_stroke = |index| {
         input_tone(index).map_or(stroke, |tone| {
-            Stroke::new(stroke.width, palette.color(tone))
+            Stroke::new(stroke.width, palette.color(mode, tone))
         })
     };
     let lights = simulation
@@ -262,7 +264,7 @@ pub(crate) fn draw(
                 .copied()
                 .unwrap_or_default();
             let knob = canvas.screen(c.joystick_center() + offset);
-            p.rect(body, 4.0 * z, Color32::WHITE, stroke, StrokeKind::Inside);
+            p.rect(body, 4.0 * z, paint.surface, stroke, StrokeKind::Inside);
             p.rect_stroke(
                 body.shrink(3.0 * z),
                 2.0 * z,
@@ -289,7 +291,7 @@ pub(crate) fn draw(
             );
         }
         Kind::DotMatrix => {
-            p.rect_filled(body, 0.0, Color32::WHITE);
+            p.rect_filled(body, 0.0, paint.surface);
             let cols = c.io.matrix_columns.clamp(1, 32);
             let rows = c.io.matrix_rows.clamp(1, 32);
             let cells = simulation.and_then(|s| s.matrices.get(&c.id));
@@ -303,7 +305,7 @@ pub(crate) fn draw(
                     let fill = match state {
                         Some(true) => color(c.io.on_color),
                         Some(false) => color(c.io.off_color),
-                        None => palette.color(crate::SignalTone::Unknown),
+                        None => palette.color(mode, crate::SignalTone::Unknown),
                     };
                     let center =
                         at(min + Point::new(i32::from(col) * 10 + 5, i32::from(row) * 10 + 5));
@@ -322,7 +324,7 @@ pub(crate) fn draw(
                         p.circle_filled(
                             center,
                             1.4 * z,
-                            palette.color(crate::SignalTone::bit(high)),
+                            palette.color(mode, crate::SignalTone::bit(high)),
                         );
                     }
                 }
@@ -351,7 +353,7 @@ pub(crate) fn draw(
             p.circle_filled(
                 at(Point::new(-10, 9)),
                 2.0 * z,
-                input_tone(0).map_or(ink, |tone| palette.color(tone)),
+                input_tone(0).map_or(ink, |tone| palette.color(mode, tone)),
             );
         }
         Kind::DipSwitch => {
@@ -380,7 +382,7 @@ pub(crate) fn draw(
                     Rect::from_center_size(center, size),
                     2.0 * z,
                     if simulation.is_some() {
-                        palette.color(crate::SignalTone::bit(on))
+                        palette.color(mode, crate::SignalTone::bit(on))
                     } else {
                         ink
                     },
@@ -394,7 +396,7 @@ pub(crate) fn draw(
                 p.rect_filled(
                     Rect::from_center_size(center + offset, egui::vec2(8.0, 8.0) * z),
                     1.0 * z,
-                    Color32::WHITE,
+                    paint.surface,
                 );
             }
         }
@@ -439,7 +441,7 @@ pub(crate) fn draw(
                 p.rect_filled(
                     body.translate(egui::vec2(2.0, 2.0) * z),
                     2.0 * z,
-                    Color32::from_gray(140),
+                    paint.button_shadow(),
                 );
             }
             p.rect(body, 2.0 * z, fill, stroke, StrokeKind::Inside);
@@ -491,12 +493,15 @@ pub(crate) fn draw(
                     index
                 };
                 input_tone(port).map(|tone| {
-                    palette.color(match tone {
-                        crate::SignalTone::Bus if c.kind == Kind::HexDisplay && index != 7 => {
-                            crate::SignalTone::bit(lights[index])
-                        }
-                        _ => tone,
-                    })
+                    palette.color(
+                        mode,
+                        match tone {
+                            crate::SignalTone::Bus if c.kind == Kind::HexDisplay && index != 7 => {
+                                crate::SignalTone::bit(lights[index])
+                            }
+                            _ => tone,
+                        },
+                    )
                 })
             };
             for (i, ((x1, y1), (x2, y2))) in segments.into_iter().enumerate() {

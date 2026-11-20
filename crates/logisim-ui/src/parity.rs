@@ -71,7 +71,7 @@ pub(crate) fn draw(p: &Painter, canvas: &Canvas, c: &Component, color: Color32, 
             p.circle(
                 at(-width - 5, port.y),
                 4.0 * canvas.camera.zoom,
-                Color32::WHITE,
+                crate::theme::palette(p.ctx()).surface,
                 stroke,
             );
             p.line_segment([at(port.x, port.y), at(-width - 9, port.y)], stroke);

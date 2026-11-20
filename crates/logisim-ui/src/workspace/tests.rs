@@ -469,7 +469,7 @@ fn selection_and_primary_button_paint_with_each_accent() {
             },
             |ui| app.show(ui),
         );
-        let c = accent.colors();
+        let c = accent.colors(crate::ThemeMode::Light);
         let shapes = || output.shapes.iter().map(|s| &s.shape);
         assert!(shapes().any(|s| matches!(s,Shape::Rect(r) if r.fill==c.base && r.rect.width()>=59. && r.rect.top()<80.)), "primary button");
         assert!(shapes().any(|s| matches!(s,Shape::Rect(r) if r.fill==c.selected && r.rect.width()>80. && r.rect.left()<320.)), "selected catalogue tab");

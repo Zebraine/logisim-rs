@@ -99,7 +99,12 @@ pub(crate) fn draw(p: &Painter, canvas: &Canvas, c: &Component, color: Color32, 
         stroke,
     ));
     if c.kind == Kind::ControlledInverter {
-        p.circle(at(-4, 0), 3.0 * canvas.camera.zoom, Color32::WHITE, stroke);
+        p.circle(
+            at(-4, 0),
+            3.0 * canvas.camera.zoom,
+            crate::theme::palette(p.ctx()).surface,
+            stroke,
+        );
     }
     line((-1, 0), (0, 0));
     let sign = if c.bus.control_left { -1 } else { 1 };
@@ -108,7 +113,7 @@ pub(crate) fn draw(p: &Painter, canvas: &Canvas, c: &Component, color: Color32, 
         p.circle(
             at(x, sign * 6),
             3.0 * canvas.camera.zoom,
-            Color32::WHITE,
+            crate::theme::palette(p.ctx()).surface,
             stroke,
         );
         line((x, sign * 9), (x, sign * 10));

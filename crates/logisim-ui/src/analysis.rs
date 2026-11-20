@@ -100,7 +100,7 @@ impl Workspace {
         let dismiss = crate::dialog::Dialog::prompt("circuit-analysis").show(ctx, tr("Analyze Circuit"), |dialog| {
             dialog.body(|ui| {
                 if let Some(error) = &self.analysis.error {
-                    ui.colored_label(crate::theme::DANGER, tr(error.message));
+                    ui.colored_label(crate::theme::palette(ui.ctx()).danger, tr(error.message));
                     ui.label(&error.detail);
                 } else {
                     ui.horizontal(|ui| { ui.spinner(); ui.label(tr("Analyzing circuit…")); });

@@ -18,7 +18,7 @@ struct Preview {
     segments: Vec<[Pos2; 2]>,
     wire_count: usize,
     missing: bool,
-    texture: Option<(f32, TextureHandle)>,
+    texture: Option<((f32, crate::ThemeMode), TextureHandle)>,
 }
 
 impl Thumbnails {
@@ -42,13 +42,15 @@ impl Thumbnails {
             .entry(id)
             .or_insert_with(|| Preview::new(circuit));
         let density = p.pixels_per_point();
-        if !matches!(preview.texture,Some((d,_)) if d==density) {
+        let paint = theme::palette(p.ctx());
+        let key = (density, paint.mode);
+        if !matches!(preview.texture,Some((k,_)) if k==key) {
             let texture = p.ctx().load_texture(
                 format!("circuit-{id}-{}", self.epoch),
-                preview.image(density),
+                preview.image(density, paint),
                 egui::TextureOptions::LINEAR,
             );
-            preview.texture = Some((density, texture));
+            preview.texture = Some((key, texture));
         }
         let texture = &preview.texture.as_ref().expect("rasterized preview").1;
         p.image(
@@ -65,7 +67,7 @@ impl Thumbnails {
                 if active {
                     theme::colors(p.ctx()).base
                 } else {
-                    theme::BORDER
+                    paint.border
                 },
             ),
             StrokeKind::Inside,
@@ -273,22 +275,22 @@ impl Preview {
         );
     }
 
-    fn image(&self, density: f32) -> ColorImage {
+    fn image(&self, density: f32, paint: &theme::Palette) -> ColorImage {
         let size = (SIZE * density).round().max(Vec2::splat(1.0));
-        let mut image = ColorImage::filled([size.x as usize, size.y as usize], theme::SURFACE);
+        let mut image = ColorImage::filled([size.x as usize, size.y as usize], paint.surface);
         let spacing = (6.0 * density).round().max(1.0) as usize;
         for y in (spacing / 2..image.size[1]).step_by(spacing) {
             for x in (spacing / 2..image.size[0]).step_by(spacing) {
-                image[(x, y)] = theme::BORDER;
+                image[(x, y)] = paint.border;
             }
         }
         for (index, &[a, b]) in self.segments.iter().enumerate() {
             let wire = index < self.wire_count;
             let radius = if wire { 0.5 } else { 0.75 } * density;
             let color = if wire {
-                theme::BORDER_STRONG
+                paint.border_strong
             } else {
-                theme::MUTED
+                paint.muted
             };
             let (a, b) = (a * density, b * density);
             let bounds = Rect::from_two_pos(a, b).expand(radius + 0.5);

@@ -317,7 +317,7 @@ fn wire_badges_leave_inspection_hit_selection_and_simulation_available() {
             app.canvas.screen(Point::new(50, 80)),
             app.canvas.screen(Point::new(350, 80)),
         ];
-        assert!(painted.iter().any(|s| matches!(&s.shape,Shape::LineSegment{points,stroke} if *points==segment && stroke.width==3. && stroke.color==palette.color(SignalTone::Bus))));
+        assert!(painted.iter().any(|s| matches!(&s.shape,Shape::LineSegment{points,stroke} if *points==segment && stroke.width==3. && stroke.color==palette.color(crate::ThemeMode::Light, SignalTone::Bus))));
         assert_eq!(app.editor.hit(vec2(100., 80.), 2.), Some(id));
         let pointer = app.canvas.screen(Point::new(100, 80));
         frame(&mut app, vec![Event::PointerMoved(pointer)]);

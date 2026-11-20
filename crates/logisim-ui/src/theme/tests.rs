@@ -20,6 +20,7 @@ fn wires_and_signal_labels_contrast_with_canvas() {
     ];
     let ctx = Context::default();
     let other = Context::default();
+    let paint = palette(&ctx);
     for (palette, expected_colors) in SignalPalette::ALL.into_iter().zip(expected) {
         crate::Settings {
             signal_palette: palette,
@@ -33,10 +34,15 @@ fn wires_and_signal_labels_contrast_with_canvas() {
             let [_, r, g, b] = u32::to_be_bytes(hex);
             assert_eq!(signal(&ctx, tone), Color32::from_rgb(r, g, b));
             assert!(
-                contrast(signal(&ctx, tone), CANVAS) >= 3.0,
+                contrast(signal(&ctx, tone), paint.canvas) >= 3.0,
                 "{palette:?} {tone:?} wire"
             );
-            for surface in [CANVAS, SUNKEN, CHROME, colors(&ctx).selected] {
+            for surface in [
+                paint.canvas,
+                paint.sunken,
+                paint.chrome,
+                colors(&ctx).selected,
+            ] {
                 assert!(
                     contrast(signal_text(&ctx, tone), surface) >= 4.5,
                     "{palette:?} {tone:?} text on {surface:?}"
@@ -45,8 +51,8 @@ fn wires_and_signal_labels_contrast_with_canvas() {
         }
         assert_eq!(active_palette(&other), SignalPalette::Default);
     }
-    for color in [INK, MUTED, colors(&ctx).base] {
-        assert!(contrast(color, CHROME) >= 4.5);
+    for color in [paint.ink, paint.muted, colors(&ctx).base] {
+        assert!(contrast(color, paint.chrome) >= 4.5);
     }
 }
 
@@ -55,6 +61,7 @@ fn accent_presets_update_standard_visuals_with_readable_chrome_and_independent_s
     let ctx = Context::default();
     configure(&ctx);
     let other = Context::default();
+    let paint = palette(&ctx);
     for (accent, expected) in [
         (Accent::Indigo, [0x4F46E5, 0x4338CA, 0xEEF2FF, 0xE0E7FF]),
         (Accent::Blue, [0x2563EB, 0x1D4ED8, 0xEFF6FF, 0xDBEAFE]),
@@ -68,8 +75,8 @@ fn accent_presets_update_standard_visuals_with_readable_chrome_and_independent_s
         .apply_appearance(&ctx);
         let c = colors(&ctx);
         assert_eq!([c.base, c.hover, c.soft, c.selected], expected.map(rgb));
-        assert!(contrast(c.base, SURFACE) >= 4.5 && contrast(c.hover, SURFACE) >= 4.5);
-        assert!(contrast(INK, c.selected) >= 4.5 && contrast(INK, c.soft) >= 4.5);
+        assert!(contrast(c.base, paint.surface) >= 4.5 && contrast(c.hover, paint.surface) >= 4.5);
+        assert!(contrast(paint.ink, c.selected) >= 4.5 && contrast(paint.ink, c.soft) >= 4.5);
         let v = &ctx.global_style().visuals;
         assert_eq!(v.selection.bg_fill, c.selected);
         assert_eq!(v.selection.stroke, Stroke::new(2., c.hover));
@@ -77,12 +84,15 @@ fn accent_presets_update_standard_visuals_with_readable_chrome_and_independent_s
         assert_eq!(v.widgets.active.bg_stroke, Stroke::new(2., c.base));
         assert_eq!(v.hyperlink_color, c.base);
         assert_eq!(v.widgets.hovered.weak_bg_fill, c.soft);
-        assert_eq!((v.warn_fg_color, v.error_fg_color), (WARNING, DANGER));
+        assert_eq!(
+            (v.warn_fg_color, v.error_fg_color),
+            (paint.warning, paint.danger)
+        );
         assert_eq!(
             signal(&ctx, SignalTone::High),
-            SignalPalette::ColorblindSafe.color(SignalTone::High)
+            SignalPalette::ColorblindSafe.color(ThemeMode::Light, SignalTone::High)
         );
-        assert_eq!(colors(&other), Accent::Indigo.colors());
+        assert_eq!(colors(&other), Accent::Indigo.colors(ThemeMode::Light));
     }
 }
 
@@ -127,4 +137,80 @@ fn metrics_have_the_prescribed_sizes_in_logical_points() {
         assert_eq!(m.settings_size, dialog);
         assert_eq!(ctx.global_style().spacing.interact_size.y, m.control);
     }
+}
+
+#[test]
+fn both_workbench_palettes_and_dark_signal_contrast_are_context_local() {
+    use SignalTone::*;
+    let ctx = Context::default();
+    let other = Context::default();
+    configure(&other);
+    for (mode, expected) in [
+        (
+            ThemeMode::Light,
+            [
+                0xFFFFFF, 0xFFFFFF, 0xF6F8FB, 0xEEF2F7, 0xE2E8F0, 0xCBD5E1, 0x0F172A, 0x5B6B7F,
+                0x94A3B8, 0x15803D, 0xB45309, 0xDC2626,
+            ],
+        ),
+        (
+            ThemeMode::Dark,
+            [
+                0x0B1220, 0x111827, 0x0F172A, 0x1E293B, 0x334155, 0x475569, 0xE2E8F0, 0x94A3B8,
+                0x64748B, 0x4ADE80, 0xFBBF24, 0xF87171,
+            ],
+        ),
+    ] {
+        apply_chrome(&ctx, mode, Density::Comfortable, Accent::Indigo);
+        let p = palette(&ctx);
+        assert_eq!(
+            [
+                p.canvas,
+                p.surface,
+                p.chrome,
+                p.sunken,
+                p.border,
+                p.border_strong,
+                p.ink,
+                p.muted,
+                p.faint,
+                p.success,
+                p.warning,
+                p.danger
+            ],
+            expected.map(rgb)
+        );
+        assert_eq!(ctx.global_style().visuals.window_fill, p.surface);
+        assert_eq!(ctx.global_style().visuals.panel_fill, p.chrome);
+        assert_eq!(
+            ctx.global_style().visuals.dark_mode,
+            mode == ThemeMode::Dark
+        );
+    }
+    let p = palette(&ctx);
+    for (accent, expected) in [
+        (Accent::Indigo, [0x818CF8, 0xA5B4FC, 0x1E1B4B, 0x312E81]),
+        (Accent::Blue, [0x60A5FA, 0x93C5FD, 0x172554, 0x1E3A8A]),
+        (Accent::Teal, [0x2DD4BF, 0x5EEAD4, 0x042F2E, 0x134E4A]),
+    ] {
+        apply_chrome(&ctx, ThemeMode::Dark, Density::Comfortable, accent);
+        let c = colors(&ctx);
+        assert_eq!([c.base, c.hover, c.soft, c.selected], expected.map(rgb));
+        for signals in SignalPalette::ALL {
+            signals.apply(&ctx);
+            for tone in [Low, High, Bus, Unknown, Error, WidthMismatch] {
+                assert!(contrast(signal(&ctx, tone), p.canvas) >= 3.0);
+                for surface in [p.surface, p.canvas, p.sunken, c.selected] {
+                    assert!(
+                        contrast(signal_text(&ctx, tone), surface) >= 4.5,
+                        "{accent:?} {signals:?} {tone:?}"
+                    );
+                }
+            }
+        }
+    }
+    assert_eq!(palette(&other).mode, ThemeMode::Light);
+    assert_eq!(active_palette(&other), SignalPalette::Default);
+    configure(&ctx);
+    assert_eq!(palette(&ctx), palette(&other));
 }

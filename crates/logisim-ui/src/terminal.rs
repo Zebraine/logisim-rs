@@ -118,7 +118,7 @@ pub(crate) fn draw(
         body,
         4.0 * z,
         if keyboard {
-            Color32::WHITE
+            crate::theme::palette(p.ctx()).surface
         } else {
             rgba(c.io.background)
         },

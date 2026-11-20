@@ -212,7 +212,7 @@ impl Workspace {
                         response.request_focus();
                     }
                     if !dialog.error.is_empty() {
-                        ui.colored_label(crate::theme::DANGER, tr(&dialog.error));
+                        ui.colored_label(crate::theme::palette(ui.ctx()).danger, tr(&dialog.error));
                     }
                     apply = response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
                 });

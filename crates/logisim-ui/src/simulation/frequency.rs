@@ -101,7 +101,7 @@ impl SimulationUi {
                         .filter(|hz| (1..=MAX_TICK_HZ).contains(hz));
                     if value.is_none() {
                         ui.colored_label(
-                            crate::theme::DANGER,
+                            crate::theme::palette(ui.ctx()).danger,
                             tf!("Enter a whole number from 1 to {}.", MAX_TICK_HZ),
                         );
                     }

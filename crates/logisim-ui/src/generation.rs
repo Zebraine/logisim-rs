@@ -246,7 +246,7 @@ impl Generator {
         }
         if let Some(error) = &self.error {
             ui.colored_label(
-                crate::theme::DANGER,
+                crate::theme::palette(ui.ctx()).danger,
                 format!("{} {}", tr(error.message), error.detail),
             );
         }

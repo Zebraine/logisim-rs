@@ -27,7 +27,7 @@ impl Workspace {
             .exact_size(m.zoom_bar)
             .frame(
                 Frame::NONE
-                    .fill(theme::CHROME)
+                    .fill(theme::palette(ui.ctx()).chrome)
                     .inner_margin(Margin::symmetric(
                         zoom_margin,
                         ((m.zoom_bar - m.control) / 2.) as i8,
@@ -47,7 +47,7 @@ impl Workspace {
             .size_range(min..=max)
             .frame(
                 Frame::NONE
-                    .fill(theme::SURFACE)
+                    .fill(theme::palette(ui.ctx()).surface)
                     .inner_margin(Margin::symmetric(m.card_margin, m.gap)),
             )
             .show(ui, |ui| {
@@ -72,7 +72,7 @@ impl Workspace {
             self.layout.split = (new_size / height).clamp(0.25, 0.75);
         }
         egui::CentralPanel::default()
-            .frame(Frame::NONE.fill(theme::CHROME))
+            .frame(Frame::NONE.fill(theme::palette(ui.ctx()).chrome))
             .show(ui, |ui| {
                 if self.editor.session.context.appearance_mode {
                     self.appearance
@@ -116,7 +116,12 @@ impl Workspace {
         let count = self.result_count(components, &query);
         ui.horizontal(|ui| {
             let (rect, _) = ui.allocate_exact_size(vec2(16.0, 16.0), egui::Sense::hover());
-            icons::paint(ui.painter(), rect.shrink(1.0), Icon::Search, theme::MUTED);
+            icons::paint(
+                ui.painter(),
+                rect.shrink(1.0),
+                Icon::Search,
+                theme::palette(ui.ctx()).muted,
+            );
             let response = ui.add(
                 egui::TextEdit::singleline(&mut self.navigation.query)
                     .id_salt("catalogue-search")
@@ -166,7 +171,8 @@ impl Workspace {
             );
             if self.document.dirty {
                 let (r, response) = ui.allocate_exact_size(vec2(8.0, 12.0), egui::Sense::hover());
-                ui.painter().circle_filled(r.center(), 3.0, theme::WARNING);
+                ui.painter()
+                    .circle_filled(r.center(), 3.0, theme::palette(ui.ctx()).warning);
                 response.on_hover_text(tr("Unsaved changes"));
             }
             let title = format!(

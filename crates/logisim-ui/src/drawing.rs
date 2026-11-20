@@ -1,11 +1,7 @@
 //! Original vector artwork and editor hit geometry.
 mod cache;
 pub(crate) mod thumbnails;
-use crate::{
-    canvas::Canvas,
-    simulation::SimulationView,
-    theme::{self, INK},
-};
+use crate::{canvas::Canvas, simulation::SimulationView, theme};
 use crate::{i18n::tr, tf};
 pub(crate) use cache::CircuitCache;
 use egui::{
@@ -257,7 +253,8 @@ pub(crate) fn circuit(
     cache.synchronize(circuit, selection);
     cache.prepare_view(p, canvas);
     let accent = theme::colors(p.ctx()).base;
-    let palette = crate::theme::active_palette(p.ctx());
+    let paint = theme::palette(p.ctx());
+    let palette = theme::active_palette(p.ctx());
     let mut badges = Vec::new();
     for w in &circuit.wires {
         let selected = selection.contains(&w.id);
@@ -289,7 +286,7 @@ pub(crate) fn circuit(
         } else {
             1.8
         };
-        let ink = tone.map_or(INK, |t| palette.color(t));
+        let ink = tone.map_or(paint.ink, |t| palette.color(paint.mode, t));
         if tone == Some(crate::SignalTone::High) && !highlighted {
             p.line_segment(segment, Stroke::new(width + 2.5, ink.gamma_multiply(0.13)));
         }
@@ -310,7 +307,10 @@ pub(crate) fn circuit(
                 || (canvas.camera.zoom >= 0.8 && segment[0].distance(segment[1]) >= 96.0))
         {
             let midpoint = segment[0].lerp(segment[1], 0.5);
-            let value_color = palette.text_color(value.tone);
+            let value_color = match paint.mode {
+                crate::ThemeMode::Light => palette.text_color(paint.mode, value.tone),
+                crate::ThemeMode::Dark => paint.ink,
+            };
             let label = p.layout_no_wrap(value.text.clone(), FontId::monospace(12.0), value_color);
             let badge = Rect::from_center_size(midpoint, label.size() + vec2(8.0, 4.0));
             if segment[0].distance(segment[1]) >= badge.width() + 12.0
@@ -322,8 +322,8 @@ pub(crate) fn circuit(
                 p.rect(
                     badge,
                     4,
-                    crate::theme::SURFACE,
-                    Stroke::new(1.0, crate::theme::BORDER_STRONG),
+                    paint.surface,
+                    Stroke::new(1.0, paint.border_strong),
                     StrokeKind::Inside,
                 );
                 p.galley(midpoint - label.size() / 2.0, label, value_color);
@@ -348,7 +348,7 @@ pub(crate) fn circuit(
             }
             let color = wire
                 .and_then(|id| simulation.wires.get(&id))
-                .map_or(INK, |s| palette.color(s.tone));
+                .map_or(paint.ink, |s| palette.color(paint.mode, s.tone));
             p.circle_filled(screen, 3.0, color);
         }
     }
@@ -364,17 +364,18 @@ pub(crate) fn component(
     ghost: bool,
     simulation: Option<&SimulationView>,
 ) {
+    let paint = theme::palette(p.ctx());
     let accent = theme::colors(p.ctx()).base;
     let color = if ghost {
         accent.gamma_multiply(0.45)
     } else {
-        Color32::from_rgba_unmultiplied(c.color[0], c.color[1], c.color[2], c.color_alpha)
+        paint.component_ink(c.color, c.color_alpha)
     };
     // Hit bounds include empty space and ports; only actual closed bodies get a fill.
     let fill = if ghost {
         Color32::TRANSPARENT
     } else {
-        Color32::WHITE
+        paint.surface
     };
     let stroke = Stroke::new(1.7, color);
     let scale_x = if matches!(c.kind, Kind::Gate(_)) {
@@ -470,13 +471,7 @@ pub(crate) fn component(
                     canvas.screen_vec(rect.min.to_vec2()),
                     canvas.screen_vec(rect.max.to_vec2()),
                 );
-                p.rect(
-                    screen,
-                    4.0,
-                    crate::theme::CHROME,
-                    stroke,
-                    StrokeKind::Inside,
-                );
+                p.rect(screen, 4.0, paint.chrome, stroke, StrokeKind::Inside);
                 path(
                     vec![
                         vec2(a.x as f32 + 4.0, a.y as f32 + 3.0),
@@ -576,7 +571,7 @@ pub(crate) fn component(
                     p.circle(
                         at((port.x + 5) as f32 / scale_x, port.y as f32),
                         4.5 * canvas.camera.zoom,
-                        Color32::WHITE,
+                        paint.surface,
                         stroke,
                     );
                 }
@@ -840,6 +835,10 @@ pub(crate) fn component(
             color,
         );
     }
+    let port_ink = match paint.mode {
+        crate::ThemeMode::Light => accent,
+        crate::ThemeMode::Dark => paint.ink,
+    };
     for (index, port) in c.ports().into_iter().enumerate() {
         let signal = simulation.and_then(|s| s.ports.get(&(c.id, index)));
         p.circle_filled(
@@ -848,7 +847,7 @@ pub(crate) fn component(
             if ghost {
                 color
             } else {
-                signal.map_or(accent, |s| crate::theme::signal(p.ctx(), s.tone))
+                signal.map_or(port_ink, |s| theme::signal(p.ctx(), s.tone))
             },
         );
     }

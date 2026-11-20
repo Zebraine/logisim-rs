@@ -44,7 +44,7 @@ impl SignalView {
 
     pub(crate) fn pill(&self, ui: &mut Ui) {
         egui::Frame::NONE
-            .fill(theme::SUNKEN)
+            .fill(theme::palette(ui.ctx()).sunken)
             .corner_radius(6)
             .inner_margin(egui::Margin::symmetric(8, 4))
             .show(ui, |ui| {
@@ -59,7 +59,8 @@ impl SignalView {
                     ui.label(self.value_text(ui.ctx(), &self.text));
                     ui.separator();
                     ui.label(
-                        egui::RichText::new(tf!("{} bit", self.binary.len())).color(theme::MUTED),
+                        egui::RichText::new(tf!("{} bit", self.binary.len()))
+                            .color(theme::palette(ui.ctx()).muted),
                     );
                 });
             });
@@ -349,7 +350,7 @@ impl SimulationUi {
                 ui.add(
                     egui::Button::new(
                         egui::RichText::new(tr(if self.view.enabled { "Pause" } else { "Run" }))
-                            .color(theme::SURFACE)
+                            .color(theme::palette(ui.ctx()).surface)
                             .strong(),
                     )
                     .min_size(egui::vec2(60.0, theme::metrics(ui.ctx()).row)),
@@ -399,7 +400,7 @@ impl SimulationUi {
                 let text = ui.painter().layout_no_wrap(
                     tr("Auto ticks").into(),
                     egui::FontId::proportional(13.0),
-                    theme::INK,
+                    theme::palette(ui.ctx()).ink,
                 );
                 let (rect, r) = ui.allocate_exact_size(
                     egui::vec2(36.0 + text.size().x, theme::metrics(ui.ctx()).control),
@@ -421,17 +422,19 @@ impl SimulationUi {
                 ui.painter().rect_filled(
                     rail,
                     8,
-                    theme::BORDER_STRONG.lerp_to_gamma(theme::colors(ui.ctx()).base, t),
+                    theme::palette(ui.ctx())
+                        .border_strong
+                        .lerp_to_gamma(theme::colors(ui.ctx()).base, t),
                 );
                 ui.painter().circle_filled(
                     rail.left_center() + egui::vec2(8.0 + t * 12.0, 0.0),
                     6.0,
-                    theme::SURFACE,
+                    theme::palette(ui.ctx()).surface,
                 );
                 ui.painter().galley(
                     rect.left_center() + egui::vec2(36.0, -text.size().y / 2.0),
                     text,
-                    theme::INK,
+                    theme::palette(ui.ctx()).ink,
                 );
                 theme::focus_ring(ui, &r);
                 r
@@ -466,14 +469,14 @@ impl SimulationUi {
                 ),
                 "Successful clock ticks per second, measured over about one second. Includes manual ticks; not full clock cycles or propagation steps.",
             ),
-        ].map(|(label,hint)|(ui.painter().layout_no_wrap(label,egui::FontId::monospace(12.0),theme::MUTED),hint));
+        ].map(|(label,hint)|(ui.painter().layout_no_wrap(label,egui::FontId::monospace(12.0),theme::palette(ui.ctx()).muted),hint));
         let width = metrics.iter().map(|(run, _)| run.size().x).sum::<f32>() + 32.0;
         let (rect, _) = ui.allocate_exact_size(egui::vec2(width, 26.0), egui::Sense::hover());
         ui.painter().rect(
             rect,
             4,
-            theme::SURFACE,
-            egui::Stroke::new(1.0, theme::BORDER),
+            theme::palette(ui.ctx()).surface,
+            egui::Stroke::new(1.0, theme::palette(ui.ctx()).border),
             egui::StrokeKind::Inside,
         );
         let mut x = rect.left() + 8.0;
@@ -487,7 +490,7 @@ impl SimulationUi {
             )
             .on_hover_text(tr(hint));
             x += run.size().x + 8.0;
-            ui.painter().galley(at, run, theme::MUTED);
+            ui.painter().galley(at, run, theme::palette(ui.ctx()).muted);
         }
     }
     pub fn status_chip(&self, ui: &mut Ui) {
@@ -502,7 +505,7 @@ impl SimulationUi {
                 if self.view.enabled {
                     theme::signal(ui.ctx(), SignalTone::High)
                 } else {
-                    theme::MUTED
+                    theme::palette(ui.ctx()).muted
                 },
             )
         } else if self.view.enabled {
@@ -511,11 +514,13 @@ impl SimulationUi {
                 theme::signal(ui.ctx(), SignalTone::High),
             )
         } else {
-            (tr("Paused").into(), theme::MUTED)
+            (tr("Paused").into(), theme::palette(ui.ctx()).muted)
         };
-        let run = ui
-            .painter()
-            .layout_no_wrap(name, egui::FontId::proportional(13.0), theme::INK);
+        let run = ui.painter().layout_no_wrap(
+            name,
+            egui::FontId::proportional(13.0),
+            theme::palette(ui.ctx()).ink,
+        );
         let (rect, r) =
             ui.allocate_exact_size(egui::vec2(run.size().x + 29.0, 24.0), egui::Sense::hover());
         ui.painter().rect_filled(rect, 4, tone.gamma_multiply(0.08));
@@ -524,7 +529,7 @@ impl SimulationUi {
         ui.painter().galley(
             rect.left_center() + egui::vec2(18.0, -run.size().y / 2.0),
             run,
-            theme::INK,
+            theme::palette(ui.ctx()).ink,
         );
         r.on_hover_text(self.status());
     }

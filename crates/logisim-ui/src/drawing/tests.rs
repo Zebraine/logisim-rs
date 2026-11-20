@@ -207,7 +207,12 @@ fn live_component_ink_tracks_palette_and_preserves_document_artwork() {
             crate::Accent::Indigo,
             crate::Accent::Blue,
         ]) {
-            crate::theme::apply_chrome(&ctx, crate::Density::Compact, accent);
+            crate::theme::apply_chrome(
+                &ctx,
+                crate::ThemeMode::Light,
+                crate::Density::Compact,
+                accent,
+            );
             palette.apply(&ctx);
             let mut out = ctx.run_ui(Default::default(), |ui| {
                 component(ui.painter(), &canvas, &c, false, false, Some(&view))
@@ -222,7 +227,7 @@ fn live_component_ink_tracks_palette_and_preserves_document_artwork() {
                 text_has("document label", label_color),
                 "{kind:?} document label"
             );
-            let high = palette.color(SignalTone::High);
+            let high = palette.color(crate::ThemeMode::Light, SignalTone::High);
             match kind {
                 Kind::Led => assert!(shapes().any(|s| matches!(s,Shape::Circle(c) if c.fill == custom_lamp && c.stroke.color == high))),
                 Kind::SevenSegment | Kind::HexDisplay => {
@@ -230,7 +235,7 @@ fn live_component_ink_tracks_palette_and_preserves_document_artwork() {
                         assert!(shapes().any(|s| matches!(s,Shape::LineSegment{stroke,..} if stroke.color == ink)), "{kind:?} segment");
                     }
                 }
-                _ => assert!(text_has("1",palette.text_color(SignalTone::High)), "{kind:?} stored or port value"),
+                _ => assert!(text_has("1",palette.text_color(crate::ThemeMode::Light, SignalTone::High)), "{kind:?} stored or port value"),
             }
         }
     }

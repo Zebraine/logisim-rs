@@ -149,12 +149,12 @@ impl Page {
                                     .show(ui, |ui| {
                                         if let Some(error) = error {
                                             egui::Frame::NONE
-                                                .fill(theme::SUNKEN)
+                                                .fill(theme::palette(ui.ctx()).sunken)
                                                 .corner_radius(6)
                                                 .inner_margin(m.card_margin)
                                                 .show(ui, |ui| {
                                                     ui.colored_label(
-                                                        theme::DANGER,
+                                                        theme::palette(ui.ctx()).danger,
                                                         tr("Settings need attention."),
                                                     );
                                                     ui.label(tr(error));
@@ -180,16 +180,20 @@ impl Page {
                         }))
                         .size(12.)
                         .color(if error.is_some() {
-                            theme::DANGER
+                            theme::palette(ui.ctx()).danger
                         } else {
-                            theme::MUTED
+                            theme::palette(ui.ctx()).muted
                         }),
                     );
                     if let Some(path) = path {
                         let r = ui.add(
-                            egui::Label::new(RichText::new(path).size(12.).color(theme::MUTED))
-                                .truncate()
-                                .sense(egui::Sense::click()),
+                            egui::Label::new(
+                                RichText::new(path)
+                                    .size(12.)
+                                    .color(theme::palette(ui.ctx()).muted),
+                            )
+                            .truncate()
+                            .sense(egui::Sense::click()),
                         );
                         if r.on_hover_text(tr("Copy path")).clicked() {
                             ctx.copy_text(path.to_owned());
@@ -435,7 +439,7 @@ impl Page {
             let hint = crate::i18n::with_language(Language::English, || {
                 tr("Chinese characters require a system CJK font (for example Noto Sans CJK SC).")
             });
-            ui.colored_label(theme::DANGER, hint);
+            ui.colored_label(theme::palette(ui.ctx()).danger, hint);
         }
     }
 }

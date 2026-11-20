@@ -49,7 +49,7 @@ pub(crate) fn draw(p: &Painter, canvas: &Canvas, c: &Component, color: Color32) 
     p.rect(
         Rect::from_min_max(at(0, -30), at(60, 30)),
         4.0 * z,
-        crate::theme::CHROME,
+        crate::theme::palette(p.ctx()).chrome,
         Stroke::new(1.6, color),
         StrokeKind::Inside,
     );

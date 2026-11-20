@@ -6,7 +6,7 @@ use crate::{
     editor::Tool,
     i18n::{self, tr},
     icons::{self, Icon},
-    theme::{self, CHROME},
+    theme,
 };
 use egui::{Frame, Margin, Panel, Ui, vec2};
 
@@ -55,12 +55,13 @@ impl Workspace {
             || self.preferences.default_zoom == crate::DefaultZoom::Fit;
     }
     fn show_inner(&mut self, ui: &mut Ui) {
+        let paint = theme::palette(ui.ctx());
         let m = theme::metrics(ui.ctx());
         Panel::top("menus")
             .exact_size(m.menu)
             .frame(
                 Frame::NONE
-                    .fill(CHROME)
+                    .fill(paint.chrome)
                     .inner_margin(Margin::symmetric(8, 1)),
             )
             .show(ui, |ui| self.menus(ui));
@@ -72,7 +73,7 @@ impl Workspace {
             .exact_size(height)
             .frame(
                 Frame::NONE
-                    .fill(CHROME)
+                    .fill(paint.chrome)
                     .inner_margin(Margin::symmetric(8, toolbar.padding(m))),
             )
             .show(ui, |ui| self.toolbar(ui, toolbar));
@@ -92,7 +93,7 @@ impl Workspace {
         Panel::left("inspector")
             .default_size(size)
             .size_range(side_min..=side_max)
-            .frame(Frame::NONE.fill(CHROME))
+            .frame(Frame::NONE.fill(paint.chrome))
             .show(ui, |ui| {
                 let mut bounded = panel_contents(ui);
                 self.sidebar(&mut bounded);

@@ -75,7 +75,7 @@ fn toggling_origin_changes_only_the_two_cross_strokes() {
                 on.pop(),
                 Some(egui::Shape::line_segment(
                     [origin - delta, origin + delta],
-                    egui::Stroke::new(1., crate::theme::FAINT)
+                    egui::Stroke::new(1., crate::theme::palette(&ctx).faint)
                 ))
             );
         }

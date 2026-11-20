@@ -148,7 +148,7 @@ pub(crate) fn draw(
     p.rect(
         Rect::from_min_max(at(-140, -40), at(0, 40)),
         3.0 * z,
-        crate::theme::CHROME,
+        crate::theme::palette(p.ctx()).chrome,
         Stroke::new(1.6, color),
         StrokeKind::Inside,
     );
@@ -405,7 +405,7 @@ impl MemoryEditor {
             .inner;
         if value.is_none() {
             ui.colored_label(
-                crate::theme::DANGER,
+                crate::theme::palette(ui.ctx()).danger,
                 tf!("Enter a hexadecimal value within {} bits.", c.bits),
             );
         }
