@@ -10,7 +10,7 @@ use crate::{
     tf, theme,
 };
 use egui::{Align2, FontId, Rect, Response, Sense, Ui, Vec2, pos2, vec2};
-use logisim_core::{Component, Id, Kind, Point};
+use logisim_core::{Id, Kind};
 
 fn matches(name: &str, query: &str) -> bool {
     query.is_empty() || name.to_lowercase().contains(query)
@@ -297,9 +297,7 @@ impl Workspace {
                         .clicked()
                     {
                         self.editor.session.context.appearance_mode = false;
-                        self.editor.set_tool(Tool::Place(Kind::Plugin));
-                        self.editor.template =
-                            Component::from_plugin(m.components().swap_remove(i), Point::ZERO);
+                        self.editor.set_plugin_tool(m.components().swap_remove(i));
                     }
                 }
             }

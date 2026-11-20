@@ -70,11 +70,18 @@ fn generic_plugin_palette_properties_actions_and_strings_in_both_languages() {
         );
         click(&ctx, &mut app, "User library");
         click(&ctx, &mut app, "Plugin tool A");
+        assert_eq!(app.editor.template.font.size, 14);
+        app.apply_settings(Settings {
+            default_font_size: Some(24),
+            ..app.preferences()
+        });
+        assert_eq!(app.editor.template.font.size, 14);
         assert_eq!(
             app.editor.template.plugin.as_ref().unwrap().tool.id,
             "first"
         );
         click(&ctx, &mut app, "Plugin tool B");
+        assert_eq!(app.editor.template.font.size, 24);
         assert_eq!(
             app.editor.template.plugin.as_ref().unwrap().tool.id,
             "second"

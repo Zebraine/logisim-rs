@@ -256,31 +256,50 @@ impl Editor {
     }
 
     fn placement_template(&mut self, kind: Kind) -> Component {
-        if let Kind::Subcircuit(id) = kind {
-            return self
-                .session
-                .project
-                .instance(id, Point::ZERO)
-                .unwrap_or_else(|| Component::new(kind, Point::ZERO));
-        }
         if let Some(memory) = &mut self.remembered_templates
             && let Some(index) = memory.iter().position(|template| template.kind == kind)
         {
             return memory.swap_remove(index);
         }
-        let mut template = Component::new(kind, Point::ZERO);
+        let mut template = match kind {
+            Kind::Subcircuit(id) => self
+                .session
+                .project
+                .instance(id, Point::ZERO)
+                .unwrap_or_else(|| Component::new(kind, Point::ZERO)),
+            _ => Component::new(kind, Point::ZERO),
+        };
         match kind {
             Kind::Pin => template.bits = self.placement_defaults.pin_bits,
             Kind::Probe => template.radix = self.placement_defaults.probe_radix,
             Kind::Gate(gate) => {
                 template.gate_options.size =
                     supported_gate_size(gate, self.placement_defaults.gate_size);
+                if !gate.unary() {
+                    template.gate_options.inputs =
+                        self.placement_defaults.gate_inputs.min(Gate::MAX_INPUTS);
+                }
             }
-            Kind::Parity(_) => template.parity.size = self.placement_defaults.gate_size,
+            Kind::Parity(_) => {
+                template.parity.size = self.placement_defaults.gate_size;
+                template.parity.inputs = self.placement_defaults.gate_inputs;
+            }
             Kind::Tunnel => template.bits = self.placement_defaults.tunnel_bits,
             _ => {}
         }
+        self.with_default_font(template)
+    }
+
+    fn with_default_font(&self, mut template: Component) -> Component {
+        if let Some(size) = self.placement_defaults.font_size {
+            template.font.size = size;
+        }
         template
+    }
+
+    pub fn set_plugin_tool(&mut self, plugin: logisim_core::plugin::api::Component) {
+        self.set_tool(Tool::Place(Kind::Plugin));
+        self.template = self.with_default_font(Component::from_plugin(plugin, Point::ZERO));
     }
 
     pub fn set_tool(&mut self, tool: Tool) {

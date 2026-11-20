@@ -353,6 +353,111 @@ fn programmatic_pin_width_is_bounded_when_placed() {
 }
 
 #[test]
+fn fresh_placements_apply_label_size_and_respect_each_gate_family_limit() {
+    use logisim_core::Parity;
+    let mut project = Project::default();
+    let child = project.add("child".into()).unwrap();
+    for (font, inputs) in [(None, 2), (Some(24), 4), (Some(32), 32)] {
+        let mut e = Editor::new(
+            project.clone(),
+            crate::Settings {
+                default_font_size: font,
+                default_gate_inputs: inputs,
+                ..Default::default()
+            },
+        );
+        let kinds = Gate::ALL
+            .map(Kind::Gate)
+            .into_iter()
+            .chain(Parity::ALL.map(Kind::Parity))
+            .chain([
+                Kind::Joystick,
+                Kind::PlaRom,
+                Kind::Pin,
+                Kind::Subcircuit(child),
+            ]);
+        for (i, kind) in kinds.enumerate() {
+            e.set_tool(Tool::Place(kind));
+            e.place(Point::new(50 + i as i32 * 100, 50));
+            let c = e.session.circuit.components.last().unwrap();
+            let auto = if matches!(kind, Kind::Joystick | Kind::PlaRom) {
+                12
+            } else {
+                14
+            };
+            assert_eq!(c.font.size, font.unwrap_or(auto), "{kind:?}");
+            match kind {
+                Kind::Gate(g) if g.unary() => {
+                    assert_eq!(
+                        c.gate_options.inputs,
+                        Component::new(kind, Point::ZERO).gate_options.inputs
+                    );
+                    assert_eq!(c.input_count(), 1);
+                }
+                Kind::Gate(_) => assert_eq!(c.gate_options.inputs, inputs.min(Gate::MAX_INPUTS)),
+                Kind::Parity(_) => assert_eq!(c.parity.inputs, inputs),
+                _ => {}
+            }
+        }
+    }
+}
+
+#[test]
+fn changing_placement_defaults_preserves_manual_templates_clipboard_and_workspace() {
+    let mut app = crate::Workspace::default();
+    let initial = crate::Settings {
+        remember_last_properties: true,
+        ..app.preferences()
+    };
+    app.apply_settings(initial);
+    let and = Tool::Place(Kind::Gate(Gate::And));
+    app.editor.set_tool(and);
+    app.editor.template.font.size = 19;
+    app.editor.template.gate_options.inputs = 6;
+    let manual = app.editor.template.clone();
+    app.editor.place(Point::new(100, 100));
+    app.editor.copy();
+    let original = app.circuit().clone();
+    let selection = app.editor.session.selection.clone();
+    let camera = app.canvas.camera;
+    app.editor.simulation.view.steps = 42;
+    app.apply_settings(crate::Settings {
+        default_font_size: Some(24),
+        default_gate_inputs: 4,
+        ..initial
+    });
+    assert_eq!(app.editor.template, manual);
+    assert_eq!(app.circuit(), &original);
+    assert_eq!(app.editor.session.selection, selection);
+    assert_eq!(
+        (app.canvas.camera.zoom, app.canvas.camera.offset),
+        (camera.zoom, camera.offset)
+    );
+    assert_eq!(app.editor.simulation.view.steps, 42);
+    assert!(app.take_simulation_actions().is_empty());
+    app.editor.set_tool(Tool::Place(Kind::Gate(Gate::Or)));
+    assert_eq!(
+        (
+            app.editor.template.font.size,
+            app.editor.template.gate_options.inputs
+        ),
+        (24, 4)
+    );
+    app.apply_settings(initial);
+    app.editor.set_tool(and);
+    assert_eq!(app.editor.template, manual);
+    app.apply_settings(crate::Settings::default());
+    assert_eq!(app.editor.template, manual);
+    app.editor.paste();
+    let pasted = app.circuit().components.last().unwrap();
+    assert_eq!((pasted.font.size, pasted.gate_options.inputs), (19, 6));
+    app.editor.undo();
+    assert_eq!(app.circuit(), &original);
+    app.editor.undo();
+    assert!(app.circuit().components.is_empty() && !app.editor.can_undo());
+}
+
+#[test]
 fn new_gate_parity_and_tunnel_templates_use_current_defaults_only_on_creation() {
     use crate::{Settings, Workspace};
     use logisim_core::{GateSize, Parity};

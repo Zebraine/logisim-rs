@@ -178,6 +178,8 @@ pub(crate) struct PlacementDefaults {
     pub probe_radix: Radix,
     pub pin_bits: u8,
     pub gate_size: GateSize,
+    pub font_size: Option<u8>,
+    pub gate_inputs: u8,
     pub tunnel_bits: u8,
 }
 
@@ -190,6 +192,8 @@ impl Settings {
             probe_radix: self.default_probe_radix,
             pin_bits: self.default_pin_bits.clamp(1, 32),
             gate_size: self.default_gate_size,
+            font_size: self.default_font_size.map(|size| size.clamp(8, 32)),
+            gate_inputs: self.default_gate_inputs.clamp(2, 32),
             tunnel_bits: self.default_tunnel_width.clamp(1, 32),
         }
     }

@@ -58,6 +58,8 @@ impl Workspace {
         self.editor
             .configure_placement(defaults, settings.remember_last_properties);
         settings.default_pin_bits = defaults.pin_bits;
+        settings.default_font_size = defaults.font_size;
+        settings.default_gate_inputs = defaults.gate_inputs;
         settings.default_tunnel_width = defaults.tunnel_bits;
         settings.workspace.recent_limit = settings.workspace.bounded_recent_limit();
         self.preferences = settings;
