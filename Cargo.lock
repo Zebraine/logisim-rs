@@ -1230,7 +1230,7 @@ checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
 
 [[package]]
 name = "logisim-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "logisim-plugin-api",
  "serde",
@@ -1238,14 +1238,14 @@ dependencies = [
 
 [[package]]
 name = "logisim-course"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "logisim-core",
 ]
 
 [[package]]
 name = "logisim-course-plugin"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "logisim-core",
  "logisim-course",
@@ -1260,7 +1260,7 @@ dependencies = [
 
 [[package]]
 name = "logisim-display-plugin"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "logisim-core",
  "logisim-file",
@@ -1273,7 +1273,7 @@ dependencies = [
 
 [[package]]
 name = "logisim-examples"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "logisim-core",
  "logisim-file",
@@ -1283,7 +1283,7 @@ dependencies = [
 
 [[package]]
 name = "logisim-file"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "logisim-core",
  "roxmltree 0.20.0",
@@ -1292,7 +1292,7 @@ dependencies = [
 
 [[package]]
 name = "logisim-input-plugin"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "logisim-core",
  "logisim-file",
@@ -1305,7 +1305,7 @@ dependencies = [
 
 [[package]]
 name = "logisim-plugin"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "logisim-plugin-api",
  "serde",
@@ -1316,7 +1316,7 @@ dependencies = [
 
 [[package]]
 name = "logisim-plugin-api"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -1325,7 +1325,7 @@ dependencies = [
 
 [[package]]
 name = "logisim-plugin-sdk"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "logisim-plugin-api",
  "serde",
@@ -1334,7 +1334,7 @@ dependencies = [
 
 [[package]]
 name = "logisim-rs"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "eframe",
  "image",
@@ -1350,7 +1350,7 @@ dependencies = [
 
 [[package]]
 name = "logisim-sim"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "logisim-core",
  "logisim-plugin",
@@ -1360,7 +1360,7 @@ dependencies = [
 
 [[package]]
 name = "logisim-ttl-combinational-plugin"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "logisim-core",
  "logisim-file",
@@ -1373,7 +1373,7 @@ dependencies = [
 
 [[package]]
 name = "logisim-ttl-plugin"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "logisim-core",
  "logisim-file",
@@ -1389,7 +1389,7 @@ dependencies = [
 
 [[package]]
 name = "logisim-ttl-sequential-plugin"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "logisim-core",
  "logisim-file",
@@ -1402,7 +1402,7 @@ dependencies = [
 
 [[package]]
 name = "logisim-ui"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "egui",
  "logisim-core",
