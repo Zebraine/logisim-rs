@@ -17,7 +17,7 @@ pub(crate) struct Autosave {
     metadata: Option<Metadata>,
     unavailable: bool,
     changed: bool,
-    owned: bool,
+    owned: Option<std::fs::File>,
     last_success: Option<Instant>,
     next_due: Option<Instant>,
     options: Option<FileSettings>,
@@ -36,9 +36,20 @@ impl Autosave {
         self.changed = true;
         match self.dir().and_then(Pair::read) {
             Ok(pair) => {
+                // A read error cannot establish that our previously readable files changed.
+                if !self.observed.empty()
+                    && !self.observed.unreadable()
+                    && let Some(error) = pair.read_error()
+                {
+                    self.unavailable = true;
+                    self.error = Some(error.to_owned());
+                    return;
+                }
                 let was_unavailable = std::mem::take(&mut self.unavailable);
                 if pair != self.observed || was_unavailable {
-                    self.owned &= pair == self.observed;
+                    if pair != self.observed {
+                        self.owned = None;
+                    }
                     self.metadata = None;
                     self.error = None;
                     if !pair.empty() {
@@ -83,6 +94,7 @@ impl Autosave {
             SnapshotState::Empty
         };
         logisim_ui::RecoveryView {
+            owned: self.owned.is_some(),
             state,
             directory: self.directory.as_ref().map(|p| p.display().to_string()),
             error: self.error.clone(),
@@ -95,6 +107,7 @@ impl Autosave {
     }
     pub fn recover(&mut self, storage: &mut Storage) -> Result<Project, String> {
         let dir = self.dir()?;
+        let lease = slot::try_lock(dir, slot::OWNER);
         self.observed.verify(dir)?;
         let meta = self
             .metadata
@@ -102,8 +115,16 @@ impl Autosave {
             .ok_or("The recovery files are damaged or incomplete.")?;
         let project = self.observed.project(dir)?;
         *storage = Storage::recovered(meta.source.as_deref(), meta.source_fnv1a64)?;
-        self.owned = true;
-        self.error = None;
+        match lease {
+            Ok(owner) => {
+                self.owned = owner;
+                self.error = None;
+            }
+            Err(error) => {
+                self.owned = None;
+                self.error = Some(error);
+            }
+        }
         self.changed = true;
         Ok(project)
     }
@@ -119,9 +140,11 @@ impl Autosave {
     pub fn reserved(&self, path: &Path) -> bool {
         self.directory.as_ref().is_some_and(|dir| {
             let base = dir.canonicalize().unwrap_or_else(|_| dir.clone());
-            [slot::DATA, slot::META]
-                .iter()
-                .any(|name| path == base.join(name))
+            path == base.with_file_name(slot::LOCK)
+                || path == base.with_file_name(slot::OWNER)
+                || [slot::DATA, slot::META]
+                    .iter()
+                    .any(|name| path == base.join(name))
         })
     }
     pub fn update(
@@ -139,7 +162,7 @@ impl Autosave {
         if !options.autosave
             || !dirty
             || storage.protected.is_some()
-            || (!self.owned && !self.observed.empty())
+            || (self.owned.is_none() && !self.observed.empty())
         {
             self.next_due = None;
             return;
@@ -150,7 +173,7 @@ impl Autosave {
         }
         if self.unavailable {
             self.refresh();
-            if self.unavailable || self.pending() {
+            if self.unavailable || (self.pending() && self.owned.is_none()) {
                 self.next_due = Some(now + interval);
                 return;
             }
@@ -159,7 +182,6 @@ impl Autosave {
         let result = self.write(storage, project);
         match result {
             Ok(()) => {
-                self.owned = true;
                 self.last_success = Some(now);
                 self.error = None;
             }
@@ -175,6 +197,14 @@ impl Autosave {
         if storage.path.as_ref().is_some_and(|p| self.reserved(p)) {
             return Err("Recovery files cannot be used as a project destination.".into());
         }
+        let lease = if self.owned.is_none() {
+            Some(
+                slot::try_lock(&dir, slot::OWNER)?
+                    .ok_or("Recovery copy is owned by another window.")?,
+            )
+        } else {
+            None
+        };
         let mut portable = project.clone();
         plugins::rebase(&mut portable, &plugins::base(storage.path.as_deref()), &dir);
         let xml = logisim_file::serialize(&portable).map_err(|e| e.to_string())?;
@@ -184,37 +214,57 @@ impl Autosave {
             storage.path.clone(),
             storage.source_checksum(),
         )?;
+        if let Some(lease) = lease {
+            self.owned = Some(lease);
+        }
         self.metadata = Some(meta);
         Ok(())
     }
     pub fn finish_document(&mut self) {
         self.next_due = None;
         self.last_success = None;
-        if self.owned {
-            self.clear();
+        if self.owned.is_some()
+            && let Err(error) = self.clear_owned()
+        {
+            self.report(error);
         }
     }
-    pub fn clear(&mut self) {
-        self.changed = true;
-        self.owned = false;
-        let result = self
-            .dir()
-            .map(Path::to_owned)
-            .and_then(|dir| self.observed.clear(&dir));
-        match result {
-            Ok(()) => {
-                self.metadata = None;
-                self.error = None;
-                self.next_due = None;
-            }
-            Err(e) => {
-                self.refresh();
-                if !self.observed.empty() && self.observed.metadata().is_err() {
-                    self.metadata = None;
-                }
-                self.report(e);
-            }
+
+    pub fn clear_owned(&mut self) -> Result<(), String> {
+        if self.owned.is_none() {
+            return Err("Recovery copy is owned by another window.".into());
         }
+        self.remove_observed()
+    }
+
+    /// Settings can also remove explicitly confirmed, damaged files. The same
+    /// compare-under-lock protects a repaired or replaced pair.
+    pub fn clear_from_settings(&mut self) -> Result<(), String> {
+        if self.owned.is_none() && self.pending() && self.metadata.is_none() {
+            self.remove_observed()
+        } else {
+            self.clear_owned()
+        }
+    }
+
+    pub fn discard(&mut self) -> Result<(), String> {
+        self.remove_observed()
+    }
+
+    fn remove_observed(&mut self) -> Result<(), String> {
+        let dir = self.dir()?.to_owned();
+        if let Err(error) = self.observed.clear(&dir) {
+            self.refresh();
+            return Err(error);
+        }
+        self.owned = None;
+        self.metadata = None;
+        self.unavailable = false;
+        self.error = None;
+        self.next_due = None;
+        self.last_success = None;
+        self.changed = true;
+        Ok(())
     }
 }
 

@@ -10,6 +10,27 @@ use std::{
 
 pub(super) const DATA: &str = "current.circ";
 pub(super) const META: &str = "current.json";
+pub(super) const LOCK: &str = ".recovery.lock";
+pub(super) const OWNER: &str = ".recovery.owner";
+
+/// A second window can read a live snapshot without acquiring the writer's lease.
+/// The OS releases the lease on process exit, including after a crash.
+pub(super) fn try_lock(dir: &Path, name: &str) -> Result<Option<fs::File>> {
+    fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let file = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(dir.with_file_name(name))
+        .map_err(|e| e.to_string())?;
+    match file.try_lock() {
+        Ok(()) => Ok(Some(file)),
+        Err(fs::TryLockError::WouldBlock) => Ok(None),
+        Err(fs::TryLockError::Error(e)) => Err(e.to_string()),
+    }
+}
+
 type Result<T> = std::result::Result<T, String>;
 
 /// FNV-1a is an on-disk integrity check for torn writes, not an authentication token.
@@ -96,7 +117,13 @@ impl Pair {
         Ok(import.document)
     }
     pub fn unreadable(&self) -> bool {
-        matches!(self.data, Entry::Unreadable(_)) || matches!(self.meta, Entry::Unreadable(_))
+        self.read_error().is_some()
+    }
+    pub fn read_error(&self) -> Option<&str> {
+        match (&self.data, &self.meta) {
+            (Entry::Unreadable(error), _) | (_, Entry::Unreadable(error)) => Some(error),
+            _ => None,
+        }
     }
     pub fn empty(&self) -> bool {
         self.data == Entry::Missing && self.meta == Entry::Missing
@@ -121,16 +148,7 @@ impl Pair {
     /// The lock covers both renames and cleanup across desktop instances. Compare
     /// the observed pair under the lock so another instance retains its snapshot.
     fn lock(dir: &Path) -> Result<fs::File> {
-        fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-        let lock = fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open(dir.with_file_name(".recovery.lock"))
-            .map_err(|e| e.to_string())?;
-        lock.try_lock().map_err(|_| "Recovery storage is busy.")?;
-        Ok(lock)
+        try_lock(dir, LOCK)?.ok_or_else(|| "Recovery storage is busy.".into())
     }
     pub fn verify(&self, dir: &Path) -> Result<()> {
         if &Self::read(dir)? != self {
@@ -172,10 +190,14 @@ impl Pair {
         write_record: impl FnOnce(&Path, &[u8], Option<&[u8]>) -> Result<()>,
     ) -> Result<()> {
         let _lock = Self::lock(dir)?;
-        self.verify(dir)?;
+        let current = Self::read(dir)?;
+        // Startup Discard may have emptied our slot since the previous checkpoint.
+        if !current.empty() && current != *self {
+            return Err("The recovery snapshot changed in another window.".into());
+        }
         let data = dir.join(DATA);
-        let old_data = self.data.bytes()?;
-        let old_meta = self.meta.bytes()?;
+        let old_data = current.data.bytes()?;
+        let old_meta = current.meta.bytes()?;
         storage::atomic_write(&data, &xml, old_data)?;
         if let Err(e) = write_record(&dir.join(META), &record, old_meta) {
             let rollback = match old_data {
@@ -201,10 +223,22 @@ impl Pair {
         if *self != current {
             return Err("The recovery snapshot changed in another window.".into());
         }
-        remove(&dir.join(DATA))?;
-        self.data = Entry::Missing;
-        remove(&dir.join(META))?;
-        self.meta = Entry::Missing;
+        // Remove a readable entry first so a failure on the second can restore it.
+        let (first, second, original) = if let Entry::Bytes(bytes) = &self.meta {
+            (META, DATA, Some(bytes))
+        } else if let Entry::Bytes(bytes) = &self.data {
+            (DATA, META, Some(bytes))
+        } else {
+            (META, DATA, None)
+        };
+        remove(&dir.join(first))?;
+        if let Err(error) = remove(&dir.join(second)) {
+            if let Some(bytes) = original {
+                storage::atomic_write(&dir.join(first), bytes, None)?;
+            }
+            return Err(error);
+        }
+        *self = Self::default();
         Ok(())
     }
 }

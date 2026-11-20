@@ -86,7 +86,7 @@ fn untitled_snapshots_use_null_source_and_windows_cannot_replace_another_slot() 
             &project,
         );
     }
-    assert!(first.owned && other.error.is_some() && !other.owned);
+    assert!(first.view().owned && other.error.is_some() && !other.view().owned);
     other.finish_document();
     let pair = Pair::read(&dir).unwrap();
     assert!(pair.metadata().unwrap().source.is_none());
@@ -109,4 +109,108 @@ fn malformed_xml_with_consistent_metadata_is_damaged_and_survives_restarts() {
     assert!(auto.recover(&mut disk).is_err());
     auto.finish_document();
     assert_eq!(Pair::read(&dir).unwrap(), pair);
+}
+
+fn write_checkpoint(auto: &mut Autosave, project: &Project) -> Instant {
+    let start = Instant::now();
+    for at in [start, start + Duration::from_secs(300)] {
+        auto.update(
+            at,
+            FileSettings::default(),
+            true,
+            &Storage::default(),
+            project,
+        );
+    }
+    assert!(auto.view().owned);
+    start
+}
+
+#[test]
+fn observed_foreign_copy_survives_settings_clear_and_finish_but_not_startup_discard() {
+    let temp = Temp::new();
+    let dir = temp.path("recovery");
+    let mut owner = Autosave::at(Some(dir.clone()));
+    let mut project = Project::default();
+    let now = write_checkpoint(&mut owner, &project);
+    let mut other = Autosave::at(Some(dir.clone()));
+    let saved = Pair::read(&dir).unwrap();
+    assert!(!other.view().owned && other.clear_owned().is_err());
+    assert!(other.clear_from_settings().is_err());
+    // Recover in a second live window cannot take the writer's ownership either.
+    assert_eq!(other.recover(&mut Storage::default()).unwrap(), project);
+    assert!(!other.view().owned);
+    other.finish_document();
+    assert_eq!(Pair::read(&dir).unwrap(), saved);
+    other.discard().unwrap();
+    assert!(Pair::read(&dir).unwrap().empty());
+    project.main_circuit_mut().name = "edited".into();
+    owner.update(
+        now + Duration::from_secs(600),
+        FileSettings::default(),
+        true,
+        &Storage::default(),
+        &project,
+    );
+    assert!(owner.view().owned);
+    assert_eq!(Pair::read(&dir).unwrap().project(&dir).unwrap(), project);
+}
+
+#[test]
+fn failed_clear_keeps_ownership_until_verified_replacement() {
+    let temp = Temp::new();
+    let dir = temp.path("recovery");
+    let mut owner = Autosave::at(Some(dir.clone()));
+    let project = Project::default();
+    write_checkpoint(&mut owner, &project);
+    let lock = slot::try_lock(&dir, slot::LOCK).unwrap().unwrap();
+    let before = Pair::read(&dir).unwrap();
+    assert!(owner.clear_owned().is_err());
+    assert!(owner.view().owned);
+    assert_eq!(Pair::read(&dir).unwrap(), before);
+    drop(lock);
+    owner.clear_owned().unwrap();
+    assert!(!owner.view().owned && !owner.pending());
+
+    write_checkpoint(&mut owner, &project);
+    let meta = dir.join(slot::META);
+    let mut newer = fs::read(&meta).unwrap();
+    newer.push(b' ');
+    fs::write(&meta, &newer).unwrap();
+    assert!(owner.clear_owned().is_err());
+    assert!(!owner.view().owned);
+    assert_eq!(fs::read(&meta).unwrap(), newer);
+    assert!(owner.clear_from_settings().is_err());
+}
+
+#[test]
+fn explicitly_clearing_damage_checks_the_observed_pair() {
+    let temp = Temp::new();
+    let dir = temp.path("recovery");
+    fs::create_dir(&dir).unwrap();
+    fs::write(dir.join(slot::DATA), b"damaged").unwrap();
+    let mut auto = Autosave::at(Some(dir.clone()));
+    assert!(!auto.view().owned);
+    assert!(auto.clear_owned().is_err());
+    fs::write(dir.join(slot::DATA), b"different").unwrap();
+    assert!(auto.clear_from_settings().is_err());
+    assert_eq!(fs::read(dir.join(slot::DATA)).unwrap(), b"different");
+    auto.clear_from_settings().unwrap();
+    assert!(Pair::read(&dir).unwrap().empty());
+}
+
+#[test]
+fn recovery_files_and_both_locks_are_reserved_project_destinations() {
+    let temp = Temp::new();
+    let dir = temp.path("recovery");
+    let auto = Autosave::at(Some(dir.clone()));
+    for path in [
+        dir.join(slot::DATA),
+        dir.join(slot::META),
+        temp.path(slot::LOCK),
+        temp.path(slot::OWNER),
+    ] {
+        assert!(auto.reserved(&path));
+    }
+    assert!(!auto.reserved(&temp.path("project.circ")));
 }

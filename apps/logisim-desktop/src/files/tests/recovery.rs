@@ -116,6 +116,7 @@ fn startup_gives_recovery_priority_even_when_disabled_and_save_keeps_conflict_ch
     checkpoint(&mut files, &w);
     let different = format!("{bytes}\n<!-- independent edit before restart -->");
     fs::write(&source, &different).unwrap();
+    drop(files); // Simulate the original process exiting.
     let mut recovered = Workspace::default();
     let mut options = recovered.preferences();
     options.files.autosave = false;

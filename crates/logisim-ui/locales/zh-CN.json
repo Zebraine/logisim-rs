@@ -605,6 +605,7 @@
     "Recover": "恢复",
     "Recover unsaved changes?": "恢复未保存的更改？",
     "Recovery circuit is missing.": "缺少恢复电路文件。",
+    "Recovery copy is owned by another window.": "该恢复副本属于另一个窗口。",
     "Recovery files cannot be used as a project destination.": "请选择恢复文件以外的项目保存位置。",
     "Recovery metadata is missing.": "缺少恢复元数据。",
     "Recovery metadata is too large.": "恢复元数据过大。",

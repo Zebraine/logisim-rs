@@ -605,6 +605,7 @@
     "Recover": "Recover",
     "Recover unsaved changes?": "Recover unsaved changes?",
     "Recovery circuit is missing.": "Recovery circuit is missing.",
+    "Recovery copy is owned by another window.": "Recovery copy is owned by another window.",
     "Recovery files cannot be used as a project destination.": "Recovery files cannot be used as a project destination.",
     "Recovery metadata is missing.": "Recovery metadata is missing.",
     "Recovery metadata is too large.": "Recovery metadata is too large.",

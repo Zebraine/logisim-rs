@@ -24,3 +24,15 @@ fn failed_commit_preserves_previous_pair_and_interrupted_commit_is_detected() {
     assert!(pair.clear(&dir).is_err());
     assert_eq!(fs::read(dir.join(DATA)).unwrap(), b"interrupted");
 }
+
+#[test]
+fn failure_on_second_removal_restores_the_first_file() {
+    let temp = Temp::new();
+    let dir = temp.path("recovery");
+    fs::create_dir_all(dir.join(DATA)).unwrap();
+    fs::write(dir.join(META), b"diagnostic record").unwrap();
+    let mut pair = Pair::read(&dir).unwrap();
+    assert!(pair.clear(&dir).is_err());
+    assert_eq!(fs::read(dir.join(META)).unwrap(), b"diagnostic record");
+    assert_eq!(Pair::read(&dir).unwrap(), pair);
+}

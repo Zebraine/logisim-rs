@@ -226,7 +226,9 @@ impl Files {
             }
             FileAction::SaveAs => self.picker(Mode::Save),
             FileAction::ClearRecovery => {
-                self.autosave.clear();
+                if let Err(error) = self.autosave.clear_from_settings() {
+                    self.autosave.report(error);
+                }
             }
             FileAction::ClearRecent => workspace.set_recent(Vec::new()),
             FileAction::Save => {
@@ -381,7 +383,9 @@ impl Files {
                 }
             }
             (Dialog::Recovery { cli, .. }, Response::Discard) => {
-                self.autosave.clear();
+                if let Err(error) = self.autosave.discard() {
+                    self.autosave.report(error);
+                }
                 self.open_startup(cli, workspace, sim);
             }
             (Dialog::Plugins(mut resolution), Response::ConfirmPlugins) => {

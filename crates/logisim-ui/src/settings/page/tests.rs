@@ -364,6 +364,7 @@ fn recovery_status_and_explicit_clear_leave_document_and_simulation_intact() {
             },
         ] {
             app.set_recovery_view(RecoveryView {
+                owned: true,
                 directory: Some("/config/recovery".into()),
                 error: matches!(
                     state,

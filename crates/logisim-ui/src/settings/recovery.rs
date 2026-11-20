@@ -18,6 +18,7 @@ pub enum SnapshotState {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RecoveryView {
+    pub owned: bool,
     pub directory: Option<String>,
     pub state: SnapshotState,
     pub error: Option<String>,
