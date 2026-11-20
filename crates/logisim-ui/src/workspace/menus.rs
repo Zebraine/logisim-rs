@@ -25,7 +25,11 @@ impl Workspace {
                     if recent.is_empty() {
                         ui.add_enabled(false, egui::Button::new(tr("No recent projects")));
                     }
-                    for (index, path) in recent.iter().enumerate() {
+                    for (index, path) in recent
+                        .iter()
+                        .take(self.preferences.workspace.recent_limit)
+                        .enumerate()
+                    {
                         if recent_button(ui, path) {
                             self.file_actions.push(FileAction::OpenRecent(index));
                             ui.close();

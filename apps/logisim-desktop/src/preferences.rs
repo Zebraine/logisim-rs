@@ -100,6 +100,42 @@ impl Preferences {
         }
         state
     }
+    pub(crate) fn is_config_path(&self, destination: &Path) -> bool {
+        self.path.as_deref().is_some_and(|path| {
+            crate::storage::destination(path).is_ok_and(|config| config == destination)
+        })
+    }
+
+    pub(crate) fn export_settings(workspace: &Workspace) -> Vec<u8> {
+        schema::encode_settings(workspace.preferences())
+    }
+
+    pub(crate) fn validate_import(bytes: &[u8]) -> Result<Settings, String> {
+        schema::decode_settings(bytes)
+    }
+
+    /// Commit the exact settings approved in the dialog before publishing them to the UI.
+    pub(crate) fn import_settings(
+        &mut self,
+        settings: Settings,
+        workspace: &mut Workspace,
+    ) -> Result<(), String> {
+        if self.blocked {
+            return Err(
+                "Repair the configuration file and retry before importing settings.".into(),
+            );
+        }
+        self.persist(Config {
+            settings,
+            recent: workspace.recent().to_vec(),
+            window: self.window,
+            panels: self.panels,
+        })?;
+        self.layout_due = None;
+        workspace.apply_settings(settings);
+        Ok(())
+    }
+
     pub fn recovery_directory(&self) -> Option<PathBuf> {
         self.path
             .as_ref()
@@ -192,7 +228,11 @@ impl Preferences {
             self.retry(workspace);
         }
         let values = workspace.preferences();
-        recent::truncate(workspace);
+        if values.workspace.recent_limit != self.loaded.config.settings.workspace.recent_limit
+            || workspace.recent() != self.loaded.config.recent
+        {
+            recent::truncate(workspace);
+        }
         let layout_due = self.layout_due.is_some_and(|at| Instant::now() >= at);
         if self.blocked
             || !values.files.valid_interval()
@@ -204,7 +244,6 @@ impl Preferences {
         {
             return;
         }
-        let path = self.path.as_ref().expect("loaded configuration path");
         let config = Config {
             window: if layout_due {
                 self.window
@@ -219,18 +258,10 @@ impl Preferences {
             settings: values,
             recent: workspace.recent().to_vec(),
         };
-        let bytes = schema::encode(&config);
-        let save = fs::create_dir_all(path.parent().expect("configuration directory"))
-            .map_err(|err| err.to_string())
-            .and_then(|()| crate::storage::atomic_write(path, &bytes, self.loaded.json.as_deref()));
-        match save {
+        match self.persist(config) {
             Ok(()) => {
                 if layout_due {
                     self.layout_due = None;
-                }
-                self.loaded = Loaded {
-                    config,
-                    json: Some(bytes),
                 }
             }
             Err(_) => {
@@ -241,6 +272,18 @@ impl Preferences {
                 ));
             }
         }
+    }
+    fn persist(&mut self, config: Config) -> Result<(), String> {
+        let path = self.path.as_ref().expect("loaded configuration path");
+        let bytes = schema::encode(&config);
+        fs::create_dir_all(path.parent().expect("configuration directory"))
+            .map_err(|err| err.to_string())?;
+        crate::storage::atomic_write(path, &bytes, self.loaded.json.as_deref())?;
+        self.loaded = Loaded {
+            config,
+            json: Some(bytes),
+        };
+        Ok(())
     }
 }
 fn legacy(text: &str) -> Option<Settings> {

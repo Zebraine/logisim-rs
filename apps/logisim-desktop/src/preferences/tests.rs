@@ -705,3 +705,78 @@ fn portable_files_migrate_validate_bindings_and_ignore_host_metadata() {
     }
     assert!(schema::decode_settings(&vec![b' '; logisim_file::MAX_BYTES + 1]).is_err());
 }
+
+#[test]
+fn importing_commits_only_validated_preferences_and_keeps_local_history_and_geometry() {
+    let temp = Temp::new();
+    let path = temp.0.join("preferences.json");
+    let mut ws = Workspace::default();
+    let mut prefs = Preferences::at(Some(path.clone()), &mut ws);
+    let recent: Vec<_> = ["one.circ", "two.circ"]
+        .map(|name| temp.0.join(name).display().to_string())
+        .into();
+    ws.set_recent(recent.clone());
+    let window: WindowState =
+        serde_json::from_str(r#"{"width":1080,"height":640,"x":41,"y":29}"#).unwrap();
+    let panels = WorkspaceLayout {
+        sidebar_width: 287.,
+        split: 0.61,
+        ..Default::default()
+    };
+    ws.set_layout(panels);
+    prefs.observe_layout(Some(window), Some(panels), Instant::now());
+    prefs.synchronize(&mut ws);
+    let project = ws.project().clone();
+    let root = ws.simulation_root();
+    let active = ws.active_circuit();
+    let before = fs::read(&path).unwrap();
+    assert!(
+        Preferences::validate_import(br#"{"version":13,"general":{"language":"XX"}}"#).is_err()
+    );
+    assert_eq!(ws.preferences(), Settings::default());
+    assert_eq!(fs::read(&path).unwrap(), before);
+    let imported = Preferences::validate_import(br#"{
+        "version":12, "general":{"language":"zh-CN"}, "appearance":{"accent":"teal","density":"compact","theme":"dark"},
+        "workspace":{"recent_limit":1}, "files":{"backup_before_save":true}, "editor":{"default_font_size":24,"default_gate_inputs":4},
+        "shortcuts":{"file.save":"f5"}, "simulation":{"mode":"event"}, "generation":{"truth_table":true},
+        "recent":[],"window":{"width":720},"panels":{"split":0.25}
+    }"#).unwrap();
+    prefs.import_settings(imported, &mut ws).unwrap();
+    prefs.synchronize(&mut ws);
+    assert_eq!(ws.preferences(), imported);
+    assert_eq!(ws.project(), &project);
+    assert_eq!((ws.active_circuit(), ws.simulation_root()), (active, root));
+    assert_eq!(ws.layout(), panels);
+    assert_eq!(ws.recent(), recent);
+    let exported = Preferences::export_settings(&ws);
+    assert_eq!(Preferences::validate_import(&exported).unwrap(), imported);
+    let persisted = schema::decode(&fs::read(&path).unwrap()).unwrap();
+    assert_eq!(
+        (persisted.window, persisted.panels, persisted.recent),
+        (window, panels, recent.clone())
+    );
+    let mut restarted = Workspace::default();
+    let prefs = Preferences::at(Some(path.clone()), &mut restarted);
+    assert!(prefs.is_config_path(&path));
+    assert_eq!(restarted.preferences(), imported);
+    assert_eq!(restarted.recent(), recent);
+}
+
+#[test]
+fn refused_import_preserves_live_settings_and_conflicting_or_protected_config() {
+    let temp = Temp::new();
+    let path = temp.0.join("preferences.json");
+    let mut ws = Workspace::default();
+    let settings = Settings {
+        theme: logisim_ui::ThemeMode::Dark,
+        ..Default::default()
+    };
+    let mut prefs = Preferences::at(Some(path.clone()), &mut ws);
+    fs::write(&path, b"external edit").unwrap();
+    for _ in 0..2 {
+        assert!(prefs.import_settings(settings, &mut ws).is_err());
+        assert_eq!(ws.preferences(), Settings::default());
+        assert_eq!(fs::read(&path).unwrap(), b"external edit");
+        prefs = Preferences::at(Some(path.clone()), &mut ws);
+    }
+}
