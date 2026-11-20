@@ -4,13 +4,46 @@ mod schema;
 use crate::window::WindowState;
 use logisim_ui::WorkspaceLayout;
 use logisim_ui::{Language, Settings, SimulationMode, Workspace};
-use schema::Config;
+use schema::{Config, PluginSettings};
 use std::time::{Duration, Instant};
 use std::{
     fs,
     io::ErrorKind,
     path::{Path, PathBuf},
 };
+
+pub(crate) fn canonical_plugin_directory(path: &Path) -> std::io::Result<PathBuf> {
+    use std::io::{Error, ErrorKind};
+    if !path.is_absolute() {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            "Choose an absolute directory.",
+        ));
+    }
+    let dir = path.canonicalize()?;
+    if !dir.metadata()?.is_dir() || dir.to_str().is_none() {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            "Choose a directory with a UTF-8 path.",
+        ));
+    }
+    Ok(dir)
+}
+
+impl PluginSettings {
+    fn directory(&self) -> Option<&Path> {
+        self.fallback_directory.as_deref().map(Path::new)
+    }
+
+    fn from_workspace(workspace: &Workspace) -> Self {
+        Self {
+            fallback_directory: workspace
+                .plugin_fallback_directory
+                .as_deref()
+                .map(|p| p.to_string_lossy().into_owned()),
+        }
+    }
+}
 
 #[derive(Default)]
 struct Loaded {
@@ -95,6 +128,8 @@ impl Preferences {
             state.loaded = loaded;
         }
         workspace.apply_settings(state.loaded.config.settings);
+        workspace.plugin_fallback_directory =
+            state.loaded.config.plugins.directory().map(Path::to_owned);
         workspace.set_recent(state.loaded.config.recent.clone());
         state.window = state.loaded.config.window;
         state.panels = state.loaded.config.panels;
@@ -129,6 +164,7 @@ impl Preferences {
             );
         }
         self.persist(Config {
+            plugins: PluginSettings::from_workspace(workspace),
             settings,
             recent: workspace.recent().to_vec(),
             window: self.window,
@@ -193,6 +229,8 @@ impl Preferences {
     /// Re-read the file before retrying a write, preserving independent disk edits.
     fn retry(&mut self, workspace: &mut Workspace) {
         let baseline = self.loaded.config.settings;
+        let directory_changed = workspace.plugin_fallback_directory.as_deref()
+            != self.loaded.config.plugins.directory();
         let recent_changed = workspace.recent() != self.loaded.config.recent;
         if self.path.is_none() {
             self.path = config_path();
@@ -220,6 +258,10 @@ impl Preferences {
         if !local_panels {
             self.panels = loaded.config.panels;
         }
+        if !directory_changed {
+            workspace.plugin_fallback_directory =
+                loaded.config.plugins.directory().map(Path::to_owned);
+        }
         if !recent_changed {
             workspace.set_recent(loaded.config.recent.clone());
         }
@@ -240,6 +282,8 @@ impl Preferences {
         if self.blocked
             || !values.files.valid_interval()
             || (values == self.loaded.config.settings
+                && workspace.plugin_fallback_directory.as_deref()
+                    == self.loaded.config.plugins.directory()
                 && workspace.recent() == self.loaded.config.recent
                 && !(layout_due
                     && (self.window != self.loaded.config.window
@@ -248,6 +292,7 @@ impl Preferences {
             return;
         }
         let config = Config {
+            plugins: PluginSettings::from_workspace(workspace),
             window: if layout_due {
                 self.window
             } else {

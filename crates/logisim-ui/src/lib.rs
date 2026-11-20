@@ -70,6 +70,8 @@ pub struct Workspace {
     memory_editor: memory::MemoryEditor,
     pla_editor: pla::PlaEditor,
     preferences: Settings,
+    /// Machine-local plugin lookup directory, independent of portable settings and the project.
+    pub plugin_fallback_directory: Option<std::path::PathBuf>,
     config_path: Option<String>,
     settings_open: bool,
     settings_page: settings::Page,

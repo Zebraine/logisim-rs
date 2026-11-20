@@ -125,7 +125,7 @@ fn missing_fields_default_and_invalid_json_stays_intact_after_edits() {
     for json in [
         "{",
         "{}",
-        r#"{"version":14}"#,
+        r#"{"version":15}"#,
         r#"{"version":13,"appearance":{"theme":"system"}}"#,
         r#"{"version":13,"appearance":{"theme":null}}"#,
         r#"{"version":12,"files":{"backup_before_save":"true"}}"#,
@@ -402,8 +402,8 @@ fn layout_waits_for_idle_or_close_and_restores_only_when_enabled() {
 }
 
 #[test]
-fn earlier_preferences_migrate_to_v13_and_editor_defaults_round_trip() {
-    for version in 1..=12 {
+fn earlier_preferences_migrate_to_v14_and_editor_defaults_round_trip() {
+    for version in 1..=13 {
         let json = serde_json::json!({"version":version,"editor":{"show_grid":false}});
         let config = schema::decode(json.to_string().as_bytes()).unwrap();
         assert_eq!(
@@ -414,7 +414,8 @@ fn earlier_preferences_migrate_to_v13_and_editor_defaults_round_trip() {
             }
         );
         let encoded: serde_json::Value = serde_json::from_slice(&schema::encode(&config)).unwrap();
-        assert_eq!(encoded["version"], 13);
+        assert_eq!(encoded["version"], 14);
+        assert!(config.plugins.fallback_directory.is_none());
         assert_eq!(encoded["appearance"]["theme"], "light");
         assert_eq!(encoded["appearance"]["density"], "comfortable");
         assert_eq!(encoded["appearance"]["accent"], "indigo");
@@ -696,13 +697,13 @@ fn portable_files_migrate_validate_bindings_and_ignore_host_metadata() {
         assert_eq!(
             serde_json::from_slice::<serde_json::Value>(&schema::encode_settings(settings))
                 .unwrap()["version"],
-            13
+            14
         );
     }
     for json in [
         "",
         "{}",
-        r#"{"version":14}"#,
+        r#"{"version":15}"#,
         r#"{"version":13,"unknown":null}"#,
         r#"{"version":13,"editor":{"new_option":2}}"#,
         r#"{"version":13,"appearance":{"theme":"system"}}"#,
@@ -790,4 +791,73 @@ fn refused_import_preserves_live_settings_and_conflicting_or_protected_config() 
         assert_eq!(fs::read(&path).unwrap(), b"external edit");
         prefs = Preferences::at(Some(path.clone()), &mut ws);
     }
+}
+
+#[test]
+fn fallback_directory_is_validated_local_state_and_survives_portable_transfers() {
+    let temp = Temp::new();
+    let dir = temp.0.join("modules");
+    fs::create_dir(&dir).unwrap();
+    let conf = temp.0.join("preferences.json");
+    for value in [
+        serde_json::json!(""),
+        serde_json::json!("relative"),
+        serde_json::json!(temp.0.join("absent")),
+        serde_json::json!(false),
+        serde_json::json!([1]),
+        serde_json::Value::Null,
+    ] {
+        let input = serde_json::json!({"version":14,"plugins":{"fallback_directory":value}});
+        assert!(
+            schema::decode(&serde_json::to_vec(&input).unwrap())
+                .unwrap()
+                .plugins
+                .fallback_directory
+                .is_none()
+        );
+    }
+    fs::write(
+        &conf,
+        serde_json::to_vec(
+            &serde_json::json!({"version":14,"plugins":{"fallback_directory":dir.join(".")}}),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let mut ws = Workspace::default();
+    let mut prefs = Preferences::at(Some(conf.clone()), &mut ws);
+    assert_eq!(
+        ws.plugin_fallback_directory,
+        Some(dir.canonicalize().unwrap())
+    );
+    let portable: serde_json::Value =
+        serde_json::from_slice(&Preferences::export_settings(&ws)).unwrap();
+    assert!(portable.get("plugins").is_none());
+    let other = serde_json::json!({"version":14,"general":{"language":"zh-CN"},"plugins":{"fallback_directory":"private-on-another-machine"}});
+    prefs
+        .import_settings(
+            Preferences::validate_import(&serde_json::to_vec(&other).unwrap()).unwrap(),
+            &mut ws,
+        )
+        .unwrap();
+    assert_eq!(
+        ws.plugin_fallback_directory,
+        Some(dir.canonicalize().unwrap())
+    );
+    assert_eq!(
+        schema::decode(&fs::read(&conf).unwrap())
+            .unwrap()
+            .plugins
+            .directory(),
+        ws.plugin_fallback_directory.as_deref()
+    );
+    ws.plugin_fallback_directory = None;
+    prefs.synchronize(&mut ws);
+    assert!(
+        schema::decode(&fs::read(conf).unwrap())
+            .unwrap()
+            .plugins
+            .directory()
+            .is_none()
+    );
 }

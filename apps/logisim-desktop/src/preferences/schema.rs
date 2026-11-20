@@ -10,8 +10,10 @@ use crate::window::WindowState;
 use logisim_ui::{CONFIG_VERSION, WorkspaceLayout};
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[serde(bound(deserialize = "R: Deserialize<'de>, W: Deserialize<'de>, P: Deserialize<'de>"))]
-struct File<R = Vec<String>, W = WindowState, P = WorkspaceLayout> {
+#[serde(bound(
+    deserialize = "R: Deserialize<'de>, W: Deserialize<'de>, P: Deserialize<'de>, F: Deserialize<'de>"
+))]
+struct File<R = Vec<String>, W = WindowState, P = WorkspaceLayout, F = PluginSettings> {
     version: u32,
     #[serde(default)]
     shortcuts: logisim_ui::shortcuts::Shortcuts,
@@ -37,6 +39,8 @@ struct File<R = Vec<String>, W = WindowState, P = WorkspaceLayout> {
         skip_serializing_if = "Option::is_none"
     )]
     panels: Option<P>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    plugins: Option<F>,
     #[serde(default)]
     general: General,
     #[serde(default)]
@@ -226,8 +230,32 @@ fn present<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(
     T::deserialize(d).map(Some)
 }
 
+#[derive(Default, Clone, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub(super) struct PluginSettings {
+    #[serde(deserialize_with = "fallback_directory")]
+    pub fallback_directory: Option<String>,
+}
+
+fn fallback_directory<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
+    let value = serde_json::Value::deserialize(d)?;
+    let Some(text) = value.as_str() else {
+        return Ok(None);
+    };
+    let path = std::path::Path::new(text);
+    Ok(match super::canonical_plugin_directory(path) {
+        Ok(path) => path.into_os_string().into_string().ok(),
+        // A configured directory can be temporarily inaccessible (for example a network mount).
+        Err(e) if path.is_absolute() && e.kind() == std::io::ErrorKind::PermissionDenied => {
+            Some(text.to_owned())
+        }
+        Err(_) => None,
+    })
+}
+
 #[derive(Default)]
 pub(super) struct Config {
+    pub plugins: PluginSettings,
     pub settings: Settings,
     pub recent: Vec<String>,
     pub window: WindowState,
@@ -257,6 +285,7 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Config, &'static str> {
         return Err("Unknown or invalid settings.");
     }
     Ok(Config {
+        plugins: file.plugins.unwrap_or_default(),
         settings,
         recent,
         panels,
@@ -271,15 +300,15 @@ pub(super) fn decode_settings(bytes: &[u8]) -> Result<Settings, String> {
     }
     // Host history and geometry can occur in a local config copied by the user.
     // Deserialize only the portable sections, retaining serde's strict field checks.
-    let file: File<IgnoredAny, IgnoredAny, IgnoredAny> =
-        serde_json::from_slice(bytes).map_err(|error| match error.classify() {
+    let file: File<IgnoredAny, IgnoredAny, IgnoredAny, IgnoredAny> = serde_json::from_slice(bytes)
+        .map_err(|error| match error.classify() {
             serde_json::error::Category::Data => logisim_ui::tf!("Invalid preference: {}", error),
             _ => logisim_ui::tf!("Invalid settings JSON: {}", error),
         })?;
     validated(&file).map_err(str::to_owned)
 }
 
-fn validated<R, W, P>(file: &File<R, W, P>) -> Result<Settings, &'static str> {
+fn validated<R, W, P, F>(file: &File<R, W, P, F>) -> Result<Settings, &'static str> {
     if !matches!(file.version, 1..=CONFIG_VERSION) {
         return Err("Unsupported configuration version.");
     }
@@ -346,6 +375,7 @@ fn validated<R, W, P>(file: &File<R, W, P>) -> Result<Settings, &'static str> {
 }
 pub(super) fn encode(config: &Config) -> Vec<u8> {
     bytes(&File {
+        plugins: Some(config.plugins.clone()),
         panels: Some(config.panels),
         window: Some(config.window),
         recent: Some(config.recent.clone()),
@@ -359,6 +389,7 @@ pub(super) fn encode_settings(settings: Settings) -> Vec<u8> {
 
 fn portable(s: Settings) -> File {
     File {
+        plugins: None,
         recent: None,
         window: None,
         panels: None,
