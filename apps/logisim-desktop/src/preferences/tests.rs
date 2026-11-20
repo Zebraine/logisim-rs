@@ -125,7 +125,12 @@ fn missing_fields_default_and_invalid_json_stays_intact_after_edits() {
     for json in [
         "{",
         "{}",
-        r#"{"version":5}"#,
+        r#"{"version":6}"#,
+        r#"{"version":5,"files":{"autosave_minutes":0}}"#,
+        r#"{"version":5,"files":{"autosave_minutes":31}}"#,
+        r#"{"version":5,"files":{"autosave_minutes":"5"}}"#,
+        r#"{"version":5,"files":{"autosave_minutes":1.5}}"#,
+        r#"{"version":5,"files":{"autosave":1}}"#,
         r#"{"version":4,"appearance":{"signal_palette":"neon"}}"#,
         r#"{"version":3,"editor":{"default_probe_radix":"decimal"}}"#,
         r#"{"version":3,"editor":{"default_pin_bits":0}}"#,
@@ -151,6 +156,10 @@ fn missing_fields_default_and_invalid_json_stays_intact_after_edits() {
 fn all_fields_restart_reset_and_atomic_conflict_protection() {
     use logisim_ui::{DefaultZoom, TickHz, UiScale};
     let alternative = Settings {
+        files: logisim_ui::FileSettings {
+            autosave: false,
+            autosave_minutes: 30,
+        },
         workspace: Default::default(),
         language: Language::SimplifiedChinese,
         ui_scale: UiScale::P125,
@@ -292,8 +301,8 @@ fn layout_waits_for_idle_or_close_and_restores_only_when_enabled() {
 }
 
 #[test]
-fn earlier_preferences_migrate_to_v4_and_all_radix_codes_round_trip() {
-    for version in [1, 2, 3] {
+fn earlier_preferences_migrate_to_v5_and_all_radix_codes_round_trip() {
+    for version in [1, 2, 3, 4] {
         let json = serde_json::json!({"version":version,"editor":{"show_grid":false}});
         let config = schema::decode(json.to_string().as_bytes()).unwrap();
         assert_eq!(
@@ -304,7 +313,11 @@ fn earlier_preferences_migrate_to_v4_and_all_radix_codes_round_trip() {
             }
         );
         let encoded: serde_json::Value = serde_json::from_slice(&schema::encode(&config)).unwrap();
-        assert_eq!(encoded["version"], 4);
+        assert_eq!(encoded["version"], 5);
+        assert_eq!(
+            encoded["files"],
+            serde_json::json!({"autosave":true,"autosave_minutes":5})
+        );
         assert_eq!(encoded["appearance"]["signal_palette"], "default");
         assert_eq!(encoded["appearance"]["show_wire_values"], true);
         assert_eq!(encoded["appearance"]["show_origin_marker"], true);

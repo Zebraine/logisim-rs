@@ -308,8 +308,12 @@ impl Page {
             );
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let defaults = Settings::default();
+                let enabled = !matches!(e.control, super::registry::Control::AutosaveMinutes)
+                    || values.files.autosave;
                 if e.changed(*values, defaults) {
-                    if icons::button(ui, Icon::Restore, false, true, "Reset to default").clicked() {
+                    if icons::button(ui, Icon::Restore, false, enabled, "Reset to default")
+                        .clicked()
+                    {
                         e.copy(values, defaults);
                         self.frequency_draft = None;
                     }

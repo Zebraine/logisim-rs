@@ -28,8 +28,8 @@ pub use terminal::TtyView;
 mod settings;
 pub use i18n::Language;
 pub use settings::{
-    CONFIG_VERSION, DefaultZoom, Settings, SignalPalette, SimulationMode, TickHz, UiScale,
-    WorkspaceSettings,
+    CONFIG_VERSION, DefaultZoom, FileSettings, Settings, SignalPalette, SimulationMode, TickHz,
+    UiScale, WorkspaceSettings,
 };
 mod libraries;
 mod plugins;

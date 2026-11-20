@@ -11,16 +11,18 @@ pub(super) enum Category {
     Editor,
     Simulation,
     Generation,
+    Files,
     Advanced,
 }
 impl Category {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::General,
         Self::Workspace,
         Self::Appearance,
         Self::Editor,
         Self::Simulation,
         Self::Generation,
+        Self::Files,
         Self::Advanced,
     ];
     pub fn label(self) -> &'static str {
@@ -31,6 +33,7 @@ impl Category {
             Self::Editor => "Editor",
             Self::Simulation => "Simulation",
             Self::Generation => "Circuit generation",
+            Self::Files => "Files & Recovery",
             Self::Advanced => "Advanced",
         })
     }
@@ -44,6 +47,7 @@ pub(super) enum Control {
     Mode,
     Frequency,
     RecentLimit,
+    AutosaveMinutes,
     ProbeRadix,
     PinBits,
 }
@@ -207,6 +211,20 @@ registry![
         "Show truth tables in circuit generation.",
         Control::Toggle(|s| &mut s.truth_table)
     ),
+    (
+        "files.autosave",
+        Files,
+        "Autosave",
+        "Save a recovery copy of unsaved changes.",
+        Control::Toggle(|s| &mut s.files.autosave)
+    ),
+    (
+        "files.autosave_minutes",
+        Files,
+        "Interval (minutes)",
+        "Enable Autosave to change the interval.",
+        Control::AutosaveMinutes
+    ),
 ];
 impl Entry {
     pub fn matches(&self, query: &str) -> bool {
@@ -231,6 +249,9 @@ impl Entry {
             Control::PinBits => target.default_pin_bits = source.default_pin_bits,
             Control::Zoom => target.default_zoom = source.default_zoom,
             Control::Mode => target.simulation_mode = source.simulation_mode,
+            Control::AutosaveMinutes => {
+                target.files.autosave_minutes = source.files.autosave_minutes
+            }
             Control::RecentLimit => target.workspace.recent_limit = source.workspace.recent_limit,
             Control::Frequency => target.tick_hz = source.tick_hz,
         }
@@ -290,6 +311,15 @@ impl Entry {
                 let r = ui.add(
                     egui::DragValue::new(&mut values.default_pin_bits)
                         .range(1..=32)
+                        .update_while_editing(false),
+                );
+                theme::focus_ring(ui, &r);
+            }
+            Control::AutosaveMinutes => {
+                let r = ui.add_enabled(
+                    values.files.autosave,
+                    egui::DragValue::new(&mut values.files.autosave_minutes)
+                        .range(1..=30)
                         .update_while_editing(false),
                 );
                 theme::focus_ring(ui, &r);

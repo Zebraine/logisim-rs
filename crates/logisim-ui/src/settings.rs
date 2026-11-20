@@ -1,11 +1,11 @@
 mod registry;
-pub const CONFIG_VERSION: u32 = 4;
+pub const CONFIG_VERSION: u32 = 5;
 mod page;
 pub(crate) use page::Page;
 mod model;
 pub use crate::theme::SignalPalette;
 use crate::{Language, Workspace, i18n::tr, theme};
-pub use model::{DefaultZoom, Settings, TickHz, UiScale, WorkspaceSettings};
+pub use model::{DefaultZoom, FileSettings, Settings, TickHz, UiScale, WorkspaceSettings};
 pub(crate) use model::{EditorDisplay, PlacementDefaults};
 
 /// Host execution preference, independent of the document and its undo history.

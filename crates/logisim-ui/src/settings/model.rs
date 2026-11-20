@@ -77,8 +77,24 @@ impl Default for WorkspaceSettings {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct FileSettings {
+    pub autosave: bool,
+    pub autosave_minutes: u8,
+}
+impl Default for FileSettings {
+    fn default() -> Self {
+        Self {
+            autosave: true,
+            autosave_minutes: 5,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Settings {
+    pub files: FileSettings,
     pub workspace: WorkspaceSettings,
     pub language: Language,
     pub ui_scale: UiScale,
@@ -101,6 +117,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            files: FileSettings::default(),
             workspace: WorkspaceSettings::default(),
             language: Language::default(),
             ui_scale: UiScale::default(),

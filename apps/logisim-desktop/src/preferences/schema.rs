@@ -12,6 +12,8 @@ use logisim_ui::{CONFIG_VERSION, WorkspaceLayout};
 #[serde(deny_unknown_fields)]
 struct File {
     version: u32,
+    #[serde(default)]
+    files: logisim_ui::FileSettings,
     #[serde(default, deserialize_with = "present")]
     workspace: Option<WorkspaceSettings>,
     #[serde(default, deserialize_with = "present")]
@@ -186,7 +188,8 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Config, &'static str> {
     let recent = file.recent.unwrap_or_default();
     let panels = file.panels.unwrap_or_default();
     let window = file.window.unwrap_or_default();
-    if !(1..=32).contains(&file.editor.default_pin_bits)
+    if !(1..=30).contains(&file.files.autosave_minutes)
+        || !(1..=32).contains(&file.editor.default_pin_bits)
         || !window.valid()
         || !(230.0..=380.0).contains(&panels.sidebar_width)
         || !(0.25..=0.75).contains(&panels.split)
@@ -209,6 +212,7 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Config, &'static str> {
         window: window.bounded(None),
         recent,
         settings: Settings {
+            files: file.files,
             workspace,
             language: file.general.language,
             ui_scale,
@@ -238,6 +242,7 @@ pub(super) fn encode(config: &Config) -> Vec<u8> {
         workspace: Some(s.workspace),
         recent: Some(config.recent.clone()),
         version: CONFIG_VERSION,
+        files: s.files,
         general: General {
             language: s.language,
         },
