@@ -150,7 +150,29 @@ logisim-agent settings patch --config /path/to/preferences.json --ops edits.json
 {"tool":"project_close","arguments":{"session":"ID_FROM_OPEN"}}
 ```
 
-将 `ID_FROM_OPEN` 换成首次返回的 `data.session_id`。MCP 提供相同的八个操作。工程快照包含全部电路定义，仿真快照给出主电路初始传播后的端口和导线四态值、插件加载状态与诊断。时钟保持在第零拍。关闭会话或退出进程即释放快照。
+将 `ID_FROM_OPEN` 换成首次返回的 `data.session_id`。MCP 提供相同的十个操作。工程快照包含全部电路定义，仿真快照给出主电路初始传播后的端口和导线四态值、插件加载状态与诊断。时钟保持在第零拍。关闭会话或退出进程即释放快照。
+
+### 编辑工程会话
+
+向 `project_patch` 传入 `session`、明确的 `dry_run` 布尔值和有序的 `ops` 数组。预演会返回预计分配的 ID；会话状态相同时，应用同一批操作会得到相同的 ID。单项失败会撤销整批修改，`error.details.op_index` 从零开始标识失败项。提交编辑后，重新调用 `simulation_open` 即可观察新工程的初始仿真状态。
+
+```jsonl
+{"tool":"project_patch","arguments":{"session":"ID_FROM_OPEN","dry_run":true,"ops":[{"op":"update_component","circuit":1,"id":12,"properties":{"label":"A","facing":"west"}}]}}
+{"tool":"project_patch","arguments":{"session":"ID_FROM_OPEN","dry_run":false,"ops":[{"op":"update_component","circuit":1,"id":12,"properties":{"label":"A","facing":"west"}}]}}
+{"tool":"project_save","arguments":{"session":"ID_FROM_OPEN","expected_sha256":"SHA_FROM_OPEN_OR_LAST_SAVE","backup":true}}
+```
+
+请使用快照中的真实 ID。核对预演结果后，将同一补丁的 `dry_run` 改为 `false`，应用后再保存。支持元件添加、移动、更新、删除，导线添加、删除，以及电路添加、重命名、删除和设置主电路。可编辑种类为 Pin、Gate、Parity、Probe、Tunnel 和 Splitter。每个元件的 `patchable_properties` 列出可写属性。端口坐标使用画布坐标，颜色使用 RGBA，Splitter 映射使用从零开始的分支索引，断开位用 null。多个电路内有相同元件或导线 ID 时须传 `circuit`。导线遵循编辑器的重布线和合并、分段规则，`add_wire` 的 `wire_ids` 列出保留下来的线段。
+
+使用 CLI 参数时，可将 `{"ops":[...],"expected_sha256":"..."}` 放入编辑文件，哈希可省略。已启动的 `logisim-agent cli` 或 `project open` 进程也接受逐行输入的参数数组。
+
+```jsonl
+["project","patch","--session","ID_FROM_OPEN","--ops","edits.json","--dry-run"]
+["project","patch","--session","ID_FROM_OPEN","--ops","edits.json","--apply"]
+["project","save","--session","ID_FROM_OPEN","--expected-sha256","SHA_FROM_OPEN_OR_LAST_SAVE"]
+```
+
+显式保存才会写回原路径。即使调用方省略哈希，保存仍会用打开或上次成功保存时的 SHA 核对磁盘文件。默认原子更新一代 `<文件>.bak`，内容为覆盖前的原始字节。可用 `--no-backup` 或 `backup:false` 跳过备份。备份失败会中止保存，随后目标写入失败时可能保留完整备份。多个 Agent 写入者通过同目录的空 `<文件>.lock` 文件协调。部分导入的工程只读；保存后会话 ID 和工程内各项 ID 继续有效，重新打开时重新分配。
 
 ## 已知限制
 

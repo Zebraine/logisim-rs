@@ -61,6 +61,11 @@ pub enum WriteError {
     Conflict,
     Io(String),
 }
+impl From<std::io::Error> for WriteError {
+    fn from(e: std::io::Error) -> Self {
+        Self::Io(e.to_string())
+    }
+}
 impl std::fmt::Display for WriteError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -124,11 +129,9 @@ pub fn replace_checked(
     use std::io::ErrorKind;
     let io = |e: std::io::Error| WriteError::Io(e.to_string());
     let check = || -> std::result::Result<(), WriteError> {
-        match (fs::File::open(target), expected) {
-            (Ok(file), Some(old)) => {
-                if !file.metadata().map_err(io)?.is_file() {
-                    return Err(WriteError::Conflict);
-                }
+        match (fs::symlink_metadata(target), expected) {
+            (Ok(meta), Some(old)) if meta.is_file() => {
+                let file = fs::File::open(target).map_err(io)?;
                 let mut actual = Vec::new();
                 file.take(old.len() as u64 + 1)
                     .read_to_end(&mut actual)
@@ -158,38 +161,36 @@ pub fn replace_checked(
 
 /// Atomically rotate one generation using the target's original bytes. Existing backups
 /// must be writable regular files and retain their permissions.
-pub fn write_backup(target: &Path, backup: &Path, original: &[u8], max_bytes: usize) -> Result<()> {
+pub fn write_backup(
+    target: &Path,
+    backup: &Path,
+    original: &[u8],
+    max_bytes: usize,
+) -> std::result::Result<(), WriteError> {
     const REGULAR: &str = "The backup path must be a writable regular file.";
     let (previous, permissions) = match fs::symlink_metadata(backup) {
         Ok(meta) => {
             if !meta.is_file() || meta.permissions().readonly() {
-                return Err(REGULAR.into());
+                return Err(WriteError::Io(REGULAR.into()));
             }
-            let file = fs::OpenOptions::new()
-                .read(true)
-                .write(true)
-                .open(backup)
-                .map_err(|e| e.to_string())?;
-            if !file.metadata().map_err(|e| e.to_string())?.is_file() {
-                return Err(REGULAR.into());
+            let file = fs::OpenOptions::new().read(true).write(true).open(backup)?;
+            if !file.metadata()?.is_file() {
+                return Err(WriteError::Io(REGULAR.into()));
             }
             let mut data = Vec::new();
-            file.take(max_bytes as u64 + 1)
-                .read_to_end(&mut data)
-                .map_err(|e| e.to_string())?;
+            file.take(max_bytes as u64 + 1).read_to_end(&mut data)?;
             if data.len() > max_bytes {
-                return Err("Backup exceeds the file size limit.".into());
+                return Err(WriteError::Io(format!(
+                    "File exceeds the {} MiB limit.",
+                    max_bytes / (1024 * 1024)
+                )));
             }
             (Some(data), meta.permissions())
         }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => (
-            None,
-            fs::metadata(target)
-                .map_err(|e| e.to_string())?
-                .permissions(),
-        ),
-        Err(e) => return Err(e.to_string()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            (None, fs::metadata(target)?.permissions())
+        }
+        Err(e) => return Err(e.into()),
     };
     replace_checked(backup, original, previous.as_deref(), Some(permissions))
-        .map_err(|e| e.to_string())
 }

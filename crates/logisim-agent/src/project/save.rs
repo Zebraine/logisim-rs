@@ -24,7 +24,7 @@ fn backup(path: &Path, original: &[u8]) -> Result<PathBuf> {
     let backup = PathBuf::from(name);
     logisim_preferences::storage::write_backup(path, &backup, original, logisim_file::MAX_BYTES)
         .map_err(|cause| {
-            let mut error = Error::new("backup_failed", cause);
+            let mut error = Error::new("backup_failed", write_error(cause).message);
             error.details["path"] = json!(backup);
             error
         })?;

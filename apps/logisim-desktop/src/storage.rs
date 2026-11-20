@@ -106,10 +106,14 @@ impl Storage {
             }
             logisim_preferences::storage::write_backup(&path, &backup, original, MAX_BYTES)
                 .map_err(|cause| {
+                    let message = match cause {
+                        logisim_preferences::storage::WriteError::Conflict => CHANGED.into(),
+                        logisim_preferences::storage::WriteError::Io(message) => message,
+                    };
                     logisim_ui::tf!(
                         "Could not write backup {}. Save stopped.\n{}",
                         backup.display(),
-                        logisim_ui::i18n::tr(&cause)
+                        logisim_ui::i18n::tr(&message)
                     )
                 })?;
         }

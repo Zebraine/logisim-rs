@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 use std::io::{BufRead, Write};
 
 const REVISION: &str = "2025-11-25";
-const TOOLS: [(&str, &str); 8] = [
+const TOOLS: [(&str, &str); 10] = [
     (
         "settings_catalog",
         "List portable v16 preference keys, defaults and allowed values.",
@@ -26,6 +26,14 @@ const TOOLS: [(&str, &str); 8] = [
         "Read the circuit definitions, components, wires and interfaces in a session.",
     ),
     (
+        "project_patch",
+        "Preview or apply an ordered batch to the in-memory project. Use project_save to write it.",
+    ),
+    (
+        "project_save",
+        "Atomically save the session to its source file. Checks the source SHA-256 and makes a one-generation backup by default.",
+    ),
+    (
         "project_close",
         "Release the project and its simulation snapshot.",
     ),
@@ -38,6 +46,45 @@ const TOOLS: [(&str, &str); 8] = [
         "Read initialized signals, plugin status and diagnostics.",
     ),
 ];
+
+fn project_operations() -> Value {
+    let id = json!({"type":"integer","minimum":1});
+    let point = json!({"type":"array","minItems":2,"maxItems":2,"items":{"type":"integer","minimum":-1000000,"maximum":1000000}});
+    let properties = json!({"type":"object","description":"Fields listed in the component snapshot's patchable_properties."});
+    let mut variants = Vec::new();
+    for (op, required, optional) in [
+        (
+            "add_component",
+            &["circuit", "kind", "position"][..],
+            &["properties"][..],
+        ),
+        ("move_component", &["id", "position"], &["circuit"]),
+        ("update_component", &["id", "properties"], &["circuit"]),
+        ("remove_component", &["id"], &["circuit"]),
+        ("add_wire", &["circuit", "from", "to"], &[]),
+        ("remove_wire", &["id"], &["circuit"]),
+        ("add_circuit", &["name"], &[]),
+        ("rename_circuit", &["id", "name"], &[]),
+        ("remove_circuit", &["id"], &[]),
+        ("set_main_circuit", &["id"], &[]),
+    ] {
+        let mut fields = json!({"op":{"const":op}});
+        for &key in required.iter().chain(optional) {
+            fields[key] = match key {
+                "id" | "circuit" => id.clone(),
+                "position" | "from" | "to" => point.clone(),
+                "properties" => properties.clone(),
+                "kind" | "name" => json!({"type":"string","minLength":1}),
+                _ => unreachable!(),
+            };
+        }
+        let required: Vec<_> = std::iter::once("op")
+            .chain(required.iter().copied())
+            .collect();
+        variants.push(json!({"type":"object","required":required,"additionalProperties":false,"properties":fields}));
+    }
+    json!({"type":"array","items":{"oneOf":variants}})
+}
 
 fn tool_list() -> Value {
     let string = json!({"type":"string","minLength":1});
@@ -56,6 +103,14 @@ fn tool_list() -> Value {
                     }}
                 }),
                 json!(["config", "dry_run", "ops"]),
+            ),
+            "project_patch" => (
+                json!({"session":string,"dry_run":{"type":"boolean"},"expected_sha256":{"type":"string","pattern":"^[0-9a-fA-F]{64}$"},"ops":project_operations()}),
+                json!(["session", "dry_run", "ops"]),
+            ),
+            "project_save" => (
+                json!({"session":string,"expected_sha256":{"type":"string","pattern":"^[0-9a-fA-F]{64}$"},"backup":{"type":"boolean","default":true}}),
+                json!(["session"]),
             ),
             "project_open" => (json!({"path": string}), json!(["path"])),
             _ => (json!({"session": string}), json!(["session"])),

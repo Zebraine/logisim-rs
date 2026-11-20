@@ -93,7 +93,7 @@ fn mcp_handshake_tools_errors_and_session_lifetime_match_cli() {
     assert_eq!(init["result"]["protocolVersion"], "2025-11-25");
     m.send(json!({"jsonrpc":"2.0","method":"notifications/initialized"}));
     let tools = m.call("tools/list", json!({}));
-    assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 8);
+    assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 10);
     assert_eq!(
         m.tool("settings_patch", json!({"config":"whatever","ops":[]}))["error"]["code"],
         -32602
@@ -147,4 +147,114 @@ fn mcp_handshake_tools_errors_and_session_lifetime_match_cli() {
         "unknown_session"
     );
     m.finish();
+}
+
+#[test]
+fn project_edits_have_the_same_outcome_over_cli_flags_and_mcp() {
+    use std::fs;
+    let dir = std::env::temp_dir().join(format!(
+        "agent-transports-{:016x}",
+        getrandom::u64().unwrap()
+    ));
+    fs::create_dir(&dir).unwrap();
+    let source = r##"<project source="logisim-rs-plugin-v1" version="1.0"><main name="top"/><circuit name="top"/></project>"##;
+    let ops = json!([{"op":"add_component","circuit":1,"kind":"Pin","position":[20,30],"properties":{"label":"port","bits":8}},{"op":"add_circuit","name":"child"}]);
+    let edits = dir.join("ops.json");
+    fs::write(&edits, json!({"ops":ops}).to_string()).unwrap();
+    let a = dir.join("cli.circ");
+    let b = dir.join("mcp.circ");
+    fs::write(&a, source).unwrap();
+    fs::write(&b, source).unwrap();
+    let mut cli = Client::start(&["project", "open", "--path", a.to_str().unwrap()]);
+    let ca = cli.read()["data"].clone();
+    let mut m = Client::start(&["mcp"]);
+    m.call("initialize",json!({"protocolVersion":"2025-11-25","clientInfo":{"name":"parity","version":"1"},"capabilities":{}}));
+    m.send(json!({"jsonrpc":"2.0","method":"notifications/initialized"}));
+    let mb =
+        m.tool("project_open", json!({"path":b}))["result"]["structuredContent"]["data"].clone();
+    let tools = m.call("tools/list", json!({}));
+    let patch = tools["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["name"] == "project_patch")
+        .unwrap();
+    assert_eq!(
+        patch["inputSchema"]["properties"]["ops"]["items"]["oneOf"]
+            .as_array()
+            .unwrap()
+            .len(),
+        10
+    );
+    assert!(
+        patch["inputSchema"]["required"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("dry_run"))
+    );
+
+    cli.send(json!([
+        "project",
+        "patch",
+        "--session",
+        ca["session_id"],
+        "--ops",
+        edits
+    ]));
+    assert_eq!(cli.read()["error"]["code"], "invalid_arguments");
+    assert_eq!(
+        m.tool(
+            "project_patch",
+            json!({"session":mb["session_id"],"ops":ops})
+        )["error"]["data"]["code"],
+        "invalid_arguments"
+    );
+    for (mode, dry) in [("--dry-run", true), ("--apply", false)] {
+        cli.send(json!([
+            "project",
+            "patch",
+            "--session",
+            ca["session_id"],
+            "--ops",
+            edits,
+            mode
+        ]));
+        let a = cli.read();
+        let b = m.tool(
+            "project_patch",
+            json!({"session":mb["session_id"],"ops":ops,"dry_run":dry}),
+        );
+        assert_eq!(a["ok"], true);
+        let data = &b["result"]["structuredContent"]["data"];
+        for field in ["source_sha256", "changes", "changed", "dry_run"] {
+            assert_eq!(a["data"][field], data[field]);
+        }
+    }
+    assert_eq!(fs::read_to_string(&a).unwrap(), source);
+    assert_eq!(fs::read_to_string(&b).unwrap(), source);
+    cli.send(json!([
+        "project",
+        "save",
+        "--session",
+        ca["session_id"],
+        "--expected-sha256",
+        ca["source_sha256"],
+        "--no-backup"
+    ]));
+    let x = cli.read();
+    let y = m.tool(
+        "project_save",
+        json!({"session":mb["session_id"],"expected_sha256":mb["source_sha256"],"backup":false}),
+    );
+    assert_eq!(x["data"]["saved"], true);
+    assert_eq!(
+        x["data"]["source_sha256"],
+        y["result"]["structuredContent"]["data"]["source_sha256"]
+    );
+    assert_eq!(fs::read(&a).unwrap(), fs::read(&b).unwrap());
+    assert!(!a.with_extension("circ.bak").exists());
+    assert!(!b.with_extension("circ.bak").exists());
+    cli.finish();
+    m.finish();
+    fs::remove_dir_all(dir).unwrap();
 }

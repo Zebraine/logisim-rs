@@ -1,5 +1,5 @@
 mod mcp;
-use logisim_agent::{Error, Patch, Request, Result, Service, envelope, io};
+use logisim_agent::{Error, Patch, ProjectOp, Request, Result, Service, envelope, io};
 use std::{
     ffi::OsString,
     path::{Path, PathBuf},
@@ -12,11 +12,15 @@ fn parse(args: &[OsString]) -> Result<Request> {
     };
     let mut flags = std::collections::BTreeMap::new();
     let mut mode = None;
+    let mut no_backup = false;
     let mut iter = options.iter();
     while let Some(flag) = iter.next() {
         match flag.to_str() {
             Some(s @ ("--dry-run" | "--apply")) if mode.is_none() => mode = Some(s == "--dry-run"),
-            Some(s @ ("--config" | "--path" | "--ops" | "--session")) if !flags.contains_key(s) => {
+            Some("--no-backup") if !no_backup => no_backup = true,
+            Some(s @ ("--config" | "--path" | "--ops" | "--session" | "--expected-sha256"))
+                if !flags.contains_key(s) =>
+            {
                 let value = iter
                     .next()
                     .filter(|v| !v.is_empty())
@@ -59,6 +63,34 @@ fn parse(args: &[OsString]) -> Result<Request> {
                 .ok_or_else(|| Error::invalid("Invalid session ID."))?
                 .to_owned();
             match (group, action) {
+                ("project", "patch") => {
+                    let path = Path::new(take("--ops")?);
+                    let dry_run = mode
+                        .take()
+                        .ok_or_else(|| Error::invalid("Specify --dry-run or --apply."))?;
+                    let edits = Patch::<ProjectOp>::from_bytes(&io::read(path)?)?;
+                    Request::ProjectPatch {
+                        session,
+                        dry_run,
+                        expected_sha256: edits.expected_sha256,
+                        ops: edits.ops,
+                    }
+                }
+                ("project", "save") => {
+                    let expected_sha256 = flags
+                        .remove("--expected-sha256")
+                        .map(|v| {
+                            v.to_str()
+                                .map(str::to_owned)
+                                .ok_or_else(|| Error::invalid("Invalid SHA-256."))
+                        })
+                        .transpose()?;
+                    Request::ProjectSave {
+                        session,
+                        expected_sha256,
+                        backup: !std::mem::take(&mut no_backup),
+                    }
+                }
                 ("project", "snapshot") => Request::ProjectSnapshot { session },
                 ("project", "close") => Request::ProjectClose { session },
                 ("simulation", "open") => Request::SimulationOpen { session },
@@ -68,7 +100,7 @@ fn parse(args: &[OsString]) -> Result<Request> {
         }
         _ => return Err(Error::invalid("Invalid command.")),
     };
-    if !flags.is_empty() || mode.is_some() {
+    if !flags.is_empty() || mode.is_some() || no_backup {
         return Err(Error::invalid("Unexpected option for this command."));
     }
     Ok(req)
@@ -94,7 +126,16 @@ fn run() -> std::io::Result<bool> {
     }
     io::lines(std::io::stdin().lock(), |line| {
         let result = line
-            .and_then(Request::from_json)
+            .and_then(|value| {
+                if value.is_array() {
+                    let words: Vec<String> =
+                        serde_json::from_value(value).map_err(Error::invalid)?;
+                    let args: Vec<_> = words.into_iter().map(OsString::from).collect();
+                    parse(&args)
+                } else {
+                    Request::from_json(value)
+                }
+            })
             .and_then(|r| service.call(r));
         io::write(&mut out, &envelope(result))
     })?;

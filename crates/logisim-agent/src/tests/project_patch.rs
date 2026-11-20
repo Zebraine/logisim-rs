@@ -172,12 +172,11 @@ fn failure_of_each_operation_rolls_back_allocations_and_simulation() {
 #[test]
 fn partial_stale_source_and_failed_backup_protect_bytes_and_session() {
     let mut partial = Fixture::new(&SOURCE.replace("</project>", "<unknown/></project>"));
-    for name in ["project_patch", "project_save"] {
-        let args = if name == "project_patch" {
-            json!({"ops":[],"dry_run":true})
-        } else {
-            json!({})
-        };
+    for (name, args) in [
+        ("project_patch", json!({"ops":[],"dry_run":true})),
+        ("project_patch", json!({"ops":[],"dry_run":false})),
+        ("project_save", json!({})),
+    ] {
         assert_eq!(
             partial.call(name, args).unwrap_err().code,
             "partial_project"
@@ -224,6 +223,77 @@ fn partial_stale_source_and_failed_backup_protect_bytes_and_session() {
     assert_eq!(f.snapshot(), edited);
     f.call("project_save", json!({"backup":false})).unwrap();
     assert!(f.backup().is_dir());
+}
+
+#[test]
+fn referenced_circuits_and_custom_port_bindings_survive_failed_transactions() {
+    let xml = r##"<project version="1.0" source="logisim-rs-plugin-v1">
+      <lib name="w" desc="#Wiring"/><main name="top"/>
+      <circuit name="top"><comp name="child" loc="(100,100)"/></circuit>
+      <circuit name="child"><appear>
+        <circ-port x="46" y="56" width="8" height="8" pin="10,10"/>
+        <circ-port x="76" y="56" width="8" height="8" pin="50,10"/>
+        <circ-anchor x="77" y="57" width="6" height="6" facing="east"/>
+      </appear><comp lib="w" name="Pin" loc="(10,10)"/>
+      <comp lib="w" name="Pin" loc="(50,10)"/></circuit></project>"##;
+    let mut f = Fixture::new(xml);
+    let before = f.snapshot();
+    assert_eq!(before["partial"], false);
+    for (op, code) in [
+        (json!({"op":"remove_circuit","id":2}), "invalid_edit"),
+        (
+            json!({"op":"remove_component","circuit":1,"id":1}),
+            "unsupported_component",
+        ),
+        (
+            json!({"op":"move_component","circuit":2,"id":2,"position":[10,10]}),
+            "invalid_project",
+        ),
+    ] {
+        let result = f.patch(
+            json!([{"op":"rename_circuit","id":1,"name":"top2"},op]),
+            false,
+        );
+        let error = result.unwrap_err();
+        assert_eq!(error.code, code, "{op}");
+        assert_eq!(error.details["op_index"], 1);
+        assert_eq!(f.snapshot(), before);
+    }
+    assert_eq!(fs::read_to_string(&f.path).unwrap(), xml);
+    let mut single = Fixture::new(SOURCE);
+    assert_eq!(
+        single
+            .patch(json!([{"op":"remove_circuit","id":1}]), false)
+            .unwrap_err()
+            .code,
+        "invalid_edit"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn replacement_symlinks_are_preserved_on_save_conflict() {
+    use std::os::unix::fs::symlink;
+    let mut f = Fixture::new(SOURCE);
+    let other = f.path.with_extension("other");
+    fs::rename(&f.path, &other).unwrap();
+    symlink(&other, &f.path).unwrap();
+    assert_eq!(
+        f.call("project_save", json!({})).unwrap_err().code,
+        "conflict"
+    );
+    assert_eq!(fs::read_link(&f.path).unwrap(), other);
+    assert_eq!(fs::read_to_string(&other).unwrap(), SOURCE);
+    assert!(!f.backup().exists());
+    // A dangling directory entry is an existing destination for atomic creation.
+    let missing = f.path.with_extension("missing");
+    symlink(&missing, f.backup()).unwrap();
+    let result = logisim_preferences::storage::replace_checked(&f.backup(), b"new", None, None);
+    assert!(matches!(
+        result,
+        Err(logisim_preferences::storage::WriteError::Conflict)
+    ));
+    assert_eq!(fs::read_link(f.backup()).unwrap(), missing);
 }
 
 #[test]

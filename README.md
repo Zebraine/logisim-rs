@@ -150,7 +150,29 @@ For a circuit, run `logisim-agent cli` and send one JSON object per line in the 
 {"tool":"project_close","arguments":{"session":"ID_FROM_OPEN"}}
 ```
 
-Use the returned `data.session_id` in subsequent requests. The same eight operations are available over MCP. A project snapshot covers every circuit definition. Simulation state describes the main circuit after initial propagation, with four-state port and wire values, dependency status and diagnostics. Clocks remain at tick zero. Closing the session or its process releases the in-memory snapshot.
+Use the returned `data.session_id` in subsequent requests. The same ten operations are available over MCP. A project snapshot covers every circuit definition. Simulation state describes the main circuit after initial propagation, with four-state port and wire values, dependency status and diagnostics. Clocks remain at tick zero. Closing the session or its process releases the in-memory snapshot.
+
+### Editing a project session
+
+Pass `project_patch` a `session`, an explicit `dry_run` boolean, and an ordered `ops` array. A preview returns provisional IDs. Applying the same batch to the same session state returns the same IDs. A failed operation rolls the whole batch back and reports its zero-based `error.details.op_index`. A committed edit invalidates the previous simulation observation. Call `simulation_open` again to observe the edited project.
+
+```jsonl
+{"tool":"project_patch","arguments":{"session":"ID_FROM_OPEN","dry_run":true,"ops":[{"op":"update_component","circuit":1,"id":12,"properties":{"label":"A","facing":"west"}}]}}
+{"tool":"project_patch","arguments":{"session":"ID_FROM_OPEN","dry_run":false,"ops":[{"op":"update_component","circuit":1,"id":12,"properties":{"label":"A","facing":"west"}}]}}
+{"tool":"project_save","arguments":{"session":"ID_FROM_OPEN","expected_sha256":"SHA_FROM_OPEN_OR_LAST_SAVE","backup":true}}
+```
+
+Use IDs from your snapshot. After reviewing the preview, repeat the patch with `dry_run:false`, then save. Supported operations are `add_component`, `move_component`, `update_component`, `remove_component`, `add_wire`, `remove_wire`, `add_circuit`, `rename_circuit`, `remove_circuit` and `set_main_circuit`. Editable families are Pin, Gate, Parity, Probe, Tunnel and Splitter. Each component lists its `patchable_properties`. Port positions use canvas coordinates, colors use RGBA and Splitter mappings use zero-based branch indices or null. Include `circuit` when an item ID occurs in multiple circuits. Wire edits use the editor's routing and normalization rules. When normalization splits or merges the added wire, `wire_ids` lists its surviving segments.
+
+For CLI flags, put `{"ops":[...],"expected_sha256":"..."}` in an edits file (the hash is optional). A running `logisim-agent cli` or `project open` process also accepts argument arrays on stdin:
+
+```jsonl
+["project","patch","--session","ID_FROM_OPEN","--ops","edits.json","--dry-run"]
+["project","patch","--session","ID_FROM_OPEN","--ops","edits.json","--apply"]
+["project","save","--session","ID_FROM_OPEN","--expected-sha256","SHA_FROM_OPEN_OR_LAST_SAVE"]
+```
+
+Only explicit save writes the original path. It checks the current file against the session's last disk SHA even when the caller omits the hash. By default it atomically rotates the original bytes to `<file>.bak`. Use `--no-backup` or `backup:false` to skip rotation. A backup failure stops the save. A later target-write failure may leave a complete backup. Agent writers coordinate on a persistent empty `<file>.lock` sidecar. Partial imports are read-only. Saving preserves session IDs, while reopening parses a fresh set.
 
 ## Known limitations
 
