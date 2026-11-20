@@ -1,6 +1,21 @@
 //! Shared desktop chrome. Document artwork supplies its own colors and fonts.
 use egui::{Color32, Context, FontId, Response, Stroke, StrokeKind, TextStyle, Ui, vec2};
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Density {
+    #[default]
+    Comfortable,
+    Compact,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Accent {
+    #[default]
+    Indigo,
+    Blue,
+    Teal,
+}
+
 mod signal;
 pub use signal::SignalPalette;
 pub(crate) use signal::{active_palette, signal, signal_text};

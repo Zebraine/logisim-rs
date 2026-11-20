@@ -1,6 +1,6 @@
 //! Application preferences, independent of documents, cameras and runtime snapshots.
 use super::SignalPalette;
-use crate::{DEFAULT_TICK_HZ, Language, MAX_TICK_HZ, SimulationMode};
+use crate::{Accent, DEFAULT_TICK_HZ, Density, Language, MAX_TICK_HZ, SimulationMode};
 use logisim_core::Radix;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -97,6 +97,8 @@ pub struct Settings {
     pub files: FileSettings,
     pub workspace: WorkspaceSettings,
     pub language: Language,
+    pub density: Density,
+    pub accent: Accent,
     pub ui_scale: UiScale,
     pub reduce_motion: bool,
     pub show_telemetry: bool,
@@ -120,6 +122,8 @@ impl Default for Settings {
             files: FileSettings::default(),
             workspace: WorkspaceSettings::default(),
             language: Language::default(),
+            density: Density::default(),
+            accent: Accent::default(),
             ui_scale: UiScale::default(),
             reduce_motion: false,
             show_telemetry: true,

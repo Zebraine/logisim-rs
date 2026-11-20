@@ -54,7 +54,7 @@ use editor::Editor;
 mod theme;
 #[cfg(test)]
 use egui::vec2;
-pub use theme::configure;
+pub use theme::{Accent, Density, configure};
 /// Circuit editing and viewport state. Signal simulation is not part of this layer.
 #[derive(Default)]
 pub struct Workspace {

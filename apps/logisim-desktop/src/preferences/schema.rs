@@ -1,8 +1,8 @@
 //! Versioned disk representation. The UI owns the validated preference types.
 use logisim_core::Radix;
 use logisim_ui::{
-    DefaultZoom, Language, Settings, SignalPalette, SimulationMode, TickHz, UiScale,
-    WorkspaceSettings,
+    Accent, DefaultZoom, Density, Language, Settings, SignalPalette, SimulationMode, TickHz,
+    UiScale, WorkspaceSettings,
 };
 use serde::{Deserialize, Serialize};
 
@@ -53,6 +53,10 @@ enum LanguageCode {
 #[derive(Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 struct Appearance {
+    #[serde(with = "DensityCode")]
+    density: Density,
+    #[serde(with = "AccentCode")]
+    accent: Accent,
     ui_scale: f64,
     reduce_motion: bool,
     show_telemetry: bool,
@@ -61,6 +65,20 @@ struct Appearance {
     show_wire_values: bool,
     show_origin_marker: bool,
 }
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "Density", rename_all = "lowercase")]
+enum DensityCode {
+    Comfortable,
+    Compact,
+}
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "Accent", rename_all = "lowercase")]
+enum AccentCode {
+    Indigo,
+    Blue,
+    Teal,
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "SignalPalette", rename_all = "kebab-case")]
 enum SignalPaletteCode {
@@ -72,6 +90,8 @@ enum SignalPaletteCode {
 impl Default for Appearance {
     fn default() -> Self {
         Self {
+            density: Density::default(),
+            accent: Accent::default(),
             ui_scale: 1.0,
             reduce_motion: false,
             show_telemetry: true,
@@ -215,6 +235,8 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Config, &'static str> {
             files: file.files,
             workspace,
             language: file.general.language,
+            density: file.appearance.density,
+            accent: file.appearance.accent,
             ui_scale,
             reduce_motion: file.appearance.reduce_motion,
             show_telemetry: file.appearance.show_telemetry,
@@ -247,6 +269,8 @@ pub(super) fn encode(config: &Config) -> Vec<u8> {
             language: s.language,
         },
         appearance: Appearance {
+            density: s.density,
+            accent: s.accent,
             ui_scale: f64::from(s.ui_scale.percent()) / 100.0,
             reduce_motion: s.reduce_motion,
             show_telemetry: s.show_telemetry,

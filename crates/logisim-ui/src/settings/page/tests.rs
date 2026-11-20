@@ -16,6 +16,8 @@ fn registry_restores_each_field_without_changing_other_preferences() {
             restore_panels: false,
         },
         language: Language::SimplifiedChinese,
+        density: crate::Density::default(),
+        accent: crate::Accent::default(),
         ui_scale: UiScale::P150,
         reduce_motion: true,
         show_telemetry: false,

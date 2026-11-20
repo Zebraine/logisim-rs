@@ -1,7 +1,7 @@
 mod recovery;
 mod registry;
 pub use recovery::{RecoveryView, SnapshotState};
-pub const CONFIG_VERSION: u32 = 5;
+pub const CONFIG_VERSION: u32 = 6;
 mod page;
 pub(crate) use page::Page;
 mod model;

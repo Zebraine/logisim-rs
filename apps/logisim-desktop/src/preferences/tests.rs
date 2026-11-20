@@ -125,7 +125,10 @@ fn missing_fields_default_and_invalid_json_stays_intact_after_edits() {
     for json in [
         "{",
         "{}",
-        r#"{"version":6}"#,
+        r#"{"version":7}"#,
+        r#"{"version":6,"appearance":{"density":"dense"}}"#,
+        r##"{"version":6,"appearance":{"accent":"#ffffff"}}"##,
+        r#"{"version":6,"appearance":{"density":null}}"#,
         r#"{"version":5,"files":{"autosave_minutes":0}}"#,
         r#"{"version":5,"files":{"autosave_minutes":31}}"#,
         r#"{"version":5,"files":{"autosave_minutes":"5"}}"#,
@@ -162,6 +165,8 @@ fn all_fields_restart_reset_and_atomic_conflict_protection() {
         },
         workspace: Default::default(),
         language: Language::SimplifiedChinese,
+        density: logisim_ui::Density::Compact,
+        accent: logisim_ui::Accent::Teal,
         ui_scale: UiScale::P125,
         reduce_motion: true,
         show_telemetry: false,
@@ -301,8 +306,8 @@ fn layout_waits_for_idle_or_close_and_restores_only_when_enabled() {
 }
 
 #[test]
-fn earlier_preferences_migrate_to_v5_and_all_radix_codes_round_trip() {
-    for version in [1, 2, 3, 4] {
+fn earlier_preferences_migrate_to_v6_and_all_radix_codes_round_trip() {
+    for version in 1..=5 {
         let json = serde_json::json!({"version":version,"editor":{"show_grid":false}});
         let config = schema::decode(json.to_string().as_bytes()).unwrap();
         assert_eq!(
@@ -313,7 +318,9 @@ fn earlier_preferences_migrate_to_v5_and_all_radix_codes_round_trip() {
             }
         );
         let encoded: serde_json::Value = serde_json::from_slice(&schema::encode(&config)).unwrap();
-        assert_eq!(encoded["version"], 5);
+        assert_eq!(encoded["version"], 6);
+        assert_eq!(encoded["appearance"]["density"], "comfortable");
+        assert_eq!(encoded["appearance"]["accent"], "indigo");
         assert_eq!(
             encoded["files"],
             serde_json::json!({"autosave":true,"autosave_minutes":5})
@@ -377,5 +384,22 @@ fn individual_file_preferences_default_independently() {
                 autosave_minutes: minutes
             }
         );
+    }
+}
+
+#[test]
+fn density_and_accent_round_trip_independently_in_v6() {
+    for density in ["comfortable", "compact"] {
+        for accent in ["indigo", "blue", "teal"] {
+            let appearance = serde_json::json!({"density": density, "accent": accent});
+            let bytes =
+                serde_json::to_vec(&serde_json::json!({"version": 6, "appearance": appearance}))
+                    .unwrap();
+            let config = schema::decode(&bytes).unwrap();
+            let encoded: serde_json::Value =
+                serde_json::from_slice(&schema::encode(&config)).unwrap();
+            assert_eq!(encoded["appearance"]["density"], density);
+            assert_eq!(encoded["appearance"]["accent"], accent);
+        }
     }
 }
