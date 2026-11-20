@@ -39,6 +39,13 @@ impl Workspace {
             self.editor.record(before);
         }
     }
+    /// Recorded sources whose modules were validated using only the machine-local directory.
+    pub fn set_fallback_plugin_sources(
+        &mut self,
+        sources: Vec<logisim_core::plugin::PluginSource>,
+    ) {
+        self.fallback_plugin_sources = sources;
+    }
     pub fn set_plugin_catalogue(&mut self, manifests: Vec<Library>) {
         self.plugins = manifests;
     }

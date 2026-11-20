@@ -1,6 +1,7 @@
 {
   "name": "简体中文",
   "messages": {
+    "Confirm to use this plugin path in the project.": "确认后，项目将使用此插件路径。",
     "  (main)": "  （主电路）",
     " (partial)": " （部分导入）",
     "(unnamed)": "（未命名）",

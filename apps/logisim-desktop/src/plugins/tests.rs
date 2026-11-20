@@ -27,20 +27,20 @@ fn relative_path_wins_after_bundle_moves_and_absolute_fallback_works() {
     fs::write(temp.path("absolute.wasm"), zero).unwrap();
     p.plugin_sources[0].path = "local.wasm".into();
     p.plugin_sources[0].fallback = temp.path("absolute.wasm").to_string_lossy().into_owned();
-    let resolved = Resolution::new(&p, temp.path("moved"), vec![]);
+    let resolved = Resolution::new(&p, temp.path("moved"), None, vec![]);
     assert!(!resolved.missing());
     assert_eq!(output(&resolved, &p), 1);
     let mut normalized = p.clone();
     absolutize(&mut normalized, &temp.path("moved"));
     assert_eq!(
         output(
-            &Resolution::new(&normalized, temp.path("moved"), vec![]),
+            &Resolution::new(&normalized, temp.path("moved"), None, vec![]),
             &p
         ),
         1
     );
     fs::remove_file(temp.path("moved/local.wasm")).unwrap();
-    let resolved = Resolution::new(&p, temp.path("moved"), vec![]);
+    let resolved = Resolution::new(&p, temp.path("moved"), None, vec![]);
     assert!(!resolved.missing());
     assert_eq!(output(&resolved, &p), 0);
 }
@@ -53,7 +53,7 @@ fn explicit_invalid_location_does_not_reuse_old_module_or_fallback() {
     fs::write(temp.path("wrong.wasm"), wrong).unwrap();
     fs::write(temp.path("broken.wasm"), b"not wasm").unwrap();
     p.plugin_sources[0].fallback = temp.path("valid.wasm").to_string_lossy().into_owned();
-    let mut resolution = Resolution::new(&p, temp.0.clone(), vec![]);
+    let mut resolution = Resolution::new(&p, temp.0.clone(), None, vec![]);
     assert!(!resolution.missing());
     for path in ["wrong.wasm", "broken.wasm", "absent.wasm"] {
         resolution.rows[0].location = path.into();
@@ -97,7 +97,7 @@ fn explicit_invalid_location_does_not_reuse_old_module_or_fallback() {
                 .tool
                 .bounds[1][0] = 30;
         }
-        assert!(Resolution::new(&changed, temp.0.clone(), vec![]).missing());
+        assert!(Resolution::new(&changed, temp.0.clone(), None, vec![]).missing());
     }
 }
 #[test]
@@ -125,10 +125,83 @@ fn save_as_and_library_import_preserve_dependency_bases_without_dirtying_open() 
     assert_eq!(disk.plugin_sources[0].path, "../library/lib.wasm");
     assert!(!storage.dirty(&loaded));
     assert_eq!(
-        output(&Resolution::new(&disk, temp.path("saved"), vec![]), &disk),
+        output(
+            &Resolution::new(&disk, temp.path("saved"), None, vec![]),
+            &disk
+        ),
         1
     );
     let import = crate::library_import::load(&original, &Project::default()).unwrap();
     assert!(Path::new(&import.project.plugin_sources[0].path).is_absolute());
-    assert!(!Resolution::new(&import.project, temp.path("saved"), vec![]).missing());
+    assert!(!Resolution::new(&import.project, temp.path("saved"), None, vec![]).missing());
+}
+
+#[test]
+fn host_directory_is_last_single_basename_and_checks_the_module() {
+    let temp = Temp::new();
+    let (mut project, good) = fixture("test.paths", 1);
+    let (_, wrong) = fixture("test.wrong", 1);
+    let (_, zero) = fixture("test.paths", 0);
+    let dir = temp.path("plugins");
+    fs::create_dir_all(dir.join("nested")).unwrap();
+    fs::write(dir.join("nested/mod.wasm"), &good).unwrap();
+    let path = temp.path("mod.wasm");
+    let fallback = temp.path("other.wasm");
+    project.plugin_sources[0].path = "mod.wasm".into();
+    project.plugin_sources[0].fallback = fallback.to_str().unwrap().into();
+    let resolve = |p: &Project| Resolution::new(p, temp.0.clone(), Some(&dir), vec![]);
+    assert!(resolve(&project).missing());
+    let candidate = dir.join("mod.wasm");
+    fs::write(&candidate, wrong).unwrap();
+    let bad = resolve(&project);
+    let error = bad.rows[0].error.as_ref().unwrap();
+    assert!(error.contains(candidate.to_str().unwrap()) && error.contains("identity"));
+    assert_eq!(bad.sources(&project.plugin_sources), project.plugin_sources);
+
+    fs::write(&candidate, &good).unwrap();
+    let mut resolved = resolve(&project);
+    assert!(resolved.rows[0].from_directory);
+    assert_eq!(output(&resolved, &project), 1);
+    resolved.rows[0].location = "bad.wasm".into();
+    resolved.check(0);
+    assert!(resolved.missing() && !resolved.rows[0].from_directory);
+    fs::write(&fallback, &zero).unwrap();
+    let resolved = resolve(&project);
+    assert!(!resolved.rows[0].from_directory);
+    assert_eq!(resolved.rows[0].found.as_ref(), Some(&fallback));
+    fs::write(&path, &good).unwrap();
+    assert_eq!(resolve(&project).rows[0].found.as_ref(), Some(&path));
+    fs::remove_file(fallback).unwrap();
+    project.plugin_sources[0].path.clear();
+    project.plugin_sources[0].fallback = "absent/mod.wasm".into();
+    assert!(resolve(&project).rows[0].from_directory);
+    project.plugin_sources[0].fallback.clear();
+    assert!(resolve(&project).missing());
+    project.plugin_sources[0].fallback = "missing/not-a-module.txt".into();
+    fs::write(dir.join("not-a-module.txt"), good).unwrap();
+    assert!(resolve(&project).missing());
+}
+
+#[test]
+fn inaccessible_directory_candidate_does_not_block_other_sources() {
+    let temp = Temp::new();
+    let (mut project, wasm) = fixture("test.a", 1);
+    let (other, _) = fixture("test.b", 0);
+    project.plugin_sources[0].path = "working.wasm".into();
+    project.plugin_sources.extend(other.plugin_sources);
+    fs::write(temp.path("working.wasm"), wasm).unwrap();
+    let regular_file = temp.path("not-a-directory");
+    fs::write(&regular_file, []).unwrap();
+    for dir in [temp.path("missing-directory"), regular_file] {
+        let resolution = Resolution::new(&project, temp.0.clone(), Some(&dir), vec![]);
+        assert!(resolution.rows[0].loaded.is_some());
+        assert!(resolution.rows[1].loaded.is_none());
+        assert!(
+            resolution.rows[1]
+                .error
+                .as_ref()
+                .unwrap()
+                .contains(dir.to_str().unwrap())
+        );
+    }
 }

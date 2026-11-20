@@ -131,14 +131,16 @@ impl Files {
         let resolution = Resolution::new(
             workspace.project(),
             crate::plugins::base(self.storage.path.as_deref()),
+            workspace.plugin_fallback_directory.as_deref(),
             warnings,
         );
-        let missing = resolution.missing();
+        let needs_confirmation =
+            resolution.missing() || (repair && resolution.rows.iter().any(|r| r.from_directory));
         // A new document needs its own registry immediately. A repair can be cancelled.
-        if !repair || !missing {
+        if !repair || !needs_confirmation {
             self.activate_plugins(&resolution, workspace, sim);
         }
-        if missing {
+        if needs_confirmation {
             self.dialog = Some(Dialog::Plugins(Box::new(resolution)));
         } else {
             self.import_warnings(resolution.warnings);
@@ -151,6 +153,14 @@ impl Files {
         sim: &mut impl Host,
     ) {
         self.plugins = resolution.registry();
+        workspace.set_fallback_plugin_sources(
+            resolution
+                .rows
+                .iter()
+                .filter(|row| row.from_directory)
+                .map(|row| row.source.clone())
+                .collect(),
+        );
         workspace.set_plugin_catalogue(self.plugins.libraries().collect());
         sim.set_plugins(self.plugins.clone());
     }
@@ -253,7 +263,7 @@ impl Files {
             FileAction::ImportLibrary => self.picker(Mode::Library),
             FileAction::LoadPlugin => self.picker(Mode::Plugin),
             FileAction::ResolvePlugins => {
-                if workspace.plugin_dependencies().any(|(_, loaded)| !loaded) {
+                if workspace.needs_plugin_resolution() {
                     self.resolve_plugins(workspace, sim, ResolutionReason::Repair);
                 }
             }

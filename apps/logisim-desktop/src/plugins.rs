@@ -18,11 +18,13 @@ pub(crate) struct Row {
     pub error: Option<String>,
     pub loaded: Option<Plugin>,
     pub found: Option<PathBuf>,
+    pub from_directory: bool,
     components: Vec<api::Component>,
 }
 pub(crate) struct Resolution {
     pub rows: Vec<Row>,
     pub base: PathBuf,
+    fallback_directory: Option<PathBuf>,
     pub warnings: Vec<String>,
 }
 pub(crate) fn base(path: Option<&Path>) -> PathBuf {
@@ -110,7 +112,12 @@ pub(crate) fn rebase(project: &mut Project, from: &Path, to: &Path) {
     }
 }
 impl Resolution {
-    pub fn new(project: &Project, base: PathBuf, warnings: Vec<String>) -> Self {
+    pub fn new(
+        project: &Project,
+        base: PathBuf,
+        fallback_directory: Option<&Path>,
+        warnings: Vec<String>,
+    ) -> Self {
         let mut rows = BTreeMap::new();
         for source in &project.plugin_sources {
             rows.insert(
@@ -121,6 +128,7 @@ impl Resolution {
                     error: None,
                     loaded: None,
                     found: None,
+                    from_directory: false,
                     components: vec![],
                 },
             );
@@ -143,6 +151,7 @@ impl Resolution {
                     error: None,
                     loaded: None,
                     found: None,
+                    from_directory: false,
                     components: vec![],
                 })
                 .components
@@ -151,6 +160,7 @@ impl Resolution {
         let mut result = Self {
             rows: rows.into_values().collect(),
             base,
+            fallback_directory: fallback_directory.map(Path::to_owned),
             warnings,
         };
         for i in 0..result.rows.len() {
@@ -165,6 +175,7 @@ impl Resolution {
         let row = &mut self.rows[index];
         row.loaded = None;
         row.found = None;
+        row.from_directory = false;
         let mut candidates = if row.location.is_empty() {
             vec![row.source.path.as_str(), row.source.fallback.as_str()]
         } else {
@@ -172,9 +183,25 @@ impl Resolution {
         };
         candidates.retain(|s| !s.is_empty());
         candidates.sort_by_key(|p| Path::new(p).is_absolute());
+        let recorded = candidates
+            .into_iter()
+            .map(|p| (absolute(Path::new(p), &self.base), false));
+        // A manually entered location is authoritative, including when its validation fails.
+        let directory_candidate = self
+            .fallback_directory
+            .as_ref()
+            .filter(|_| row.location.is_empty())
+            .and_then(|dir| {
+                let name = [&row.source.path, &row.source.fallback]
+                    .into_iter()
+                    .find_map(|p| Path::new(p).file_name())?;
+                Path::new(name)
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("wasm"))
+                    .then(|| (dir.join(name), true))
+            });
         let mut errors = Vec::new();
-        for candidate in candidates {
-            let path = absolute(Path::new(candidate), &self.base);
+        for (path, from_directory) in recorded.chain(directory_candidate) {
             match load(
                 &path,
                 &row.source.plugin,
@@ -182,6 +209,7 @@ impl Resolution {
                 &row.components,
             ) {
                 Ok(plugin) => {
+                    row.from_directory = from_directory;
                     row.loaded = Some(plugin);
                     row.found = Some(path.canonicalize().unwrap_or(path));
                     row.error = None;
@@ -216,7 +244,7 @@ impl Resolution {
     pub fn sources(&self, old: &[PluginSource]) -> Vec<PluginSource> {
         let mut sources = old.to_vec();
         for row in &self.rows {
-            if !row.location.is_empty() && row.loaded.is_some() {
+            if (row.from_directory || !row.location.is_empty()) && row.loaded.is_some() {
                 let updated = located(
                     &row.source.plugin,
                     &row.source.version,

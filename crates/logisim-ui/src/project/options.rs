@@ -180,13 +180,16 @@ impl Workspace {
         })
     }
 
+    pub fn needs_plugin_resolution(&self) -> bool {
+        self.plugin_dependencies()
+            .any(|(source, loaded)| !loaded || self.fallback_plugin_sources.contains(source))
+    }
+
     fn dependency_list(&self, ui: &mut Ui, action: &mut Option<Action>) {
         if self.project().plugin_sources.is_empty() {
             ui.weak(tr("No plugin dependencies."));
         }
-        let mut missing = false;
         for (i, (source, loaded)) in self.plugin_dependencies().enumerate() {
-            missing |= !loaded;
             if i > 0 {
                 ui.separator();
             }
@@ -211,7 +214,7 @@ impl Workspace {
             if ui.button(tr("Load Plugin…")).clicked() {
                 *action = Some(Action::File(FileAction::LoadPlugin));
             }
-            if missing && ui.button(tr("Resolve missing…")).clicked() {
+            if self.needs_plugin_resolution() && ui.button(tr("Resolve missing…")).clicked() {
                 *action = Some(Action::File(FileAction::ResolvePlugins));
             }
         });

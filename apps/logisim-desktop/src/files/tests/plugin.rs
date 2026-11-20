@@ -210,3 +210,44 @@ fn reappearing_recorded_module_resolves_without_an_empty_dialog_or_a_document_ed
     assert_eq!(h.ws.project(), &before);
     assert!(!h.files.present(&h.ws).dirty);
 }
+
+#[test]
+fn host_directory_loads_without_an_edit_and_only_confirmation_relocates() {
+    let temp = Temp::new();
+    let (project, wasm) = fixture("test.fallback", 1);
+    let original = logisim_file::serialize(&project).unwrap();
+    let path = temp.path("project.circ");
+    fs::write(&path, &original).unwrap();
+    let dir = temp.path("modules");
+    fs::create_dir(&dir).unwrap();
+    let candidate = dir.join("missing.wasm");
+    fs::write(&candidate, wasm).unwrap();
+    let mut h = super::Harness::default();
+    h.ws.plugin_fallback_directory = Some(dir);
+    assert!(h.files.load(&path, &mut h.ws, &mut h.sim));
+    assert!(!h.files.busy() && !h.files.present(&h.ws).dirty);
+    assert!(h.ws.plugin_dependencies().next().unwrap().1 && h.ws.needs_plugin_resolution());
+    let before = h.ws.project().clone();
+    let registry = h.files.plugins.clone();
+    for button in ["Cancel", "Confirm"] {
+        h.click("Project");
+        h.click("Project Options…");
+        h.click("Resolve missing…");
+        h.click("Check");
+        assert!(h.frame(vec![]).iter().any(|(s, _)| s == "Plugin ready"));
+        h.click(button);
+        if button == "Cancel" {
+            assert!(registry.same(&h.files.plugins));
+            assert_eq!(h.ws.project(), &before);
+            assert!(!h.files.present(&h.ws).dirty);
+        }
+    }
+    assert_eq!(fs::read_to_string(&path).unwrap(), original);
+    assert!(h.files.present(&h.ws).dirty && !h.ws.needs_plugin_resolution());
+    assert_eq!(Path::new(&h.ws.project().plugin_sources[0].path), candidate);
+    h.files
+        .request(FileAction::Save, &h.ctx, &mut h.ws, &mut h.sim);
+    h.ws.plugin_fallback_directory = None;
+    assert!(h.files.load(&path, &mut h.ws, &mut h.sim));
+    assert!(!h.files.busy() && h.ws.plugin_dependencies().next().unwrap().1);
+}

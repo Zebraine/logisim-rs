@@ -66,6 +66,7 @@ pub struct Workspace {
     generator: generation::Generator,
     generated_expressions: generation::Memory,
     plugins: Vec<logisim_core::plugin::api::presentation::Library>,
+    fallback_plugin_sources: Vec<logisim_core::plugin::PluginSource>,
     libraries: Vec<libraries::LibraryGroup>,
     memory_editor: memory::MemoryEditor,
     pla_editor: pla::PlaEditor,

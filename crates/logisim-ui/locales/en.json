@@ -1,6 +1,7 @@
 {
   "name": "English",
   "messages": {
+    "Confirm to use this plugin path in the project.": "Confirm to use this plugin path in the project.",
     "  (main)": "  (main)",
     " (partial)": " (partial)",
     "(unnamed)": "(unnamed)",

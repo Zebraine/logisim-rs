@@ -139,6 +139,7 @@ impl Workspace {
         &self.editor.session.context.path
     }
     pub fn replace_project(&mut self, mut project: Project) {
+        self.fallback_plugin_sources.clear();
         self.analysis.cancel();
         self.generator.cancel_computation();
         let serial = self.generator.serial;

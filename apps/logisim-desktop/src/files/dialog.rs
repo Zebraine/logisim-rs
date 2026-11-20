@@ -210,6 +210,7 @@ fn plugin_row(
         {
             row.loaded = None;
             row.found = None;
+            row.from_directory = false;
             row.error = Some(tr("Location changed; Check or Confirm to validate.").into());
         }
         if ui.button(tr("Browse…")).clicked() {
@@ -223,5 +224,13 @@ fn plugin_row(
         ui.colored_label(ui.visuals().error_fg_color, error);
     } else {
         ui.label(tr("Plugin ready"));
+        if row.from_directory
+            && let Some(path) = &row.found
+        {
+            ui.label(tr("Confirm to use this plugin path in the project."));
+            let path = path.to_string_lossy();
+            ui.add(egui::Label::new(path.as_ref()).truncate())
+                .on_hover_text(path);
+        }
     }
 }
