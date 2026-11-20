@@ -125,7 +125,15 @@ fn missing_fields_default_and_invalid_json_stays_intact_after_edits() {
     for json in [
         "{",
         "{}",
-        r#"{"version":7}"#,
+        r#"{"version":8}"#,
+        r#"{"version":7,"shortcuts":null}"#,
+        r#"{"version":7,"shortcuts":{"edit.unknown":"f3"}}"#,
+        r#"{"version":7,"shortcuts":{"file.new":"primary+maybe"}}"#,
+        r#"{"version":7,"shortcuts":{"file.new":"shift+shift+n"}}"#,
+        r#"{"version":7,"shortcuts":{"file.new":"ctrl+y"}}"#,
+        r#"{"version":7,"shortcuts":{"file.new":"primary++"}}"#,
+        r#"{"version":7,"shortcuts":{"file.new":"ctrl+s"}}"#,
+        r#"{"version":7,"shortcuts":{"file.new":"f3","file.new":"f4"}}"#,
         r#"{"version":6,"appearance":{"density":"dense"}}"#,
         r##"{"version":6,"appearance":{"accent":"#ffffff"}}"##,
         r#"{"version":6,"appearance":{"density":null}}"#,
@@ -159,6 +167,7 @@ fn missing_fields_default_and_invalid_json_stays_intact_after_edits() {
 fn all_fields_restart_reset_and_atomic_conflict_protection() {
     use logisim_ui::{DefaultZoom, TickHz, UiScale};
     let alternative = Settings {
+        shortcuts: Default::default(),
         files: logisim_ui::FileSettings {
             autosave: false,
             autosave_minutes: 30,
@@ -306,8 +315,8 @@ fn layout_waits_for_idle_or_close_and_restores_only_when_enabled() {
 }
 
 #[test]
-fn earlier_preferences_migrate_to_v6_and_all_radix_codes_round_trip() {
-    for version in 1..=5 {
+fn earlier_preferences_migrate_to_v7_and_all_radix_codes_round_trip() {
+    for version in 1..=6 {
         let json = serde_json::json!({"version":version,"editor":{"show_grid":false}});
         let config = schema::decode(json.to_string().as_bytes()).unwrap();
         assert_eq!(
@@ -318,7 +327,7 @@ fn earlier_preferences_migrate_to_v6_and_all_radix_codes_round_trip() {
             }
         );
         let encoded: serde_json::Value = serde_json::from_slice(&schema::encode(&config)).unwrap();
-        assert_eq!(encoded["version"], 6);
+        assert_eq!(encoded["version"], 7);
         assert_eq!(encoded["appearance"]["density"], "comfortable");
         assert_eq!(encoded["appearance"]["accent"], "indigo");
         assert_eq!(
@@ -444,4 +453,62 @@ fn programmatic_limits_bound_history_and_never_persist_an_invalid_interval() {
             corrected
         );
     }
+}
+
+#[test]
+fn shortcut_defaults_and_partial_bindings_round_trip_and_survive_retry() {
+    use logisim_ui::shortcuts::{Command, Shortcuts};
+    let expected = [
+        "primary+n",
+        "primary+o",
+        "primary+s",
+        "primary+shift+s",
+        "primary+q",
+        "primary+z",
+        "primary+shift+z",
+        "primary+x",
+        "primary+c",
+        "primary+v",
+        "primary+d",
+        "primary+a",
+        "primary+shift+n",
+        "primary+shift+e",
+        "alt+left",
+        "primary+e",
+        "primary+i",
+        "primary+r",
+        "primary+t",
+        "primary+k",
+    ];
+    for (c, key) in Command::ALL.into_iter().zip(expected) {
+        assert_eq!(Shortcuts::default().get(c).to_string(), key);
+    }
+    let bytes = br#"{"version":7,"shortcuts":{"file.save":"primary+shift+f8"}}"#;
+    let shortcuts = schema::decode(bytes).unwrap().settings.shortcuts;
+    assert_eq!(shortcuts.get(Command::New), Command::New.default_chord());
+    assert_eq!(shortcuts.get(Command::Save).label(false), "Ctrl+Shift+F8");
+    assert_eq!(shortcuts.get(Command::Save).label(true), "Cmd+Shift+F8");
+    let tmp = Temp::new();
+    let path = tmp.0.join("preferences.json");
+    fs::write(&path, b"invalid").unwrap();
+    let mut w = Workspace::default();
+    let mut prefs = Preferences::at(Some(path.clone()), &mut w);
+    w.apply_settings(Settings {
+        shortcuts,
+        ..w.preferences()
+    });
+    prefs.synchronize(&mut w);
+    assert_eq!(fs::read(&path).unwrap(), b"invalid");
+    fs::write(&path, br#"{"version":6,"general":{"language":"zh-CN"}}"#).unwrap();
+    prefs.retry(&mut w);
+    prefs.synchronize(&mut w);
+    let saved = fs::read(path).unwrap();
+    assert_eq!(
+        schema::decode(&saved).unwrap().settings.shortcuts,
+        shortcuts
+    );
+    assert_eq!(w.language(), Language::SimplifiedChinese);
+    let json: serde_json::Value = serde_json::from_slice(&saved).unwrap();
+    assert_eq!(json["version"], 7);
+    assert_eq!(json["shortcuts"].as_object().unwrap().len(), Command::COUNT);
 }

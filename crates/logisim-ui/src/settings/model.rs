@@ -104,6 +104,7 @@ impl Default for FileSettings {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Settings {
+    pub shortcuts: crate::shortcuts::Shortcuts,
     pub files: FileSettings,
     pub workspace: WorkspaceSettings,
     pub language: Language,
@@ -129,6 +130,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            shortcuts: Default::default(),
             files: FileSettings::default(),
             workspace: WorkspaceSettings::default(),
             language: Language::default(),
@@ -199,6 +201,9 @@ impl Settings {
     }
     /// Replay only local edits when Retry loads a configuration repaired on disk.
     pub fn with_changes(mut self, before: Self, after: Self) -> Self {
+        if before.shortcuts != after.shortcuts {
+            self.shortcuts = after.shortcuts;
+        }
         for entry in super::registry::REGISTRY {
             if entry.changed(after, before) {
                 entry.copy(&mut self, after);

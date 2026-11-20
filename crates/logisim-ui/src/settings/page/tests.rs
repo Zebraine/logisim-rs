@@ -5,6 +5,7 @@ use crate::tests::support::widgets::frame_at_size;
 fn registry_restores_each_field_without_changing_other_preferences() {
     let defaults = Settings::default();
     let alternative = Settings {
+        shortcuts: Default::default(),
         files: FileSettings {
             autosave: false,
             autosave_minutes: 30,

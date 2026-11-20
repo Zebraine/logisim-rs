@@ -26,6 +26,7 @@ mod terminal;
 mod tests;
 pub use terminal::TtyView;
 mod settings;
+pub mod shortcuts;
 pub use i18n::Language;
 pub use settings::{
     CONFIG_VERSION, DefaultZoom, FileSettings, RecoveryView, Settings, SignalPalette,

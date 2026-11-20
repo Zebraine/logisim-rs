@@ -13,6 +13,8 @@ use logisim_ui::{CONFIG_VERSION, WorkspaceLayout};
 struct File {
     version: u32,
     #[serde(default)]
+    shortcuts: logisim_ui::shortcuts::Shortcuts,
+    #[serde(default)]
     files: logisim_ui::FileSettings,
     #[serde(default, deserialize_with = "present")]
     workspace: Option<WorkspaceSettings>,
@@ -232,6 +234,7 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Config, &'static str> {
         window: window.bounded(None),
         recent,
         settings: Settings {
+            shortcuts: file.shortcuts,
             files: file.files,
             workspace,
             language: file.general.language,
@@ -264,6 +267,7 @@ pub(super) fn encode(config: &Config) -> Vec<u8> {
         workspace: Some(s.workspace),
         recent: Some(config.recent.clone()),
         version: CONFIG_VERSION,
+        shortcuts: s.shortcuts,
         files: s.files,
         general: General {
             language: s.language,
