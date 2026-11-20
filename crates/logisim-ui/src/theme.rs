@@ -133,6 +133,7 @@ pub(crate) const ANIMATION_SECONDS: f32 = 0.12;
 
 /// Install the default workbench style before opening a workspace or host dialog.
 pub fn configure(ctx: &Context) {
+    crate::fonts::install_serif(ctx);
     ctx.options_mut(|o| o.zoom_with_keyboard = false);
     apply_chrome(ctx, ThemeMode::Light, Density::default(), Accent::default());
 }

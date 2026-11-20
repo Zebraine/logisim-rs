@@ -92,35 +92,52 @@ fn project_options_navigates_and_records_main_against_the_file_baseline() {
 }
 
 #[test]
-fn joystick_keeps_its_native_font_from_placement_through_save_and_reopen() {
+fn label_bearing_placements_reopen_with_serif_and_joystick_keeps_its_native_font() {
     let dir = crate::tests::support::Temp::new();
-    let path = dir.path("joystick.circ");
-    let mut h = super::Harness::default();
-    logisim_ui::configure(&h.ctx);
-    h.ws.apply_settings(logisim_ui::Settings {
-        default_font_family: logisim_ui::FontPreset::Serif,
-        default_font_bold: true,
-        default_font_italic: true,
-        default_font_size: Some(24),
-        ..h.ws.preferences()
-    });
-    h.click("Components");
-    h.click("Search · Ctrl+F");
-    h.frame(vec![egui::Event::Text("Joy".into())]);
-    h.click("Joystick");
-    h.click_at(egui::pos2(650., 300.));
-    let placed = &h.ws.circuit().components;
-    assert_eq!(placed.len(), 1);
-    assert_eq!((placed[0].kind, placed[0].font.size), (Kind::Joystick, 12));
-    h.files
-        .storage
-        .save(h.ws.project(), &path, SaveMode::Current, false)
-        .unwrap();
-    let saved = std::fs::read_to_string(&path).unwrap();
-    assert!(!saved.contains("name=\"labelfont\"") && !saved.contains("name=\"font\""));
-    let (loaded, warnings) = Storage::new().load(&path).unwrap();
-    assert!(warnings.is_empty());
-    assert_eq!(&loaded.main_circuit().circuit.components, placed);
+    for (name, kind) in [
+        ("Joystick", Kind::Joystick),
+        ("PLA ROM", Kind::PlaRom),
+        ("Pin", Kind::Pin),
+    ] {
+        let path = dir.path(&format!("{name}.circ"));
+        let mut h = super::Harness::default();
+        logisim_ui::configure(&h.ctx);
+        h.ws.apply_settings(logisim_ui::Settings {
+            default_font_family: logisim_ui::FontPreset::Serif,
+            default_font_bold: true,
+            default_font_italic: true,
+            default_font_size: Some(24),
+            ..h.ws.preferences()
+        });
+        h.click("Components");
+        h.click("Search · Ctrl+F");
+        h.frame(vec![egui::Event::Text(name[..name.len() - 1].into())]);
+        h.click(name);
+        h.click_at(egui::pos2(650., 300.));
+        let placed = &h.ws.circuit().components;
+        assert_eq!(placed.len(), 1, "{name}");
+        assert_eq!(placed[0].kind, kind);
+        let font = &placed[0].font;
+        if kind.has_label() {
+            assert_eq!(
+                (font.family.as_str(), font.size, font.bold, font.italic),
+                ("Serif", 24, true, true)
+            );
+        } else {
+            assert_eq!(font.size, 12);
+        }
+        h.files
+            .storage
+            .save(h.ws.project(), &path, SaveMode::Current, false)
+            .unwrap();
+        let saved = std::fs::read_to_string(&path).unwrap();
+        if !kind.has_label() {
+            assert!(!saved.contains("name=\"labelfont\"") && !saved.contains("name=\"font\""));
+        }
+        let (loaded, warnings) = Storage::new().load(&path).unwrap();
+        assert!(warnings.is_empty());
+        assert_eq!(&loaded.main_circuit().circuit.components, placed);
+    }
 }
 
 #[test]

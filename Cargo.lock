@@ -1405,7 +1405,9 @@ name = "logisim-ui"
 version = "0.2.0"
 dependencies = [
  "egui",
+ "fontique",
  "logisim-core",
+ "read-fonts",
  "serde",
  "serde_json",
 ]

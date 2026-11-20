@@ -10,6 +10,8 @@ publish.workspace = true
 [dependencies]
 serde.workspace = true
 egui.workspace = true
+fontique = { version = "=0.11.1", default-features = false, features = ["system", "fontconfig-dlopen"] }
+read-fonts = "=0.41.0"
 logisim-core.workspace = true
 
 [build-dependencies]

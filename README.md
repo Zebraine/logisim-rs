@@ -59,7 +59,7 @@ Useful starting points:
 - `Ctrl+F` searches the catalogue or settings, depending on the focused panel.
 - **File → Settings** changes language, simulation mode, theme, density, editor defaults, autosave, and recovery behavior.
 - **File → Print…** previews the current canvas and sends that image to the system default printer. Linux and macOS require `lp`. Windows uses the registered PNG print handler through PowerShell. Paper size, copies and other page settings follow the system defaults.
-- **Settings → Editor** sets the family (Dialog, Monospace or Serif), size, bold and italic for new component labels. A remembered placement template keeps its edited font. The canvas uses its existing proportional face for Serif.
+- **Settings → Editor** sets the family (Dialog, Monospace or Serif), size, bold and italic for new component labels. A remembered placement template keeps its edited font. The canvas uses a system serif face for Serif. If none is available, it uses the proportional font and logs a warning at startup.
 - Shortcuts can be rebound under **Settings → Shortcuts**.
 
 ## Plugins

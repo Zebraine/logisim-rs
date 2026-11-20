@@ -1,5 +1,67 @@
+use egui::epaint::text::{FontInsert, FontPriority, InsertFontFamily};
 use egui::{Align2, Color32, Painter, Pos2, Vec2};
+use fontique::{Collection, GenericFamily};
 use logisim_core::ArtworkFont;
+use read_fonts::{FontRef, TableProvider};
+use std::sync::LazyLock;
+
+static SERIF: LazyLock<egui::FontFamily> = LazyLock::new(|| egui::FontFamily::Name("Serif".into()));
+static SYSTEM_SERIF: LazyLock<Option<FontInsert>> = LazyLock::new(|| {
+    let face = resolve_serif(&mut Collection::new(Default::default()));
+    if face.is_none() {
+        eprintln!(
+            "warning: no usable system serif font found; canvas Serif labels will use Proportional."
+        );
+    }
+    face
+});
+
+fn resolve_serif(collection: &mut Collection) -> Option<FontInsert> {
+    let known = [
+        "Noto Serif",
+        "DejaVu Serif",
+        "Liberation Serif",
+        "Times New Roman",
+        "Times",
+        "Georgia",
+    ];
+    let mut candidates: Vec<_> = collection.generic_families(GenericFamily::Serif).collect();
+    for name in known {
+        if let Some(id) = collection.family_id(name)
+            && !candidates.contains(&id)
+        {
+            candidates.push(id);
+        }
+    }
+    candidates.into_iter().find_map(|id| {
+        let family = collection.family(id)?;
+        let face = family.default_font()?;
+        let bytes = face.load(None)?;
+        // Fontconfig's generic list can end in sans fallbacks. Only accept a serif face.
+        let font = FontRef::from_index(bytes.as_ref(), face.index()).ok()?;
+        let classified = font.os2().is_ok_and(|os2| {
+            matches!(os2.s_family_class() >> 8, 1..=5 | 7)
+                || matches!(os2.panose_10(), [2, 2..=10, ..])
+        });
+        if !classified && !known.contains(&family.name()) {
+            return None;
+        }
+        Some(FontInsert {
+            name: format!("document-serif:{}", family.name()),
+            data: egui::FontData::from_blob(bytes.into_raw_parts().0, face.index()),
+            families: vec![InsertFontFamily {
+                family: SERIF.clone(),
+                priority: FontPriority::Highest,
+            }],
+        })
+    })
+}
+
+pub(crate) fn install_serif(ctx: &egui::Context) {
+    if let Some(font) = &*SYSTEM_SERIF {
+        ctx.add_font(font.clone());
+    }
+}
 
 pub(crate) struct Text<'a> {
     pub text: &'a str,
@@ -10,7 +72,11 @@ pub(crate) struct Text<'a> {
 }
 impl Text<'_> {
     pub fn layout(&self, p: &Painter) -> std::sync::Arc<egui::Galley> {
-        let family = if self.font.family.to_ascii_lowercase().contains("mono") {
+        let family = if self.font.family.eq_ignore_ascii_case("serif")
+            && p.fonts(|fonts| fonts.definitions().families.contains_key(&*SERIF))
+        {
+            SERIF.clone()
+        } else if self.font.family.to_ascii_lowercase().contains("mono") {
             egui::FontFamily::Monospace
         } else {
             egui::FontFamily::Proportional
@@ -70,3 +136,6 @@ pub(crate) fn properties(ui: &mut egui::Ui, font: &mut ArtworkFont) -> bool {
     ui.end_row();
     family.has_focus() || size.has_focus() || size.dragged()
 }
+
+#[cfg(test)]
+mod tests;
