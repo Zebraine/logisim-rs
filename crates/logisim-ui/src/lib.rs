@@ -85,6 +85,7 @@ pub struct Workspace {
     fit_pending: bool,
     name_dialog: Option<NameDialog>,
     remove_dialog: bool,
+    project_options_open: bool,
 }
 
 impl Workspace {

@@ -144,6 +144,14 @@ impl Editor {
             .advance(&before.project, &self.session.project);
         self.history.record(before, &self.session);
     }
+    pub fn set_main_circuit(&mut self, id: Id) {
+        if self.session.project.main != id && self.session.project.circuit(id).is_some() {
+            let before = self.snapshot();
+            self.session.project.main = id;
+            // Only project metadata changed. The active working copy needs no wire normalization.
+            self.history.record(before, &self.session);
+        }
+    }
     pub fn commit_properties(&mut self) {
         if let Some(before) = self.history.take_properties() {
             self.record(before);

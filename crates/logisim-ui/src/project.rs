@@ -15,7 +15,6 @@ pub(crate) enum CircuitCommand {
     Add,
     Rename,
     Remove,
-    Main,
     Up,
     Down,
 }
@@ -88,7 +87,6 @@ impl Editor {
                 self.session.context.path.clear();
                 self.session.selection.clear();
             }
-            CircuitCommand::Main => self.session.project.main = self.session.context.active,
             CircuitCommand::Up | CircuitCommand::Down => {
                 let index = self
                     .session
@@ -118,6 +116,10 @@ impl Workspace {
     }
     pub fn active_circuit(&self) -> Id {
         self.editor.session.context.active
+    }
+    pub(crate) fn set_main_circuit(&mut self, id: Id) {
+        self.finish_edit();
+        self.editor.set_main_circuit(id);
     }
     pub fn circuit_name(&self) -> &str {
         &self
@@ -161,6 +163,7 @@ impl Workspace {
         self.pla_editor = crate::pla::PlaEditor::default();
         self.appearance.reset_context();
         self.name_dialog = None;
+        self.project_options_open = false;
         self.remove_dialog = false;
         self.reset_canvas_for_navigation();
     }

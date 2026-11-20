@@ -1,5 +1,53 @@
 use super::*;
 use logisim_core::{Facing, Point};
+
+#[test]
+fn setting_main_records_only_the_root_definition_choice() {
+    let mut project = Project::default();
+    let original = project.main;
+    let child = project.add("child".into()).unwrap();
+    let top = project.add("top".into()).unwrap();
+    let instance = project.instance(child, Point::ZERO).unwrap();
+    let instance = project
+        .circuit_mut(original)
+        .unwrap()
+        .circuit
+        .add_component(instance);
+    let pin = project
+        .circuit_mut(child)
+        .unwrap()
+        .circuit
+        .add_component(logisim_core::Component::new(Kind::Pin, Point::ZERO));
+    let mut app = Workspace::default();
+    app.replace_project(project);
+    app.editor.enter_instance(instance);
+    app.editor.session.selection.insert(pin);
+    app.canvas.camera.zoom = 2.;
+    app.simulation_mut().ticks = 47;
+    let before = app.project().clone();
+    let context = app.editor.session.context.clone();
+    let working_copy = app.circuit().components.as_ptr();
+    for id in [original, Id::MAX] {
+        app.set_main_circuit(id);
+        assert!(!app.editor.can_undo());
+    }
+    app.set_main_circuit(top);
+    assert_eq!(app.circuit().components.as_ptr(), working_copy);
+    assert_eq!(app.editor.session.context, context);
+    assert_eq!(app.editor.session.selection, [pin].into());
+    assert_eq!(app.canvas.camera.zoom, 2.);
+    assert_eq!(app.simulation_mut().ticks, 47);
+    assert!(app.take_simulation_actions().is_empty());
+    assert_eq!(app.project().main, top);
+    assert_eq!(app.project().circuits, before.circuits);
+    app.editor.undo();
+    assert_eq!(app.project(), &before);
+    assert!(!app.editor.can_undo());
+    app.editor.redo();
+    assert_eq!(app.project().main, top);
+    assert_eq!(app.editor.session.context, context);
+}
+
 #[test]
 fn circuit_label_edits_update_instances_and_undo_without_moving_wires() {
     let mut e = Editor::default();
@@ -79,7 +127,7 @@ fn global_history_restores_definitions_instances_and_main_selection() {
         "part"
     );
     e.redo();
-    e.edit_project(CircuitCommand::Main, String::new()).unwrap();
+    e.set_main_circuit(part);
     assert_eq!(e.session.project.main, part);
     e.undo();
     assert_eq!(e.session.project.main, 1);

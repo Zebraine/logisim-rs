@@ -65,6 +65,7 @@ impl Files {
     }
     pub fn present(&self, workspace: &Workspace) -> DocumentView {
         DocumentView {
+            path: self.storage.path.clone(),
             untitled: self.storage.path.is_none(),
             title: self
                 .storage

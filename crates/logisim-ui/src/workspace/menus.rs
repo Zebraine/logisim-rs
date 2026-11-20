@@ -93,13 +93,21 @@ impl Workspace {
                 }
                 ui.separator();
                 self.command_button(ui, Command::AddCircuit);
+                if ui.button(tr("Rename Circuit…")).clicked() {
+                    self.circuit_command(CircuitCommand::Rename);
+                    ui.close();
+                }
+                if ui
+                    .add_enabled(
+                        self.active_circuit() != self.project().main,
+                        egui::Button::new(tr("Set as Main Circuit")),
+                    )
+                    .clicked()
+                {
+                    self.set_main_circuit(self.active_circuit());
+                    ui.close();
+                }
                 for (label, command, enabled) in [
-                    ("Rename Circuit…", CircuitCommand::Rename, true),
-                    (
-                        "Set as Main Circuit",
-                        CircuitCommand::Main,
-                        self.editor.session.context.active != self.editor.session.project.main,
-                    ),
                     ("Move Circuit Up", CircuitCommand::Up, true),
                     ("Move Circuit Down", CircuitCommand::Down, true),
                     (

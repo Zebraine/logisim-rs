@@ -11,6 +11,7 @@ impl Workspace {
             || self.editor.pla_target.is_some()
             || self.about_open
             || self.settings_open
+            || self.project_options_open
             || self.name_dialog.is_some()
             || self.remove_dialog
             || self.editor.project_error.is_some()

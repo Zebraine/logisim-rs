@@ -22,6 +22,7 @@ pub enum FileAction {
 #[derive(Clone, Debug)]
 pub struct DocumentView {
     pub title: String,
+    pub path: Option<std::path::PathBuf>,
     pub untitled: bool,
     pub circuit_name: String,
     pub dirty: bool,
@@ -31,6 +32,7 @@ impl Default for DocumentView {
     fn default() -> Self {
         Self {
             title: "Untitled".into(),
+            path: None,
             untitled: true,
             circuit_name: "main".into(),
             dirty: false,
