@@ -136,7 +136,7 @@ fn missing_fields_default_and_invalid_json_stays_intact_after_edits() {
         r#"{"version":10,"shortcuts":{"appearance.copy":"delete"}}"#,
         r#"{"version":10,"shortcuts":{"appearance.copy":"f3","appearance.cut":"f3"}}"#,
         r#"{"version":10,"shortcuts":{"appearance.copy":"primary+s"}}"#,
-        r#"{"version":9,"shortcuts":{"file.save":"shift+up"}}"#,
+        r#"{"version":9,"shortcuts":{"file.save":"primary+shift+up"}}"#,
         r#"{"version":9,"shortcuts":{"tool.missing":"f3"}}"#,
         r#"{"version":9,"shortcuts":{"tool.text":"primary+bad"}}"#,
         r#"{"version":9,"shortcuts":{"tool.poke":"f6","tool.poke":"p"}}"#,
@@ -544,8 +544,8 @@ fn shortcut_defaults_and_partial_bindings_round_trip_and_survive_retry() {
         "primary+a",
         "primary+up",
         "primary+down",
-        "shift+up",
-        "shift+down",
+        "primary+shift+up",
+        "primary+shift+down",
     ];
     assert_eq!(expected.len(), Command::COUNT);
     for (c, key) in Command::ALL.into_iter().zip(expected) {

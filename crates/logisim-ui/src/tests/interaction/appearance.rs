@@ -57,6 +57,54 @@ fn appearance_draw_cancel_undo_redo_and_mode_shortcut_use_real_canvas_input() {
 }
 
 #[test]
+fn appearance_layer_shortcuts_restore_the_old_chords_and_follow_rebinding() {
+    use crate::appearance::{Target, Tool as ArtTool};
+    use crate::shortcuts::Command::AppearanceFront;
+    let (ctx, mut app) = setup();
+    let primary_shift = Modifiers::COMMAND.plus(Modifiers::SHIFT);
+    key(&ctx, &mut app, Key::E, primary_shift);
+    frame(&ctx, &mut app, vec![], Modifiers::NONE);
+    app.appearance.tool = ArtTool::Rect;
+    let start = app.canvas.screen(Point::new(150, 150));
+    let end = app.canvas.screen(Point::new(220, 190));
+    drag(&ctx, &mut app, start, end);
+    let initial = app.circuit().appearance.clone().unwrap();
+    assert_eq!(initial.shapes.len(), 3);
+    app.appearance.tool = ArtTool::Select;
+    app.appearance.selected = [Target::Shape(initial.shapes[0].id)].into();
+    let mut raised = initial.clone();
+    raised.shapes.rotate_left(1);
+    for (keycode, modifiers, expected) in [
+        (Key::ArrowUp, Modifiers::SHIFT, &initial),
+        (Key::ArrowUp, primary_shift, &raised),
+        (Key::ArrowDown, Modifiers::SHIFT, &raised),
+        (Key::ArrowDown, primary_shift, &initial),
+    ] {
+        key(&ctx, &mut app, keycode, modifiers);
+        assert_eq!(
+            app.circuit().appearance.as_ref(),
+            Some(expected),
+            "{keycode:?} {modifiers:?}"
+        );
+    }
+    let mut prefs = app.preferences();
+    prefs
+        .shortcuts
+        .bind(AppearanceFront, "f5".parse().unwrap())
+        .unwrap();
+    app.apply_settings(prefs);
+    key(&ctx, &mut app, Key::ArrowUp, primary_shift);
+    assert_eq!(app.circuit().appearance.as_ref(), Some(&initial));
+    key(&ctx, &mut app, Key::F5, Modifiers::NONE);
+    assert_eq!(app.circuit().appearance.as_ref(), Some(&raised));
+
+    key(&ctx, &mut app, Key::E, primary_shift);
+    assert!(!app.editor.session.context.appearance_mode);
+    key(&ctx, &mut app, Key::ArrowDown, primary_shift);
+    assert_eq!(app.circuit().appearance.as_ref(), Some(&raised));
+}
+
+#[test]
 fn appearance_port_overlapping_anchor_can_move_independently_and_undo() {
     use crate::appearance::{AppearanceEditor, Target};
     let (ctx, mut app) = setup();

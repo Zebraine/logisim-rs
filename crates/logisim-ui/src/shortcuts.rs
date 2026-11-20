@@ -96,8 +96,8 @@ commands! {
     AppearanceSelectAll, "appearance.select_all", "Select All", Appearance, PRIMARY, A;
     AppearanceRaise, "appearance.raise", "Raise", Appearance, PRIMARY, ArrowUp;
     AppearanceLower, "appearance.lower", "Lower", Appearance, PRIMARY, ArrowDown;
-    AppearanceFront, "appearance.front", "Bring to Front", Appearance, Modifiers::SHIFT, ArrowUp;
-    AppearanceBack, "appearance.back", "Send to Back", Appearance, Modifiers::SHIFT, ArrowDown;
+    AppearanceFront, "appearance.front", "Bring to Front", Appearance, PRIMARY_SHIFT, ArrowUp;
+    AppearanceBack, "appearance.back", "Send to Back", Appearance, PRIMARY_SHIFT, ArrowDown;
 }
 impl Command {
     pub fn scope(self) -> Scope {
