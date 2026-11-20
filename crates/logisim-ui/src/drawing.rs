@@ -251,9 +251,11 @@ pub(crate) fn circuit(
     display: crate::settings::EditorDisplay,
 ) {
     cache.synchronize(circuit, selection);
-    cache.prepare_view(p, canvas);
     let accent = theme::colors(p.ctx()).base;
     let paint = theme::palette(p.ctx());
+    let contrast =
+        theme::ArtworkContrast::new(paint, p.pixels_per_point(), display.dark_artwork_contrast);
+    cache.prepare_view(p, canvas, contrast.is_some());
     let palette = theme::active_palette(p.ctx());
     let mut badges = Vec::new();
     for w in &circuit.wires {
@@ -352,8 +354,6 @@ pub(crate) fn circuit(
             p.circle_filled(screen, 3.0, color);
         }
     }
-    let contrast =
-        theme::ArtworkContrast::new(paint, p.pixels_per_point(), display.dark_artwork_contrast);
     for (index, c) in circuit.components.iter().enumerate() {
         cache.component(index, p, canvas, c, simulation, contrast);
     }

@@ -209,6 +209,122 @@ fn viewport_cache_preserves_visible_shapes_when_panning_zooming_and_editing() {
 }
 
 #[test]
+fn artwork_bounds_follow_the_effective_outline_across_cached_frames() {
+    use crate::ThemeMode::{Dark, Light};
+    use logisim_core::{Appearance, Geometry, Paint};
+
+    let mut part = Component::new(Kind::Subcircuit(2), Point::new(100, 100));
+    let mut artwork = Appearance {
+        shapes: vec![],
+        ports: Default::default(),
+        anchor: Point::ZERO,
+        facing: Facing::East,
+    };
+    artwork
+        .add(
+            Geometry::Rect {
+                a: Point::ZERO,
+                b: Point::new(60, 30),
+                radius: 0,
+            },
+            Paint {
+                width: 32,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    (part.interface.min, part.interface.max) = artwork.bounds();
+    part.interface.appearance = Some(artwork);
+    let mut circuit = Circuit::default();
+    circuit.add_component(part);
+
+    let ctx = egui::Context::default();
+    let render = |cache: &mut CircuitCache, mode, enabled, clip: Rect| {
+        let settings = crate::Settings {
+            theme: mode,
+            dark_artwork_contrast: enabled,
+            ..Default::default()
+        };
+        settings.apply_appearance(&ctx);
+        let mut out = ctx.run_ui(Default::default(), |ui| {
+            let canvas = Canvas {
+                rect: ui.max_rect(),
+                camera: crate::canvas::Camera {
+                    offset: egui::Vec2::ZERO,
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            super::super::circuit(
+                &ui.painter().with_clip_rect(clip),
+                &canvas,
+                &circuit,
+                &BTreeSet::new(),
+                &SimulationView::default(),
+                cache,
+                settings.editor_display(),
+            );
+        });
+        out.textures_delta.clear();
+        out.shapes
+            .into_iter()
+            .filter_map(|s| match s.shape {
+                Shape::Path(path) => Some(path),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let mut cache = CircuitCache::default();
+    let all = Rect::EVERYTHING;
+    let bare = render(&mut cache, Light, false, all);
+    let bare_bounds = cache.visual_bounds[0].unwrap();
+    let mut previous = None;
+    for (mode, enabled) in [
+        (Dark, true),
+        (Dark, true),
+        (Dark, false),
+        (Dark, true),
+        (Light, true),
+        (Light, false),
+        (Dark, false),
+        (Light, false),
+        (Light, true),
+        (Dark, true),
+    ] {
+        let outlined = mode == Dark && enabled;
+        let mut fresh = CircuitCache::default();
+        let expected = render(&mut fresh, mode, enabled, all);
+        let bounds = fresh.visual_bounds[0].unwrap();
+        assert_eq!(bounds, bare_bounds.expand(if outlined { 1. } else { 0. }));
+        let offscreen = Rect::from_min_size(egui::pos2(400., 400.), vec2(10., 10.));
+        // With unchanged geometry a warmed cache culls the offscreen part immediately.
+        let measured = render(&mut cache, mode, enabled, offscreen);
+        if previous.is_none_or(|(_, old)| old != outlined) {
+            assert!(!measured.is_empty(), "{mode:?}, {enabled}");
+        } else if previous == Some((mode, outlined)) {
+            assert!(measured.is_empty(), "{mode:?}, {enabled}");
+        }
+        previous = Some((mode, outlined));
+        if mode == Light {
+            assert_eq!(expected, bare);
+        }
+        assert_eq!(cache.visual_bounds[0], Some(bounds));
+        assert_eq!(render(&mut cache, mode, enabled, all), expected);
+        // Clip to just the last half pixel of paint at the right edge.
+        let edge = Rect::from_min_size(
+            egui::pos2(bounds.right() - 0.5, bounds.center().y),
+            vec2(4., 1.),
+        );
+        assert!(
+            expected
+                .iter()
+                .any(|s| s.visual_bounding_rect().intersects(edge))
+        );
+        assert_eq!(render(&mut cache, mode, enabled, edge), expected);
+    }
+}
+
+#[test]
 fn custom_artwork_and_changing_plugin_graphics_survive_cached_frames() {
     use logisim_core::{Appearance, ArtworkFont, Geometry, Paint, TextAnchor, plugin::api};
     let ctx = egui::Context::default();

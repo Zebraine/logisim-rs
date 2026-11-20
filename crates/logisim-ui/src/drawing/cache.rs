@@ -10,6 +10,7 @@ pub(crate) struct CircuitCache {
     pub selected_net: BTreeSet<Id>,
     visual_bounds: Vec<Option<Rect>>,
     scale: Option<(f32, f32)>,
+    artwork_outline: bool,
     language: Option<crate::i18n::Language>,
     fonts: Option<egui::FontDefinitions>,
     text_options: Option<egui::epaint::text::TextOptions>,
@@ -64,7 +65,7 @@ impl CircuitCache {
         }
     }
 
-    pub fn prepare_view(&mut self, p: &Painter, canvas: &Canvas) {
+    pub fn prepare_view(&mut self, p: &Painter, canvas: &Canvas, artwork_outline: bool) {
         let scale = (canvas.camera.zoom, p.pixels_per_point());
         let fonts_changed = p.fonts(|f| {
             let changed = self.fonts.as_ref() != Some(f.definitions())
@@ -79,10 +80,12 @@ impl CircuitCache {
         });
         if self.scale != Some(scale)
             || self.language != Some(crate::i18n::current_language())
+            || self.artwork_outline != artwork_outline
             || fonts_changed
         {
             self.visual_bounds.fill(None);
             self.scale = Some(scale);
+            self.artwork_outline = artwork_outline;
             self.language = Some(crate::i18n::current_language());
         }
     }
