@@ -285,6 +285,13 @@ registry![
         "Enable Autosave to change the interval.",
         Control::AutosaveMinutes
     ),
+    (
+        "files.backup_before_save",
+        Files,
+        "Back up before saving",
+        "Before overwriting a file, keep its previous contents in <file>.bak. Only one backup is kept.",
+        Control::Toggle(|s| &mut s.files.backup_before_save)
+    ),
 ];
 impl Entry {
     pub fn matches(&self, query: &str) -> bool {

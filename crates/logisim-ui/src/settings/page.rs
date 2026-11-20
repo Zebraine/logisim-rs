@@ -258,6 +258,13 @@ impl Page {
         }
         let mut found = false;
         let active = self.category;
+        let files_page = self.showing_files();
+        let recovery_first = files_page
+            && (self.recovery.error.is_some() || self.recovery.state != SnapshotState::Empty);
+        if recovery_first {
+            self.recovery_card(ui, values, document_dirty, action);
+            ui.add_space(f32::from(theme::metrics(ui.ctx()).gap));
+        }
         for category in Category::ALL {
             if category == Category::Shortcuts {
                 if active == category || !q.is_empty() {
@@ -283,46 +290,8 @@ impl Page {
             });
             ui.add_space(f32::from(theme::metrics(ui.ctx()).gap));
         }
-        if self.showing_files() {
-            theme::card(ui, tr("Recovery snapshot"), |ui| {
-                self.recovery.details(ui);
-                let owner_error =
-                    self.recovery.error.as_deref() == Some(RecoveryView::FOREIGN_OWNER);
-                if self.recovery.can_clear() {
-                    if self.confirm_clear {
-                        let disabled_autosave = document_dirty && values.files.autosave;
-                        ui.label(tr("Delete this recovery copy?"));
-                        if disabled_autosave {
-                            ui.label(tr("Autosave is on. Clearing will also turn Autosave off so this copy stays removed."));
-                        }
-                        ui.horizontal_wrapped(|ui| {
-                            if ui.button(tr("Confirm clear")).clicked() {
-                                self.confirm_clear = false;
-                                if disabled_autosave {
-                                    values.files.autosave = false;
-                                }
-                                *action = Some(PageAction::ClearRecovery { disabled_autosave });
-                            }
-                            if ui.button(tr("Cancel")).clicked() {
-                                self.confirm_clear = false;
-                            }
-                        });
-                    } else if ui
-                        .button(tr(if owner_error {
-                            "Retry"
-                        } else {
-                            "Clear recovery"
-                        }))
-                        .clicked()
-                    {
-                        self.confirm_clear = true;
-                    }
-                } else if matches!(self.recovery.state, SnapshotState::Available { .. })
-                    && !owner_error
-                {
-                    ui.label(tr(RecoveryView::FOREIGN_OWNER));
-                }
-            });
+        if files_page && !recovery_first {
+            self.recovery_card(ui, values, document_dirty, action);
         }
         if active == Category::Workspace && q.is_empty() {
             theme::card(ui, tr("Recent Projects"), |ui| {
@@ -366,6 +335,51 @@ impl Page {
                 self.query.clear();
             }
         }
+    }
+    fn recovery_card(
+        &mut self,
+        ui: &mut Ui,
+        values: &mut Settings,
+        document_dirty: bool,
+        action: &mut Option<PageAction>,
+    ) {
+        theme::card(ui, tr("Recovery snapshot"), |ui| {
+            self.recovery.details(ui);
+            let owner_error = self.recovery.error.as_deref() == Some(RecoveryView::FOREIGN_OWNER);
+            if self.recovery.can_clear() {
+                if self.confirm_clear {
+                    let disabled_autosave = document_dirty && values.files.autosave;
+                    ui.label(tr("Delete this recovery copy?"));
+                    if disabled_autosave {
+                        ui.label(tr("Autosave is on. Clearing will also turn Autosave off so this copy stays removed."));
+                    }
+                    ui.horizontal_wrapped(|ui| {
+                        if ui.button(tr("Confirm clear")).clicked() {
+                            self.confirm_clear = false;
+                            if disabled_autosave {
+                                values.files.autosave = false;
+                            }
+                            *action = Some(PageAction::ClearRecovery { disabled_autosave });
+                        }
+                        if ui.button(tr("Cancel")).clicked() {
+                            self.confirm_clear = false;
+                        }
+                    });
+                } else if ui
+                    .button(tr(if owner_error {
+                        "Retry"
+                    } else {
+                        "Clear recovery"
+                    }))
+                    .clicked()
+                {
+                    self.confirm_clear = true;
+                }
+            } else if matches!(self.recovery.state, SnapshotState::Available { .. }) && !owner_error
+            {
+                ui.label(tr(RecoveryView::FOREIGN_OWNER));
+            }
+        });
     }
     fn row(&mut self, ui: &mut Ui, e: &Entry, values: &mut Settings) {
         let width = ui.available_width();

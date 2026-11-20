@@ -257,6 +257,10 @@ fn retry_after_write_failure_replays_only_local_changes_on_repaired_file() {
     let mut prefs = Preferences::at(Some(path.clone()), &mut w);
     fs::write(&directory, b"blocks directory creation").unwrap();
     w.apply_settings(Settings {
+        files: logisim_ui::FileSettings {
+            backup_before_save: true,
+            ..w.preferences().files
+        },
         truth_table: true,
         default_font_size: Some(24),
         default_gate_inputs: 4,
@@ -283,6 +287,7 @@ fn retry_after_write_failure_replays_only_local_changes_on_repaired_file() {
     let mut restarted = Workspace::default();
     Preferences::at(Some(path), &mut restarted);
     assert!(restarted.truth_table_generation());
+    assert!(restarted.preferences().files.backup_before_save);
     assert_eq!(
         restarted.preferences().default_gate_size,
         logisim_core::GateSize::Medium

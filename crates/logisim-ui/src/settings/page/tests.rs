@@ -2,6 +2,89 @@ use super::*;
 use crate::tests::support::widgets::frame_at_size;
 
 #[test]
+fn backup_search_toggle_and_resets_work_in_both_files_layouts() {
+    use egui::{Event, PointerButton};
+    let entry = REGISTRY
+        .iter()
+        .find(|e| e.key == "files.backup_before_save")
+        .unwrap();
+    for language in Language::ALL {
+        let t = |key| crate::i18n::with_language(language, || tr(key));
+        for size in [vec2(720., 480.), vec2(1200., 820.)] {
+            let ctx = Context::default();
+            crate::configure(&ctx);
+            let mut app = Workspace {
+                settings_open: true,
+                ..Default::default()
+            };
+            app.set_language(language);
+            app.settings_page.select(Category::Files);
+            app.preferences.files.autosave = false;
+            let render = |app: &mut Workspace| {
+                for _ in 0..2 {
+                    frame_at_size(&ctx, app, vec![], size);
+                }
+                frame_at_size(&ctx, app, vec![], size)
+            };
+            let tap = |app: &mut Workspace, pos| {
+                for pressed in [true, false] {
+                    frame_at_size(
+                        &ctx,
+                        app,
+                        vec![
+                            Event::PointerMoved(pos),
+                            Event::PointerButton {
+                                pos,
+                                pressed,
+                                button: PointerButton::Primary,
+                                modifiers: Modifiers::NONE,
+                            },
+                        ],
+                        size,
+                    );
+                }
+            };
+            for query in ["backup", entry.key, t(entry.label)] {
+                app.settings_page.query = query.into();
+                let labels = render(&mut app);
+                let at = |text| labels.iter().rev().find(|(s, _)| s == text).unwrap().1;
+                let bounds = ctx
+                    .memory(|m| m.area_rect(Id::unique("settings-window")))
+                    .unwrap();
+                let help = at(t(entry.help));
+                let toggle = at(t("Off"));
+                assert!(bounds.contains_rect(at(t(entry.label))) && bounds.contains_rect(help));
+                assert!(help.right() < toggle.left() && bounds.contains_rect(toggle));
+                tap(&mut app, toggle.center());
+                assert!(app.preferences().files.backup_before_save);
+                let labels = render(&mut app);
+                let on = labels.iter().rev().find(|(s, _)| s == t("On")).unwrap().1;
+                tap(&mut app, egui::pos2(bounds.right() - 36., on.center().y));
+                assert!(!app.preferences().files.backup_before_save);
+                assert!(!app.preferences().files.autosave);
+            }
+            app.preferences.files.backup_before_save = true;
+            app.settings_page.select(Category::Advanced);
+            for button in ["Reset all", "Confirm reset"] {
+                let labels = render(&mut app);
+                let position = labels
+                    .iter()
+                    .rev()
+                    .find(|(s, _)| s == t(button))
+                    .unwrap()
+                    .1
+                    .center();
+                tap(&mut app, position);
+            }
+            assert_eq!(app.preferences().files, FileSettings::default());
+            assert!(
+                !app.document.dirty && !app.editor.can_undo() && app.take_file_actions().is_empty()
+            );
+        }
+    }
+}
+
+#[test]
 fn registry_restores_each_field_without_changing_other_preferences() {
     let defaults = Settings::default();
     let alternative = Settings {
@@ -9,7 +92,7 @@ fn registry_restores_each_field_without_changing_other_preferences() {
         files: FileSettings {
             autosave: false,
             autosave_minutes: 30,
-            ..FileSettings::default()
+            backup_before_save: true,
         },
         workspace: WorkspaceSettings {
             recent_limit: 3,
