@@ -68,7 +68,11 @@ enum Entry {
     Missing,
     Bytes(Vec<u8>),
     Invalid,
-    Unreadable(String),
+    Unreadable {
+        error: String,
+        len: u64,
+        modified: SystemTime,
+    },
 }
 impl Entry {
     fn read(path: &Path, limit: usize) -> Result<Self> {
@@ -76,9 +80,13 @@ impl Entry {
             Err(e) if e.kind() == ErrorKind::NotFound => Ok(Self::Missing),
             Err(e) => Err(e.to_string()),
             Ok(m) if !m.is_file() || m.len() > limit as u64 => Ok(Self::Invalid),
-            Ok(_) => Ok(match storage::read(path) {
+            Ok(m) => Ok(match storage::read(path) {
                 Ok(bytes) => Self::Bytes(bytes),
-                Err(e) => Self::Unreadable(e),
+                Err(error) => Self::Unreadable {
+                    error,
+                    len: m.len(),
+                    modified: m.modified().map_err(|e| e.to_string())?,
+                },
             }),
         }
     }
@@ -86,7 +94,7 @@ impl Entry {
         match self {
             Self::Missing => Ok(None),
             Self::Bytes(b) => Ok(Some(b)),
-            Self::Unreadable(e) => Err(e.clone()),
+            Self::Unreadable { error, .. } => Err(error.clone()),
             Self::Invalid => Err("The recovery file is invalid or too large.".into()),
         }
     }
@@ -124,7 +132,9 @@ impl Pair {
     }
     pub fn read_error(&self) -> Option<&str> {
         match (&self.data, &self.meta) {
-            (Entry::Unreadable(error), _) | (_, Entry::Unreadable(error)) => Some(error),
+            (Entry::Unreadable { error, .. }, _) | (_, Entry::Unreadable { error, .. }) => {
+                Some(error)
+            }
             _ => None,
         }
     }
@@ -216,34 +226,50 @@ impl Pair {
         };
         Ok(())
     }
-    pub fn clear(&mut self, dir: &Path) -> Result<()> {
+    pub fn clear(&mut self, dir: &Path, partial: Option<&Self>) -> Result<()> {
         let _lock = Self::lock(dir)?;
         let current = Self::read(dir)?;
         if current.empty() {
             *self = current;
             return Ok(());
         }
-        if *self != current {
+        if *self != current && partial != Some(&current) {
             return Err("The recovery snapshot changed in another window.".into());
         }
-        // Remove a readable entry first so a failure on the second can restore it.
-        let (first, second, original) = if let Entry::Bytes(bytes) = &self.meta {
-            (META, DATA, Some(bytes))
-        } else if let Entry::Bytes(bytes) = &self.data {
-            (DATA, META, Some(bytes))
-        } else {
-            (META, DATA, None)
-        };
-        remove(&dir.join(first))?;
-        if let Err(error) = remove(&dir.join(second)) {
-            if let Some(bytes) = original {
-                storage::atomic_write(&dir.join(first), bytes, None)?;
+        let meta = dir.join(META);
+        let data = dir.join(DATA);
+        match (&current.meta, &current.data) {
+            (Entry::Missing, _) => remove(&data)?,
+            (_, Entry::Missing) => remove(&meta)?,
+            (Entry::Bytes(original), _) => remove_pair(&meta, &data, original)?,
+            (_, Entry::Bytes(original)) => remove_pair(&data, &meta, original)?,
+            // Neither entry can be buffered for rollback. A temporary hard link
+            // preserves even an unreadable or oversized file if the second unlink fails.
+            _ => {
+                let temp = dir.join(format!(".logisim-clear-{}.tmp", std::process::id()));
+                fs::hard_link(&meta, &temp).map_err(|e| e.to_string())?;
+                if let Err(e) = remove(&meta) {
+                    remove(&temp)?;
+                    return Err(e);
+                }
+                if let Err(e) = remove(&data) {
+                    fs::rename(&temp, &meta).map_err(|e| e.to_string())?;
+                    return Err(e);
+                }
+                remove(&temp)?;
             }
-            return Err(error);
         }
         *self = Self::default();
         Ok(())
     }
+}
+fn remove_pair(first: &Path, second: &Path, original: &[u8]) -> Result<()> {
+    remove(first)?;
+    if let Err(error) = remove(second) {
+        storage::atomic_write(first, original, None)?;
+        return Err(error);
+    }
+    Ok(())
 }
 fn remove(path: &Path) -> Result<()> {
     match fs::remove_file(path) {

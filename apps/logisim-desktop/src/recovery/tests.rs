@@ -316,3 +316,107 @@ fn invalid_minutes_report_once_and_suspend_writes_until_corrected() {
     write_checkpoint(&mut auto, &Project::default());
     assert!(auto.error.is_none());
 }
+
+#[test]
+fn damaged_clear_rejects_the_live_writer_then_releases_its_temporary_lease() {
+    let tmp = Temp::new();
+    let dir = tmp.path("recovery");
+    let mut owner = Autosave::at(Some(dir.clone()));
+    let mut project = Project::default();
+    let at = write_checkpoint(&mut owner, &project);
+    let meta = dir.join(slot::META);
+    let original = fs::read(&meta).unwrap();
+    fs::write(&meta, b"damaged").unwrap();
+    let mut observer = Autosave::at(Some(dir.clone()));
+    assert_eq!(observer.view().state, logisim_ui::SnapshotState::Damaged);
+    let damaged = Pair::read(&dir).unwrap();
+    assert_eq!(
+        observer.clear_from_settings().unwrap_err(),
+        "Recovery copy is owned by another window."
+    );
+    assert_eq!(Pair::read(&dir).unwrap(), damaged);
+    fs::write(&meta, original).unwrap();
+    project.main_circuit_mut().name = "owner edit".into();
+    owner.update(
+        at + Duration::from_secs(600),
+        FileSettings::default(),
+        true,
+        &Storage::default(),
+        &project,
+    );
+    assert_eq!(Pair::read(&dir).unwrap().project(&dir).unwrap(), project);
+    drop(owner);
+    assert!(observer.clear_from_settings().is_err()); // Repaired since confirmation.
+    assert_eq!(Pair::read(&dir).unwrap().project(&dir).unwrap(), project);
+    fs::write(&meta, b"damaged again").unwrap();
+    observer.refresh();
+    observer.clear_from_settings().unwrap();
+    assert!(Pair::read(&dir).unwrap().empty());
+    assert!(slot::owner(&dir).is_ok());
+}
+
+#[test]
+fn unavailable_directory_with_cached_metadata_can_be_cleared_after_access_returns() {
+    let tmp = Temp::new();
+    let dir = tmp.path("recovery");
+    let hidden = tmp.path("temporarily-unmounted");
+    let mut owner = Autosave::at(Some(dir.clone()));
+    write_checkpoint(&mut owner, &Project::default());
+    let mut observer = Autosave::at(Some(dir.clone()));
+    fs::rename(&dir, &hidden).unwrap();
+    fs::write(&dir, b"unavailable").unwrap();
+    observer.refresh();
+    assert!(observer.metadata.is_some());
+    assert_eq!(
+        observer.view().state,
+        logisim_ui::SnapshotState::Unavailable {
+            snapshot_present: true
+        }
+    );
+    fs::remove_file(&dir).unwrap();
+    fs::rename(&hidden, &dir).unwrap();
+    let before = Pair::read(&dir).unwrap();
+    assert_eq!(
+        observer.clear_from_settings().unwrap_err(),
+        "Recovery copy is owned by another window."
+    );
+    assert_eq!(Pair::read(&dir).unwrap(), before);
+    drop(owner);
+    observer.clear_from_settings().unwrap();
+    assert!(Pair::read(&dir).unwrap().empty());
+    assert!(!observer.view().owned && observer.error.is_none());
+}
+
+#[cfg(unix)]
+#[test]
+fn unreadable_data_can_be_cleared_without_rereading_its_contents() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = Temp::new();
+    let dir = tmp.path("recovery");
+    let mut owner = Autosave::at(Some(dir.clone()));
+    write_checkpoint(&mut owner, &Project::default());
+    let mut observer = Autosave::at(Some(dir.clone()));
+    let data = dir.join(slot::DATA);
+    fs::set_permissions(&data, fs::Permissions::from_mode(0)).unwrap();
+    if fs::read(&data).is_ok() {
+        // A privileged test process bypasses Unix read permissions.
+        return;
+    }
+    observer.refresh();
+    assert!(observer.metadata.is_some());
+    assert_eq!(
+        observer.view().state,
+        logisim_ui::SnapshotState::Unavailable {
+            snapshot_present: true
+        }
+    );
+    assert_eq!(
+        observer.clear_from_settings().unwrap_err(),
+        "Recovery copy is owned by another window."
+    );
+    let saved = Pair::read(&dir).unwrap();
+    drop(owner);
+    assert_eq!(Pair::read(&dir).unwrap(), saved);
+    observer.clear_from_settings().unwrap();
+    assert!(Pair::read(&dir).unwrap().empty());
+}

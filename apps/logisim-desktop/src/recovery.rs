@@ -12,12 +12,22 @@ use std::{
 
 const INVALID_INTERVAL: &str = "Autosave interval must be between 1 and 30 minutes.";
 
+/// Keep the last verified pair for recovery and the most recent observation for
+/// an explicit clear while a file is still unreadable.
+#[derive(Default)]
+enum Access {
+    #[default]
+    Readable,
+    UnreadableFile(Pair),
+    UnavailableDirectory,
+}
+
 #[derive(Default)]
 pub(crate) struct Autosave {
     directory: Option<PathBuf>,
     observed: Pair,
     metadata: Option<Metadata>,
-    unavailable: bool,
+    access: Access,
     changed: bool,
     owned: Option<std::fs::File>,
     written: Option<Project>,
@@ -44,11 +54,11 @@ impl Autosave {
                     && !self.observed.unreadable()
                     && let Some(error) = pair.read_error()
                 {
-                    self.unavailable = true;
                     self.error = Some(error.to_owned());
+                    self.access = Access::UnreadableFile(pair);
                     return;
                 }
-                let was_unavailable = std::mem::take(&mut self.unavailable);
+                let was_unavailable = !matches!(std::mem::take(&mut self.access), Access::Readable);
                 if pair != self.observed || was_unavailable {
                     if pair != self.observed {
                         self.owned = None;
@@ -73,7 +83,7 @@ impl Autosave {
                 }
             }
             Err(e) => {
-                self.unavailable = true;
+                self.access = Access::UnavailableDirectory;
                 self.error = Some(e);
             }
         }
@@ -83,7 +93,7 @@ impl Autosave {
     }
     pub fn view(&self) -> logisim_ui::RecoveryView {
         use logisim_ui::SnapshotState;
-        let state = if self.unavailable || self.observed.unreadable() {
+        let state = if !matches!(self.access, Access::Readable) || self.observed.unreadable() {
             SnapshotState::Unavailable {
                 snapshot_present: self.pending(),
             }
@@ -180,9 +190,10 @@ impl Autosave {
         if now < *self.next_due.get_or_insert(now + interval) {
             return;
         }
-        if self.unavailable {
+        if !matches!(self.access, Access::Readable) {
             self.refresh();
-            if self.unavailable || (self.pending() && self.owned.is_none()) {
+            if !matches!(self.access, Access::Readable) || (self.pending() && self.owned.is_none())
+            {
                 self.next_due = Some(now + interval);
                 return;
             }
@@ -251,11 +262,16 @@ impl Autosave {
     /// Settings can also remove explicitly confirmed, damaged files. The same
     /// compare-under-lock protects a repaired or replaced pair.
     pub fn clear_from_settings(&mut self) -> Result<(), String> {
-        if self.owned.is_none() && self.pending() && self.metadata.is_none() {
-            self.remove_observed()
-        } else {
-            self.clear_owned()
+        if self.owned.is_some() {
+            return self.clear_owned();
         }
+        if !self.pending() || (matches!(self.access, Access::Readable) && self.metadata.is_some()) {
+            return Err("Recovery copy is owned by another window.".into());
+        }
+        // Hold OWNER across verification and both removals. A writer cannot
+        // acquire the slot between our ownership check and the operation lock.
+        let _lease = slot::owner(self.dir()?)?;
+        self.remove_observed()
     }
 
     pub fn discard(&mut self) -> Result<(), String> {
@@ -264,13 +280,17 @@ impl Autosave {
 
     fn remove_observed(&mut self) -> Result<(), String> {
         let dir = self.dir()?.to_owned();
-        if let Err(error) = self.observed.clear(&dir) {
+        let partial = match &self.access {
+            Access::UnreadableFile(pair) => Some(pair),
+            Access::Readable | Access::UnavailableDirectory => None,
+        };
+        if let Err(error) = self.observed.clear(&dir, partial) {
             self.refresh();
             return Err(error);
         }
         self.owned = None;
         self.metadata = None;
-        self.unavailable = false;
+        self.access = Access::Readable;
         self.error = None;
         self.next_due = None;
         self.last_success = None;
