@@ -839,24 +839,34 @@ fn fallback_directory_is_validated_local_state_and_survives_portable_transfers()
     let portable: serde_json::Value =
         serde_json::from_slice(&Preferences::export_settings(&ws)).unwrap();
     assert!(portable.get("plugins").is_none());
-    let other = serde_json::json!({"version":14,"general":{"language":"zh-CN"},"plugins":{"fallback_directory":"private-on-another-machine"}});
-    prefs
-        .import_settings(
-            Preferences::validate_import(&serde_json::to_vec(&other).unwrap()).unwrap(),
-            &mut ws,
-        )
-        .unwrap();
-    assert_eq!(
-        ws.plugin_fallback_directory,
-        Some(dir.canonicalize().unwrap())
-    );
-    assert_eq!(
-        schema::decode(&fs::read(&conf).unwrap())
-            .unwrap()
-            .plugins
-            .directory(),
-        ws.plugin_fallback_directory.as_deref()
-    );
+    let local = dir.canonicalize().unwrap();
+    for version in [13, 14, 15] {
+        let mut other = serde_json::json!({
+            "version": version, "general": {"language": "zh-CN"}, "appearance": {"theme": "dark"}
+        });
+        if version >= 14 {
+            other["plugins"] =
+                serde_json::json!({"fallback_directory":"private-on-another-machine"});
+        }
+        if version == 15 {
+            other["appearance"]["dark_artwork_contrast"] = false.into();
+        }
+        let settings = Preferences::validate_import(&serde_json::to_vec(&other).unwrap()).unwrap();
+        prefs.import_settings(settings, &mut ws).unwrap();
+        assert_eq!(ws.plugin_fallback_directory.as_ref(), Some(&local));
+        let saved = schema::decode(&fs::read(&conf).unwrap()).unwrap();
+        assert_eq!(saved.plugins.directory(), Some(local.as_path()));
+        let exported: serde_json::Value =
+            serde_json::from_slice(&Preferences::export_settings(&ws)).unwrap();
+        assert_eq!(exported["version"], 15);
+        assert_eq!(exported["general"]["language"], "zh-CN");
+        assert_eq!(exported["appearance"]["theme"], "dark");
+        assert_eq!(
+            exported["appearance"]["dark_artwork_contrast"],
+            version < 15
+        );
+        assert!(exported.get("plugins").is_none());
+    }
     ws.plugin_fallback_directory = None;
     prefs.synchronize(&mut ws);
     assert!(

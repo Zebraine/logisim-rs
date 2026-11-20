@@ -41,6 +41,7 @@ cargo run -p logisim-rs --release --locked -- examples/course/redirect-pipeline.
 - 从左侧选择元件，在画布放置；选中后编辑属性，从端口或线段中间拖出连线。
 - 使用 Poke（`P`）操作输入，`Ctrl+T` 推进一个 tick，`Ctrl+K` 开关自动时钟。
 - 自动时钟默认 4 Hz，可在 Simulate 菜单设置 1–4096 Hz；一个 tick 不等于完整时钟周期。
+- File → Export Image… 将当前画布视口导出为 PNG。Print… 尚未实现，菜单项禁用。
 - 在 File → Settings 切换语言与仿真模式；默认英语、稳定态。
 - Settings → Appearance 中的“深色模式图形轮廓”默认开启，可增强低对比自定义封装的边缘。插件仅显示附加外框，内部线条、填充和透明度由插件作者决定。
 - 在 Project 菜单添加子电路、编辑封装、加载 `.circ` 库或 Wasm 插件。
@@ -106,6 +107,8 @@ cargo run -p logisim-examples --release --locked -- assemble examples/game/snake
 
 仅保存已实现内容；导入遇到不支持的内容会报告省略并禁止覆盖原文件。
 `.circ` 库以可编辑快照导入。插件路径优先相对电路目录解析；缺失时可补选，未修复的元件显示静态图形、属性报错并输出 E。
+
+摇杆（Joystick）的标签字体不会写入 `.circ`，重新打开后字号恢复为 12。
 
 宿主不执行 Java/JAR。含 Wasm 元件的 `.circ` 使用本项目扩展，需 logisim-rs 运行并附带模块。
 不承诺完整兼容参考程序的全部元件、传播延迟与反馈行为。
