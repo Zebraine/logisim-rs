@@ -175,6 +175,7 @@ fn missing_and_untitled_sources_recover_without_a_destination_or_history_entry()
         if named {
             fs::remove_file(&source).unwrap();
         }
+        drop(files); // The crashed process no longer holds the writer lease.
         let mut w = Workspace::default();
         let mut files = Files::with_recovery(Some(dir.clone()));
         let ctx = egui::Context::default();
@@ -256,6 +257,7 @@ fn restored_project_resolves_external_plugins_from_the_snapshot_and_keeps_source
         .add_component(Component::new(Kind::Pin, Point::ZERO));
     w.replace_project(edited);
     checkpoint(&mut files, &w);
+    drop(files);
     let mut files = Files::with_recovery(Some(dir));
     let mut fresh = Workspace::default();
     files.startup(None, &mut fresh, &mut sim);
@@ -404,4 +406,42 @@ fn clear_failure_rolls_back_only_the_disclosed_setting_and_allows_retry() {
         assert!(!w.preferences().files.autosave);
         assert_eq!(w.project(), &dirty_project());
     }
+}
+
+#[test]
+fn foreign_recover_keeps_the_same_dialog_document_and_paused_simulator() {
+    let tmp = Temp::new();
+    let dir = tmp.path("recovery");
+    let mut owner = Files::with_recovery(Some(dir.clone()));
+    let mut source = Workspace::default();
+    source.replace_project(dirty_project());
+    checkpoint(&mut owner, &source);
+    let mut files = Files::with_recovery(Some(dir));
+    let mut w = Workspace::default();
+    let project = w.project().clone();
+    let prefs = w.preferences();
+    let cli = tmp.path("requested.circ");
+    let mut sim = Simulator::default();
+    sim.set_enabled(false);
+    let ctx = egui::Context::default();
+    files.startup(Some(cli.clone()), &mut w, &mut sim);
+    let prompt = files.dialog.take().unwrap();
+    files.respond(prompt, Response::Recover, &ctx, &mut w, &mut sim);
+    let prompt = files.dialog.take().unwrap();
+    let Dialog::Recovery { cli: pending, view } = &prompt else {
+        panic!("Expected the recovery prompt")
+    };
+    assert_eq!(pending.as_ref(), Some(&cli));
+    assert_eq!(
+        view.error.as_deref(),
+        Some("Recovery copy is owned by another window.")
+    );
+    assert!(!view.owned && !sim.enabled());
+    assert_eq!(w.project(), &project);
+    assert_eq!(w.preferences(), prefs);
+    assert!(!files.present(&w).dirty);
+    drop(owner);
+    files.respond(prompt, Response::Recover, &ctx, &mut w, &mut sim);
+    assert_eq!(w.project(), source.project());
+    assert!(files.autosave.view().owned && files.present(&w).dirty && !files.busy());
 }

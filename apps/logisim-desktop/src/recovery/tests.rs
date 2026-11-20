@@ -137,9 +137,25 @@ fn observed_foreign_copy_survives_settings_clear_and_finish_but_not_startup_disc
     let saved = Pair::read(&dir).unwrap();
     assert!(!other.view().owned && other.clear_owned().is_err());
     assert!(other.clear_from_settings().is_err());
-    // Recover in a second live window cannot take the writer's ownership either.
-    assert_eq!(other.recover(&mut Storage::default()).unwrap(), project);
-    assert!(!other.view().owned);
+    let mut disk = Storage::default();
+    let source = temp.path("other.circ");
+    disk.save(&project, &source, crate::storage::SaveMode::Current)
+        .unwrap();
+    let checksum = disk.source_checksum();
+    other.changed = false;
+    assert_eq!(
+        other.recover(&mut disk).unwrap_err(),
+        "Recovery copy is owned by another window."
+    );
+    assert!(other.changed && !other.view().owned && other.written.is_none());
+    assert_eq!(
+        other.error.as_deref(),
+        Some("Recovery copy is owned by another window.")
+    );
+    assert_eq!(disk.path.as_ref(), Some(&source));
+    assert_eq!(disk.source_checksum(), checksum);
+    assert!(!disk.dirty(&project));
+    assert_eq!(other.observed, saved);
     other.finish_document();
     assert_eq!(Pair::read(&dir).unwrap(), saved);
     other.discard().unwrap();
@@ -154,6 +170,11 @@ fn observed_foreign_copy_survives_settings_clear_and_finish_but_not_startup_disc
     );
     assert!(owner.view().owned);
     assert_eq!(Pair::read(&dir).unwrap().project(&dir).unwrap(), project);
+    other.refresh();
+    drop(owner);
+    assert_eq!(other.recover(&mut disk).unwrap(), project);
+    assert!(other.view().owned && other.error.is_none());
+    assert_eq!(other.written.as_ref(), Some(&project));
 }
 
 #[test]

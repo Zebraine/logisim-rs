@@ -385,9 +385,7 @@ impl Files {
                         sim.new_document();
                         self.resolve_plugins(workspace, sim, Vec::new());
                     }
-                    Err(e) => {
-                        self.autosave.refresh();
-                        self.autosave.report(e);
+                    Err(_) => {
                         self.dialog = Some(Dialog::Recovery {
                             cli,
                             view: self.autosave.view(),

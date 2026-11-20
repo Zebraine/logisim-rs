@@ -110,8 +110,13 @@ impl Autosave {
         }
     }
     pub fn recover(&mut self, storage: &mut Storage) -> Result<Project, String> {
+        self.recover_with_lease(storage)
+            .inspect_err(|error| self.report(error.clone()))
+    }
+
+    fn recover_with_lease(&mut self, storage: &mut Storage) -> Result<Project, String> {
         let dir = self.dir()?;
-        let lease = slot::try_lock(dir, slot::OWNER);
+        let lease = slot::owner(dir)?;
         self.observed.verify(dir)?;
         let meta = self
             .metadata
@@ -119,16 +124,8 @@ impl Autosave {
             .ok_or("The recovery files are damaged or incomplete.")?;
         let project = self.observed.project(dir)?;
         *storage = Storage::recovered(meta.source.as_deref(), meta.source_fnv1a64)?;
-        match lease {
-            Ok(owner) => {
-                self.owned = owner;
-                self.error = None;
-            }
-            Err(error) => {
-                self.owned = None;
-                self.error = Some(error);
-            }
-        }
+        self.owned = Some(lease);
+        self.error = None;
         self.changed = true;
         self.written = Some(project.clone());
         Ok(project)
@@ -214,10 +211,7 @@ impl Autosave {
             return Err("Recovery files cannot be used as a project destination.".into());
         }
         let lease = if self.owned.is_none() {
-            Some(
-                slot::try_lock(&dir, slot::OWNER)?
-                    .ok_or("Recovery copy is owned by another window.")?,
-            )
+            Some(slot::owner(&dir)?)
         } else {
             None
         };

@@ -13,8 +13,11 @@ pub(super) const META: &str = "current.json";
 pub(super) const LOCK: &str = ".recovery.lock";
 pub(super) const OWNER: &str = ".recovery.owner";
 
-/// A second window can read a live snapshot without acquiring the writer's lease.
-/// The OS releases the lease on process exit, including after a crash.
+/// The OS releases the exclusive writer lease on process exit, including after a crash.
+pub(super) fn owner(dir: &Path) -> Result<fs::File> {
+    try_lock(dir, OWNER)?.ok_or_else(|| "Recovery copy is owned by another window.".into())
+}
+
 pub(super) fn try_lock(dir: &Path, name: &str) -> Result<Option<fs::File>> {
     fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     let file = fs::OpenOptions::new()
