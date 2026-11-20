@@ -52,7 +52,8 @@ impl Workspace {
             });
             ui.menu_button(tr("Edit"), |ui| {
                 if self.editor.session.context.appearance_mode {
-                    self.appearance.edit_menu(ui, &mut self.editor);
+                    self.appearance
+                        .edit_menu(ui, &mut self.editor, &self.preferences.shortcuts);
                     return;
                 }
                 self.command_button(ui, Command::Undo);

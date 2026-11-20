@@ -91,7 +91,7 @@ pub(crate) fn show(
                     }
                     component_editor(ui, editor, c, placing, plugins, shortcuts);
                 } else {
-                    selection_info(ui, editor);
+                    selection_info(ui, editor, shortcuts);
                 }
                 if !editor.simulation.view.issues.is_empty() {
                     ui.separator();
@@ -120,12 +120,15 @@ pub(crate) fn show(
         });
 }
 
-fn selection_info(ui: &mut Ui, editor: &mut Editor) {
+fn selection_info(ui: &mut Ui, editor: &mut Editor, shortcuts: &Shortcuts) {
     if !editor.session.selection.is_empty() {
         editor.commit_properties();
         ui.horizontal(|ui| {
             if ui
-                .add_enabled(editor.can_rotate(), egui::Button::new(tr("Rotate")))
+                .add_enabled(
+                    editor.can_rotate(),
+                    egui::Button::new(shortcuts.caption(Command::ToolRotate, ui)),
+                )
                 .clicked()
             {
                 editor.rotate();

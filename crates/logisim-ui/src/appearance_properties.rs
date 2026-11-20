@@ -87,7 +87,12 @@ fn font(ui: &mut Ui, font: &mut ArtworkFont, anchor: &mut TextAnchor) {
         });
 }
 impl AppearanceEditor {
-    pub fn properties(&mut self, ui: &mut Ui, editor: &mut Editor) {
+    pub fn properties(
+        &mut self,
+        ui: &mut Ui,
+        editor: &mut Editor,
+        shortcuts: &crate::shortcuts::Shortcuts,
+    ) {
         ScrollArea::vertical().show(ui,|ui| { Frame::NONE.inner_margin(12).show(ui,|ui|{
             crate::theme::section(ui,tr("Inspector"));
             ui.strong(tf!("Appearance: {}", editor.session.project.circuit(editor.session.context.active).unwrap().name));
@@ -139,9 +144,13 @@ impl AppearanceEditor {
             }
             if a!=original && a.shapes.iter().all(|s|s.geometry.valid()) {editor.update_appearance(a);}
             if !ui.ctx().egui_wants_keyboard_input()&&!ui.input(|i|i.pointer.any_down()){editor.commit_properties();}
-            if self.selected.iter().any(|t|matches!(t,Target::Shape(_))) {
+            if self.has_selected_shape() {
                 ui.separator();ui.horizontal_wrapped(|ui|{
-                    for (label,cmd) in [("Raise",Command::Raise),("Lower",Command::Lower),("Front",Command::Front),("Send to Back",Command::Back),("Duplicate",Command::Duplicate),("Delete",Command::Delete)] {if ui.button(tr(label)).clicked(){self.command(editor,cmd);}}
+                    for cmd in [Command::Raise, Command::Lower, Command::Front, Command::Back, Command::Duplicate, Command::Delete] {
+                        if ui.button(cmd.caption(shortcuts, ui)).clicked() {
+                            self.command(editor, cmd);
+                        }
+                    }
                 });
                 if self.can_edit_vertex(editor,false)||self.can_edit_vertex(editor,true) {
                     ui.horizontal(|ui| {

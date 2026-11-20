@@ -148,8 +148,13 @@ impl Workspace {
                 let response = self.canvas.show(ui, &self.preferences);
                 self.dispatch_shortcuts(ui, &response);
                 if self.editor.session.context.appearance_mode {
-                    self.appearance
-                        .show(ui, &mut self.editor, &mut self.canvas, &response);
+                    self.appearance.show(
+                        ui,
+                        &mut self.editor,
+                        &mut self.canvas,
+                        &response,
+                        &self.preferences.shortcuts,
+                    );
                 } else {
                     self.editor.show(
                         ui,

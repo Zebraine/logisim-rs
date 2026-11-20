@@ -3,6 +3,7 @@ use crate::{
     artwork,
     canvas::Canvas,
     editor::{Editor, Snapshot},
+    shortcuts::{Command as Binding, Shortcuts},
     theme,
 };
 use crate::{i18n::tr, tf};
@@ -82,6 +83,25 @@ pub(crate) enum Command {
     Back,
     AddVertex,
     RemoveVertex,
+}
+impl Command {
+    pub(crate) fn caption(self, shortcuts: &Shortcuts, ui: &Ui) -> String {
+        let binding = match self {
+            Self::Cut => Binding::AppearanceCut,
+            Self::Copy => Binding::AppearanceCopy,
+            Self::Paste => Binding::AppearancePaste,
+            Self::Duplicate => Binding::AppearanceDuplicate,
+            Self::All => Binding::AppearanceSelectAll,
+            Self::Raise => Binding::AppearanceRaise,
+            Self::Lower => Binding::AppearanceLower,
+            Self::Front => Binding::AppearanceFront,
+            Self::Back => Binding::AppearanceBack,
+            Self::Delete => return tr("Delete").to_owned(),
+            Self::AddVertex => return tr("Add Vertex").to_owned(),
+            Self::RemoveVertex => return tr("Remove Vertex").to_owned(),
+        };
+        shortcuts.caption(binding, ui)
+    }
 }
 #[derive(Default)]
 pub(crate) struct AppearanceEditor {
@@ -355,54 +375,45 @@ impl AppearanceEditor {
         };
         Self::current(editor).shapes.iter().any(|s|s.id==id && matches!(&s.geometry,Geometry::Poly {points,closed} if index<points.len() && if remove {points.len()>if *closed {3}else{2}}else{points.len()<256}))
     }
-    pub fn edit_menu(&mut self, ui: &mut Ui, editor: &mut Editor) {
+    pub fn edit_menu(&mut self, ui: &mut Ui, editor: &mut Editor, shortcuts: &Shortcuts) {
         if ui
-            .add_enabled(editor.can_undo(), egui::Button::new(tr("Undo · Ctrl+Z")))
+            .add_enabled(
+                editor.can_undo(),
+                egui::Button::new(shortcuts.caption(Binding::AppearanceUndo, ui)),
+            )
             .clicked()
         {
-            self.cancel();
-            editor.undo();
-            self.selected.clear();
+            self.history(editor, Editor::undo);
             ui.close();
         }
         if ui
             .add_enabled(
                 editor.can_redo(),
-                egui::Button::new(tr("Redo · Ctrl+Shift+Z")),
+                egui::Button::new(shortcuts.caption(Binding::AppearanceRedo, ui)),
             )
             .clicked()
         {
-            self.cancel();
-            editor.redo();
-            self.selected.clear();
+            self.history(editor, Editor::redo);
             ui.close();
         }
         ui.separator();
-        let selected = self.selected.iter().any(|t| matches!(t, Target::Shape(_)));
-        for (label, command, enabled) in [
-            ("Cut · Ctrl+X", Command::Cut, selected),
-            ("Copy · Ctrl+C", Command::Copy, selected),
-            ("Paste · Ctrl+V", Command::Paste, !self.clipboard.is_empty()),
-            ("Duplicate · Ctrl+D", Command::Duplicate, selected),
-            ("Delete", Command::Delete, selected),
-            ("Select All · Ctrl+A", Command::All, true),
-            ("Raise · Ctrl+Up", Command::Raise, selected),
-            ("Lower · Ctrl+Down", Command::Lower, selected),
-            ("Bring to Front", Command::Front, selected),
-            ("Send to Back", Command::Back, selected),
-            (
-                "Add Vertex",
-                Command::AddVertex,
-                self.can_edit_vertex(editor, false),
-            ),
-            (
-                "Remove Vertex",
-                Command::RemoveVertex,
-                self.can_edit_vertex(editor, true),
-            ),
+        let selected = self.has_selected_shape();
+        for (command, enabled) in [
+            (Command::Cut, selected),
+            (Command::Copy, selected),
+            (Command::Paste, !self.clipboard.is_empty()),
+            (Command::Duplicate, selected),
+            (Command::Delete, selected),
+            (Command::All, true),
+            (Command::Raise, selected),
+            (Command::Lower, selected),
+            (Command::Front, selected),
+            (Command::Back, selected),
+            (Command::AddVertex, self.can_edit_vertex(editor, false)),
+            (Command::RemoveVertex, self.can_edit_vertex(editor, true)),
         ] {
             if ui
-                .add_enabled(enabled, egui::Button::new(tr(label)))
+                .add_enabled(enabled, egui::Button::new(command.caption(shortcuts, ui)))
                 .clicked()
             {
                 self.command(editor, command);
@@ -524,6 +535,7 @@ impl AppearanceEditor {
         editor: &mut Editor,
         canvas: &mut Canvas,
         response: &Response,
+        shortcuts: &Shortcuts,
     ) {
         let a = Self::current(editor);
         self.selected.retain(|t| Self::targets(&a).contains(t));
@@ -859,7 +871,7 @@ impl AppearanceEditor {
                 0.0,
             );
         }
-        response.context_menu(|ui| self.edit_menu(ui, editor));
+        response.context_menu(|ui| self.edit_menu(ui, editor, shortcuts));
         self.publish(ui);
         if response.hovered()
             && let Some(world) = world

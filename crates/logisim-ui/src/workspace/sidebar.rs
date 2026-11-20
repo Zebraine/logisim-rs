@@ -75,7 +75,8 @@ impl Workspace {
             .frame(Frame::NONE.fill(theme::CHROME))
             .show(ui, |ui| {
                 if self.editor.session.context.appearance_mode {
-                    self.appearance.properties(ui, &mut self.editor);
+                    self.appearance
+                        .properties(ui, &mut self.editor, &self.preferences.shortcuts);
                 } else {
                     let name = self.circuit_name().to_owned();
                     properties::show(

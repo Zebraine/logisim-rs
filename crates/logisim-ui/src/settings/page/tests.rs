@@ -725,6 +725,10 @@ fn shortcut_capture_conflicts_cancel_and_resets_keep_workspace_state() {
     app.settings_page.select(Category::Shortcuts);
     click(&ctx, &mut app, &ctrl_s);
     send(&mut app, Key::F6, Modifiers::NONE);
+    app.preferences
+        .shortcuts
+        .bind(Command::AppearanceCopy, "f5".parse().unwrap())
+        .unwrap();
     click(&ctx, &mut app, "Reset all shortcuts");
     assert_eq!(save(&app).to_string(), "f6");
     click(&ctx, &mut app, "Cancel");
@@ -787,7 +791,7 @@ fn menu_and_toolbar_follow_the_effective_binding() {
 }
 
 #[test]
-fn tool_search_matches_both_languages_and_restores_an_individual_binding() {
+fn shortcut_search_matches_both_languages_and_restores_individual_bindings() {
     use crate::shortcuts::Command;
     use crate::tests::support::widgets::has;
     for language in Language::ALL {
@@ -807,19 +811,28 @@ fn tool_search_matches_both_languages_and_restores_an_individual_binding() {
                 .shortcuts
                 .bind(Command::ToolRotate, "f10".parse().unwrap())
                 .unwrap();
-            for query in ["tools", "工具", "tool.", "rotate", "旋转", "tool.rotate"] {
+            app.preferences
+                .shortcuts
+                .bind(Command::AppearanceFront, "f10".parse().unwrap())
+                .unwrap();
+            for (query, group, chord, reset) in [
+                ("tools", "Tools", "F6", false),
+                ("工具", "Tools", "F6", false),
+                ("tool.", "Tools", "F6", false),
+                ("rotate", "Tools", "F10", false),
+                ("旋转", "Tools", "F10", false),
+                ("tool.rotate", "Tools", "F10", true),
+                ("bring to front", "Appearance", "F10", false),
+                ("置于顶层", "Appearance", "F10", false),
+                ("appearance.front", "Appearance", "F10", true),
+            ] {
                 app.settings_page.query = query.into();
                 let mut labels = vec![];
                 for _ in 0..4 {
                     labels = frame_at_size(&ctx, &mut app, vec![], size);
                 }
-                let group = crate::i18n::with_language(language, || tr("Tools").to_uppercase());
+                let group = crate::i18n::with_language(language, || tr(group).to_uppercase());
                 assert!(has(&labels, &group), "{language:?} {size:?} {query}");
-                let chord = if ["tools", "工具", "tool."].contains(&query) {
-                    "F6"
-                } else {
-                    "F10"
-                };
                 let bounds = ctx
                     .memory(|m| m.area_rect(Id::unique("settings-window")))
                     .unwrap();
@@ -828,7 +841,7 @@ fn tool_search_matches_both_languages_and_restores_an_individual_binding() {
                     .find(|(s, r)| s == chord && bounds.contains_rect(*r))
                     .unwrap()
                     .1;
-                if query == "tool.rotate" {
+                if reset {
                     let pos = egui::pos2(bounds.right() - 36., rect.center().y);
                     for pressed in [true, false] {
                         frame_at_size(
@@ -851,6 +864,10 @@ fn tool_search_matches_both_languages_and_restores_an_individual_binding() {
             assert_eq!(
                 app.preferences.shortcuts.get(Command::ToolRotate),
                 Command::ToolRotate.default_chord()
+            );
+            assert_eq!(
+                app.preferences.shortcuts.get(Command::AppearanceFront),
+                Command::AppearanceFront.default_chord()
             );
             assert_eq!(
                 app.preferences.shortcuts.get(Command::ToolPoke).to_string(),
