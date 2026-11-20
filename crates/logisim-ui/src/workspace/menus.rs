@@ -1,5 +1,5 @@
 //! Workspace menus; document and simulation commands stay in their existing layers.
-use crate::{FileAction, Workspace, i18n::tr, project::CircuitCommand};
+use crate::{FileAction, Workspace, document::recent_button, i18n::tr, project::CircuitCommand};
 use egui::Ui;
 
 impl Workspace {
@@ -17,6 +17,26 @@ impl Workspace {
                         ui.close();
                     }
                 }
+                ui.menu_button(tr("Recent Projects"), |ui| {
+                    let recent = &self.recent;
+                    if recent.is_empty() {
+                        ui.add_enabled(false, egui::Button::new(tr("No recent projects")));
+                    }
+                    for (index, path) in recent.iter().enumerate() {
+                        if recent_button(ui, path) {
+                            self.file_actions.push(FileAction::OpenRecent(index));
+                            ui.close();
+                        }
+                    }
+                    ui.separator();
+                    if ui
+                        .add_enabled(!recent.is_empty(), egui::Button::new(tr("Clear recent")))
+                        .clicked()
+                    {
+                        self.file_actions.push(FileAction::ClearRecent);
+                        ui.close();
+                    }
+                });
                 ui.separator();
                 disabled_actions(ui, &["Export Image…", "Print…"]);
                 ui.separator();

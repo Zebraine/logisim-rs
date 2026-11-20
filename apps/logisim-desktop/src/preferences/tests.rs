@@ -114,7 +114,9 @@ fn rejects_invalid_legacy_without_creating_a_replacement() {
 fn missing_fields_default_and_invalid_json_stays_intact_after_edits() {
     let defaults = Settings::default();
     assert_eq!(
-        schema::decode(br#"{"version":1,"appearance":{},"generation":{}}"#).unwrap(),
+        schema::decode(br#"{"version":1,"appearance":{},"generation":{}}"#)
+            .unwrap()
+            .settings,
         defaults
     );
     let temp = Temp::new();
@@ -123,7 +125,7 @@ fn missing_fields_default_and_invalid_json_stays_intact_after_edits() {
     for json in [
         "{",
         "{}",
-        r#"{"version":2}"#,
+        r#"{"version":3}"#,
         r#"{"version":1,"other":0}"#,
         r#"{"version":1,"simulation":{"typo":4}}"#,
         r#"{"version":1,"simulation":{"tick_hz":32769}}"#,
@@ -145,6 +147,7 @@ fn missing_fields_default_and_invalid_json_stays_intact_after_edits() {
 fn all_fields_restart_reset_and_atomic_conflict_protection() {
     use logisim_ui::{DefaultZoom, TickHz, UiScale};
     let alternative = Settings {
+        workspace: Default::default(),
         language: Language::SimplifiedChinese,
         ui_scale: UiScale::P125,
         reduce_motion: true,
@@ -202,4 +205,43 @@ fn retry_after_write_failure_replays_only_local_changes_on_repaired_file() {
     assert!(restarted.truth_table_generation());
     assert_eq!(restarted.language(), Language::SimplifiedChinese);
     assert_eq!(w.preferences(), restarted.preferences());
+}
+
+#[test]
+fn v1_migrates_and_v2_history_is_validated_and_limited_on_edit() {
+    let temp = Temp::new();
+    let path = temp.0.join("preferences.json");
+    let mut ws = Workspace::default();
+    fs::write(&path, r#"{"version":1,"editor":{"show_grid":false}}"#).unwrap();
+    let mut prefs = Preferences::at(Some(path.clone()), &mut ws);
+    assert!(!ws.preferences().show_grid);
+    let a = temp.0.join("a.circ");
+    let b = temp.0.join("b.circ");
+    recent::record(&mut ws, &a);
+    recent::record(&mut ws, &b);
+    recent::record(&mut ws, &a);
+    recent::record(&mut ws, Path::new(""));
+    assert_eq!(ws.recent(), &[a.to_str().unwrap(), b.to_str().unwrap()]);
+    let mut values = ws.preferences();
+    values.workspace.recent_limit = 1;
+    ws.apply_settings(values);
+    prefs.synchronize(&mut ws);
+    let bytes = fs::read(&path).unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&bytes).unwrap()["version"],
+        2
+    );
+    let saved = schema::decode(&bytes).unwrap();
+    assert_eq!(saved.recent, [a.to_str().unwrap()]);
+    assert_eq!(saved.settings, values);
+    for bad in [
+        r#"{"version":2,"recent":["relative.circ"]}"#,
+        r#"{"version":2,"workspace":{"recent_limit":21}}"#,
+        r#"{"version":2,"workspace":{"recent_limit":0}}"#,
+        r#"{"version":2,"workspace":null}"#,
+        r#"{"version":1,"recent":[]}"#,
+        r#"{"version":2,"workspace":{"unknown":true}}"#,
+    ] {
+        assert!(schema::decode(bad.as_bytes()).is_err(), "{bad}");
+    }
 }

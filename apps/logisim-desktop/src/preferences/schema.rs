@@ -1,5 +1,7 @@
-//! Version-one disk representation. The UI owns the validated preference types.
-use logisim_ui::{DefaultZoom, Language, Settings, SimulationMode, TickHz, UiScale};
+//! Versioned disk representation. The UI owns the validated preference types.
+use logisim_ui::{
+    DefaultZoom, Language, Settings, SimulationMode, TickHz, UiScale, WorkspaceSettings,
+};
 use serde::{Deserialize, Serialize};
 
 use logisim_ui::CONFIG_VERSION;
@@ -7,6 +9,10 @@ use logisim_ui::CONFIG_VERSION;
 #[serde(deny_unknown_fields)]
 struct File {
     version: u32,
+    #[serde(default, deserialize_with = "present")]
+    workspace: Option<WorkspaceSettings>,
+    #[serde(default, deserialize_with = "present")]
+    recent: Option<Vec<String>>,
     #[serde(default)]
     general: General,
     #[serde(default)]
@@ -104,30 +110,64 @@ struct Generation {
     truth_table: bool,
 }
 
-pub(super) fn decode(bytes: &[u8]) -> Result<Settings, &'static str> {
+// An omitted section receives defaults. An explicitly null section is invalid.
+fn present<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(
+    d: D,
+) -> Result<Option<T>, D::Error> {
+    T::deserialize(d).map(Some)
+}
+
+#[derive(Default)]
+pub(super) struct Config {
+    pub settings: Settings,
+    pub recent: Vec<String>,
+}
+
+pub(super) fn decode(bytes: &[u8]) -> Result<Config, &'static str> {
     let file: File = serde_json::from_slice(bytes).map_err(|_| "Unknown or invalid settings.")?;
-    if file.version != CONFIG_VERSION {
+    if !matches!(file.version, 1 | CONFIG_VERSION) {
         return Err("Unsupported configuration version.");
+    }
+    if file.version == 1 && (file.recent.is_some() || file.workspace.is_some()) {
+        return Err("Unknown or invalid settings.");
+    }
+    let workspace = file.workspace.unwrap_or_default();
+    let recent = file.recent.unwrap_or_default();
+    if !(1..=20).contains(&workspace.recent_limit)
+        || recent.len() > workspace.recent_limit
+        || recent
+            .iter()
+            .enumerate()
+            .any(|(i, p)| !super::recent::valid(p) || recent[..i].contains(p))
+    {
+        return Err("Unknown or invalid settings.");
     }
     let ui_scale = UiScale::ALL
         .into_iter()
         .find(|s| f64::from(s.percent()) / 100.0 == file.appearance.ui_scale)
         .ok_or("Invalid interface scale.")?;
     let tick_hz = TickHz::new(file.simulation.tick_hz).ok_or("Invalid tick frequency.")?;
-    Ok(Settings {
-        language: file.general.language,
-        ui_scale,
-        reduce_motion: file.appearance.reduce_motion,
-        show_telemetry: file.appearance.show_telemetry,
-        show_grid: file.editor.show_grid,
-        default_zoom: file.editor.default_zoom,
-        simulation_mode: file.simulation.mode,
-        tick_hz,
-        truth_table: file.generation.truth_table,
+    Ok(Config {
+        recent,
+        settings: Settings {
+            workspace,
+            language: file.general.language,
+            ui_scale,
+            reduce_motion: file.appearance.reduce_motion,
+            show_telemetry: file.appearance.show_telemetry,
+            show_grid: file.editor.show_grid,
+            default_zoom: file.editor.default_zoom,
+            simulation_mode: file.simulation.mode,
+            tick_hz,
+            truth_table: file.generation.truth_table,
+        },
     })
 }
-pub(super) fn encode(s: Settings) -> Vec<u8> {
+pub(super) fn encode(config: &Config) -> Vec<u8> {
+    let s = config.settings;
     let file = File {
+        workspace: Some(s.workspace),
+        recent: Some(config.recent.clone()),
         version: CONFIG_VERSION,
         general: General {
             language: s.language,

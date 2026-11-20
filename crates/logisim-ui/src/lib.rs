@@ -26,7 +26,9 @@ mod tests;
 pub use terminal::TtyView;
 mod settings;
 pub use i18n::Language;
-pub use settings::{CONFIG_VERSION, DefaultZoom, Settings, SimulationMode, TickHz, UiScale};
+pub use settings::{
+    CONFIG_VERSION, DefaultZoom, Settings, SimulationMode, TickHz, UiScale, WorkspaceSettings,
+};
 mod libraries;
 mod plugins;
 pub use plugins::{PluginImportTarget, PluginInputTarget};
@@ -73,6 +75,7 @@ pub struct Workspace {
     editor: Editor,
     about_open: bool,
     document: DocumentView,
+    recent: Vec<String>,
     file_actions: Vec<FileAction>,
     fit_pending: bool,
     name_dialog: Option<NameDialog>,

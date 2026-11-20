@@ -1,10 +1,10 @@
 mod registry;
-pub const CONFIG_VERSION: u32 = 1;
+pub const CONFIG_VERSION: u32 = 2;
 mod page;
 pub(crate) use page::Page;
 mod model;
 use crate::{Language, Workspace, i18n::tr, theme};
-pub use model::{DefaultZoom, Settings, TickHz, UiScale};
+pub use model::{DefaultZoom, Settings, TickHz, UiScale, WorkspaceSettings};
 
 /// Host execution preference, independent of the document and its undo history.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

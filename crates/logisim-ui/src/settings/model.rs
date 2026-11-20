@@ -56,8 +56,28 @@ impl Default for TickHz {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct WorkspaceSettings {
+    pub reopen_last: bool,
+    pub recent_limit: usize,
+    pub restore_window: bool,
+    pub restore_panels: bool,
+}
+impl Default for WorkspaceSettings {
+    fn default() -> Self {
+        Self {
+            reopen_last: false,
+            recent_limit: 10,
+            restore_window: true,
+            restore_panels: true,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Settings {
+    pub workspace: WorkspaceSettings,
     pub language: Language,
     pub ui_scale: UiScale,
     pub reduce_motion: bool,
@@ -71,6 +91,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            workspace: WorkspaceSettings::default(),
             language: Language::default(),
             ui_scale: UiScale::default(),
             reduce_motion: false,

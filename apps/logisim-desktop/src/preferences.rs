@@ -1,6 +1,8 @@
 //! Atomic, versioned application preferences. Invalid input is read-only until repaired.
+pub(crate) mod recent;
 mod schema;
 use logisim_ui::{Language, Settings, SimulationMode, Workspace};
+use schema::Config;
 use std::{
     fs,
     io::ErrorKind,
@@ -9,7 +11,7 @@ use std::{
 
 #[derive(Default)]
 struct Loaded {
-    values: Settings,
+    config: Config,
     json: Option<Vec<u8>>,
 }
 struct Issue {
@@ -33,12 +35,12 @@ impl Loaded {
             }),
         };
         if let Some(bytes) = read(path)? {
-            let values = schema::decode(&bytes).map_err(|message| Issue {
+            let config = schema::decode(&bytes).map_err(|message| Issue {
                 path: path.to_owned(),
                 message,
             })?;
             return Ok(Self {
-                values,
+                config,
                 json: Some(bytes),
             });
         }
@@ -53,7 +55,13 @@ impl Loaded {
                 path: old,
                 message: "Unknown or invalid settings.",
             })?;
-        Ok(Self { values, json: None })
+        Ok(Self {
+            config: Config {
+                settings: values,
+                ..Default::default()
+            },
+            json: None,
+        })
     }
 }
 pub(crate) struct Preferences {
@@ -72,7 +80,8 @@ impl Preferences {
             blocked: false,
         };
         state.reload(workspace);
-        workspace.apply_settings(state.loaded.values);
+        workspace.apply_settings(state.loaded.config.settings);
+        workspace.set_recent(state.loaded.config.recent.clone());
         state
     }
     fn reload(&mut self, workspace: &mut Workspace) -> bool {
@@ -100,14 +109,19 @@ impl Preferences {
     }
     /// Re-read the file before retrying a write, preserving independent disk edits.
     fn retry(&mut self, workspace: &mut Workspace) {
-        let baseline = self.loaded.values;
+        let baseline = self.loaded.config.settings;
+        let recent_changed = workspace.recent() != self.loaded.config.recent;
         if self.path.is_none() {
             self.path = config_path();
         }
         if self.reload(workspace) {
+            if !recent_changed {
+                workspace.set_recent(self.loaded.config.recent.clone());
+            }
             workspace.apply_settings(
                 self.loaded
-                    .values
+                    .config
+                    .settings
                     .with_changes(baseline, workspace.preferences()),
             );
         }
@@ -117,18 +131,26 @@ impl Preferences {
             self.retry(workspace);
         }
         let values = workspace.preferences();
-        if self.blocked || values == self.loaded.values {
+        recent::truncate(workspace);
+        if self.blocked
+            || (values == self.loaded.config.settings
+                && workspace.recent() == self.loaded.config.recent)
+        {
             return;
         }
         let path = self.path.as_ref().expect("loaded configuration path");
-        let bytes = schema::encode(values);
+        let config = Config {
+            settings: values,
+            recent: workspace.recent().to_vec(),
+        };
+        let bytes = schema::encode(&config);
         let save = fs::create_dir_all(path.parent().expect("configuration directory"))
             .map_err(|err| err.to_string())
             .and_then(|()| crate::storage::atomic_write(path, &bytes, self.loaded.json.as_deref()));
         match save {
             Ok(()) => {
                 self.loaded = Loaded {
-                    values,
+                    config,
                     json: Some(bytes),
                 }
             }

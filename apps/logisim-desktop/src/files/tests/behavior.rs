@@ -60,11 +60,11 @@ fn cancelling_save_before_new_preserves_document_and_clears_deferred_action() {
     let ctx = egui::Context::default();
     files.request(FileAction::New, &ctx, &mut workspace, &mut sim);
     let dialog = files.dialog.take().unwrap();
-    assert!(matches!(dialog, Dialog::Unsaved(FileAction::New)));
+    assert!(matches!(dialog, Dialog::Unsaved(NextDocument::New)));
     files.respond(dialog, Response::Save, &ctx, &mut workspace, &mut sim);
     let dialog = files.dialog.take().unwrap();
     assert!(matches!(dialog, Dialog::Picker(_)));
-    assert!(matches!(files.after_save, Some(FileAction::New)));
+    assert!(matches!(files.after_save, Some(NextDocument::New)));
     files.respond(dialog, Response::Cancel, &ctx, &mut workspace, &mut sim);
     assert!(!files.busy());
     assert!(files.after_save.is_none());
@@ -74,4 +74,90 @@ fn cancelling_save_before_new_preserves_document_and_clears_deferred_action() {
     files.respond(dialog, Response::Discard, &ctx, &mut workspace, &mut sim);
     assert_eq!(workspace.project(), &Project::default());
     assert!(!files.storage.dirty(workspace.project()));
+}
+
+#[test]
+fn recent_navigation_keeps_the_chosen_target_through_dirty_save_as() {
+    let temp = crate::tests::support::Temp::new();
+    let target = temp.path("target.circ");
+    let copy = temp.path("copy.circ");
+    let project = Project::single("remembered", Circuit::default());
+    std::fs::write(&target, logisim_file::serialize(&project).unwrap()).unwrap();
+    let ctx = egui::Context::default();
+    let mut ws = Workspace::default();
+    let mut sim = Simulator::default();
+    let mut files = Files::default();
+    ws.set_recent(vec![target.to_str().unwrap().into()]);
+    ws.replace_project(Project::single("unsaved", Circuit::default()));
+    for answer in [Response::Cancel, Response::Save] {
+        files.request(FileAction::OpenRecent(0), &ctx, &mut ws, &mut sim);
+        let dialog = files.dialog.take().unwrap();
+        assert!(matches!(dialog, Dialog::Unsaved(NextDocument::Recent(_))));
+        files.respond(dialog, answer, &ctx, &mut ws, &mut sim);
+        assert_eq!(ws.circuit_name(), "unsaved");
+    }
+    let dialog = files.dialog.take().unwrap();
+    files.respond(
+        dialog,
+        Response::Pick(copy.clone()),
+        &ctx,
+        &mut ws,
+        &mut sim,
+    );
+    assert_eq!(ws.circuit_name(), "remembered");
+    assert_eq!(
+        ws.recent(),
+        &[target.to_str().unwrap(), copy.to_str().unwrap()]
+    );
+    files.request(FileAction::ClearRecent, &ctx, &mut ws, &mut sim);
+    assert!(ws.recent().is_empty());
+    assert!(!files.storage.dirty(ws.project()));
+}
+
+#[test]
+fn startup_honors_cli_and_reopen_and_removes_only_the_failed_entry() {
+    let temp = crate::tests::support::Temp::new();
+    let good = temp.path("document.circ");
+    let bad = temp.path("missing.circ");
+    std::fs::write(
+        &good,
+        logisim_file::serialize(&Project::single("opened", Circuit::default())).unwrap(),
+    )
+    .unwrap();
+    let mut ws = Workspace::default();
+    let mut sim = Simulator::default();
+    let mut files = Files::default();
+    ws.set_recent(vec![
+        bad.to_str().unwrap().into(),
+        good.to_str().unwrap().into(),
+    ]);
+    files.startup(None, &mut ws, &mut sim);
+    assert!(!files.busy() && files.storage.path.is_none());
+    let mut values = ws.preferences();
+    values.workspace.reopen_last = true;
+    ws.apply_settings(values);
+    files.startup(None, &mut ws, &mut sim);
+    assert!(matches!(files.dialog, Some(Dialog::Message { .. })));
+    assert!(files.storage.path.is_none());
+    assert_eq!(ws.recent(), &[good.to_str().unwrap()]);
+    files.dialog = None;
+    files.startup(None, &mut ws, &mut sim);
+    assert_eq!(ws.circuit_name(), "opened");
+    ws.set_recent(vec![bad.to_str().unwrap().into()]);
+    files.startup(Some(good.clone()), &mut ws, &mut sim);
+    assert_eq!(
+        ws.recent(),
+        &[good.to_str().unwrap(), bad.to_str().unwrap()]
+    );
+    ws.set_recent(vec![
+        bad.to_str().unwrap().into(),
+        good.to_str().unwrap().into(),
+    ]);
+    files.request(
+        FileAction::Save,
+        &egui::Context::default(),
+        &mut ws,
+        &mut sim,
+    );
+    assert_eq!(ws.recent()[0], bad.to_str().unwrap());
 }

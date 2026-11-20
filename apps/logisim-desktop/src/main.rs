@@ -42,15 +42,13 @@ fn main() -> eframe::Result {
                 files: Default::default(),
                 window_title: String::new(),
             };
-            if let Some(path) = std::env::args_os().nth(1) {
-                logisim_ui::i18n::with_language(app.workspace.language(), || {
-                    app.files.load(
-                        std::path::Path::new(&path),
-                        &mut app.workspace,
-                        &mut app.simulator,
-                    );
-                });
-            }
+            logisim_ui::i18n::with_language(app.workspace.language(), || {
+                app.files.startup(
+                    std::env::args_os().nth(1).map(Into::into),
+                    &mut app.workspace,
+                    &mut app.simulator,
+                );
+            });
             Ok(Box::new(app))
         }),
     )

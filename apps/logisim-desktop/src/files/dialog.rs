@@ -2,7 +2,7 @@
 use super::picker::Picker;
 use eframe::egui;
 use logisim_ui::{
-    FileAction, MemoryImportTarget,
+    MemoryImportTarget,
     dialog::{Dialog as Window, Dismiss},
     i18n::tr,
 };
@@ -24,7 +24,7 @@ pub(super) enum Dialog {
         picker: Picker,
         target: Box<logisim_ui::PluginImportTarget>,
     },
-    Unsaved(FileAction),
+    Unsaved(super::NextDocument),
     Replace {
         path: PathBuf,
         bytes: Vec<u8>,

@@ -3,6 +3,8 @@
 pub enum FileAction {
     New,
     Open,
+    OpenRecent(usize),
+    ClearRecent,
     Save,
     SaveAs,
     ImportMemory,
@@ -53,4 +55,26 @@ impl DocumentView {
             }
         )
     }
+}
+
+impl crate::Workspace {
+    pub fn recent(&self) -> &[String] {
+        &self.recent
+    }
+    pub fn set_recent(&mut self, recent: Vec<String>) {
+        self.recent = recent;
+    }
+}
+
+pub(crate) fn recent_button(ui: &mut egui::Ui, path: &str) -> bool {
+    let name = std::path::Path::new(path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(path);
+    ui.push_id(path, |ui| {
+        ui.add(egui::Button::new(name).truncate())
+            .on_hover_text(path)
+            .clicked()
+    })
+    .inner
 }

@@ -14,11 +14,18 @@ use logisim_ui::{DocumentView, FileAction, Workspace};
 use logisim_ui::{i18n::tr, tf};
 use std::path::{Path, PathBuf};
 
+#[derive(Debug)]
+pub(super) enum NextDocument {
+    New,
+    Browse,
+    Recent(PathBuf),
+    Close,
+}
 pub(crate) struct Files {
     pub plugins: logisim_plugin::Registry,
     pub storage: Storage,
     dialog: Option<Dialog>,
-    after_save: Option<FileAction>,
+    after_save: Option<NextDocument>,
     directory: PathBuf,
     pub allow_close: bool,
 }
@@ -91,9 +98,28 @@ impl Files {
             self.import_warnings(resolution.warnings);
         }
     }
-    pub fn load(&mut self, path: &Path, workspace: &mut Workspace, sim: &mut impl Host) {
+    pub fn startup(
+        &mut self,
+        cli: Option<PathBuf>,
+        workspace: &mut Workspace,
+        sim: &mut impl Host,
+    ) {
+        if let Some(path) = cli {
+            self.load(&path, workspace, sim);
+        } else if workspace.preferences().workspace.reopen_last
+            && let Some(path) = workspace.recent().first().map(PathBuf::from)
+            && !self.load(&path, workspace, sim)
+        {
+            crate::preferences::recent::remove(workspace, &path);
+        }
+    }
+    pub fn load(&mut self, path: &Path, workspace: &mut Workspace, sim: &mut impl Host) -> bool {
         match self.storage.load(path) {
             Ok((circuit, warnings)) => {
+                crate::preferences::recent::record(
+                    workspace,
+                    self.storage.path.as_deref().expect("loaded document path"),
+                );
                 self.directory = self
                     .storage
                     .path
@@ -104,8 +130,15 @@ impl Files {
                 workspace.replace_project(circuit);
                 sim.new_document();
                 self.resolve_plugins(workspace, sim, warnings);
+                true
             }
-            Err(e) => self.error(format!("{}\n\n{}", path.display(), tr(&e))),
+            Err(e) => {
+                if matches!(path.try_exists(), Ok(false)) {
+                    crate::preferences::recent::remove(workspace, path);
+                }
+                self.error(format!("{}\n\n{}", path.display(), tr(&e)));
+                false
+            }
         }
     }
     pub fn request(
@@ -118,50 +151,18 @@ impl Files {
         if self.busy() {
             return;
         }
-        workspace.finish_edit();
-        if matches!(
-            action,
-            FileAction::New | FileAction::Open | FileAction::Close
-        ) && self.storage.dirty(workspace.project())
-        {
-            self.dialog = Some(Dialog::Unsaved(action));
-        } else {
-            self.execute(action, ctx, workspace, sim);
+        if action != FileAction::ClearRecent {
+            workspace.finish_edit();
         }
-    }
-    fn picker(&mut self, mode: Mode) {
-        let suggested = if mode == Mode::Save {
-            self.storage
-                .path
-                .as_ref()
-                .and_then(|p| p.file_name())
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_else(|| "Untitled.circ".into())
-        } else {
-            String::new()
-        };
-        self.dialog = Some(Dialog::Picker(Picker::new(
-            mode,
-            self.directory.clone(),
-            &suggested,
-        )));
-    }
-    fn execute(
-        &mut self,
-        action: FileAction,
-        ctx: &egui::Context,
-        workspace: &mut Workspace,
-        sim: &mut impl Host,
-    ) {
         match action {
-            FileAction::New => {
-                self.plugins = Default::default();
-                workspace.set_plugin_catalogue(vec![]);
-                self.storage = Storage::new();
-                workspace.replace_project(Default::default());
-                sim.new_document();
+            FileAction::New => self.navigate(NextDocument::New, ctx, workspace, sim),
+            FileAction::Open => self.navigate(NextDocument::Browse, ctx, workspace, sim),
+            FileAction::Close => self.navigate(NextDocument::Close, ctx, workspace, sim),
+            FileAction::OpenRecent(i) => {
+                if let Some(path) = workspace.recent().get(i).map(PathBuf::from) {
+                    self.navigate(NextDocument::Recent(path), ctx, workspace, sim);
+                }
             }
-            FileAction::Open => self.picker(Mode::Open),
             FileAction::ImportLibrary => self.picker(Mode::Library),
             FileAction::LoadPlugin => self.picker(Mode::Plugin),
             FileAction::ImportPlugin { component, import } => {
@@ -181,10 +182,7 @@ impl Files {
                 }
             }
             FileAction::SaveAs => self.picker(Mode::Save),
-            FileAction::Close => {
-                self.allow_close = true;
-                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-            }
+            FileAction::ClearRecent => workspace.set_recent(Vec::new()),
             FileAction::Save => {
                 if let Some(path) = self
                     .storage
@@ -199,6 +197,61 @@ impl Files {
             }
         }
     }
+    fn navigate(
+        &mut self,
+        target: NextDocument,
+        ctx: &egui::Context,
+        workspace: &mut Workspace,
+        sim: &mut impl Host,
+    ) {
+        if self.storage.dirty(workspace.project()) {
+            self.dialog = Some(Dialog::Unsaved(target));
+        } else {
+            self.proceed(target, ctx, workspace, sim);
+        }
+    }
+    fn proceed(
+        &mut self,
+        target: NextDocument,
+        ctx: &egui::Context,
+        workspace: &mut Workspace,
+        sim: &mut impl Host,
+    ) {
+        match target {
+            NextDocument::New => {
+                self.plugins = Default::default();
+                workspace.set_plugin_catalogue(vec![]);
+                self.storage = Storage::new();
+                workspace.replace_project(Default::default());
+                sim.new_document();
+            }
+            NextDocument::Browse => self.picker(Mode::Open),
+            NextDocument::Recent(path) => {
+                self.load(&path, workspace, sim);
+            }
+            NextDocument::Close => {
+                self.allow_close = true;
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+        }
+    }
+    fn picker(&mut self, mode: Mode) {
+        let suggested = if mode == Mode::Save {
+            self.storage
+                .path
+                .as_ref()
+                .and_then(|p| p.file_name())
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "Untitled.circ".into())
+        } else {
+            String::new()
+        };
+        self.dialog = Some(Dialog::Picker(Picker::new(
+            mode,
+            self.directory.clone(),
+            &suggested,
+        )));
+    }
     fn save(
         &mut self,
         path: &Path,
@@ -207,13 +260,20 @@ impl Files {
         workspace: &mut Workspace,
         sim: &mut impl Host,
     ) {
+        let save_as = matches!(mode, SaveMode::Selected(_));
         match self.storage.save(workspace.project(), path, mode) {
             Ok(()) => {
+                if save_as {
+                    crate::preferences::recent::record(
+                        workspace,
+                        self.storage.path.as_deref().expect("saved document path"),
+                    );
+                }
                 if let Some(parent) = path.parent() {
                     self.directory = parent.to_path_buf();
                 }
                 if let Some(action) = self.after_save.take() {
-                    self.execute(action, ctx, workspace, sim);
+                    self.proceed(action, ctx, workspace, sim);
                 }
             }
             Err(e) => self.error(format!("{}\n\n{}", path.display(), tr(&e))),
@@ -282,10 +342,10 @@ impl Files {
             }
             (Dialog::Unsaved(action), Response::Save) => {
                 self.after_save = Some(action);
-                self.execute(FileAction::Save, ctx, workspace, sim);
+                self.request(FileAction::Save, ctx, workspace, sim);
             }
             (Dialog::Unsaved(action), Response::Discard) => {
-                self.execute(action, ctx, workspace, sim)
+                self.proceed(action, ctx, workspace, sim)
             }
             (Dialog::Replace { path, bytes }, Response::Replace) => {
                 self.save(&path, SaveMode::Selected(Some(&bytes)), ctx, workspace, sim)
