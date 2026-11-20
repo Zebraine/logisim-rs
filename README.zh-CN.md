@@ -35,7 +35,7 @@
 | --- | --- |
 | Linux x86-64 | `./logisim-rs`；基于 Ubuntu 24.04 构建，需要 Fontconfig 和可用的图形驱动 |
 | Windows x86-64 | `logisim-rs.exe` |
-| macOS 15+ | 打开 `Logisim rs.app`（Apple Silicon）。v0.2.0 不再提供 Intel 包。 |
+| macOS 15+ | 打开 `Logisim rs.app`（Apple Silicon）；Intel 包仅 v0.1.0 提供。 |
 
 Windows/macOS 包未签名或公证。本版本的界面实机验证在 Linux X11 上完成；其他平台包由同一发布流程构建，但尚未在对应系统上人工验证界面。
 
@@ -132,6 +132,7 @@ cargo test --workspace --all-features --locked --offline
 
 - Joystick 的标签字体不写入现有 `.circ` 格式；重开后保持固有字号 12，即使配置了其他默认标签字号。
 - 深色模式下，自定义封装会增加对比度轮廓；插件内部仍由插件作者绘制，宿主只增加元件外围边界。
+- Print 使用系统默认打印机。本版本未验证实体出纸及 Windows/macOS 的打印处理器；已进入系统打印队列的作业须从队列取消。
 - 界面在 Linux X11 上做过人工验证；本版本尚未在 Windows、macOS 和原生 Wayland 上人工验证界面。
 
 ## 许可证

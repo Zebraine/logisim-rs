@@ -35,7 +35,7 @@ Download a package for your platform and its `.sha256` checksum from [Releases](
 | --- | --- |
 | Linux x86-64 | `./logisim-rs`; built on Ubuntu 24.04, requires Fontconfig and a working graphics driver |
 | Windows x86-64 | `logisim-rs.exe` |
-| macOS 15+ | Open `Logisim rs.app` (Apple Silicon). v0.2.0 no longer ships an Intel build. |
+| macOS 15+ | Open `Logisim rs.app` (Apple Silicon); an Intel build was only provided for v0.1.0. |
 
 The Windows and macOS packages are not signed or notarized. UI validation for this release was performed on Linux X11; the other packages are built by the same release workflow but have not been manually UI-tested on their platforms.
 
@@ -132,6 +132,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the development and release workflow.
 
 - A Joystick's label font is not serialized in the existing `.circ` format; it keeps its intrinsic size of 12 after reopening, even if a different default label size is configured.
 - In Dark mode, custom subcircuit artwork receives a contrast outline, but plugin interiors are drawn by the plugin author. The host only adds a boundary around the plugin component.
+- Print uses the system default printer. Physical paper output and the Windows/macOS print handlers were not verified in this release; jobs already accepted by the print queue must be cancelled there.
 - The UI has been manually validated on Linux X11. Windows, macOS, and native Wayland have not been manually UI-tested in this release.
 
 ## License
