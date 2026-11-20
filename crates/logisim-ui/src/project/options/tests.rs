@@ -30,6 +30,45 @@ fn rect(labels: &[(String, Rect)], text: &str) -> Rect {
         .1
 }
 
+fn click_at(ctx: &Context, app: &mut Workspace, pos: Pos2, size: Vec2) {
+    for pressed in [true, false] {
+        frame_at_size(
+            ctx,
+            app,
+            vec![
+                Event::PointerMoved(pos),
+                Event::PointerButton {
+                    pos,
+                    pressed,
+                    button: PointerButton::Primary,
+                    modifiers: Modifiers::NONE,
+                },
+            ],
+            size,
+        );
+    }
+}
+
+fn scroll_body(ctx: &Context, app: &mut Workspace, size: Vec2, pointer: Pos2) {
+    for _ in 0..6 {
+        frame_at_size(
+            ctx,
+            app,
+            vec![
+                Event::PointerMoved(pointer),
+                Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Line,
+                    delta: vec2(0., -3.),
+                    phase: egui::TouchPhase::Move,
+                    source: egui::MouseWheelSource::Unknown,
+                    modifiers: Modifiers::NONE,
+                },
+            ],
+            size,
+        );
+    }
+}
+
 #[test]
 fn browsing_blocks_canvas_edits_and_opening_a_definition_keeps_history_empty() {
     let ctx = Context::default();
@@ -79,22 +118,7 @@ fn browsing_blocks_canvas_edits_and_opening_a_definition_keeps_history_empty() {
         .unwrap()
         .1
         .center();
-    for pressed in [true, false] {
-        frame_at_size(
-            &ctx,
-            &mut app,
-            vec![
-                Event::PointerMoved(pos),
-                Event::PointerButton {
-                    pos,
-                    pressed,
-                    button: PointerButton::Primary,
-                    modifiers: Modifiers::NONE,
-                },
-            ],
-            size,
-        );
-    }
+    click_at(&ctx, &mut app, pos, size);
     assert!(!app.project_options_open && !app.editor.can_undo());
     assert_eq!(app.active_circuit(), child);
     assert_eq!(app.project(), &project);
@@ -120,14 +144,16 @@ fn missing_dependency_opens_file_workflow_without_editing_the_project() {
     assert!(!app.editor.can_undo());
 
     let source = &project.plugin_sources[0];
-    app.set_plugin_catalogue(vec![Manifest {
-        abi: 1,
-        id: source.plugin.clone(),
-        version: source.version.clone(),
-        name: "Test module".into(),
-        tools: Vec::new(),
-    }
-    .into()]);
+    app.set_plugin_catalogue(vec![
+        Manifest {
+            abi: 1,
+            id: source.plugin.clone(),
+            version: source.version.clone(),
+            name: "Test module".into(),
+            tools: Vec::new(),
+        }
+        .into(),
+    ]);
     app.project_options_open = true;
     let labels = overview(&ctx, &mut app, vec2(1200., 820.));
     assert!(has(&labels, "Loaded"));
@@ -135,6 +161,50 @@ fn missing_dependency_opens_file_workflow_without_editing_the_project() {
     click(&ctx, &mut app, "Load Plugin…");
     assert_eq!(app.take_file_actions(), [FileAction::LoadPlugin]);
     assert!(!app.project_options_open);
+}
+
+#[test]
+fn translated_repair_and_load_actions_fit_both_themes_and_viewports() {
+    for language in Language::ALL {
+        for theme in [crate::ThemeMode::Light, crate::ThemeMode::Dark] {
+            for size in [vec2(720., 480.), vec2(1200., 820.)] {
+                let ctx = Context::default();
+                crate::configure(&ctx);
+                let mut app = Workspace::default();
+                app.apply_settings(crate::Settings {
+                    theme,
+                    language,
+                    ..Default::default()
+                });
+                app.editor
+                    .session
+                    .project
+                    .plugin_sources
+                    .push(PluginSource {
+                        plugin: "test.module".into(),
+                        version: "1".into(),
+                        path: format!("{}tool.wasm", "long/path/".repeat(40)),
+                        fallback: "/backup/tool.wasm".into(),
+                    });
+                app.project_options_open = true;
+                overview(&ctx, &mut app, size);
+                scroll_body(&ctx, &mut app, size, size.to_pos2() / 2.);
+                let labels = overview(&ctx, &mut app, size);
+                let at = |key| rect(&labels, with_language(language, || tr(key)));
+                let load = at("Load Plugin…");
+                let repair = at("Resolve missing…");
+                let close = at("Close");
+                let bounds = ctx
+                    .memory(|m| m.area_rect(egui::Id::unique("project-options")))
+                    .unwrap();
+                assert!(bounds.contains_rect(load) && bounds.contains_rect(repair));
+                assert!(load.right() < repair.left() && repair.bottom() < close.top());
+                click_at(&ctx, &mut app, repair.center(), size);
+                assert_eq!(app.take_file_actions(), [FileAction::ResolvePlugins]);
+                assert!(!app.project_options_open);
+            }
+        }
+    }
 }
 
 #[test]
@@ -292,40 +362,9 @@ fn bilingual_overview_bounds_truncation_empty_states_and_disabled_single_main() 
             );
             assert!(main.bottom() < close.top());
             let pos = main.center();
-            for pressed in [true, false] {
-                frame_at_size(
-                    &ctx,
-                    &mut app,
-                    vec![
-                        Event::PointerMoved(pos),
-                        Event::PointerButton {
-                            pos,
-                            pressed,
-                            button: PointerButton::Primary,
-                            modifiers: Modifiers::NONE,
-                        },
-                    ],
-                    size,
-                );
-            }
+            click_at(&ctx, &mut app, pos, size);
             assert!(app.project_options_open && !app.editor.can_undo());
-            for _ in 0..6 {
-                frame_at_size(
-                    &ctx,
-                    &mut app,
-                    vec![
-                        Event::PointerMoved(bounds.center()),
-                        Event::MouseWheel {
-                            unit: egui::MouseWheelUnit::Line,
-                            delta: vec2(0., -3.),
-                            phase: egui::TouchPhase::Move,
-                            source: egui::MouseWheelSource::Unknown,
-                            modifiers: Modifiers::NONE,
-                        },
-                    ],
-                    size,
-                );
-            }
+            scroll_body(&ctx, &mut app, size, bounds.center());
             let bottom = overview(&ctx, &mut app, size);
             for key in [
                 "No plugin dependencies.",
@@ -334,6 +373,7 @@ fn bilingual_overview_bounds_truncation_empty_states_and_disabled_single_main() 
             ] {
                 assert!(has(&bottom, translate(key)), "{lang:?} {size}: {key}");
             }
+            assert!(!has(&bottom, translate("Resolve missing…")));
             assert_eq!(rect(&bottom, translate("Close")), close);
         }
     }

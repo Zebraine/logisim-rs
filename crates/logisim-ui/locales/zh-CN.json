@@ -704,6 +704,7 @@
     "Reset workspace layout": "重置工作区布局",
     "Resize text and controls throughout the app.": "调整整个应用的文字和控件大小。",
     "Resizing preserves the upper-left connections; removed cells are discarded.": "调整尺寸保留左上区域的连接，移除的单元会被丢弃。",
+    "Resolve missing…": "修复缺失插件…",
     "Restore default": "恢复默认值",
     "Restore default preferences. Your current circuit and workspace layout are preserved.": "恢复默认偏好设置。保留当前电路和工作区布局。",
     "Restore inspector layout": "恢复检查器布局",
