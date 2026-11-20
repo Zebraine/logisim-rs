@@ -6,10 +6,55 @@ use std::{
     process::ExitCode,
 };
 
+fn simulation_request(command: &std::ffi::OsStr, options: &[OsString]) -> Result<Request> {
+    let tool = match command.to_str() {
+        Some("open") => "simulation_open",
+        Some("state") => "simulation_state",
+        Some("set-input") => "simulation_set_input",
+        Some("settle") => "simulation_settle",
+        Some("step") => "simulation_step",
+        Some("tick") => "simulation_tick",
+        Some("reset") => "simulation_reset",
+        Some("enable") => "simulation_set_enabled",
+        _ => return Err(Error::invalid("Unknown simulation command.")),
+    };
+    let mut arguments = serde_json::Map::new();
+    let mut words = options.iter();
+    while let Some(option) = words.next() {
+        let key = option
+            .to_str()
+            .and_then(|s| s.strip_prefix("--"))
+            .ok_or_else(|| Error::invalid("Expected a named simulation option."))?;
+        if arguments.contains_key(key) {
+            return Err(Error::invalid(format!("Duplicate --{key}.")));
+        }
+        let value = if key == "unknown" {
+            true.into()
+        } else {
+            let word = words
+                .next()
+                .and_then(|w| w.to_str())
+                .filter(|s| !s.is_empty() && !s.starts_with("--"))
+                .ok_or_else(|| Error::invalid(format!("Missing value for --{key}.")))?;
+            match key {
+                "id" | "value" => word.parse::<u64>().map_err(Error::invalid)?.into(),
+                "enabled" => word.parse::<bool>().map_err(Error::invalid)?.into(),
+                "session" | "mode" => word.into(),
+                _ => return Err(Error::invalid(format!("Unknown --{key}."))),
+            }
+        };
+        arguments.insert(key.into(), value);
+    }
+    Request::from_json(serde_json::json!({"tool":tool, "arguments":arguments}))
+}
+
 fn parse(args: &[OsString]) -> Result<Request> {
     let [group, command, options @ ..] = args else {
         return Err(Error::invalid("Expected a group and command."));
     };
+    if group == "simulation" {
+        return simulation_request(command, options);
+    }
     let mut flags = std::collections::BTreeMap::new();
     let mut mode = None;
     let mut no_backup = false;
@@ -93,11 +138,6 @@ fn parse(args: &[OsString]) -> Result<Request> {
                 }
                 ("project", "snapshot") => Request::ProjectSnapshot { session },
                 ("project", "close") => Request::ProjectClose { session },
-                ("simulation", "open") => Request::SimulationOpen {
-                    session,
-                    mode: Default::default(),
-                },
-                ("simulation", "state") => Request::SimulationState { session },
                 _ => return Err(Error::invalid("Unknown command.")),
             }
         }

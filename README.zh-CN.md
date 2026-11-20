@@ -150,7 +150,24 @@ logisim-agent settings patch --config /path/to/preferences.json --ops edits.json
 {"tool":"project_close","arguments":{"session":"ID_FROM_OPEN"}}
 ```
 
-将 `ID_FROM_OPEN` 换成首次返回的 `data.session_id`。MCP 提供相同的十个操作。工程快照包含全部电路定义，仿真快照给出主电路初始传播后的端口和导线四态值、插件加载状态与诊断。时钟保持在第零拍。关闭会话或退出进程即释放快照。
+后续请求使用打开工程时返回的 `data.session_id`。CLI 和 MCP 提供相同的 16 项操作。工程快照覆盖全部电路定义，仿真状态包含根实例的信号、时钟与传播计数、诊断和插件状态。
+
+### 控制仿真
+
+首次打开时可选 `auto`（默认）、`stable` 或 `event`。Auto 和 Stable 优先使用编译传播，预检回退的原因记录在 `fallback_reason`。运行中发生故障会暂停。同一会话再次打开会返回 `created:false`、当前模式和状态。保存工程保留仿真，已应用且改变工程的补丁使仿真失效，关闭会话释放仿真。
+
+在同一个 `logisim-agent cli` 进程中，可逐行发送命令参数数组。
+
+```jsonl
+["simulation","open","--session","ID_FROM_OPEN","--mode","event"]
+["simulation","enable","--session","ID_FROM_OPEN","--enabled","false"]
+["simulation","set-input","--session","ID_FROM_OPEN","--id","1","--value","1"]
+["simulation","step","--session","ID_FROM_OPEN"]
+["simulation","settle","--session","ID_FROM_OPEN"]
+["simulation","tick","--session","ID_FROM_OPEN"]
+```
+
+从根电路快照取输入 ID。输入 Pin、Switch 和 DipSwitch 接受其控制位宽内的无符号数，三态输入 Pin 也支持 `--unknown`。启用时输入会传播至稳定，暂停时可用 `step` 推进一个事件批次、`settle` 完成传播，或用 `enable --enabled true` 恢复传播。网络稳定后，`tick` 推进一拍并完成传播。实例层级无时钟时返回 `no_clocks`，有待传播事件时返回 `not_settled`。时钟只由显式 tick 推进。Reset 恢复初始信号，重新收敛后显示的拍数与步数均为零。每个成功控制操作返回 `action`、`changed` 和操作后的 `state`。
 
 ### 编辑工程会话
 

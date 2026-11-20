@@ -241,3 +241,39 @@ fn running_state_is_per_session_and_survives_only_nonchanging_project_actions() 
         "unknown_session"
     );
 }
+
+#[test]
+fn hierarchy_initialization_error_preserves_requested_mode_and_rejects_controls() {
+    // This is a valid document, but its active instance path exceeds the simulator's depth limit.
+    let mut project = Project::default();
+    let mut parent = project.main;
+    for depth in 1..=34 {
+        let child = project.add(format!("level-{depth}")).unwrap();
+        let instance = project.instance(child, Point::ZERO).unwrap();
+        project
+            .circuit_mut(parent)
+            .unwrap()
+            .circuit
+            .add_component(instance);
+        parent = child;
+    }
+    let mut session = Session::new(&project);
+    let initial = session
+        .call("simulation_open", json!({"mode":"event"}))
+        .unwrap();
+    assert_eq!(initial["engine"], "event");
+    assert!(initial["error"].as_str().unwrap().contains("Hierarchy"));
+    assert_eq!(initial["enabled"], false);
+    for action in [
+        "simulation_step",
+        "simulation_tick",
+        "simulation_settle",
+        "simulation_reset",
+    ] {
+        assert_eq!(
+            session.call(action, json!({})).unwrap_err().code,
+            "invalid_state"
+        );
+    }
+    assert_eq!(session.state()["ticks"], 0);
+}

@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 use std::io::{BufRead, Write};
 
 const REVISION: &str = "2025-11-25";
-const TOOLS: [(&str, &str); 10] = [
+const TOOLS: [(&str, &str); 16] = [
     (
         "settings_catalog",
         "List portable v16 preference keys, defaults and allowed values.",
@@ -39,11 +39,35 @@ const TOOLS: [(&str, &str); 10] = [
     ),
     (
         "simulation_open",
-        "Initialize and settle a read-only simulation of the main circuit.",
+        "Open the root simulation and return current state. Reopening retains the first engine selection and current runtime.",
     ),
     (
         "simulation_state",
-        "Read initialized signals, plugin status and diagnostics.",
+        "Read current four-state signals, counters, plugin status and diagnostics.",
+    ),
+    (
+        "simulation_set_input",
+        "Set a root Pin, Switch or DipSwitch input. Enabled propagation settles immediately.",
+    ),
+    (
+        "simulation_settle",
+        "Finish pending propagation without advancing the clock.",
+    ),
+    (
+        "simulation_step",
+        "Execute one event propagation batch, including when paused.",
+    ),
+    (
+        "simulation_tick",
+        "Advance one tick in a settled hierarchy containing a clock, then settle.",
+    ),
+    (
+        "simulation_reset",
+        "Reset the session simulation and settle its initial signals.",
+    ),
+    (
+        "simulation_set_enabled",
+        "Pause automatic propagation or resume and drain pending work.",
     ),
 ];
 
@@ -112,15 +136,27 @@ fn tool_list() -> Value {
                 json!({"session":string,"expected_sha256":{"type":"string","pattern":"^[0-9a-fA-F]{64}$"},"backup":{"type":"boolean","default":true}}),
                 json!(["session"]),
             ),
+            "simulation_open" => (
+                json!({"session":string, "mode":{"type":"string", "enum":["auto","stable","event"], "default":"auto"}}),
+                json!(["session"]),
+            ),
+            "simulation_set_input" => (
+                json!({"session":string, "id":{"type":"integer","minimum":1},
+                       "value":{"type":"integer","minimum":0,"maximum":u32::MAX}, "unknown":{"const":true}}),
+                json!(["session", "id"]),
+            ),
+            "simulation_set_enabled" => (
+                json!({"session":string, "enabled":{"type":"boolean"}}),
+                json!(["session", "enabled"]),
+            ),
             "project_open" => (json!({"path": string}), json!(["path"])),
             _ => (json!({"session": string}), json!(["session"])),
         };
-        tools.push(json!({
-            "name": name, "description": description, "inputSchema": {
-                "type": "object", "properties": properties,
-                "required": required, "additionalProperties": false
-            }
-        }));
+        let mut schema = json!({"type":"object", "properties":properties, "required":required, "additionalProperties":false});
+        if name == "simulation_set_input" {
+            schema["oneOf"] = json!([{"required":["value"]},{"required":["unknown"]}]);
+        }
+        tools.push(json!({"name":name, "description":description, "inputSchema":schema}));
     }
     json!({"tools":tools})
 }
@@ -206,7 +242,16 @@ impl Connection {
                     .unwrap_or_else(|| json!({}));
                 let request = Request::from_json(json!({"tool":name,"arguments":arguments}))
                     .map_err(|e| Failure(-32602, e))?;
-                let data = self.service.call(request).map_err(|e| Failure(-32000, e))?;
+                let data = self.service.call(request).map_err(|e| {
+                    Failure(
+                        if e.code == "invalid_arguments" {
+                            -32602
+                        } else {
+                            -32000
+                        },
+                        e,
+                    )
+                })?;
                 let result = envelope(Ok(data));
                 Ok(
                     json!({"content":[{"type":"text","text":result.to_string()}],"structuredContent":result}),

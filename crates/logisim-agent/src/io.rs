@@ -1,3 +1,4 @@
+mod json;
 use crate::{Error, Result};
 use serde_json::Value;
 use std::{
@@ -62,7 +63,15 @@ pub fn lines(
             }
             Err(Error::new("too_large", "Request exceeds 8 MiB."))
         } else {
-            serde_json::from_slice(&bytes).map_err(|e| Error::new("invalid_json", e))
+            serde_json::from_slice::<json::Message>(&bytes)
+                .map(|message| message.0)
+                .map_err(|e| {
+                    if e.is_data() {
+                        Error::invalid(e)
+                    } else {
+                        Error::new("invalid_json", e)
+                    }
+                })
         };
         handle(value)?;
     }

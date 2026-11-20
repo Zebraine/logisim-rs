@@ -150,7 +150,24 @@ For a circuit, run `logisim-agent cli` and send one JSON object per line in the 
 {"tool":"project_close","arguments":{"session":"ID_FROM_OPEN"}}
 ```
 
-Use the returned `data.session_id` in subsequent requests. The same ten operations are available over MCP. A project snapshot covers every circuit definition. Simulation state describes the main circuit after initial propagation, with four-state port and wire values, dependency status and diagnostics. Clocks remain at tick zero. Closing the session or its process releases the in-memory snapshot.
+Use the returned `data.session_id` in subsequent requests. CLI and MCP expose the same 16 operations. The project snapshot covers every circuit definition. Simulation state includes signals from the active root instance, clock and propagation counters, diagnostics and plugin status.
+
+### Controlling a simulation
+
+Open the simulation with `mode` set to `auto` (default), `stable` or `event`. Auto and Stable try compiled propagation and report a preflight fallback in `fallback_reason`. A runtime fault pauses execution. Opening the same session again returns `created:false` and its current mode and state. Saving the project retains the simulation. An applied project change invalidates it, and closing the session releases it.
+
+Send these argument arrays on stdin to the same running `logisim-agent cli` process.
+
+```jsonl
+["simulation","open","--session","ID_FROM_OPEN","--mode","event"]
+["simulation","enable","--session","ID_FROM_OPEN","--enabled","false"]
+["simulation","set-input","--session","ID_FROM_OPEN","--id","1","--value","1"]
+["simulation","step","--session","ID_FROM_OPEN"]
+["simulation","settle","--session","ID_FROM_OPEN"]
+["simulation","tick","--session","ID_FROM_OPEN"]
+```
+
+Use an input ID from the root circuit. Input Pins, Switches and DipSwitches accept unsigned values within their control width. Three-state input Pins also accept `--unknown`. Enabled inputs propagate immediately. Pausing leaves pending work for a single event batch (`step`), full propagation (`settle`) or resumption (`enable --enabled true`). A tick requires a settled network and advances exactly once, including propagation. A clockless hierarchy returns `no_clocks`, and pending work returns `not_settled`. Only an explicit tick advances the clock. Reset restores initial signals and reports zero ticks and steps at the settled reset boundary. Each successful control returns `action`, `changed` and the resulting `state`.
 
 ### Editing a project session
 

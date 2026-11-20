@@ -93,13 +93,13 @@ fn mcp_handshake_tools_errors_and_session_lifetime_match_cli() {
     assert_eq!(init["result"]["protocolVersion"], "2025-11-25");
     m.send(json!({"jsonrpc":"2.0","method":"notifications/initialized"}));
     let tools = m.call("tools/list", json!({}));
-    assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 10);
+    assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 16);
     assert_eq!(
         m.tool("settings_patch", json!({"config":"whatever","ops":[]}))["error"]["code"],
         -32602
     );
     assert_eq!(
-        m.tool("simulation_tick", json!({}))["error"]["data"]["code"],
+        m.tool("simulation_run_forever", json!({}))["error"]["data"]["code"],
         "unknown_tool"
     );
     for invalid in [
@@ -257,4 +257,162 @@ fn project_edits_have_the_same_outcome_over_cli_flags_and_mcp() {
     cli.finish();
     m.finish();
     fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn simulation_controls_match_on_both_transports_and_invalid_requests_leave_state_intact() {
+    let path = std::env::temp_dir().join(format!(
+        "agent-controls-{:016x}.circ",
+        getrandom::u64().unwrap()
+    ));
+    let xml = r##"<project source="logisim-rs-plugin-v1" version="1.0"><lib name="w" desc="#Wiring"/><main name="main"/><circuit name="main"><comp lib="w" name="Pin" loc="(10,20)"><a name="tristate" val="true"/></comp><comp lib="w" name="Clock" loc="(100,20)"/></circuit></project>"##;
+    std::fs::write(&path, xml).unwrap();
+    let mut cli = Client::start(&["project", "open", "--path", path.to_str().unwrap()]);
+    let a = cli.read()["data"]["session_id"].clone();
+    let mut mcp = Client::start(&["mcp"]);
+    mcp.call("initialize",json!({"protocolVersion":"2025-11-25","clientInfo":{"name":"control","version":"1"},"capabilities":{}}));
+    mcp.send(json!({"jsonrpc":"2.0","method":"notifications/initialized"}));
+    let b=mcp.tool("project_open",json!({"path":path}))["result"]["structuredContent"]["data"]["session_id"].clone();
+
+    // Strip only per-process identity. All signals, counters, modes, action metadata and
+    // error details must otherwise match, even after a rejected frame.
+    fn local_ids(mut data: Value) -> Value {
+        for key in ["/session_id", "/state/session_id"] {
+            if let Some(id) = data.pointer_mut(key) {
+                *id = "session".into();
+            }
+        }
+        data
+    }
+    let commands = [
+        (
+            "open",
+            "simulation_open",
+            vec!["--mode", "event"],
+            json!({"mode":"event"}),
+        ),
+        (
+            "enable",
+            "simulation_set_enabled",
+            vec!["--enabled", "false"],
+            json!({"enabled":false}),
+        ),
+        (
+            "set-input",
+            "simulation_set_input",
+            vec!["--id", "1", "--value", "1"],
+            json!({"id":1,"value":1}),
+        ),
+        ("tick", "simulation_tick", vec![], json!({})),
+        ("step", "simulation_step", vec![], json!({})),
+        ("settle", "simulation_settle", vec![], json!({})),
+        (
+            "enable",
+            "simulation_set_enabled",
+            vec!["--enabled", "true"],
+            json!({"enabled":true}),
+        ),
+        (
+            "set-input",
+            "simulation_set_input",
+            vec!["--id", "1", "--unknown"],
+            json!({"id":1,"unknown":true}),
+        ),
+        ("tick", "simulation_tick", vec![], json!({})),
+        ("reset", "simulation_reset", vec![], json!({})),
+        ("state", "simulation_state", vec![], json!({})),
+    ];
+    let mut last = Value::Null;
+    for (command, tool, flags, mut args) in commands {
+        let mut argv = vec![
+            json!("simulation"),
+            json!(command),
+            json!("--session"),
+            a.clone(),
+        ];
+        argv.extend(flags.into_iter().map(Value::from));
+        cli.send(argv.into());
+        args["session"] = b.clone();
+        let left = cli.read();
+        let right = mcp.tool(tool, args);
+        if command == "tick"
+            && last["state"]["pending_count"]
+                .as_u64()
+                .is_some_and(|n| n > 0)
+        {
+            assert_eq!(left["error"]["code"], "not_settled");
+            assert_eq!(left["error"], right["error"]["data"]);
+        } else {
+            assert_eq!(left["ok"], true, "{tool}: {left}");
+            assert_eq!(
+                local_ids(left["data"].clone()),
+                local_ids(right["result"]["structuredContent"]["data"].clone()),
+                "{tool}"
+            );
+            last = left["data"].clone();
+        }
+    }
+
+    for args in [
+        json!({"id":1}),
+        json!({"value":1}),
+        json!({"id":1,"value":1,"unknown":true}),
+        json!({"id":1,"unknown":false}),
+        json!({"id":1,"value":null}),
+        json!({"id":1,"value":-1}),
+        json!({"id":1,"value":4294967296u64}),
+        json!({"id":1,"value":1,"path":[]}),
+    ] {
+        let mut args = args;
+        args["session"] = b.clone();
+        assert_eq!(
+            mcp.tool("simulation_set_input", args)["error"]["data"]["code"],
+            "invalid_arguments"
+        );
+    }
+    for argv in [
+        json!([
+            "simulation",
+            "enable",
+            "--session",
+            a,
+            "--enabled",
+            "true",
+            "--enabled",
+            "false"
+        ]),
+        json!(["simulation", "open", "--session", a, "--mode", "other"]),
+        json!([
+            "simulation",
+            "set-input",
+            "--session",
+            a,
+            "--id",
+            "1",
+            "--value",
+            "0",
+            "--unknown"
+        ]),
+        json!(["simulation", "step", "--session", a, "--id", "1"]),
+        json!(["simulation", "tick", "--session"]),
+    ] {
+        cli.send(argv);
+        assert_eq!(cli.read()["error"]["code"], "invalid_arguments");
+    }
+    let dup = format!(r#"{{"session":{b},"enabled":false,"enabled":true}}"#);
+    writeln!(mcp.process.stdin.as_mut().unwrap(),r#"{{"jsonrpc":"2.0","id":12,"method":"tools/call","params":{{"name":"simulation_set_enabled","arguments":{dup}}}}}"#).unwrap();
+    assert_eq!(mcp.read()["error"]["data"]["code"], "invalid_arguments");
+    writeln!(cli.process.stdin.as_mut().unwrap(),r#"{{"tool":"simulation_set_enabled","arguments":{{"session":{a},"enabled":false,"enabled":true}}}}"#).unwrap();
+    assert_eq!(cli.read()["error"]["code"], "invalid_arguments");
+    cli.send(json!(["simulation", "state", "--session", a]));
+    assert_eq!(cli.read()["data"], last);
+    let state = mcp.tool("simulation_state", json!({"session":b}));
+    assert_eq!(
+        local_ids(state["result"]["structuredContent"]["data"].clone()),
+        local_ids(last)
+    );
+    cli.finish();
+    mcp.finish();
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), xml);
+    std::fs::remove_file(path).unwrap();
 }

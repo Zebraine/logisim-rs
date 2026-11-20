@@ -136,7 +136,10 @@ impl Runtime {
         let mut runtime = Self {
             sim,
             mode,
-            engine: Engine::Stable,
+            engine: match mode {
+                SimulationMode::Event => Engine::Event { fallback: None },
+                SimulationMode::Stable | SimulationMode::Auto => Engine::Stable,
+            },
             plugins,
             failure: None,
             step_origin: 0,
