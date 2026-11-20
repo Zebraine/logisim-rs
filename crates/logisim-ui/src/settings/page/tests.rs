@@ -1542,3 +1542,155 @@ fn advanced_settings_file_buttons_dispatch_in_both_languages_and_window_sizes() 
         }
     }
 }
+
+#[test]
+fn compact_help_is_visible_hoverable_and_keyboard_reachable_without_moving_controls() {
+    use egui::{Event, Key, Pos2, Rect};
+    let entry = REGISTRY
+        .iter()
+        .find(|e| e.key == "editor.default_gate_size")
+        .unwrap();
+    for language in Language::ALL {
+        let t = |key| crate::i18n::with_language(language, || tr(key));
+        for size in [vec2(720., 480.), vec2(1200., 820.)] {
+            let ctx = Context::default();
+            crate::configure(&ctx);
+            let mut w = Workspace {
+                settings_open: true,
+                ..Default::default()
+            };
+            w.set_language(language);
+            w.settings_page.query = entry.key.into();
+            let render = |w: &mut Workspace, events| frame_at_size(&ctx, w, events, size);
+            for _ in 0..3 {
+                render(&mut w, vec![]);
+            }
+            let rect = |labels: &[(String, Rect)], text: &str| {
+                labels.iter().rfind(|(s, _)| s == text).map(|(_, r)| *r)
+            };
+            let normal = render(&mut w, vec![]);
+            assert!(rect(&normal, "?").is_none());
+            assert!(rect(&normal, t(entry.help)).is_some());
+            w.apply_settings(Settings {
+                density: crate::Density::Compact,
+                ..w.preferences()
+            });
+            for _ in 0..3 {
+                render(&mut w, vec![]);
+            }
+            let compact = render(&mut w, vec![]);
+            let mark = rect(&compact, "?").unwrap();
+            let control = rect(&compact, t("Narrow")).unwrap();
+            assert!(
+                rect(&compact, t(entry.label)).unwrap().right() < mark.left()
+                    && mark.right() < control.left()
+            );
+            assert!(rect(&compact, t(entry.help)).is_none());
+            ctx.global_style_mut(|s| {
+                s.interaction.tooltip_delay = 0.;
+                s.interaction.show_tooltips_only_when_still = false;
+            });
+            render(&mut w, vec![Event::PointerMoved(mark.center())]);
+            render(&mut w, vec![]);
+            let hover = render(&mut w, vec![]);
+            assert!(
+                Rect::from_min_size(Pos2::ZERO, size)
+                    .contains_rect(rect(&hover, t(entry.help)).unwrap())
+            );
+            tap(&ctx, size, &mut w, mark.center());
+            let help_id = ctx.memory(|m| m.focused()).unwrap();
+            render(&mut w, vec![Event::PointerMoved(Pos2::ZERO)]);
+            assert!(rect(&render(&mut w, vec![]), t(entry.help)).is_some());
+            let tab = |shift| Event::Key {
+                key: Key::Tab,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: Modifiers {
+                    shift,
+                    ..Modifiers::NONE
+                },
+            };
+            render(&mut w, vec![tab(false)]);
+            render(&mut w, vec![]);
+            assert_ne!(ctx.memory(|m| m.focused()), Some(help_id));
+            render(&mut w, vec![tab(true)]);
+            for _ in 0..2 {
+                render(&mut w, vec![]);
+            }
+            let focused = render(&mut w, vec![]);
+            assert_eq!(ctx.memory(|m| m.focused()), Some(help_id));
+            assert!(rect(&focused, t(entry.help)).is_some());
+            assert_eq!(rect(&focused, t("Narrow")), Some(control));
+            w.settings_page.query = "file.save".into();
+            for _ in 0..2 {
+                render(&mut w, vec![]);
+            }
+            let shortcuts = render(&mut w, vec![]);
+            assert!(rect(&shortcuts, t("Save")).is_some() && rect(&shortcuts, "?").is_none());
+        }
+    }
+}
+
+#[test]
+fn compact_help_covers_disabled_and_custom_actions_without_activating_them() {
+    let ctx = Context::default();
+    crate::configure(&ctx);
+    let mut w = Workspace {
+        settings_open: true,
+        ..Default::default()
+    };
+    let mut values = w.preferences();
+    values.density = crate::Density::Compact;
+    values.files.autosave = false;
+    w.apply_settings(values);
+    let size = vec2(720., 480.);
+    for (category, query, label, help) in [
+        (
+            Category::Files,
+            "files.autosave_minutes",
+            "Interval (minutes)",
+            REGISTRY
+                .iter()
+                .find(|e| e.key == "files.autosave_minutes")
+                .unwrap()
+                .help,
+        ),
+        (
+            Category::Advanced,
+            "",
+            "Reset all",
+            "Restore default preferences. Your current circuit and workspace layout are preserved.",
+        ),
+        (
+            Category::Advanced,
+            "",
+            "Import settings…",
+            "Transfer preferences as JSON. Recent projects, window geometry and panel layout stay on this computer.",
+        ),
+    ] {
+        w.settings_page.select(category);
+        w.settings_page.query = query.into();
+        for _ in 0..3 {
+            frame_at_size(&ctx, &mut w, vec![], size);
+        }
+        let labels = frame_at_size(&ctx, &mut w, vec![], size);
+        let row = labels
+            .iter()
+            .rfind(|(s, _)| s == label)
+            .unwrap_or_else(|| panic!("{label}"))
+            .1;
+        let help_pos = labels
+            .iter()
+            .find(|(s, r)| s == "?" && (r.center().y - row.center().y).abs() < 4.)
+            .unwrap()
+            .1
+            .center();
+        tap(&ctx, size, &mut w, help_pos);
+        frame_at_size(&ctx, &mut w, vec![], size);
+        let help_visible = frame_at_size(&ctx, &mut w, vec![], size);
+        assert!(help_visible.iter().any(|(s, _)| s == help), "{label}");
+        assert!(w.take_file_actions().is_empty() && !w.settings_page.confirm_reset);
+        assert_eq!(w.preferences(), values);
+    }
+}

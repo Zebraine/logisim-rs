@@ -159,7 +159,7 @@ impl Page {
                                                         tr("Settings need attention."),
                                                     );
                                                     ui.label(tr(error));
-                                                    path_line(ui, path);
+                                                    path_line(ui, path, compact);
                                                     if ui.button(tr("Retry")).clicked() {
                                                         action = Some(PageAction::Retry);
                                                     }
@@ -235,14 +235,18 @@ impl Page {
             ..
         } = *info;
         let q = self.query.trim().to_lowercase();
+        let compact = values.density == crate::Density::Compact;
         if q.is_empty() && self.category == Category::Advanced {
             theme::card(ui, tr("Configuration"), |ui| {
-                path_line(ui, path);
+                path_line(ui, path, compact);
                 theme::chip(ui, &tf!("Configuration version {}", super::CONFIG_VERSION));
             });
             ui.add_space(f32::from(theme::metrics(ui.ctx()).gap));
             theme::card(ui, tr("Reset preferences"), |ui| {
-                ui.label(tr("Restore default preferences. Your current circuit and workspace layout are preserved."));
+                let help = "Restore default preferences. Your current circuit and workspace layout are preserved.";
+                if !compact {
+                    ui.label(tr(help));
+                }
                 if self.confirm_reset {
                     ui.strong(tr("Reset all settings to their defaults?"));
                     ui.horizontal(|ui| {
@@ -255,7 +259,7 @@ impl Page {
                             self.confirm_reset = false;
                         }
                     });
-                } else if ui.button(tr("Reset all")).clicked() {
+                } else if action_with_help(ui, compact, "Reset all", help) {
                     self.confirm_reset = true;
                 }
             });
@@ -269,6 +273,9 @@ impl Page {
                         if ui.button(tr(label)).clicked() {
                             *action = Some(PageAction::SettingsFile(command));
                         }
+                    }
+                    if compact {
+                        help_button(ui, "Settings file", "Transfer preferences as JSON. Recent projects, window geometry and panel layout stay on this computer.");
                     }
                 });
             });
@@ -331,17 +338,23 @@ impl Page {
                                 }
                             }
                         });
-                    if ui.button(tr("Clear recent")).clicked() {
+                    if action_with_help(
+                        ui,
+                        compact,
+                        "Clear recent",
+                        "Remove the entries from this list. Project files stay on disk.",
+                    ) {
                         *action = Some(PageAction::ClearRecent);
                     }
                 }
             });
             ui.add_space(f32::from(theme::metrics(ui.ctx()).gap));
             theme::card(ui, tr("Workspace layout"), |ui| {
-                ui.weak(tr(
-                    "Center the window and restore the default inspector layout.",
-                ));
-                if ui.button(tr("Reset workspace layout")).clicked() {
+                let help = "Center the window and restore the default inspector layout.";
+                if !compact {
+                    ui.weak(tr(help));
+                }
+                if action_with_help(ui, compact, "Reset workspace layout", help) {
                     *action = Some(PageAction::ResetLayout);
                 }
             });
@@ -383,14 +396,16 @@ impl Page {
                             self.confirm_clear = false;
                         }
                     });
-                } else if ui
-                    .button(tr(if owner_error {
+                } else if action_with_help(
+                    ui,
+                    values.density == crate::Density::Compact,
+                    if owner_error {
                         "Retry"
                     } else {
                         "Clear recovery"
-                    }))
-                    .clicked()
-                {
+                    },
+                    "Review the recovery copy before confirming its removal.",
+                ) {
                     self.confirm_clear = true;
                 }
             } else if matches!(self.recovery.state, SnapshotState::Available { .. }) && !owner_error
@@ -415,12 +430,26 @@ impl Page {
             let label_size = vec2((width - right - 4.).max(40.), theme::metrics(ui.ctx()).row);
             let label = RichText::new(tr(e.label)).strong();
             let help = tr(e.help);
-            if values.density == crate::Density::Compact && enabled {
+            if values.density == crate::Density::Compact {
                 ui.allocate_ui_with_layout(
                     label_size,
                     Layout::left_to_right(Align::Center),
                     |ui| {
-                        ui.add(egui::Label::new(label).wrap()).on_hover_text(help);
+                        let button_width = theme::metrics(ui.ctx()).icon_button;
+                        let text_width =
+                            (label_size.x - button_width - ui.spacing().item_spacing.x).max(1.);
+                        ui.allocate_ui_with_layout(
+                            vec2(text_width, label_size.y),
+                            Layout::left_to_right(Align::Center),
+                            |ui| {
+                                ui.add(egui::Label::new(label).truncate())
+                                    .on_hover_ui(|ui| {
+                                        ui.strong(tr(e.label));
+                                        ui.label(help);
+                                    });
+                            },
+                        );
+                        help_button(ui, e.label, e.help);
                     },
                 );
             } else {
@@ -457,11 +486,51 @@ impl Page {
         }
     }
 }
-fn path_line(ui: &mut Ui, path: Option<&str>) {
+// The button is active even when the setting it describes is disabled.
+fn help_button(ui: &mut Ui, label: &str, help: &str) {
+    let side = theme::metrics(ui.ctx()).icon_button;
+    let button = ui.add_sized(vec2(side, side), egui::Button::new("?"));
+    button.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::Role::Button, true, tf!("Help for {}", tr(label)))
+    });
+    if button.clicked() {
+        button.request_focus();
+    }
+    theme::focus_ring(ui, &button);
+    if button.has_focus() {
+        button.show_tooltip_ui(|ui| {
+            ui.set_max_width(ui.spacing().tooltip_width);
+            ui.label(tr(help));
+        });
+    } else {
+        button.on_hover_text(tr(help));
+    }
+}
+
+fn action_with_help(ui: &mut Ui, compact: bool, label: &str, help: &str) -> bool {
+    if !compact {
+        return ui.button(tr(label)).clicked();
+    }
+    ui.horizontal_wrapped(|ui| {
+        let clicked = ui.button(tr(label)).clicked();
+        help_button(ui, label, help);
+        clicked
+    })
+    .inner
+}
+
+fn path_line(ui: &mut Ui, path: Option<&str>, compact: bool) {
     if let Some(path) = path {
         ui.horizontal(|ui| {
             if ui.button(tr("Copy path")).clicked() {
                 ui.ctx().copy_text(path.to_owned());
+            }
+            if compact {
+                help_button(
+                    ui,
+                    "Copy path",
+                    "Copy the location of this computer’s preferences file.",
+                );
             }
             ui.add(egui::Label::new(path).truncate())
                 .on_hover_text(path);
