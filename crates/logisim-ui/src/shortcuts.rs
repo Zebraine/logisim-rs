@@ -8,6 +8,7 @@ pub enum Group {
     File,
     Edit,
     Project,
+    Tools,
     Simulation,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -16,12 +17,19 @@ pub enum Scope {
     Canvas,
 }
 impl Group {
-    pub const ALL: [Self; 4] = [Self::File, Self::Edit, Self::Project, Self::Simulation];
+    pub const ALL: [Self; 5] = [
+        Self::File,
+        Self::Edit,
+        Self::Project,
+        Self::Tools,
+        Self::Simulation,
+    ];
     pub fn label(self) -> &'static str {
         match self {
             Self::File => "File",
             Self::Edit => "Edit",
             Self::Project => "Project",
+            Self::Tools => "Tools",
             Self::Simulation => "Simulation",
         }
     }
@@ -32,7 +40,7 @@ macro_rules! commands {
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
         pub enum Command { $($variant,)* }
         impl Command {
-            pub const ALL: [Self; 20] = [$(Self::$variant,)*];
+            pub const ALL: [Self; 26] = [$(Self::$variant,)*];
             pub const COUNT: usize = Self::ALL.len();
             pub const fn id(self) -> &'static str { match self { $(Self::$variant => $id,)* } }
             pub const fn label(self) -> &'static str { match self { $(Self::$variant => $label,)* } }
@@ -59,6 +67,12 @@ commands! {
     AddCircuit, "project.add_circuit", "Add Circuit…", Project, PRIMARY_SHIFT, N;
     ToggleAppearance, "project.toggle_appearance", "Edit Circuit Appearance", Project, PRIMARY_SHIFT, E;
     ReturnParent, "project.return_parent", "Return to Parent", Project, Modifiers::ALT, ArrowLeft;
+    ToolSelect, "tool.select", "Select", Tools, Modifiers::NONE, V;
+    ToolPoke, "tool.poke", "Poke", Tools, Modifiers::NONE, P;
+    ToolWire, "tool.wire", "Wire", Tools, Modifiers::NONE, W;
+    ToolText, "tool.text", "Text", Tools, Modifiers::NONE, T;
+    ToolTunnel, "tool.tunnel", "Tunnel", Tools, Modifiers::NONE, U;
+    ToolRotate, "tool.rotate", "Rotate", Tools, Modifiers::NONE, R;
     Toggle, "simulation.toggle", "Enable / pause simulation", Simulation, PRIMARY, E;
     Step, "simulation.step", "Step Simulation", Simulation, PRIMARY, I;
     Reset, "simulation.reset", "Reset Simulation", Simulation, PRIMARY, R;
@@ -69,7 +83,7 @@ impl Command {
     pub fn scope(self) -> Scope {
         match self.group() {
             Group::File | Group::Project => Scope::Global,
-            Group::Edit | Group::Simulation => Scope::Canvas,
+            Group::Edit | Group::Tools | Group::Simulation => Scope::Canvas,
         }
     }
 }
@@ -155,10 +169,7 @@ impl Chord {
         match self.key {
             key if Self::is_modifier(key) => true,
             Escape | Enter | Backspace | Delete | Tab | Copy | Cut | Paste => true,
-            P | V | W | T | U | R | Space | Num0 | Num1 | ArrowLeft | ArrowRight | ArrowUp
-            | ArrowDown
-                if m.is_none() =>
-            {
+            Space | Num0 | Num1 | ArrowLeft | ArrowRight | ArrowUp | ArrowDown if m.is_none() => {
                 true
             }
             // Windows translates these physical combinations into native clipboard events.
@@ -327,3 +338,6 @@ impl<'de> Deserialize<'de> for Shortcuts {
         deserializer.deserialize_map(Bindings)
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -1,11 +1,12 @@
 //! Route workspace commands once, after the canvas and text fields have resolved focus.
 use crate::{
     FileAction, SimulationAction, Workspace,
-    editor::CLIPBOARD_MARKER,
+    editor::{CLIPBOARD_MARKER, Tool},
     project::CircuitCommand,
     shortcuts::{Chord, Command, Group, Scope},
 };
 use egui::{Event, Response, Ui};
+use logisim_core::Kind;
 
 impl Workspace {
     pub(super) fn dispatch_shortcuts(&mut self, ui: &Ui, response: &Response) {
@@ -82,12 +83,13 @@ impl Workspace {
             Redo => editor.can_redo(),
             Cut | Copy | Duplicate => !editor.session.selection.is_empty(),
             Paste => editor.can_paste(),
+            ToolRotate => editor.can_rotate(),
             ReturnParent => !editor.session.context.path.is_empty(),
             Step => !editor.simulation.view.enabled && !editor.simulation.view.limited,
             Tick => editor.simulation.can_tick(),
             AutomaticTicks => editor.simulation.view.has_clocks,
             New | Open | Save | SaveAs | Exit | SelectAll | AddCircuit | ToggleAppearance
-            | Toggle | Reset => true,
+            | ToolSelect | ToolPoke | ToolWire | ToolText | ToolTunnel | Toggle | Reset => true,
         }
     }
     pub(super) fn run_command(&mut self, c: Command) {
@@ -112,6 +114,12 @@ impl Workspace {
             }
             AddCircuit => self.circuit_command(CircuitCommand::Add),
             ReturnParent => self.editor.leave_instance(),
+            ToolSelect => self.editor.set_tool(Tool::Select),
+            ToolPoke => self.editor.set_tool(Tool::Poke),
+            ToolWire => self.editor.set_tool(Tool::Wire),
+            ToolText => self.editor.set_tool(Tool::Place(Kind::Text)),
+            ToolTunnel => self.editor.set_tool(Tool::Place(Kind::Tunnel)),
+            ToolRotate => self.editor.rotate(),
             ToggleAppearance => {
                 self.finish_edit();
                 self.editor.session.context.appearance_mode =
