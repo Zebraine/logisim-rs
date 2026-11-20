@@ -55,7 +55,8 @@ pub(super) enum Control {
     RecentLimit,
     AutosaveMinutes,
     ProbeRadix,
-    PinBits,
+    BitWidth(fn(&mut Settings) -> &mut u8),
+    GateSize,
 }
 pub(super) struct Entry {
     pub key: &'static str,
@@ -208,7 +209,28 @@ registry![
         Editor,
         "Default pin width",
         "Set the bit width for new pins.",
-        Control::PinBits
+        Control::BitWidth(|s| &mut s.default_pin_bits)
+    ),
+    (
+        "editor.default_gate_size",
+        Editor,
+        "Default gate size",
+        "Set the size for new logic and parity gates.",
+        Control::GateSize
+    ),
+    (
+        "editor.default_tunnel_width",
+        Editor,
+        "Default tunnel width",
+        "Set the bit width for new tunnels.",
+        Control::BitWidth(|s| &mut s.default_tunnel_width)
+    ),
+    (
+        "editor.remember_last_properties",
+        Editor,
+        "Remember last component properties",
+        "Reuse each built-in component’s placement properties for this session.",
+        Control::Toggle(|s| &mut s.remember_last_properties)
     ),
     (
         "simulation.mode",
@@ -268,7 +290,8 @@ impl Entry {
             Control::Scale => target.ui_scale = source.ui_scale,
             Control::Toggle(field) => *field(target) = *field(&mut source),
             Control::ProbeRadix => target.default_probe_radix = source.default_probe_radix,
-            Control::PinBits => target.default_pin_bits = source.default_pin_bits,
+            Control::BitWidth(field) => *field(target) = *field(&mut source),
+            Control::GateSize => target.default_gate_size = source.default_gate_size,
             Control::Zoom => target.default_zoom = source.default_zoom,
             Control::Mode => target.simulation_mode = source.simulation_mode,
             Control::AutosaveMinutes => {
@@ -338,9 +361,18 @@ impl Entry {
                 logisim_core::Radix::ALL,
                 |v| tr(v.name()).to_owned(),
             ),
-            Control::PinBits => {
+            Control::GateSize => {
+                use logisim_core::GateSize::{Medium, Narrow, Wide};
+                choice(
+                    ui,
+                    &mut values.default_gate_size,
+                    [Narrow, Medium, Wide],
+                    |v| tr(v.name()).to_owned(),
+                )
+            }
+            Control::BitWidth(field) => {
                 let r = ui.add(
-                    egui::DragValue::new(&mut values.default_pin_bits)
+                    egui::DragValue::new(field(values))
                         .range(1..=32)
                         .update_while_editing(false),
                 );

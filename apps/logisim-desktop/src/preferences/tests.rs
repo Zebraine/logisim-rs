@@ -229,7 +229,13 @@ fn retry_after_write_failure_replays_only_local_changes_on_repaired_file() {
     let mut w = Workspace::default();
     let mut prefs = Preferences::at(Some(path.clone()), &mut w);
     fs::write(&directory, b"blocks directory creation").unwrap();
-    w.set_truth_table_generation(true);
+    w.apply_settings(Settings {
+        truth_table: true,
+        default_gate_size: logisim_core::GateSize::Medium,
+        default_tunnel_width: 17,
+        remember_last_properties: true,
+        ..w.preferences()
+    });
     prefs.synchronize(&mut w);
     assert!(prefs.blocked);
     assert!(w.truth_table_generation());
@@ -248,6 +254,12 @@ fn retry_after_write_failure_replays_only_local_changes_on_repaired_file() {
     let mut restarted = Workspace::default();
     Preferences::at(Some(path), &mut restarted);
     assert!(restarted.truth_table_generation());
+    assert_eq!(
+        restarted.preferences().default_gate_size,
+        logisim_core::GateSize::Medium
+    );
+    assert_eq!(restarted.preferences().default_tunnel_width, 17);
+    assert!(restarted.preferences().remember_last_properties);
     assert_eq!(restarted.language(), Language::SimplifiedChinese);
     assert_eq!(w.preferences(), restarted.preferences());
 }

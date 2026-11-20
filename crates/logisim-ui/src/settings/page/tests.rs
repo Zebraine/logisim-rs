@@ -32,9 +32,9 @@ fn registry_restores_each_field_without_changing_other_preferences() {
         invert_wheel_zoom: true,
         default_probe_radix: logisim_core::Radix::Hex,
         default_pin_bits: 8,
-        default_gate_size: defaults.default_gate_size,
-        default_tunnel_width: defaults.default_tunnel_width,
-        remember_last_properties: defaults.remember_last_properties,
+        default_gate_size: logisim_core::GateSize::Medium,
+        default_tunnel_width: 13,
+        remember_last_properties: true,
         simulation_mode: SimulationMode::Event,
         tick_hz: TickHz::new(1).unwrap(),
         truth_table: true,
@@ -237,7 +237,7 @@ fn workspace_history_actions_and_resets_leave_document_and_runtime_intact() {
 }
 
 #[test]
-fn appearance_and_editor_keys_find_the_same_control_in_both_languages() {
+fn appearance_and_editor_settings_are_searchable_by_key_and_localized_label() {
     use crate::tests::support::widgets::{frame, has};
     for language in Language::ALL {
         let ctx = Context::default();
@@ -251,13 +251,15 @@ fn appearance_and_editor_keys_find_the_same_control_in_both_languages() {
             .iter()
             .filter(|s| matches!(s.category, Category::Editor | Category::Appearance))
         {
-            app.settings_page.query = entry.key.into();
-            for _ in 0..2 {
-                frame(&ctx, &mut app, vec![]);
-            }
-            let labels = frame(&ctx, &mut app, vec![]);
             let label = crate::i18n::with_language(language, || tr(entry.label));
-            assert!(has(&labels, label), "{}", entry.key);
+            for query in [entry.key, label] {
+                app.settings_page.query = query.into();
+                for _ in 0..2 {
+                    frame(&ctx, &mut app, vec![]);
+                }
+                let labels = frame(&ctx, &mut app, vec![]);
+                assert!(has(&labels, label), "{query}");
+            }
         }
     }
 }
@@ -831,6 +833,110 @@ fn shortcut_search_and_conflict_fit_the_viewport_in_both_languages() {
                     locate(tr(Command::ToggleAppearance.label())).right() < locate(&current).left()
                 );
             });
+        }
+    }
+}
+
+#[test]
+fn editor_default_rows_reset_at_both_window_sizes_without_editing_the_circuit() {
+    use crate::tests::support::widgets::click;
+    use egui::{Event, PointerButton};
+    use logisim_core::{Component, GateSize, Kind, Point, Project};
+    for language in Language::ALL {
+        for size in [vec2(720., 480.), vec2(1200., 820.)] {
+            let ctx = Context::default();
+            crate::configure(&ctx);
+            let mut app = Workspace {
+                settings_open: true,
+                ..Default::default()
+            };
+            let mut project = Project::default();
+            let id = project
+                .main_circuit_mut()
+                .circuit
+                .add_component(Component::new(Kind::Tunnel, Point::ZERO));
+            app.replace_project(project.clone());
+            app.editor.session.selection.insert(id);
+            app.apply_settings(Settings {
+                language,
+                default_gate_size: GateSize::Wide,
+                default_tunnel_width: 17,
+                remember_last_properties: true,
+                ..app.preferences()
+            });
+            app.simulation_mut().steps = 39;
+            let t = |label| crate::i18n::with_language(language, || tr(label));
+            for (key, value) in [
+                ("editor.default_gate_size", t("Wide")),
+                ("editor.default_tunnel_width", "17"),
+                ("editor.remember_last_properties", t("On")),
+            ] {
+                app.settings_page.query = key.into();
+                let mut labels = vec![];
+                for _ in 0..4 {
+                    labels = frame_at_size(&ctx, &mut app, vec![], size);
+                }
+                let bounds = ctx
+                    .memory(|m| m.area_rect(Id::unique("settings-window")))
+                    .unwrap();
+                let value_rect = labels
+                    .iter()
+                    .rev()
+                    .find(|(s, r)| s == value && bounds.contains_rect(*r))
+                    .unwrap()
+                    .1;
+                let pos = egui::pos2(bounds.right() - 36., value_rect.center().y);
+                for pressed in [true, false] {
+                    frame_at_size(
+                        &ctx,
+                        &mut app,
+                        vec![
+                            Event::PointerMoved(pos),
+                            Event::PointerButton {
+                                pos,
+                                button: PointerButton::Primary,
+                                pressed,
+                                modifiers: Modifiers::NONE,
+                            },
+                        ],
+                        size,
+                    );
+                }
+                let values = app.preferences();
+                match key {
+                    "editor.default_gate_size" => assert_eq!(
+                        (
+                            values.default_gate_size,
+                            values.default_tunnel_width,
+                            values.remember_last_properties
+                        ),
+                        (GateSize::Narrow, 17, true)
+                    ),
+                    "editor.default_tunnel_width" => assert_eq!(
+                        (values.default_tunnel_width, values.remember_last_properties),
+                        (1, true)
+                    ),
+                    _ => assert!(!values.remember_last_properties),
+                }
+            }
+            app.apply_settings(Settings {
+                default_gate_size: GateSize::Medium,
+                default_tunnel_width: 12,
+                remember_last_properties: true,
+                ..app.preferences()
+            });
+            app.settings_page.select(Category::Advanced);
+            click(&ctx, &mut app, t("Reset all"));
+            click(&ctx, &mut app, t("Confirm reset"));
+            assert_eq!(app.preferences(), Settings::default());
+            assert_eq!(app.project(), &project);
+            assert_eq!(
+                app.editor.session.selection,
+                std::collections::BTreeSet::from([id])
+            );
+            assert!(!app.document.dirty && !app.editor.can_undo());
+            assert_eq!(app.simulation_mut().steps, 39);
+            assert!(app.take_simulation_actions().is_empty());
         }
     }
 }
