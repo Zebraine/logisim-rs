@@ -109,6 +109,7 @@ fn registry_restores_each_field_without_changing_other_preferences() {
         language: Language::SimplifiedChinese,
         density: crate::Density::Compact,
         theme: crate::ThemeMode::Dark,
+        dark_artwork_contrast: defaults.dark_artwork_contrast,
         accent: crate::Accent::Teal,
         ui_scale: UiScale::P150,
         reduce_motion: true,

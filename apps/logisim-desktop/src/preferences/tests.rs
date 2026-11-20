@@ -125,7 +125,9 @@ fn missing_fields_default_and_invalid_json_stays_intact_after_edits() {
     for json in [
         "{",
         "{}",
-        r#"{"version":15}"#,
+        r#"{"version":16}"#,
+        r#"{"version":15,"appearance":{"dark_artwork_contrast":"false"}}"#,
+        r#"{"version":15,"appearance":{"dark_artwork_contrast":null}}"#,
         r#"{"version":13,"appearance":{"theme":"system"}}"#,
         r#"{"version":13,"appearance":{"theme":null}}"#,
         r#"{"version":12,"files":{"backup_before_save":"true"}}"#,
@@ -220,6 +222,7 @@ fn all_fields_restart_reset_and_atomic_conflict_protection() {
         density: logisim_ui::Density::Compact,
         theme: logisim_ui::ThemeMode::Dark,
         accent: logisim_ui::Accent::Teal,
+        dark_artwork_contrast: false,
         ui_scale: UiScale::P125,
         reduce_motion: true,
         show_telemetry: false,
@@ -402,8 +405,8 @@ fn layout_waits_for_idle_or_close_and_restores_only_when_enabled() {
 }
 
 #[test]
-fn earlier_preferences_migrate_to_v14_and_editor_defaults_round_trip() {
-    for version in 1..=13 {
+fn earlier_preferences_migrate_to_v15_and_editor_defaults_round_trip() {
+    for version in 1..=14 {
         let json = serde_json::json!({"version":version,"editor":{"show_grid":false}});
         let config = schema::decode(json.to_string().as_bytes()).unwrap();
         assert_eq!(
@@ -414,7 +417,8 @@ fn earlier_preferences_migrate_to_v14_and_editor_defaults_round_trip() {
             }
         );
         let encoded: serde_json::Value = serde_json::from_slice(&schema::encode(&config)).unwrap();
-        assert_eq!(encoded["version"], 14);
+        assert_eq!(encoded["version"], 15);
+        assert_eq!(encoded["appearance"]["dark_artwork_contrast"], true);
         assert!(config.plugins.fallback_directory.is_none());
         assert_eq!(encoded["appearance"]["theme"], "light");
         assert_eq!(encoded["appearance"]["density"], "comfortable");
@@ -697,13 +701,15 @@ fn portable_files_migrate_validate_bindings_and_ignore_host_metadata() {
         assert_eq!(
             serde_json::from_slice::<serde_json::Value>(&schema::encode_settings(settings))
                 .unwrap()["version"],
-            14
+            15
         );
     }
     for json in [
         "",
         "{}",
-        r#"{"version":15}"#,
+        r#"{"version":16}"#,
+        r#"{"version":15,"appearance":{"dark_artwork_contrast":"false"}}"#,
+        r#"{"version":15,"appearance":{"dark_artwork_contrast":null}}"#,
         r#"{"version":13,"unknown":null}"#,
         r#"{"version":13,"editor":{"new_option":2}}"#,
         r#"{"version":13,"appearance":{"theme":"system"}}"#,
@@ -893,4 +899,32 @@ fn failed_local_directory_write_preserves_the_previous_path_on_disk() {
             .directory()
             .is_none()
     );
+}
+
+#[test]
+fn dark_artwork_contrast_round_trips_in_local_and_portable_settings() {
+    let temp = Temp::new();
+    let path = temp.0.join("preferences.json");
+    let mut workspace = Workspace::default();
+    let mut prefs = Preferences::at(Some(path.clone()), &mut workspace);
+    for enabled in [false, true] {
+        let expected = Settings {
+            dark_artwork_contrast: enabled,
+            ..workspace.preferences()
+        };
+        let portable = schema::encode_settings(expected);
+        let value: serde_json::Value = serde_json::from_slice(&portable).unwrap();
+        assert_eq!(value["appearance"]["dark_artwork_contrast"], enabled);
+        prefs
+            .import_settings(
+                Preferences::validate_import(&portable).unwrap(),
+                &mut workspace,
+            )
+            .unwrap();
+        assert_eq!(workspace.preferences(), expected);
+        let mut restarted = Workspace::default();
+        Preferences::at(Some(path.clone()), &mut restarted);
+        assert_eq!(restarted.preferences(), expected);
+        assert_eq!(Preferences::export_settings(&restarted), portable);
+    }
 }

@@ -76,6 +76,7 @@ struct Appearance {
     density: Density,
     #[serde(with = "ThemeCode")]
     theme: ThemeMode,
+    dark_artwork_contrast: bool,
     #[serde(with = "AccentCode")]
     accent: Accent,
     ui_scale: f64,
@@ -119,6 +120,7 @@ impl Default for Appearance {
         Self {
             density: Density::default(),
             theme: ThemeMode::default(),
+            dark_artwork_contrast: true,
             accent: Accent::default(),
             ui_scale: 1.0,
             reduce_motion: false,
@@ -349,6 +351,7 @@ fn validated<R, W, P, F>(file: &File<R, W, P, F>) -> Result<Settings, &'static s
         language: file.general.language,
         density: file.appearance.density,
         theme: file.appearance.theme,
+        dark_artwork_contrast: file.appearance.dark_artwork_contrast,
         accent: file.appearance.accent,
         ui_scale,
         reduce_motion: file.appearance.reduce_motion,
@@ -403,6 +406,7 @@ fn portable(s: Settings) -> File {
         appearance: Appearance {
             density: s.density,
             theme: s.theme,
+            dark_artwork_contrast: s.dark_artwork_contrast,
             accent: s.accent,
             ui_scale: f64::from(s.ui_scale.percent()) / 100.0,
             reduce_motion: s.reduce_motion,
