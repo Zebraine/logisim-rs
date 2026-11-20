@@ -71,7 +71,13 @@ impl Storage {
         self.disk = bytes;
         Ok((import.document, import.warnings))
     }
-    pub fn save(&mut self, project: &Project, path: &Path, mode: SaveMode<'_>) -> Result<()> {
+    pub fn save(
+        &mut self,
+        project: &Project,
+        path: &Path,
+        mode: SaveMode<'_>,
+        backup_before_save: bool,
+    ) -> Result<()> {
         let path = destination(path)?;
         if self.protected.as_ref() == Some(&path) {
             return Err("This import omitted unsupported content. Save to a different file to protect the original.".into());
@@ -89,6 +95,24 @@ impl Storage {
             &crate::plugins::base(Some(&path)),
         );
         let text = logisim_file::serialize(&portable).map_err(|e| e.to_string())?;
+        if backup_before_save && let Some(original) = expected {
+            // These are the exact bytes observed at load or Replace confirmation.
+            // Verify them before rotating the backup; atomic_write checks the target again.
+            check_expected(&path, Some(original))?;
+            let mut name = path.as_os_str().to_owned();
+            name.push(".bak");
+            let backup = PathBuf::from(name);
+            if self.protected.as_ref() == Some(&backup) {
+                return Err("The backup would replace the protected source. Choose a different destination.".into());
+            }
+            write_backup(&path, &backup, original).map_err(|cause| {
+                logisim_ui::tf!(
+                    "Could not write backup {}. Save stopped.\n{}",
+                    backup.display(),
+                    logisim_ui::i18n::tr(&cause)
+                )
+            })?;
+        }
         atomic_write(&path, text.as_bytes(), expected)?;
         self.path = Some(path);
         self.disk = text.into_bytes();
@@ -107,6 +131,9 @@ pub(crate) fn read_file(path: &Path, regular_file_message: &str) -> Result<Vec<u
         return Err(regular_file_message.into());
     }
     let file = fs::File::open(path).map_err(|e| e.to_string())?;
+    read_bytes(file, regular_file_message)
+}
+fn read_bytes(file: fs::File, regular_file_message: &str) -> Result<Vec<u8>> {
     if !file.metadata().map_err(|e| e.to_string())?.is_file() {
         return Err(regular_file_message.into());
     }
@@ -138,6 +165,32 @@ pub(crate) fn destination(path: &Path) -> Result<PathBuf> {
     Ok(parent.canonicalize().map_err(|e| e.to_string())?.join(name))
 }
 const CHANGED: &str = "The destination changed, cannot be read, or needs overwrite confirmation. Use Save As and choose the file again.";
+fn write_backup(target: &Path, backup: &Path, original: &[u8]) -> Result<()> {
+    const REGULAR: &str = "The backup path must be a writable regular file.";
+    let (previous, permissions) = match fs::symlink_metadata(backup) {
+        Ok(meta) => {
+            if !meta.is_file() || meta.permissions().readonly() {
+                return Err(REGULAR.into());
+            }
+            // Atomic rename alone could replace a file that the user cannot write.
+            let file = fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(backup)
+                .map_err(|e| e.to_string())?;
+            (Some(read_bytes(file, REGULAR)?), meta.permissions())
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => (
+            None,
+            fs::metadata(target)
+                .map_err(|e| e.to_string())?
+                .permissions(),
+        ),
+        Err(e) => return Err(e.to_string()),
+    };
+    atomic_replace(backup, original, previous.as_deref(), Some(permissions))
+}
+
 fn check_expected(path: &Path, expected: Option<&[u8]>) -> Result<()> {
     match (read(path), expected) {
         (Ok(actual), Some(expected)) if actual == expected => Ok(()),
@@ -151,6 +204,14 @@ fn check_expected(path: &Path, expected: Option<&[u8]>) -> Result<()> {
     }
 }
 pub(crate) fn atomic_write(path: &Path, bytes: &[u8], expected: Option<&[u8]>) -> Result<()> {
+    atomic_replace(path, bytes, expected, None)
+}
+fn atomic_replace(
+    path: &Path,
+    bytes: &[u8],
+    expected: Option<&[u8]>,
+    permissions: Option<fs::Permissions>,
+) -> Result<()> {
     check_expected(path, expected)?;
     static SEQUENCE: AtomicU64 = AtomicU64::new(0);
     let parent = path.parent().ok_or("Missing parent directory")?;
@@ -176,8 +237,10 @@ pub(crate) fn atomic_write(path: &Path, bytes: &[u8], expected: Option<&[u8]>) -
     }
     let (temp, mut file) = created.ok_or("Could not create a temporary save file")?;
     let result = (|| {
-        if let Ok(meta) = fs::metadata(path) {
-            file.set_permissions(meta.permissions())
+        if let Some(permissions) =
+            permissions.or_else(|| fs::metadata(path).ok().map(|m| m.permissions()))
+        {
+            file.set_permissions(permissions)
                 .map_err(|e| e.to_string())?;
         }
         file.write_all(bytes).map_err(|e| e.to_string())?;

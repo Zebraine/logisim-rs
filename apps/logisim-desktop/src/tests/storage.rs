@@ -11,6 +11,69 @@ fn circuit() -> Project {
     c.add_component(Component::new(Kind::Gate(Gate::And), Point::new(200, 100)));
     Project::single("main", c)
 }
+
+#[test]
+fn backup_rotates_exactly_one_generation_of_disk_bytes() {
+    let dir = Temp::new();
+    let path = dir.path("layout.circ.bak");
+    let backup = dir.path("layout.circ.bak.bak");
+    let mut disk = Storage::new();
+    let mut project = circuit();
+    disk.save(&project, &path, SaveMode::Selected(None), true)
+        .unwrap();
+    assert!(!backup.exists());
+    let mut original = fs::read(&path).unwrap();
+    original.extend_from_slice(b"\r\n<!-- user formatting -->\r\n");
+    fs::write(&path, &original).unwrap();
+    disk.load(&path).unwrap();
+    project.circuits[0].name = "first".into();
+    disk.save(&project, &path, SaveMode::Current, true).unwrap();
+    assert_eq!(fs::read(&backup).unwrap(), original);
+    let first = fs::read(&path).unwrap();
+    project.circuits[0].name = "second".into();
+    disk.save(&project, &path, SaveMode::Current, true).unwrap();
+    assert_eq!(fs::read(&backup).unwrap(), first);
+    assert_eq!(
+        logisim_file::parse(&fs::read_to_string(&path).unwrap())
+            .unwrap()
+            .document,
+        project
+    );
+    assert_eq!(fs::read_dir(&dir.0).unwrap().count(), 2);
+    fs::write(&path, b"external edit").unwrap();
+    assert!(disk.save(&project, &path, SaveMode::Current, true).is_err());
+    assert_eq!(fs::read(&backup).unwrap(), first);
+    assert_eq!(fs::read(&path).unwrap(), b"external edit");
+}
+
+#[cfg(unix)]
+#[test]
+fn new_backup_inherits_private_mode_and_never_follows_sidecar_links() {
+    use std::os::unix::fs::{PermissionsExt, symlink};
+    let dir = Temp::new();
+    let path = dir.path("private.circ");
+    let backup = dir.path("private.circ.bak");
+    let mut disk = Storage::new();
+    let project = circuit();
+    disk.save(&project, &path, SaveMode::Current, true).unwrap();
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+    disk.save(&project, &path, SaveMode::Current, true).unwrap();
+    assert_eq!(
+        fs::metadata(&backup).unwrap().permissions().mode() & 0o777,
+        0o600
+    );
+    fs::remove_file(&backup).unwrap();
+    symlink(&path, &backup).unwrap();
+    assert!(
+        disk.save(&Project::default(), &path, SaveMode::Current, true)
+            .is_err()
+    );
+    assert!(backup.is_symlink());
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        logisim_file::serialize(&project).unwrap().as_bytes()
+    );
+}
 #[test]
 fn disk_roundtrip_updates_baseline_only_after_success() {
     let dir = Temp::new();
@@ -18,11 +81,16 @@ fn disk_roundtrip_updates_baseline_only_after_success() {
     let mut storage = Storage::new();
     let mut circuit = circuit();
     assert!(storage.dirty(&circuit));
-    storage.save(&circuit, &path, SaveMode::Current).unwrap();
+    storage
+        .save(&circuit, &path, SaveMode::Current, false)
+        .unwrap();
     assert!(!storage.dirty(&circuit));
     circuit.main_circuit_mut().circuit.components[0].label = "saved again".into();
-    storage.save(&circuit, &path, SaveMode::Current).unwrap();
+    storage
+        .save(&circuit, &path, SaveMode::Current, false)
+        .unwrap();
     let mut loaded = Storage::new();
+    assert!(!dir.path("test.circ.bak").exists());
     let (result, warnings) = loaded.load(&path).unwrap();
     assert!(warnings.is_empty());
     assert_eq!(result, circuit);
@@ -30,7 +98,12 @@ fn disk_roundtrip_updates_baseline_only_after_success() {
     circuit.main_circuit_mut().circuit.components[0].label = "pending".into();
     assert!(
         storage
-            .save(&circuit, &dir.path("absent/failed.circ"), SaveMode::Current)
+            .save(
+                &circuit,
+                &dir.path("absent/failed.circ"),
+                SaveMode::Current,
+                false
+            )
             .is_err()
     );
     assert!(storage.dirty(&circuit));
@@ -53,23 +126,43 @@ fn external_changes_and_unconfirmed_overwrites_preserve_both_documents() {
     let other = dir.path("two.circ");
     let mut storage = Storage::new();
     let circuit = circuit();
-    storage.save(&circuit, &path, SaveMode::Current).unwrap();
+    storage
+        .save(&circuit, &path, SaveMode::Current, false)
+        .unwrap();
     fs::write(&path, "external edit").unwrap();
-    assert!(storage.save(&circuit, &path, SaveMode::Current).is_err());
+    assert!(
+        storage
+            .save(&circuit, &path, SaveMode::Current, false)
+            .is_err()
+    );
     assert_eq!(fs::read_to_string(&path).unwrap(), "external edit");
     fs::write(&other, "existing file").unwrap();
-    assert!(storage.save(&circuit, &other, SaveMode::Current).is_err());
+    assert!(
+        storage
+            .save(&circuit, &other, SaveMode::Current, false)
+            .is_err()
+    );
     assert_eq!(fs::read_to_string(&other).unwrap(), "existing file");
     let confirmed = storage::read(&other).unwrap();
     fs::write(&other, "changed again").unwrap();
     assert!(
         storage
-            .save(&circuit, &other, SaveMode::Selected(Some(&confirmed)))
+            .save(
+                &circuit,
+                &other,
+                SaveMode::Selected(Some(&confirmed)),
+                false
+            )
             .is_err()
     );
     let confirmed = storage::read(&other).unwrap();
     storage
-        .save(&circuit, &other, SaveMode::Selected(Some(&confirmed)))
+        .save(
+            &circuit,
+            &other,
+            SaveMode::Selected(Some(&confirmed)),
+            false,
+        )
         .unwrap();
     assert_eq!(storage.path.as_ref(), Some(&other));
     assert!(logisim_file::parse(&fs::read_to_string(&other).unwrap()).is_ok());
@@ -87,16 +180,45 @@ fn partial_import_requires_a_different_destination() {
     let (circuit, warnings) = storage.load(&path).unwrap();
     assert_eq!(warnings.len(), 1);
     assert_eq!(circuit.main_circuit().circuit.components.len(), 1);
-    assert!(storage.save(&circuit, &path, SaveMode::Current).is_err());
+    assert!(
+        storage
+            .save(&circuit, &path, SaveMode::Current, true)
+            .is_err()
+    );
     assert_eq!(fs::read_to_string(&path).unwrap(), xml);
+    assert!(!dir.path("mixed.circ.bak").exists());
+    let protected_backup = dir.path("copy.circ.bak");
+    fs::write(&protected_backup, &xml).unwrap();
+    let mut from_backup = Storage::new();
+    from_backup.load(&protected_backup).unwrap();
+    let target = dir.path("copy.circ");
+    fs::write(&target, b"previous").unwrap();
+    assert!(
+        from_backup
+            .save(
+                &circuit,
+                &target,
+                SaveMode::Selected(Some(b"previous")),
+                true
+            )
+            .is_err()
+    );
+    assert_eq!(fs::read(target).unwrap(), b"previous");
+    assert_eq!(fs::read_to_string(protected_backup).unwrap(), xml);
     #[cfg(unix)]
     {
         let link = dir.path("alias.circ");
         std::os::unix::fs::symlink(&path, &link).unwrap();
-        assert!(storage.save(&circuit, &link, SaveMode::Current).is_err());
+        assert!(
+            storage
+                .save(&circuit, &link, SaveMode::Current, true)
+                .is_err()
+        );
     }
     let copy = dir.path("subset.circ");
-    storage.save(&circuit, &copy, SaveMode::Current).unwrap();
+    storage
+        .save(&circuit, &copy, SaveMode::Current, true)
+        .unwrap();
     assert!(storage.protected.is_none());
     assert!(
         !fs::read_to_string(copy)
@@ -164,15 +286,17 @@ fn save_as_can_confirm_an_externally_modified_or_deleted_current_path() {
     let path = dir.path("document.circ");
     let mut storage = Storage::new();
     let c = circuit();
-    storage.save(&c, &path, SaveMode::Current).unwrap();
+    storage.save(&c, &path, SaveMode::Current, false).unwrap();
     fs::write(&path, "external change").unwrap();
-    assert!(storage.save(&c, &path, SaveMode::Current).is_err());
+    assert!(storage.save(&c, &path, SaveMode::Current, false).is_err());
     let confirmed = storage::read(&path).unwrap();
     storage
-        .save(&c, &path, SaveMode::Selected(Some(&confirmed)))
+        .save(&c, &path, SaveMode::Selected(Some(&confirmed)), false)
         .unwrap();
     fs::remove_file(&path).unwrap();
-    assert!(storage.save(&c, &path, SaveMode::Current).is_err());
-    storage.save(&c, &path, SaveMode::Selected(None)).unwrap();
+    assert!(storage.save(&c, &path, SaveMode::Current, false).is_err());
+    storage
+        .save(&c, &path, SaveMode::Selected(None), false)
+        .unwrap();
     assert!(!storage.dirty(&c));
 }

@@ -1,3 +1,4 @@
+mod backup;
 mod behavior;
 mod memory;
 mod plugin;

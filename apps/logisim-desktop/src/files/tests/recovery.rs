@@ -41,7 +41,7 @@ fn only_completed_file_actions_clear_the_owned_snapshot() {
         let ctx = egui::Context::default();
         files
             .storage
-            .save(w.project(), &source, SaveMode::Current)
+            .save(w.project(), &source, SaveMode::Current, false)
             .unwrap();
         let original = fs::read(&source).unwrap();
         let mut edited = w.project().clone();
@@ -167,7 +167,7 @@ fn missing_and_untitled_sources_recover_without_a_destination_or_history_entry()
         if named {
             files
                 .storage
-                .save(w.project(), &source, SaveMode::Current)
+                .save(w.project(), &source, SaveMode::Current, false)
                 .unwrap();
         }
         w.replace_project(dirty_project());
@@ -322,7 +322,7 @@ fn clear_only_removes_snapshot_files_and_preserves_the_working_document() {
     let path = tmp.path("source.circ");
     files
         .storage
-        .save(w.project(), &path, SaveMode::Current)
+        .save(w.project(), &path, SaveMode::Current, false)
         .unwrap();
     let disk = fs::read(&path).unwrap();
     w.replace_project(dirty_project());

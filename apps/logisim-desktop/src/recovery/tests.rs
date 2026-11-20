@@ -47,11 +47,19 @@ fn deadlines_reset_on_options_and_failure_without_writing_source_or_protected_im
     let xml = fs::read_to_string(dir.join(slot::DATA)).unwrap();
     assert_eq!(logisim_file::parse(&xml).unwrap().document, project);
     assert_eq!(fs::read_to_string(&path).unwrap(), original);
+    project.main_circuit_mut().circuit.components[0].label = "second checkpoint".into();
+    options.backup_before_save = false;
+    auto.update(time(510), options, true, &disk, &project);
+    options.backup_before_save = true;
+    auto.update(time(520), options, true, &disk, &project);
+    assert_eq!(auto.last_success, Some(time(520)));
+    assert!(!dir.join("current.circ.bak").exists() && !dir.join("current.json.bak").exists());
+    assert!(!temp.path("source.circ.bak").exists());
     let old = Pair::read(&dir).unwrap();
     project.circuits[0].name.clear();
-    auto.update(time(519), options, true, &disk, &project);
+    auto.update(time(639), options, true, &disk, &project);
     assert!(auto.error.is_none());
-    auto.update(time(520), options, true, &disk, &project);
+    auto.update(time(640), options, true, &disk, &project);
     assert!(auto.error.is_some());
     assert_eq!(Pair::read(&dir).unwrap(), old);
     options.autosave = false;
@@ -140,7 +148,7 @@ fn observed_foreign_copy_survives_settings_clear_and_finish_but_not_startup_disc
     assert!(other.clear_from_settings().is_err());
     let mut disk = Storage::default();
     let source = temp.path("other.circ");
-    disk.save(&project, &source, crate::storage::SaveMode::Current)
+    disk.save(&project, &source, crate::storage::SaveMode::Current, false)
         .unwrap();
     let checksum = disk.source_checksum();
     other.changed = false;

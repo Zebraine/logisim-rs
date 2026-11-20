@@ -34,7 +34,7 @@ pub(crate) struct Autosave {
     written: Option<Project>,
     last_success: Option<Instant>,
     next_due: Option<Instant>,
-    options: Option<FileSettings>,
+    schedule: Option<(bool, u8)>,
     error: Option<String>,
 }
 impl Autosave {
@@ -178,9 +178,10 @@ impl Autosave {
         storage: &Storage,
         project: &Project,
     ) {
-        if self.options != Some(options) {
+        let schedule = (options.autosave, options.autosave_minutes);
+        if self.schedule != Some(schedule) {
             self.next_due = None;
-            self.options = Some(options);
+            self.schedule = Some(schedule);
             if !options.valid_interval() {
                 self.report(INVALID_INTERVAL.into());
             } else if self.error.as_deref() == Some(INVALID_INTERVAL) {

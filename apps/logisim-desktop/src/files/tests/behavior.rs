@@ -16,7 +16,7 @@ fn project_options_navigates_and_records_main_against_the_file_baseline() {
         .add_component(Component::new(Kind::Pin, Point::ZERO));
     h.files
         .storage
-        .save(&project, &path, SaveMode::Current)
+        .save(&project, &path, SaveMode::Current, false)
         .unwrap();
     h.ws.replace_project(project);
     let document = h.files.present(&h.ws);
@@ -127,7 +127,7 @@ fn placing_and_reopening_unary_gates_preserves_their_sizes() {
     );
     h.files
         .storage
-        .save(h.ws.project(), &path, SaveMode::Current)
+        .save(h.ws.project(), &path, SaveMode::Current, false)
         .unwrap();
     let (loaded, warnings) = Storage::new().load(&path).unwrap();
     assert!(warnings.is_empty());
@@ -147,7 +147,7 @@ fn library_picker_is_additive_and_failure_or_cancel_keeps_document_baseline() {
     let ctx = egui::Context::default();
     files
         .storage
-        .save(workspace.project(), &current, SaveMode::Current)
+        .save(workspace.project(), &current, SaveMode::Current, false)
         .unwrap();
     let bytes = std::fs::read(&current).unwrap();
     for cancel in [true, false] {

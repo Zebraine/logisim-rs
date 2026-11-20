@@ -329,7 +329,12 @@ impl Files {
             self.error(tr("Recovery files cannot be used as a project destination.").into());
             return;
         }
-        match self.storage.save(workspace.project(), path, mode) {
+        match self.storage.save(
+            workspace.project(),
+            path,
+            mode,
+            workspace.preferences().files.backup_before_save,
+        ) {
             Ok(()) => {
                 self.autosave.finish_document();
                 if save_as {

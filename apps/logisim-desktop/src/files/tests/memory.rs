@@ -44,7 +44,7 @@ fn real_memory_picker_cancels_retries_and_preserves_document_file_and_ram() {
     h.ws.replace_circuit(circuit);
     h.files
         .storage
-        .save(h.ws.project(), &source, SaveMode::Current)
+        .save(h.ws.project(), &source, SaveMode::Current, false)
         .unwrap();
     h.files.directory = dir.0.clone();
     let original_disk = std::fs::read(&source).unwrap();
@@ -86,7 +86,7 @@ fn real_memory_picker_cancels_retries_and_preserves_document_file_and_ram() {
     h.click("Close");
     h.files
         .storage
-        .save(h.ws.project(), &source, SaveMode::Current)
+        .save(h.ws.project(), &source, SaveMode::Current, false)
         .unwrap();
     let saved = h.ws.project().clone();
     h.click("RAM 16 × 8");
