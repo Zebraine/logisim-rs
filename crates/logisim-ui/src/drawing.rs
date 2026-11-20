@@ -236,6 +236,15 @@ pub(crate) fn wire_distance(w: Wire, point: Vec2) -> f32 {
     let t = ((point - a).dot(segment) / segment.length_sq().max(1.0)).clamp(0.0, 1.0);
     (point - (a + segment * t)).length()
 }
+fn dash_pattern(tone: crate::SignalTone) -> Option<(&'static [f32], &'static [f32])> {
+    use crate::SignalTone::*;
+    match tone {
+        Error => Some((&[5.0], &[3.0])),
+        WidthMismatch => Some((&[9.0, 2.0], &[3.0, 3.0])),
+        Low | High | Bus | Unknown => None,
+    }
+}
+
 pub(crate) fn circuit(
     p: &Painter,
     canvas: &Canvas,
@@ -247,6 +256,7 @@ pub(crate) fn circuit(
 ) {
     cache.synchronize(circuit, selection);
     cache.prepare_view(p, canvas);
+    let palette = crate::theme::active_palette(p.ctx());
     let mut badges = Vec::new();
     for w in &circuit.wires {
         let selected = selection.contains(&w.id);
@@ -271,15 +281,17 @@ pub(crate) fn circuit(
         let tone = signal.map(|s| s.tone);
         let bus = signal.is_some_and(|s| s.binary.len() > 1);
         let width = if bus { 3.0 } else { 1.8 };
-        let ink = tone.map_or(INK, crate::SignalTone::color);
+        let ink = tone.map_or(INK, |t| palette.color(t));
         if tone == Some(crate::SignalTone::High) && !highlighted {
             p.line_segment(segment, Stroke::new(width + 2.5, ink.gamma_multiply(0.13)));
         }
         let stroke = Stroke::new(width, ink);
-        if tone == Some(crate::SignalTone::Error) {
+        if let Some((dashes, gaps)) = tone.and_then(dash_pattern) {
             let clip = p.clip_rect().expand(6.0);
             let visible = segment.map(|point| clip.clamp(point));
-            p.extend(Shape::dashed_line(&visible, stroke, 5.0, 3.0));
+            p.extend(Shape::dashed_line_with_offset(
+                &visible, stroke, dashes, gaps, 0.0,
+            ));
         } else {
             p.line_segment(segment, stroke);
         }
@@ -289,11 +301,8 @@ pub(crate) fn circuit(
                 || (canvas.camera.zoom >= 0.8 && segment[0].distance(segment[1]) >= 96.0))
         {
             let midpoint = segment[0].lerp(segment[1], 0.5);
-            let label = p.layout_no_wrap(
-                value.text.clone(),
-                FontId::monospace(12.0),
-                crate::theme::INK,
-            );
+            let value_color = palette.text_color(value.tone);
+            let label = p.layout_no_wrap(value.text.clone(), FontId::monospace(12.0), value_color);
             let badge = Rect::from_center_size(midpoint, label.size() + vec2(8.0, 4.0));
             if segment[0].distance(segment[1]) >= badge.width() + 12.0
                 && p.clip_rect().contains_rect(badge)
@@ -308,7 +317,7 @@ pub(crate) fn circuit(
                     Stroke::new(1.0, crate::theme::BORDER_STRONG),
                     StrokeKind::Inside,
                 );
-                p.galley(midpoint - label.size() / 2.0, label, crate::theme::INK);
+                p.galley(midpoint - label.size() / 2.0, label, value_color);
                 badges.push(badge);
             }
         }
@@ -330,7 +339,7 @@ pub(crate) fn circuit(
             }
             let color = wire
                 .and_then(|id| simulation.wires.get(&id))
-                .map_or(INK, |s| s.tone.color());
+                .map_or(INK, |s| palette.color(s.tone));
             p.circle_filled(screen, 3.0, color);
         }
     }
@@ -631,7 +640,7 @@ pub(crate) fn component(
             body_text(
                 at(-width / 2.0 - 3.0, 0.0),
                 text,
-                signal.map_or(color, |s| s.tone.text_color()),
+                signal.map_or(color, |s| crate::theme::signal_text(p.ctx(), s.tone)),
             );
         }
         Kind::Splitter => {
@@ -716,7 +725,7 @@ pub(crate) fn component(
                 .map(|v| v.text())
                 .or_else(|| signal.map(|s| s.text.clone()))
                 .unwrap_or_else(|| if c.output { "OUT".into() } else { "IN".into() });
-            let color = signal.map_or(color, |s| s.tone.text_color());
+            let color = signal.map_or(color, |s| crate::theme::signal_text(p.ctx(), s.tone));
             let galley =
                 p.layout_no_wrap(text, FontId::monospace(12.0 * canvas.camera.zoom), color);
             let angle = match c.facing {
@@ -829,7 +838,7 @@ pub(crate) fn component(
             if ghost {
                 color
             } else {
-                signal.map_or(ACCENT, |s| s.tone.color())
+                signal.map_or(ACCENT, |s| crate::theme::signal(p.ctx(), s.tone))
             },
         );
     }

@@ -152,6 +152,7 @@ impl Settings {
 
     /// Apply interface density and motion without touching the canvas camera.
     pub fn apply_appearance(&self, ctx: &egui::Context) {
+        self.signal_palette.apply(ctx);
         ctx.set_zoom_factor(f32::from(self.ui_scale.percent()) / 100.0);
         let animation = if self.reduce_motion {
             0.0

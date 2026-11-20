@@ -196,16 +196,18 @@ pub(crate) fn draw(
             ),
             7.0,
         );
-        text(
-            -20,
-            y,
+        let word = contents.map_or(0, |words| words.get(a));
+        let word_color = if c.kind == Kind::Ram && contents.is_some() {
+            crate::theme::signal_text(p.ctx(), crate::SignalTone::word(c.bits, word))
+        } else {
+            color
+        };
+        p.text(
+            at(-20, y),
             Align2::RIGHT_CENTER,
-            format!(
-                "{:0width$X}",
-                contents.map_or(0, |v| v.get(a)),
-                width = c.bits.div_ceil(4) as usize
-            ),
-            7.0,
+            format!("{:0width$X}", word, width = c.bits.div_ceil(4) as usize),
+            FontId::monospace(7.0 * z),
+            word_color,
         );
     }
     for port in c.memory_terminals() {
@@ -454,18 +456,24 @@ impl MemoryEditor {
                     ));
                     for column in 0..4 {
                         let address = base + column;
-                        if address < capacity
-                            && ui
-                                .selectable_label(
-                                    self.address == address,
-                                    egui::RichText::new(format!(
-                                        "{:0width$X}",
-                                        contents.get(address),
-                                        width = c.bits.div_ceil(4) as usize
-                                    ))
-                                    .monospace(),
-                                )
-                                .clicked()
+                        if address >= capacity {
+                            break;
+                        }
+                        let word = contents.get(address);
+                        let mut label = egui::RichText::new(format!(
+                            "{word:0width$X}",
+                            width = c.bits.div_ceil(4) as usize
+                        ))
+                        .monospace();
+                        if c.kind == Kind::Ram {
+                            label = label.color(crate::theme::signal_text(
+                                ui.ctx(),
+                                crate::SignalTone::word(c.bits, word),
+                            ));
+                        }
+                        if ui
+                            .selectable_label(self.address == address, label)
+                            .clicked()
                         {
                             self.select_address(address, contents);
                         }

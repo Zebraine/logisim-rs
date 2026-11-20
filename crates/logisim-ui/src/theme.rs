@@ -1,25 +1,9 @@
 //! Shared desktop chrome. Document artwork supplies its own colors and fonts.
 use egui::{Color32, Context, FontId, Response, Stroke, StrokeKind, TextStyle, Ui, vec2};
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum SignalPalette {
-    #[default]
-    Default,
-    HighContrast,
-    ColorblindSafe,
-}
-
-impl SignalPalette {
-    pub const ALL: [Self; 3] = [Self::Default, Self::HighContrast, Self::ColorblindSafe];
-
-    pub(crate) fn name(self) -> &'static str {
-        crate::i18n::tr(match self {
-            Self::Default => "Default",
-            Self::HighContrast => "High contrast",
-            Self::ColorblindSafe => "Colorblind-safe",
-        })
-    }
-}
+mod signal;
+pub use signal::SignalPalette;
+pub(crate) use signal::{active_palette, signal, signal_text};
 
 pub(crate) const CANVAS: Color32 = Color32::WHITE;
 pub(crate) const SURFACE: Color32 = Color32::WHITE;
@@ -35,10 +19,6 @@ pub(crate) const ACCENT_HOVER: Color32 = Color32::from_rgb(67, 56, 202);
 pub(crate) const ACCENT_SOFT: Color32 = Color32::from_rgb(238, 242, 255);
 pub(crate) const SELECTED: Color32 = Color32::from_rgb(224, 231, 255);
 pub(crate) const SUCCESS: Color32 = Color32::from_rgb(21, 128, 61);
-pub(crate) const LOW: Color32 = Color32::from_rgb(11, 107, 58);
-pub(crate) const HIGH: Color32 = Color32::from_rgb(22, 163, 74);
-pub(crate) const BUS: Color32 = Color32::from_rgb(71, 85, 105);
-pub(crate) const UNKNOWN: Color32 = Color32::from_rgb(124, 58, 237);
 pub(crate) const WARNING: Color32 = Color32::from_rgb(180, 83, 9);
 pub(crate) const DANGER: Color32 = Color32::from_rgb(220, 38, 38);
 

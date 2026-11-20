@@ -218,7 +218,7 @@ pub(crate) fn draw(
             .is_some_and(|s| s.binary == "1");
         let signal_color = simulation
             .and_then(|s| s.ports.get(&(c.id, 0)))
-            .map_or(color, |s| s.tone.color());
+            .map_or(color, |s| crate::theme::signal(p.ctx(), s.tone));
         let sign = if high { -1 } else { 1 };
         let points = [
             (-17, 4 * sign),
@@ -292,7 +292,7 @@ pub(crate) fn draw(
         }
         let value = simulation.and_then(|s| s.storage.get(&c.id));
         let label = value.map_or("0", |s| s.text.as_str());
-        let tone = value.map_or(color, |s| s.tone.text_color());
+        let tone = value.map_or(color, |s| crate::theme::signal_text(p.ctx(), s.tone));
         let x = if c.kind == Kind::ShiftRegister {
             15
         } else {
@@ -419,6 +419,6 @@ pub(crate) fn draw(
         } else {
             12.0 * z
         }),
-        state.map_or(color, |s| s.tone.text_color()),
+        state.map_or(color, |s| crate::theme::signal_text(p.ctx(), s.tone)),
     );
 }

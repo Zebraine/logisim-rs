@@ -132,7 +132,8 @@ fn unselected_open_ends_have_signal_colored_dots_without_marking_elbows() {
         .iter()
         .filter_map(|s| match &s.shape {
             Shape::Circle(circle)
-                if circle.radius == 3.0 && circle.fill == SignalTone::High.color() =>
+                if circle.radius == 3.0
+                    && circle.fill == crate::theme::signal(&ctx, SignalTone::High) =>
             {
                 Some(circle.center)
             }
@@ -146,4 +147,86 @@ fn unselected_open_ends_have_signal_colored_dots_without_marking_elbows() {
             canvas.screen(Point::new(150, 100))
         ]
     );
+}
+
+#[test]
+fn signal_patterns_distinguish_faults_even_without_color() {
+    use SignalTone::*;
+    for tone in [Low, High, Bus, Unknown] {
+        assert!(dash_pattern(tone).is_none());
+    }
+    let (error, _) = dash_pattern(Error).unwrap();
+    let (mismatch, _) = dash_pattern(WidthMismatch).unwrap();
+    assert_eq!(error.len(), 1);
+    assert!(mismatch.windows(2).any(|pair| pair[0] != pair[1]));
+}
+
+#[test]
+fn live_component_ink_tracks_palette_and_preserves_document_artwork() {
+    use crate::SignalPalette;
+    let ctx = egui::Context::default();
+    let canvas = Canvas {
+        rect: Rect::from_min_size(Pos2::ZERO, vec2(500., 400.)),
+        ..Default::default()
+    };
+    let custom_lamp = Color32::from_rgb(27, 165, 220);
+    let label_color = Color32::from_rgb(139, 10, 147);
+    for kind in [
+        Kind::Led,
+        Kind::SevenSegment,
+        Kind::HexDisplay,
+        Kind::Probe,
+        Kind::Pin,
+        Kind::Register,
+        Kind::Latch(logisim_core::Latch::D),
+        Kind::Ram,
+    ] {
+        let mut c = Component::new(kind, Point::new(200, 160));
+        c.label = "document label".into();
+        c.color = [139, 10, 147];
+        c.bits = 1;
+        c.io.on_color = custom_lamp.to_array();
+        let mut view = SimulationView::default();
+        let high = SignalView {
+            text: "1".into(),
+            binary: "1".into(),
+            tone: SignalTone::High,
+        };
+        for (index, _) in c.ports().iter().enumerate() {
+            let mut signal = high.clone();
+            if kind == Kind::HexDisplay && index == 0 {
+                signal.tone = SignalTone::Bus;
+            }
+            view.ports.insert((c.id, index), signal.into());
+        }
+        view.indicators.insert(c.id, [true; 8]);
+        view.storage.insert(c.id, high);
+        view.memories.entry(c.id).or_default().fill(0, 1, 1);
+        for palette in SignalPalette::ALL {
+            palette.apply(&ctx);
+            let mut out = ctx.run_ui(Default::default(), |ui| {
+                component(ui.painter(), &canvas, &c, false, false, Some(&view))
+            });
+            out.textures_delta.clear();
+            let shapes = || out.shapes.iter().map(|s| &s.shape);
+            let text_has = |label: &str, color| {
+                shapes().any(|s| matches!(s, Shape::Text(t) if
+                t.galley.job.text == label && t.galley.job.sections.iter().any(|s| s.format.color == color)))
+            };
+            assert!(
+                text_has("document label", label_color),
+                "{kind:?} document label"
+            );
+            let high = palette.color(SignalTone::High);
+            match kind {
+                Kind::Led => assert!(shapes().any(|s| matches!(s,Shape::Circle(c) if c.fill == custom_lamp && c.stroke.color == high))),
+                Kind::SevenSegment | Kind::HexDisplay => {
+                    for ink in [high, custom_lamp] {
+                        assert!(shapes().any(|s| matches!(s,Shape::LineSegment{stroke,..} if stroke.color == ink)), "{kind:?} segment");
+                    }
+                }
+                _ => assert!(text_has("1",palette.text_color(SignalTone::High)), "{kind:?} stored or port value"),
+            }
+        }
+    }
 }

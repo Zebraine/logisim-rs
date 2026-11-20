@@ -110,6 +110,6 @@ pub(crate) fn draw(
         Align2::CENTER_CENTER,
         value.map_or("0", |s| s.text.as_str()),
         FontId::monospace(10.0 * z),
-        value.map_or(color, |s| s.tone.text_color()),
+        value.map_or(color, |s| crate::theme::signal_text(p.ctx(), s.tone)),
     );
 }

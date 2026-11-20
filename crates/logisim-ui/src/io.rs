@@ -235,10 +235,16 @@ pub(crate) fn draw(
     let body = Rect::from_two_pos(at(min), at(max));
     let z = canvas.camera.zoom;
     let stroke = Stroke::new(1.5, ink);
-    let input_stroke = |index| {
+    let palette = crate::theme::active_palette(p.ctx());
+    let input_tone = |index| {
         simulation
             .and_then(|s| s.ports.get(&(c.id, index)))
-            .map_or(stroke, |s| Stroke::new(stroke.width, s.tone.color()))
+            .map(|s| s.tone)
+    };
+    let input_stroke = |index| {
+        input_tone(index).map_or(stroke, |tone| {
+            Stroke::new(stroke.width, palette.color(tone))
+        })
     };
     let lights = simulation
         .and_then(|s| s.indicators.get(&c.id))
@@ -297,7 +303,7 @@ pub(crate) fn draw(
                     let fill = match state {
                         Some(true) => color(c.io.on_color),
                         Some(false) => color(c.io.off_color),
-                        None => crate::SignalTone::Unknown.color(),
+                        None => palette.color(crate::SignalTone::Unknown),
                     };
                     let center =
                         at(min + Point::new(i32::from(col) * 10 + 5, i32::from(row) * 10 + 5));
@@ -308,6 +314,15 @@ pub(crate) fn draw(
                             Rect::from_center_size(center, egui::vec2(10.0, 10.0) * z),
                             0.0,
                             fill,
+                        );
+                    }
+                    if cells.is_some()
+                        && let Some(high) = state
+                    {
+                        p.circle_filled(
+                            center,
+                            1.4 * z,
+                            palette.color(crate::SignalTone::bit(high)),
                         );
                     }
                 }
@@ -336,11 +351,7 @@ pub(crate) fn draw(
             p.circle_filled(
                 at(Point::new(-10, 9)),
                 2.0 * z,
-                if closed {
-                    crate::theme::ACCENT
-                } else {
-                    Color32::from_gray(150)
-                },
+                input_tone(0).map_or(ink, |tone| palette.color(tone)),
             );
         }
         Kind::DipSwitch => {
@@ -368,10 +379,10 @@ pub(crate) fn draw(
                 p.rect_filled(
                     Rect::from_center_size(center, size),
                     2.0 * z,
-                    if on {
-                        crate::theme::ACCENT
+                    if simulation.is_some() {
+                        palette.color(crate::SignalTone::bit(on))
                     } else {
-                        Color32::from_gray(100)
+                        ink
                     },
                 );
                 let offset = if on { 4.0 } else { -4.0 };
@@ -471,9 +482,34 @@ pub(crate) fn draw(
                 ((10, 52), (28, 52)),
                 ((31, 33), (31, 50)),
             ];
+            // Keep the document's on/off fills. Each segment has its own signal
+            // outline when lit and a small terminal dot when unlit.
+            let segment_color = |index: usize| {
+                let port = if c.kind == Kind::HexDisplay {
+                    usize::from(index == 7)
+                } else {
+                    index
+                };
+                input_tone(port).map(|tone| {
+                    palette.color(match tone {
+                        crate::SignalTone::Bus if c.kind == Kind::HexDisplay && index != 7 => {
+                            crate::SignalTone::bit(lights[index])
+                        }
+                        _ => tone,
+                    })
+                })
+            };
             for (i, ((x1, y1), (x2, y2))) in segments.into_iter().enumerate() {
+                let line = [at(min + Point::new(x1, y1)), at(min + Point::new(x2, y2))];
+                if let Some(signal) = segment_color(i) {
+                    if lights[i] {
+                        p.line_segment(line, Stroke::new(5.5 * z, signal));
+                    } else {
+                        p.circle_filled(line[0], 2.1 * z, signal);
+                    }
+                }
                 p.line_segment(
-                    [at(min + Point::new(x1, y1)), at(min + Point::new(x2, y2))],
+                    line,
                     Stroke::new(
                         3.3 * z,
                         color(if lights[i] {
@@ -484,8 +520,12 @@ pub(crate) fn draw(
                     ),
                 );
             }
+            let decimal = at(min + Point::new(35, 53));
+            if let Some(signal) = segment_color(7) {
+                p.circle_filled(decimal, 3.3 * z, signal);
+            }
             p.circle_filled(
-                at(min + Point::new(35, 53)),
+                decimal,
                 2.1 * z,
                 color(if lights[7] {
                     c.io.on_color

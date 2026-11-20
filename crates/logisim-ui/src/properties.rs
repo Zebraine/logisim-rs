@@ -148,7 +148,10 @@ fn selection_info(ui: &mut Ui, editor: &mut Editor) {
             ));
             ui.weak(tr("Click or drag the wire to branch. Ctrl-drag moves; drag blue endpoint handles to reshape."));
             if let Some(signal) = editor.simulation.view.wires.get(&w.id) {
-                ui.colored_label(signal.tone.text_color(), tf!("Signal: {}", signal.text));
+                ui.colored_label(
+                    crate::theme::signal_text(ui.ctx(), signal.tone),
+                    tf!("Signal: {}", signal.text),
+                );
                 ui.monospace(&signal.binary);
             }
             if editor.display.highlight_net {

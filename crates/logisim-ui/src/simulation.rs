@@ -1,7 +1,7 @@
 //! Presentation and commands only; the desktop host owns the simulation service.
 mod frequency;
 use crate::{i18n::tr, tf, theme};
-use egui::{Color32, Key, Modifiers, Ui};
+use egui::{Key, Modifiers, Ui};
 pub use frequency::{DEFAULT_TICK_HZ, MAX_TICK_HZ};
 use logisim_core::{Component, Id, Point};
 use std::collections::{BTreeMap, BTreeSet};
@@ -16,21 +16,15 @@ pub enum SignalTone {
     WidthMismatch,
 }
 impl SignalTone {
-    pub(crate) fn text_color(self) -> Color32 {
-        if self == Self::High {
-            theme::SUCCESS
-        } else {
-            self.color()
-        }
+    pub(crate) fn bit(high: bool) -> Self {
+        if high { Self::High } else { Self::Low }
     }
-    pub(crate) fn color(self) -> Color32 {
-        match self {
-            Self::Low => theme::LOW,
-            Self::High => theme::HIGH,
-            Self::Bus => theme::BUS,
-            Self::Unknown => theme::UNKNOWN,
-            Self::Error => theme::DANGER,
-            Self::WidthMismatch => theme::WARNING,
+
+    pub(crate) fn word(bits: u8, value: u32) -> Self {
+        if bits == 1 {
+            Self::bit(value != 0)
+        } else {
+            Self::Bus
         }
     }
 }
@@ -50,9 +44,16 @@ impl SignalView {
                 ui.horizontal(|ui| {
                     let (dot, _) =
                         ui.allocate_exact_size(egui::vec2(10.0, 14.0), egui::Sense::hover());
-                    ui.painter()
-                        .circle_filled(dot.center(), 3.5, self.tone.color());
-                    ui.monospace(&self.text);
+                    ui.painter().circle_filled(
+                        dot.center(),
+                        3.5,
+                        theme::signal(ui.ctx(), self.tone),
+                    );
+                    ui.label(
+                        egui::RichText::new(&self.text)
+                            .monospace()
+                            .color(theme::signal_text(ui.ctx(), self.tone)),
+                    );
                     ui.separator();
                     ui.label(
                         egui::RichText::new(tf!("{} bit", self.binary.len())).color(theme::MUTED),
@@ -485,18 +486,24 @@ impl SimulationUi {
     }
     pub fn status_chip(&self, ui: &mut Ui) {
         let (name, tone) = if self.view.limited || self.view.plugin_error_count > 0 {
-            (tr("Error").into(), theme::DANGER)
+            (
+                tr("Error").into(),
+                theme::signal(ui.ctx(), SignalTone::Error),
+            )
         } else if self.view.pending > 0 && ui.available_width() > 190.0 {
             (
                 self.status(),
                 if self.view.enabled {
-                    theme::SUCCESS
+                    theme::signal(ui.ctx(), SignalTone::High)
                 } else {
                     theme::MUTED
                 },
             )
         } else if self.view.enabled {
-            (tr("Running").into(), theme::SUCCESS)
+            (
+                tr("Running").into(),
+                theme::signal(ui.ctx(), SignalTone::High),
+            )
         } else {
             (tr("Paused").into(), theme::MUTED)
         };
@@ -590,8 +597,11 @@ impl SimulationUi {
             }
         }
         if let Some(state) = self.view.storage.get(&c.id) {
-            ui.colored_label(state.tone.text_color(), tf!("Stored value: {}", state.text))
-                .on_hover_text(&state.binary);
+            ui.colored_label(
+                theme::signal_text(ui.ctx(), state.tone),
+                tf!("Stored value: {}", state.text),
+            )
+            .on_hover_text(&state.binary);
             if matches!(
                 c.kind,
                 logisim_core::Kind::FlipFlop(_) | logisim_core::Kind::Latch(_)
@@ -605,8 +615,11 @@ impl SimulationUi {
             self.actions.push(SimulationAction::PokeClock { id: c.id });
         }
         if let Some(signal) = self.view.ports.get(&(c.id, 0)) {
-            ui.colored_label(signal.tone.text_color(), tf!("Signal: {}", signal.text))
-                .on_hover_text(tf!("{} bit: {}", signal.binary.len(), signal.binary));
+            ui.colored_label(
+                theme::signal_text(ui.ctx(), signal.tone),
+                tf!("Signal: {}", signal.text),
+            )
+            .on_hover_text(tf!("{} bit: {}", signal.binary.len(), signal.binary));
         }
         let Some(input) = self.view.inputs.get(&c.id).copied() else {
             return;
@@ -663,7 +676,7 @@ impl SimulationUi {
         }
         if value.is_none() {
             ui.colored_label(
-                SignalTone::Error.color(),
+                theme::signal_text(ui.ctx(), SignalTone::Error),
                 tf!("Enter a hexadecimal value within {} bits.", input.bits),
             );
         }
