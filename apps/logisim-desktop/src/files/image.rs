@@ -41,18 +41,17 @@ impl ImageTarget {
                 return Err("The export destination changed. Choose the file again.".into());
             }
             if self.existing.is_some() {
-                let file = fs::OpenOptions::new()
-                    .write(true)
-                    .open(&self.path)
-                    .map_err(|e| e.to_string())?;
-                if file
-                    .metadata()
+                if fs::metadata(&self.path)
                     .map_err(|e| e.to_string())?
                     .permissions()
                     .readonly()
                 {
                     return Err("The selected file is read-only.".into());
                 }
+                fs::OpenOptions::new()
+                    .write(true)
+                    .open(&self.path)
+                    .map_err(|e| e.to_string())?;
             }
             Ok(())
         })

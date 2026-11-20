@@ -873,3 +873,36 @@ fn appearance_commands_follow_shape_selection_clipboard_history_and_layer_order(
     }
     assert_eq!(app.project(), &before);
 }
+
+#[test]
+fn export_image_menu_keeps_the_selected_component_camera_simulation_and_history() {
+    use crate::tests::support::widgets::click;
+    let ctx = Context::default();
+    let mut app = Workspace::default();
+    app.apply_settings(Settings {
+        theme: ThemeMode::Dark,
+        ..Default::default()
+    });
+    app.editor.set_tool(editor::Tool::Place(Kind::Pin));
+    app.editor.place(logisim_core::Point::new(100, 60));
+    app.editor.set_tool(editor::Tool::Select);
+    let id = app.circuit().components[0].id;
+    app.editor.session.selection.insert(id);
+    app.canvas.camera.pan(vec2(50., -18.));
+    app.canvas.set_zoom(1.5);
+    app.simulation_mut().ticks = 41;
+    let project = app.project().clone();
+    let camera = app.canvas.camera;
+    click(&ctx, &mut app, "File");
+    click(&ctx, &mut app, "Export Image…");
+    assert_eq!(app.take_file_actions(), [FileAction::ExportImage]);
+    assert_eq!(app.project(), &project);
+    assert_eq!(app.editor.session.selection, [id].into());
+    assert_eq!(app.canvas.camera.offset, camera.offset);
+    assert_eq!(app.canvas.camera.zoom, camera.zoom);
+    assert_eq!(app.preferences().theme, ThemeMode::Dark);
+    assert_eq!(app.simulation_mut().ticks, 41);
+    assert!(app.take_simulation_actions().is_empty());
+    app.editor.undo();
+    assert!(app.circuit().components.is_empty() && !app.editor.can_undo());
+}
