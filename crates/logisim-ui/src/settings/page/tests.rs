@@ -940,3 +940,117 @@ fn editor_default_rows_reset_at_both_window_sizes_without_editing_the_circuit() 
         }
     }
 }
+
+#[test]
+fn leaving_a_shortcut_button_returns_input_to_search_and_other_settings() {
+    use crate::{
+        shortcuts::{Command, Shortcuts},
+        tests::support::widgets::{click, frame, has},
+    };
+    use egui::Event;
+    let ctx = Context::default();
+    crate::configure(&ctx);
+    let mut app = Workspace {
+        settings_open: true,
+        ..Default::default()
+    };
+    app.settings_page.select(Category::Shortcuts);
+    let save = Command::Save.default_chord().label(ctx.os().is_mac());
+    let tick = Command::Tick.default_chord().label(ctx.os().is_mac());
+    let key = |key, modifiers| Event::Key {
+        key,
+        modifiers,
+        pressed: true,
+        repeat: false,
+        physical_key: None,
+    };
+    click(&ctx, &mut app, &save);
+    click(&ctx, &mut app, "Search settings · Ctrl+F");
+    frame(
+        &ctx,
+        &mut app,
+        vec![key(Key::F, Modifiers::SHIFT), Event::Text("F".into())],
+    );
+    frame(
+        &ctx,
+        &mut app,
+        vec![key(Key::Num5, Modifiers::NONE), Event::Text("5".into())],
+    );
+    assert_eq!(app.settings_page.query, "F5");
+    assert_eq!(app.preferences().shortcuts, Shortcuts::default());
+
+    app.settings_page.query = "simulation.tick".into();
+    click(&ctx, &mut app, &tick);
+    click(&ctx, &mut app, "Tick frequency");
+    let labels = frame(&ctx, &mut app, vec![key(Key::F8, Modifiers::NONE)]);
+    assert!(!has(&labels, "Press a shortcut… Esc to cancel"));
+    assert_eq!(app.preferences().shortcuts, Shortcuts::default());
+
+    app.settings_page.select(Category::Shortcuts);
+    click(&ctx, &mut app, &save);
+    let open = Command::Open.default_chord().label(ctx.os().is_mac());
+    click(&ctx, &mut app, &open);
+    frame(&ctx, &mut app, vec![key(Key::F7, Modifiers::NONE)]);
+    assert_eq!(
+        app.preferences().shortcuts.get(Command::Save),
+        Command::Save.default_chord()
+    );
+    assert_eq!(
+        app.preferences().shortcuts.get(Command::Open).to_string(),
+        "f7"
+    );
+    click(&ctx, &mut app, &save);
+    click(&ctx, &mut app, "Reset all shortcuts");
+    frame(&ctx, &mut app, vec![key(Key::F6, Modifiers::NONE)]);
+    assert!(app.settings_page.bindings.confirm_reset);
+    click(&ctx, &mut app, "Confirm reset");
+    assert_eq!(app.preferences().shortcuts, Shortcuts::default());
+}
+
+#[test]
+fn shortcut_capture_ends_on_window_or_keyboard_focus_loss() {
+    use crate::{
+        shortcuts::{Command, Shortcuts},
+        tests::support::widgets::{click, frame, has},
+    };
+    let ctx = Context::default();
+    crate::configure(&ctx);
+    let mut app = Workspace {
+        settings_open: true,
+        ..Default::default()
+    };
+    app.settings_page.select(Category::Shortcuts);
+    let save = Command::Save.default_chord().label(ctx.os().is_mac());
+    for window_loss in [false, true] {
+        click(&ctx, &mut app, &save);
+        assert!(has(
+            &frame(&ctx, &mut app, vec![]),
+            "Press a shortcut… Esc to cancel"
+        ));
+        if window_loss {
+            let _ = ctx.run_ui(
+                egui::RawInput {
+                    focused: false,
+                    ..Default::default()
+                },
+                |ui| app.show(ui),
+            );
+        } else {
+            ctx.memory_mut(|m| m.surrender_focus(m.focused().unwrap()));
+        }
+        let labels = frame(
+            &ctx,
+            &mut app,
+            vec![egui::Event::Key {
+                key: Key::F9,
+                modifiers: Modifiers::NONE,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+            }],
+        );
+        assert!(!has(&labels, "Press a shortcut… Esc to cancel"));
+        assert_eq!(app.preferences().shortcuts, Shortcuts::default());
+        assert!(app.settings_open);
+    }
+}

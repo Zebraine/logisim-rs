@@ -4,20 +4,37 @@ use crate::{
     shortcuts::{Chord, Command, Conflict, Group, Shortcuts},
     tf, theme,
 };
-use egui::{Align, Context, Event, Key, Layout, Ui};
+use egui::{Align, Context, Event, Id, Key, Layout, Ui};
 
 #[derive(Default)]
 pub(super) struct BindingEditor {
-    capture: Option<Command>,
+    capture: Option<(Command, Id)>,
     error: Option<(Command, Conflict)>,
     reveal_feedback: bool,
     pub(super) confirm_reset: bool,
 }
 impl BindingEditor {
+    fn capturing(&self, c: Command) -> bool {
+        self.capture.is_some_and(|(command, _)| command == c)
+    }
+
+    fn cancel_capture(&mut self) {
+        self.capture = None;
+        self.error = None;
+        self.reveal_feedback = false;
+    }
+
     pub(super) fn input(&mut self, ctx: &Context, bindings: &mut Shortcuts) {
-        let Some(command) = self.capture else {
+        let Some((command, button)) = self.capture else {
             return;
         };
+        if ctx.input(|i| i.pointer.any_click() || !i.focused)
+            || ctx.text_edit_focused()
+            || !ctx.memory(|m| m.has_focus(button))
+        {
+            self.cancel_capture();
+            return;
+        }
         let mac = ctx.os().is_mac();
         let mut pressed = None;
         ctx.input_mut(|i| {
@@ -59,7 +76,7 @@ impl BindingEditor {
         });
         if let Some((key, mods)) = pressed {
             if key == Key::Escape {
-                *self = Self::default();
+                self.cancel_capture();
             } else {
                 self.assign(bindings, command, Chord::from_event(key, mods, mac));
             }
@@ -118,7 +135,10 @@ impl BindingEditor {
                     if i > 0 {
                         ui.separator();
                     }
-                    ui.push_id(c.id(), |ui| self.row(ui, bindings, c));
+                    let row = Id::unique(("settings-shortcut-row", c.id()));
+                    ui.scope_builder(egui::UiBuilder::new().scope_id(row), |ui| {
+                        self.row(ui, bindings, c)
+                    });
                 }
             });
             ui.add_space(f32::from(theme::metrics(ui.ctx()).gap));
@@ -152,15 +172,11 @@ impl BindingEditor {
                     self.assign(bindings, c, c.default_chord());
                 }
                 let label = chord.label(ui.ctx().os().is_mac());
-                let r = ui.add(
-                    egui::Button::new(label)
-                        .selected(self.capture == Some(c))
-                        .wrap(),
-                );
+                let r = ui.add(egui::Button::new(label).selected(self.capturing(c)).wrap());
                 theme::focus_ring(ui, &r);
                 if r.clicked() {
                     *self = Self {
-                        capture: Some(c),
+                        capture: Some((c, r.id)),
                         reveal_feedback: true,
                         ..Default::default()
                     };
@@ -168,7 +184,7 @@ impl BindingEditor {
                 }
             });
         });
-        if self.capture == Some(c) {
+        if self.capturing(c) {
             let hint = ui.label(tr("Press a shortcut… Esc to cancel"));
             if self.error.is_none() && std::mem::take(&mut self.reveal_feedback) {
                 hint.scroll_to_me(None);
