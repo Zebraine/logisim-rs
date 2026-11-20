@@ -10,17 +10,19 @@ pub(super) enum Category {
     Workspace,
     Appearance,
     Editor,
+    Shortcuts,
     Simulation,
     Generation,
     Files,
     Advanced,
 }
 impl Category {
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::General,
         Self::Workspace,
         Self::Appearance,
         Self::Editor,
+        Self::Shortcuts,
         Self::Simulation,
         Self::Generation,
         Self::Files,
@@ -32,6 +34,7 @@ impl Category {
             Self::Workspace => "Workspace",
             Self::Appearance => "Appearance",
             Self::Editor => "Editor",
+            Self::Shortcuts => "Shortcuts",
             Self::Simulation => "Simulation",
             Self::Generation => "Circuit generation",
             Self::Files => "Files & Recovery",

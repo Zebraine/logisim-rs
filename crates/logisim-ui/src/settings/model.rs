@@ -200,15 +200,21 @@ impl Settings {
         }
     }
     /// Replay only local edits when Retry loads a configuration repaired on disk.
-    pub fn with_changes(mut self, before: Self, after: Self) -> Self {
+    pub fn with_changes(
+        mut self,
+        before: Self,
+        after: Self,
+    ) -> Result<Self, crate::shortcuts::Conflict> {
         if before.shortcuts != after.shortcuts {
-            self.shortcuts = after.shortcuts;
+            self.shortcuts = self
+                .shortcuts
+                .with_changes(before.shortcuts, after.shortcuts)?;
         }
         for entry in super::registry::REGISTRY {
             if entry.changed(after, before) {
                 entry.copy(&mut self, after);
             }
         }
-        self
+        Ok(self)
     }
 }

@@ -1,21 +1,24 @@
 //! Workspace menus; document and simulation commands stay in their existing layers.
+use crate::shortcuts::Command;
 use crate::{FileAction, Workspace, document::recent_button, i18n::tr, project::CircuitCommand};
 use egui::Ui;
 
 impl Workspace {
+    fn command_button(&mut self, ui: &mut Ui, c: Command) {
+        let label = self.preferences.shortcuts.caption(c, ui);
+        if ui
+            .add_enabled(self.command_enabled(c), egui::Button::new(label))
+            .clicked()
+        {
+            self.run_command(c);
+            ui.close();
+        }
+    }
     pub(super) fn menus(&mut self, ui: &mut Ui) {
         egui::MenuBar::new().ui(ui, |ui| {
             ui.menu_button(tr("File"), |ui| {
-                for (label, action) in [
-                    ("New · Ctrl+N", FileAction::New),
-                    ("Open… · Ctrl+O", FileAction::Open),
-                    ("Save · Ctrl+S", FileAction::Save),
-                    ("Save As… · Ctrl+Shift+S", FileAction::SaveAs),
-                ] {
-                    if ui.button(tr(label)).clicked() {
-                        self.file_actions.push(action);
-                        ui.close();
-                    }
+                for c in [Command::New, Command::Open, Command::Save, Command::SaveAs] {
+                    self.command_button(ui, c);
                 }
                 ui.menu_button(tr("Recent Projects"), |ui| {
                     let recent = &self.recent;
@@ -45,69 +48,25 @@ impl Workspace {
                     self.settings_open = true;
                     ui.close();
                 }
-                if ui.button(tr("Exit")).clicked() {
-                    self.file_actions.push(FileAction::Close);
-                    ui.close();
-                }
+                self.command_button(ui, Command::Exit);
             });
             ui.menu_button(tr("Edit"), |ui| {
                 if self.editor.session.context.appearance_mode {
                     self.appearance.edit_menu(ui, &mut self.editor);
                     return;
                 }
-                if ui
-                    .add_enabled(
-                        self.editor.can_undo(),
-                        egui::Button::new(tr("Undo · Ctrl+Z")),
-                    )
-                    .clicked()
-                {
-                    self.editor.undo();
-                    ui.close();
-                }
-                if ui
-                    .add_enabled(
-                        self.editor.can_redo(),
-                        egui::Button::new(tr("Redo · Ctrl+Shift+Z")),
-                    )
-                    .clicked()
-                {
-                    self.editor.redo();
-                    ui.close();
-                }
+                self.command_button(ui, Command::Undo);
+                self.command_button(ui, Command::Redo);
                 ui.separator();
+                for c in [
+                    Command::Cut,
+                    Command::Copy,
+                    Command::Paste,
+                    Command::Duplicate,
+                ] {
+                    self.command_button(ui, c);
+                }
                 let selected = !self.editor.session.selection.is_empty();
-                if ui
-                    .add_enabled(selected, egui::Button::new(tr("Cut · Ctrl+X")))
-                    .clicked()
-                {
-                    self.editor.cut();
-                    ui.close();
-                }
-                if ui
-                    .add_enabled(selected, egui::Button::new(tr("Copy · Ctrl+C")))
-                    .clicked()
-                {
-                    self.editor.copy();
-                    ui.close();
-                }
-                if ui
-                    .add_enabled(
-                        self.editor.can_paste(),
-                        egui::Button::new(tr("Paste · Ctrl+V")),
-                    )
-                    .clicked()
-                {
-                    self.editor.paste();
-                    ui.close();
-                }
-                if ui
-                    .add_enabled(selected, egui::Button::new(tr("Duplicate · Ctrl+D")))
-                    .clicked()
-                {
-                    self.editor.duplicate();
-                    ui.close();
-                }
                 if ui
                     .add_enabled(selected, egui::Button::new(tr("Delete")))
                     .clicked()
@@ -115,10 +74,7 @@ impl Workspace {
                     self.editor.delete();
                     ui.close();
                 }
-                if ui.button(tr("Select All · Ctrl+A")).clicked() {
-                    self.editor.select_all();
-                    ui.close();
-                }
+                self.command_button(ui, Command::SelectAll);
             });
             ui.menu_button(tr("Project"), |ui| {
                 if ui.button(tr("Analyze Circuit…")).clicked() {
@@ -135,8 +91,8 @@ impl Workspace {
                     ui.close();
                 }
                 ui.separator();
+                self.command_button(ui, Command::AddCircuit);
                 for (label, command, enabled) in [
-                    ("Add Circuit… · Ctrl+Shift+N", CircuitCommand::Add, true),
                     ("Rename Circuit…", CircuitCommand::Rename, true),
                     (
                         "Set as Main Circuit",
@@ -163,16 +119,7 @@ impl Workspace {
                     }
                 }
                 ui.separator();
-                if ui
-                    .add_enabled(
-                        !self.editor.session.context.path.is_empty(),
-                        egui::Button::new(tr("Return to Parent · Alt+Left")),
-                    )
-                    .clicked()
-                {
-                    self.editor.leave_instance();
-                    ui.close();
-                }
+                self.command_button(ui, Command::ReturnParent);
                 ui.separator();
                 if ui
                     .selectable_label(
@@ -188,7 +135,9 @@ impl Workspace {
                 if ui
                     .selectable_label(
                         self.editor.session.context.appearance_mode,
-                        tr("Edit Circuit Appearance · Ctrl+Shift+E"),
+                        self.preferences
+                            .shortcuts
+                            .caption(Command::ToggleAppearance, ui),
                     )
                     .clicked()
                 {
@@ -209,9 +158,11 @@ impl Workspace {
                 disabled_actions(ui, &["Project Options…"]);
             });
             ui.menu_button(tr("Simulate"), |ui| {
-                self.editor
-                    .simulation
-                    .menu(ui, &mut self.preferences.tick_hz);
+                self.editor.simulation.menu(
+                    ui,
+                    &mut self.preferences.tick_hz,
+                    &self.preferences.shortcuts,
+                );
             });
             ui.menu_button(tr("Window"), |ui| {
                 if ui.button(tr("Minimize")).clicked() {

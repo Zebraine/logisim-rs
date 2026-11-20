@@ -79,12 +79,35 @@ pub struct Chord {
     key: Key,
 }
 impl Chord {
+    pub(crate) fn is_modifier(key: Key) -> bool {
+        matches!(
+            key,
+            Key::ShiftLeft
+                | Key::ShiftRight
+                | Key::ControlLeft
+                | Key::ControlRight
+                | Key::AltLeft
+                | Key::AltRight
+                | Key::SuperLeft
+                | Key::SuperRight
+                | Key::Fn
+        )
+    }
+
     pub(crate) fn consume_primary(ui: &egui::Ui, key: Key) -> bool {
         let mac = ui.ctx().os().is_mac();
         let wanted = Self { key, mods: PRIMARY };
         ui.input_mut(|i| {
             let count = i.events.len();
-            i.events.retain(|e| !matches!(e, egui::Event::Key { key, modifiers, pressed: true, .. } if wanted.matches(Self::from_event(*key, *modifiers, mac), mac)));
+            i.events.retain(|event| match event {
+                egui::Event::Key {
+                    key,
+                    modifiers,
+                    pressed: true,
+                    ..
+                } => !wanted.matches(Self::from_event(*key, *modifiers, mac), mac),
+                _ => true,
+            });
             i.events.len() != count
         })
     }
@@ -130,6 +153,7 @@ impl Chord {
         let m = Self::from_event(self.key, self.mods, false).mods;
         use Key::*;
         match self.key {
+            key if Self::is_modifier(key) => true,
             Escape | Enter | Backspace | Delete | Tab | Copy | Cut | Paste => true,
             P | V | W | T | U | R | Space | Num0 | Num1 | ArrowLeft | ArrowRight | ArrowUp
             | ArrowDown
@@ -137,6 +161,8 @@ impl Chord {
             {
                 true
             }
+            // Windows translates these physical combinations into native clipboard events.
+            Insert if m.command || m.shift => true,
             F | Num0 | Y if m == PRIMARY => true,
             ArrowUp | ArrowDown if m == PRIMARY || m == PRIMARY_SHIFT => true,
             // The appearance editor keeps its original editing shortcuts.
@@ -186,6 +212,9 @@ impl FromStr for Chord {
             .find(|k| k.name().eq_ignore_ascii_case(rest))
             .or_else(|| Key::from_name(rest))
             .ok_or("Invalid shortcut chord.")?;
+        if Self::is_modifier(key) {
+            return Err("A shortcut requires a non-modifier key.");
+        }
         Ok(Self { mods, key })
     }
 }
@@ -214,6 +243,16 @@ impl Shortcuts {
             .into_iter()
             .find(|c| self.get(*c).matches(chord, mac))
     }
+    pub(crate) fn caption(&self, c: Command, ui: &egui::Ui) -> String {
+        self.caption_with(c, c.label(), ui)
+    }
+    pub(crate) fn caption_with(&self, c: Command, label: &str, ui: &egui::Ui) -> String {
+        format!(
+            "{} · {}",
+            crate::i18n::tr(label),
+            self.get(c).label(ui.ctx().os().is_mac())
+        )
+    }
     pub fn get(&self, c: Command) -> Chord {
         self.0[c as usize]
     }
@@ -228,6 +267,18 @@ impl Shortcuts {
             return Err(Conflict::Fixed);
         }
         Ok(())
+    }
+    pub(crate) fn with_changes(mut self, before: Self, after: Self) -> Result<Self, Conflict> {
+        for command in Command::ALL {
+            if before.get(command) != after.get(command) {
+                self.0[command as usize] = after.get(command);
+            }
+        }
+        // Validate the finished map so a valid swap can be replayed atomically.
+        for command in Command::ALL {
+            self.validate(command, self.get(command))?;
+        }
+        Ok(self)
     }
     pub fn bind(&mut self, c: Command, chord: Chord) -> Result<(), Conflict> {
         self.validate(c, chord)?;

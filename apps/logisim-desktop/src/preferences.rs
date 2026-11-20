@@ -88,7 +88,9 @@ impl Preferences {
             panels: WorkspaceLayout::default(),
             layout_due: None,
         };
-        state.reload(workspace);
+        if let Some(loaded) = state.read_settings(workspace) {
+            state.loaded = loaded;
+        }
         workspace.apply_settings(state.loaded.config.settings);
         workspace.set_recent(state.loaded.config.recent.clone());
         state.window = state.loaded.config.window;
@@ -127,26 +129,25 @@ impl Preferences {
     pub fn flush_layout(&mut self) {
         self.layout_due = Some(Instant::now());
     }
-    fn reload(&mut self, workspace: &mut Workspace) -> bool {
+    fn read_settings(&mut self, workspace: &mut Workspace) -> Option<Loaded> {
         let Some(path) = self.path.as_ref() else {
             self.blocked = true;
             workspace
                 .set_settings_error(Some("User configuration directory is unavailable.".into()));
-            return false;
+            return None;
         };
         match Loaded::read(path) {
             Ok(loaded) => {
-                self.loaded = loaded;
                 self.blocked = false;
                 workspace.set_config_path(Some(path.display().to_string()));
                 workspace.set_settings_error(None);
-                true
+                Some(loaded)
             }
             Err(issue) => {
                 self.blocked = true;
                 workspace.set_config_path(Some(issue.path.display().to_string()));
                 workspace.set_settings_error(Some(issue.message.into()));
-                false
+                None
             }
         }
     }
@@ -159,23 +160,32 @@ impl Preferences {
         }
         let local_window = self.window != self.loaded.config.window;
         let local_panels = self.panels != self.loaded.config.panels;
-        if self.reload(workspace) {
-            if !local_window {
-                self.window = self.loaded.config.window;
-            }
-            if !local_panels {
-                self.panels = self.loaded.config.panels;
-            }
-            if !recent_changed {
-                workspace.set_recent(self.loaded.config.recent.clone());
-            }
-            workspace.apply_settings(
-                self.loaded
-                    .config
-                    .settings
-                    .with_changes(baseline, workspace.preferences()),
-            );
+        let Some(loaded) = self.read_settings(workspace) else {
+            return;
+        };
+        let Ok(merged) = loaded
+            .config
+            .settings
+            .with_changes(baseline, workspace.preferences())
+        else {
+            self.blocked = true;
+            workspace.set_settings_error(Some(
+                "A local shortcut conflicts with a binding on disk. Change the binding and retry."
+                    .into(),
+            ));
+            return;
+        };
+        if !local_window {
+            self.window = loaded.config.window;
         }
+        if !local_panels {
+            self.panels = loaded.config.panels;
+        }
+        if !recent_changed {
+            workspace.set_recent(loaded.config.recent.clone());
+        }
+        workspace.apply_settings(merged);
+        self.loaded = loaded;
     }
     pub fn synchronize(&mut self, workspace: &mut Workspace) {
         if workspace.take_settings_retry() {

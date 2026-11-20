@@ -434,7 +434,7 @@ impl Editor {
         canvas: &mut Canvas,
         response: &Response,
         libraries: &[logisim_core::plugin::api::presentation::Library],
-        show_grid: &mut bool,
+        preferences: &mut crate::Settings,
     ) {
         self.validate_plugin_keyboard(libraries);
         let keyboard = ui.is_enabled()
@@ -849,7 +849,11 @@ impl Editor {
             if ui
                 .add_enabled(
                     !self.session.selection.is_empty(),
-                    egui::Button::new(tr("Duplicate · Ctrl+D")),
+                    egui::Button::new(
+                        preferences
+                            .shortcuts
+                            .caption(crate::shortcuts::Command::Duplicate, ui),
+                    ),
                 )
                 .clicked()
             {
@@ -875,7 +879,7 @@ impl Editor {
                 canvas.set_zoom(1.0);
                 ui.close();
             }
-            ui.checkbox(show_grid, tr("Show grid"));
+            ui.checkbox(&mut preferences.show_grid, tr("Show grid"));
         });
         if self.publish_clipboard {
             ui.ctx().copy_text(CLIPBOARD_MARKER.to_owned());

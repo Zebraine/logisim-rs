@@ -12,6 +12,7 @@ impl Workspace {
         if !ui.is_enabled()
             || self.dialog_open()
             || ui.ctx().any_popup_open()
+            || egui::Popup::is_any_open(ui.ctx())
             || ui.ctx().text_edit_focused()
             || self.editor.simulation.plugin_keyboard.is_some()
             || ui.input(|i| !i.focused || i.events.iter().any(|e| matches!(e, Event::Ime(_))))
@@ -54,7 +55,11 @@ impl Workspace {
                 if command.scope() == Scope::Canvas && !canvas {
                     return true;
                 }
-                if !commands.contains(&command) {
+                // A platform clipboard event can accompany its key event. Other
+                // actions, especially consecutive clock edges, stay ordered.
+                if !matches!(command, Command::Cut | Command::Copy | Command::Paste)
+                    || !commands.contains(&command)
+                {
                     commands.push(command);
                 }
                 false
@@ -99,7 +104,12 @@ impl Workspace {
             Cut => self.editor.cut(),
             Paste => self.editor.paste(),
             Duplicate => self.editor.duplicate(),
-            SelectAll => self.editor.select_all(),
+            SelectAll => {
+                let circuit = self.circuit();
+                if !circuit.components.is_empty() || !circuit.wires.is_empty() {
+                    self.editor.select_all();
+                }
+            }
             AddCircuit => self.circuit_command(CircuitCommand::Add),
             ReturnParent => self.editor.leave_instance(),
             ToggleAppearance => {

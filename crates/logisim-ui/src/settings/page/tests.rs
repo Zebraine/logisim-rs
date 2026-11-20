@@ -626,3 +626,208 @@ fn ownership_error_and_retry_fit_the_recovery_card_in_both_languages() {
         }
     }
 }
+
+#[test]
+fn shortcut_capture_conflicts_cancel_and_resets_keep_workspace_state() {
+    use crate::{
+        shortcuts::{Command, Shortcuts},
+        tests::support::widgets::{click, frame, has},
+    };
+    use egui::{Event, PointerButton};
+    let ctx = Context::default();
+    crate::configure(&ctx);
+    let mut app = Workspace {
+        settings_open: true,
+        ..Default::default()
+    };
+    app.settings_page.select(Category::Shortcuts);
+    app.settings_page.query = "file.save".to_owned();
+    let defaults = Shortcuts::default();
+    let save = |app: &Workspace| app.preferences().shortcuts.get(Command::Save);
+    let key = |k, mods, repeat| Event::Key {
+        key: k,
+        physical_key: None,
+        pressed: true,
+        repeat,
+        modifiers: mods,
+    };
+    let send = |app: &mut Workspace, k, mods| {
+        let mut up = key(k, mods, false);
+        if let Event::Key { pressed, .. } = &mut up {
+            *pressed = false;
+        }
+        frame(&ctx, app, vec![key(k, mods, false), up])
+    };
+    for _ in 0..3 {
+        frame(&ctx, &mut app, vec![]);
+    }
+    app.editor.select_all();
+    app.editor.simulation.view.steps = 42;
+    app.canvas.camera.pan(vec2(77., 23.));
+    let selection = app.editor.session.selection.clone();
+    let camera = app.canvas.camera;
+    let ctrl_s = defaults.get(Command::Save).label(ctx.os().is_mac());
+    frame(&ctx, &mut app, vec![key(Key::F11, Modifiers::NONE, false)]);
+    click(&ctx, &mut app, &ctrl_s);
+    for k in [
+        Key::ControlLeft,
+        Key::ShiftRight,
+        Key::AltLeft,
+        Key::SuperRight,
+    ] {
+        let labels = send(&mut app, k, Modifiers::CTRL);
+        assert!(has(&labels, "Press a shortcut… Esc to cancel"));
+    }
+    let labels = frame(&ctx, &mut app, vec![key(Key::F11, Modifiers::NONE, true)]);
+    assert!(has(&labels, "Press a shortcut… Esc to cancel"));
+    assert!(has(
+        &send(&mut app, Key::O, Modifiers::COMMAND),
+        "Already assigned to “Open…”."
+    ));
+    assert!(has(
+        &send(&mut app, Key::F, Modifiers::COMMAND),
+        "Reserved by a fixed shortcut."
+    ));
+    assert_eq!(save(&app), Command::Save.default_chord());
+    send(&mut app, Key::Escape, Modifiers::NONE);
+    assert!(app.settings_open);
+    assert!(!has(
+        &frame(&ctx, &mut app, vec![]),
+        "Press a shortcut… Esc to cancel"
+    ));
+    click(&ctx, &mut app, &ctrl_s);
+    let bound = send(&mut app, Key::F5, Modifiers::NONE);
+    assert!(has(&bound, "F5"));
+    assert_eq!(save(&app).to_string(), "f5");
+    let right = bound.iter().find(|(s, _)| s == "F5").unwrap().1;
+    let pos = right.right_center() + vec2(25., 0.);
+    for pressed in [true, false] {
+        frame(
+            &ctx,
+            &mut app,
+            vec![
+                Event::PointerMoved(pos),
+                Event::PointerButton {
+                    pos,
+                    button: PointerButton::Primary,
+                    pressed,
+                    modifiers: Modifiers::NONE,
+                },
+            ],
+        );
+    }
+    assert_eq!(save(&app), Command::Save.default_chord());
+    app.settings_page.select(Category::Shortcuts);
+    click(&ctx, &mut app, &ctrl_s);
+    send(&mut app, Key::F6, Modifiers::NONE);
+    click(&ctx, &mut app, "Reset all shortcuts");
+    assert_eq!(save(&app).to_string(), "f6");
+    click(&ctx, &mut app, "Cancel");
+    click(&ctx, &mut app, "Reset all shortcuts");
+    click(&ctx, &mut app, "Confirm reset");
+    assert_eq!(app.preferences().shortcuts, defaults);
+    click(&ctx, &mut app, &ctrl_s);
+    send(&mut app, Key::F7, Modifiers::NONE);
+    assert!(!app.document.dirty && !app.editor.can_undo());
+    assert_eq!(app.editor.session.selection, selection);
+    assert_eq!(
+        (app.canvas.camera.zoom, app.canvas.camera.offset),
+        (camera.zoom, camera.offset)
+    );
+    assert_eq!(app.editor.simulation.view.steps, 42);
+    assert!(app.take_file_actions().is_empty() && app.take_simulation_actions().is_empty());
+    app.settings_page.select(Category::Advanced);
+    click(&ctx, &mut app, "Reset all");
+    click(&ctx, &mut app, "Confirm reset");
+    assert_eq!(app.preferences().shortcuts, defaults);
+}
+
+#[test]
+fn menu_and_toolbar_follow_the_effective_binding() {
+    use crate::{
+        shortcuts::Command,
+        tests::support::widgets::{click, frame, has},
+    };
+    let ctx = Context::default();
+    crate::configure(&ctx);
+    let mut app = Workspace::default();
+    app.editor.simulation.view.has_clocks = true;
+    click(&ctx, &mut app, "Simulate");
+    let default_tick = format!(
+        "Tick once · {}",
+        Command::Tick.default_chord().label(ctx.os().is_mac())
+    );
+    assert!(has(&frame(&ctx, &mut app, vec![]), &default_tick));
+    app.preferences
+        .shortcuts
+        .bind(Command::Tick, "f8".parse().unwrap())
+        .unwrap();
+    assert!(has(&frame(&ctx, &mut app, vec![]), "Tick once · F8"));
+    click(&ctx, &mut app, "Simulate");
+    let buttons = frame(&ctx, &mut app, vec![]);
+    let tick = buttons
+        .iter()
+        .find(|(s, _)| s == "Tick")
+        .unwrap()
+        .1
+        .center();
+    let mut labels = frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tick)]);
+    for _ in 0..75 {
+        labels = frame(&ctx, &mut app, vec![]);
+    }
+    assert!(has(
+        &labels,
+        "Queue one clock tick; paused simulation uses Step or Run · F8"
+    ));
+}
+
+#[test]
+fn shortcut_search_and_conflict_fit_the_viewport_in_both_languages() {
+    use crate::{shortcuts::Command, tests::support::widgets::click};
+    for language in Language::ALL {
+        let ctx = Context::default();
+        crate::configure(&ctx);
+        let mut app = Workspace {
+            settings_open: true,
+            ..Default::default()
+        };
+        app.set_language(language);
+        for size in [vec2(720., 480.), vec2(1200., 820.)] {
+            app.settings_page.select(Category::General);
+            // Search by stable ID from a different category.
+            app.settings_page.query = "project.toggle_appearance".into();
+            let current = Command::ToggleAppearance
+                .default_chord()
+                .label(ctx.os().is_mac());
+            click(&ctx, &mut app, &current);
+            let key = |pressed| egui::Event::Key {
+                key: Key::Y,
+                physical_key: None,
+                pressed,
+                repeat: false,
+                modifiers: Modifiers::COMMAND,
+            };
+            frame_at_size(&ctx, &mut app, vec![key(true), key(false)], size);
+            let labels = frame_at_size(&ctx, &mut app, vec![], size);
+            crate::i18n::with_language(language, || {
+                let locate = |label: &str| {
+                    labels
+                        .iter()
+                        .rev()
+                        .find(|(s, _)| s == label)
+                        .unwrap_or_else(|| panic!("Missing {label} at {size:?} in {language:?}"))
+                        .1
+                };
+                let error = locate(tr("Reserved by a fixed shortcut."));
+                let bounds = ctx
+                    .memory(|m| m.area_rect(Id::unique("settings-window")))
+                    .unwrap();
+                assert!(bounds.contains_rect(error) && error.bottom() < locate(tr("Close")).top());
+                assert!(bounds.contains_rect(locate(&current)));
+                assert!(
+                    locate(tr(Command::ToggleAppearance.label())).right() < locate(&current).left()
+                );
+            });
+        }
+    }
+}

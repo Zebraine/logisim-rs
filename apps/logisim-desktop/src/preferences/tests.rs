@@ -131,6 +131,8 @@ fn missing_fields_default_and_invalid_json_stays_intact_after_edits() {
         r#"{"version":7,"shortcuts":{"file.new":"primary+maybe"}}"#,
         r#"{"version":7,"shortcuts":{"file.new":"shift+shift+n"}}"#,
         r#"{"version":7,"shortcuts":{"file.new":"ctrl+y"}}"#,
+        r#"{"version":7,"shortcuts":{"file.new":"controlleft"}}"#,
+        r#"{"version":7,"shortcuts":{"file.new":"shift+insert"}}"#,
         r#"{"version":7,"shortcuts":{"file.new":"primary++"}}"#,
         r#"{"version":7,"shortcuts":{"file.new":"ctrl+s"}}"#,
         r#"{"version":7,"shortcuts":{"file.new":"f3","file.new":"f4"}}"#,
@@ -499,14 +501,22 @@ fn shortcut_defaults_and_partial_bindings_round_trip_and_survive_retry() {
     });
     prefs.synchronize(&mut w);
     assert_eq!(fs::read(&path).unwrap(), b"invalid");
-    fs::write(&path, br#"{"version":6,"general":{"language":"zh-CN"}}"#).unwrap();
+    let clash = br#"{"version":7,"shortcuts":{"file.open":"primary+shift+f8"}}"#;
+    fs::write(&path, clash).unwrap();
+    prefs.retry(&mut w);
+    prefs.synchronize(&mut w);
+    assert_eq!(fs::read(&path).unwrap(), clash);
+    assert_eq!(w.preferences().shortcuts, shortcuts);
+    let repair = br#"{"version":7,"general":{"language":"zh-CN"},"shortcuts":{"file.open":"f10"}}"#;
+    fs::write(&path, repair).unwrap();
     prefs.retry(&mut w);
     prefs.synchronize(&mut w);
     let saved = fs::read(path).unwrap();
-    assert_eq!(
-        schema::decode(&saved).unwrap().settings.shortcuts,
-        shortcuts
-    );
+    let mut expected = shortcuts;
+    expected
+        .bind(Command::Open, "f10".parse().unwrap())
+        .unwrap();
+    assert_eq!(schema::decode(&saved).unwrap().settings.shortcuts, expected);
     assert_eq!(w.language(), Language::SimplifiedChinese);
     let json: serde_json::Value = serde_json::from_slice(&saved).unwrap();
     assert_eq!(json["version"], 7);

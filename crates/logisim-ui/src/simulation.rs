@@ -1,5 +1,6 @@
 //! Presentation and commands only; the desktop host owns the simulation service.
 mod frequency;
+use crate::shortcuts::{Command, Shortcuts};
 use crate::{i18n::tr, tf, theme};
 use egui::{Key, Modifiers, Ui};
 pub use frequency::{DEFAULT_TICK_HZ, MAX_TICK_HZ};
@@ -283,32 +284,40 @@ impl SimulationUi {
             }
         }
     }
-    pub fn menu(&mut self, ui: &mut Ui, rate: &mut crate::TickHz) {
+    pub fn menu(&mut self, ui: &mut Ui, rate: &mut crate::TickHz, shortcuts: &Shortcuts) {
         let label = if self.view.enabled {
-            "Pause · Ctrl+E"
+            "Pause"
         } else {
-            "Enable Simulation · Ctrl+E"
+            "Enable Simulation"
         };
         for (label, action, enabled) in [
-            (label, SimulationAction::ToggleEnabled, true),
             (
-                "Step Simulation · Ctrl+I",
+                shortcuts.caption_with(Command::Toggle, label, ui),
+                SimulationAction::ToggleEnabled,
+                true,
+            ),
+            (
+                shortcuts.caption(Command::Step, ui),
                 SimulationAction::Step,
                 !self.view.enabled && !self.view.limited,
             ),
-            ("Reset Simulation · Ctrl+R", SimulationAction::Reset, true),
+            (
+                shortcuts.caption(Command::Reset, ui),
+                SimulationAction::Reset,
+                true,
+            ),
         ] {
-            if ui
-                .add_enabled(enabled, egui::Button::new(tr(label)))
-                .clicked()
-            {
+            if ui.add_enabled(enabled, egui::Button::new(label)).clicked() {
                 self.actions.push(action);
                 ui.close();
             }
         }
         ui.separator();
         if ui
-            .add_enabled(self.can_tick(), egui::Button::new(tr("Tick once · Ctrl+T")))
+            .add_enabled(
+                self.can_tick(),
+                egui::Button::new(shortcuts.caption(Command::Tick, ui)),
+            )
             .clicked()
         {
             self.actions.push(SimulationAction::Tick);
@@ -318,7 +327,10 @@ impl SimulationUi {
         if ui
             .add_enabled(
                 self.view.has_clocks,
-                egui::Checkbox::new(&mut automatic, tr("Automatic ticks · Ctrl+K")),
+                egui::Checkbox::new(
+                    &mut automatic,
+                    shortcuts.caption(Command::AutomaticTicks, ui),
+                ),
             )
             .changed()
         {
@@ -326,7 +338,7 @@ impl SimulationUi {
         }
         self.frequency_menu(ui, rate);
     }
-    pub fn toolbar(&mut self, ui: &mut Ui) {
+    pub fn toolbar(&mut self, ui: &mut Ui, shortcuts: &Shortcuts) {
         if ui
             .scope(|ui| {
                 let colors = theme::colors(ui.ctx());
@@ -344,7 +356,7 @@ impl SimulationUi {
                 )
             })
             .inner
-            .on_hover_text(tr("Enable / pause simulation · Ctrl+E"))
+            .on_hover_text(shortcuts.caption(Command::Toggle, ui))
             .clicked()
         {
             self.actions.push(SimulationAction::ToggleEnabled);
@@ -354,22 +366,28 @@ impl SimulationUi {
                 !self.view.enabled && !self.view.limited,
                 egui::Button::new(tr("Step")),
             )
-            .on_hover_text(tr("Propagate one batch · Ctrl+I"))
+            .on_hover_text(shortcuts.caption_with(Command::Step, "Propagate one batch", ui))
             .clicked()
         {
             self.actions.push(SimulationAction::Step);
         }
         if ui
             .button(tr("Reset"))
-            .on_hover_text(tr("Reset inputs, storage and clocks · Ctrl+R"))
+            .on_hover_text(shortcuts.caption_with(
+                Command::Reset,
+                "Reset inputs, storage and clocks",
+                ui,
+            ))
             .clicked()
         {
             self.actions.push(SimulationAction::Reset);
         }
         if ui
             .add_enabled(self.can_tick(), egui::Button::new(tr("Tick")))
-            .on_hover_text(tr(
-                "Queue one clock tick · Ctrl+T; paused simulation uses Step or Run",
+            .on_hover_text(shortcuts.caption_with(
+                Command::Tick,
+                "Queue one clock tick; paused simulation uses Step or Run",
+                ui,
             ))
             .clicked()
         {
@@ -420,7 +438,7 @@ impl SimulationUi {
             })
             .inner;
         if switch
-            .on_hover_text(tr("Automatic ticks · Ctrl+K"))
+            .on_hover_text(shortcuts.caption(Command::AutomaticTicks, ui))
             .clicked()
         {
             self.actions.push(SimulationAction::ToggleTicks);

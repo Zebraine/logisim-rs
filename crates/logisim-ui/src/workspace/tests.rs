@@ -574,6 +574,18 @@ fn remapped_commands_follow_scope_and_dispatch_their_own_actions() {
         press(&mut w, c);
         assert_eq!(w.take_simulation_actions(), [action]);
     }
+    let tick = Event::Key {
+        key: egui::Key::from_name(&settings.shortcuts.get(Command::Tick).label(false)).unwrap(),
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: Modifiers::NONE,
+    };
+    frame(&ctx, &mut w, size, vec![tick.clone(), tick]);
+    assert_eq!(
+        w.take_simulation_actions(),
+        [SimulationAction::Tick, SimulationAction::Tick]
+    );
     w.simulation_mut().limited = true;
     w.simulation_mut().has_clocks = false;
     for c in [Command::Step, Command::Tick, Command::AutomaticTicks] {
@@ -584,4 +596,61 @@ fn remapped_commands_follow_scope_and_dispatch_their_own_actions() {
     press(&mut w, Command::Save);
     press(&mut w, Command::Reset);
     assert!(w.take_file_actions().is_empty() && w.take_simulation_actions().is_empty());
+}
+
+#[test]
+fn text_focus_popup_and_ime_block_custom_workspace_commands() {
+    use crate::shortcuts::Command;
+    let ctx = Context::default();
+    configure(&ctx);
+    let mut app = Workspace::default();
+    app.preferences
+        .shortcuts
+        .bind(Command::Save, "f5".parse().unwrap())
+        .unwrap();
+    app.preferences
+        .shortcuts
+        .bind(Command::Reset, "f8".parse().unwrap())
+        .unwrap();
+    let size = vec2(1200., 820.);
+    let key = |key, modifiers| Event::Key {
+        key,
+        modifiers,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+    };
+    let attempt = || {
+        vec![
+            key(egui::Key::F5, Modifiers::NONE),
+            key(egui::Key::F8, Modifiers::NONE),
+        ]
+    };
+    frame(
+        &ctx,
+        &mut app,
+        size,
+        vec![Event::PointerMoved(pos2(900., 600.))],
+    );
+    let mut ime = attempt();
+    ime.push(Event::Ime(egui::ImeEvent::Preedit {
+        text: "拼".into(),
+        active_range_chars: None,
+    }));
+    frame(&ctx, &mut app, size, ime);
+    assert!(app.take_file_actions().is_empty() && app.take_simulation_actions().is_empty());
+    frame(
+        &ctx,
+        &mut app,
+        size,
+        vec![key(egui::Key::F, Modifiers::COMMAND)],
+    );
+    frame(&ctx, &mut app, size, attempt());
+    assert!(ctx.text_edit_focused());
+    assert!(app.take_file_actions().is_empty() && app.take_simulation_actions().is_empty());
+    crate::tests::support::widgets::click(&ctx, &mut app, "File");
+    let menu = crate::tests::support::widgets::frame(&ctx, &mut app, vec![]);
+    assert!(crate::tests::support::widgets::has(&menu, "Save · F5"));
+    frame(&ctx, &mut app, size, attempt());
+    assert!(app.take_file_actions().is_empty() && app.take_simulation_actions().is_empty());
 }

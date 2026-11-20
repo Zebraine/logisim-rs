@@ -210,7 +210,11 @@ impl Workspace {
                 if !self.editor.session.context.path.is_empty()
                     && ui
                         .button(tr("Back"))
-                        .on_hover_text(tr("Return to parent instance · Alt+Left"))
+                        .on_hover_text(self.preferences.shortcuts.caption_with(
+                            crate::shortcuts::Command::ReturnParent,
+                            "Return to parent instance",
+                            ui,
+                        ))
                         .clicked()
                 {
                     self.editor.leave_instance();

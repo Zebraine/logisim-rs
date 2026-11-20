@@ -1,3 +1,4 @@
+mod bindings;
 use super::{
     registry::{Category, Entry, REGISTRY},
     *,
@@ -28,6 +29,7 @@ pub(crate) struct Page {
     category: Category,
     query: String,
     confirm_reset: bool,
+    bindings: bindings::BindingEditor,
     confirm_clear: bool,
     recovery: RecoveryView,
     frequency_draft: Option<u32>,
@@ -43,6 +45,7 @@ impl Page {
         }
     }
     pub(super) fn clear_transient(&mut self) {
+        self.bindings = Default::default();
         self.confirm_clear = false;
         self.query.clear();
         self.confirm_reset = false;
@@ -59,6 +62,7 @@ impl Page {
         let mut action = None;
         let screen = ctx.content_rect();
         let search_id = Id::unique("preference-search");
+        self.bindings.input(ctx, &mut values.shortcuts);
         let find = ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::F));
         if find {
             ctx.memory_mut(|m| m.request_focus(search_id));
@@ -80,6 +84,7 @@ impl Page {
                         );
                         theme::focus_ring(ui, &search);
                         if search.changed() {
+                            self.bindings = Default::default();
                             self.confirm_clear = false;
                             self.confirm_reset = false;
                         }
@@ -194,6 +199,7 @@ impl Page {
             },
         );
         match dismiss {
+            Dismiss::Escape if self.bindings.confirm_reset => self.bindings.confirm_reset = false,
             Dismiss::Escape if self.confirm_clear => self.confirm_clear = false,
             Dismiss::Escape if self.confirm_reset => self.confirm_reset = false,
             Dismiss::Escape if !self.query.is_empty() => self.query.clear(),
@@ -204,6 +210,7 @@ impl Page {
     }
     fn select(&mut self, cat: Category) {
         self.category = cat;
+        self.bindings = Default::default();
         self.confirm_clear = false;
         self.query.clear();
         self.confirm_reset = false;
@@ -252,6 +259,12 @@ impl Page {
         let mut found = false;
         let active = self.category;
         for category in Category::ALL {
+            if category == Category::Shortcuts {
+                if active == category || !q.is_empty() {
+                    found |= self.bindings.show(ui, &mut values.shortcuts, &q);
+                }
+                continue;
+            }
             let mut entries = REGISTRY
                 .iter()
                 .filter(|s| s.category == category && s.visible(active, &q))

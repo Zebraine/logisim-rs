@@ -156,7 +156,7 @@ impl Workspace {
                         &mut self.canvas,
                         &response,
                         &self.plugins,
-                        &mut self.preferences.show_grid,
+                        &mut self.preferences,
                     );
                 }
             });

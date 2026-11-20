@@ -58,13 +58,17 @@ impl Workspace {
                 });
             } else {
                 ui.separator();
-                self.editor.simulation.toolbar(ui);
+                self.editor
+                    .simulation
+                    .toolbar(ui, &self.preferences.shortcuts);
                 self.runtime_status(ui, true);
             }
         });
         if compact {
             ui.horizontal(|ui| {
-                self.editor.simulation.toolbar(ui);
+                self.editor
+                    .simulation
+                    .toolbar(ui, &self.preferences.shortcuts);
                 if !narrow {
                     self.runtime_status(ui, false);
                 } else if !self.preferences.show_telemetry {
