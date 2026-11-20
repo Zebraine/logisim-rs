@@ -92,6 +92,35 @@ fn project_options_navigates_and_records_main_against_the_file_baseline() {
 }
 
 #[test]
+fn joystick_keeps_its_native_font_from_placement_through_save_and_reopen() {
+    let dir = crate::tests::support::Temp::new();
+    let path = dir.path("joystick.circ");
+    let mut h = super::Harness::default();
+    logisim_ui::configure(&h.ctx);
+    h.ws.apply_settings(logisim_ui::Settings {
+        default_font_size: Some(24),
+        ..h.ws.preferences()
+    });
+    h.click("Components");
+    h.click("Search · Ctrl+F");
+    h.frame(vec![egui::Event::Text("Joy".into())]);
+    h.click("Joystick");
+    h.click_at(egui::pos2(650., 300.));
+    let placed = &h.ws.circuit().components;
+    assert_eq!(placed.len(), 1);
+    assert_eq!((placed[0].kind, placed[0].font.size), (Kind::Joystick, 12));
+    h.files
+        .storage
+        .save(h.ws.project(), &path, SaveMode::Current, false)
+        .unwrap();
+    let saved = std::fs::read_to_string(&path).unwrap();
+    assert!(!saved.contains("name=\"labelfont\"") && !saved.contains("name=\"font\""));
+    let (loaded, warnings) = Storage::new().load(&path).unwrap();
+    assert!(warnings.is_empty());
+    assert_eq!(&loaded.main_circuit().circuit.components, placed);
+}
+
+#[test]
 fn placing_and_reopening_unary_gates_preserves_their_sizes() {
     use egui::pos2;
     use logisim_core::{Gate, GateSize};

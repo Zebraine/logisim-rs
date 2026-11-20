@@ -299,7 +299,9 @@ impl Editor {
     }
 
     fn with_default_font(&self, mut template: Component) -> Component {
-        if let Some(size) = self.placement_defaults.font_size {
+        if template.kind.has_label()
+            && let Some(size) = self.placement_defaults.font_size
+        {
             template.font.size = size;
         }
         template

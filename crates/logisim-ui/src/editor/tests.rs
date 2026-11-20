@@ -388,6 +388,7 @@ fn fresh_placements_apply_label_size_and_respect_each_gate_family_limit() {
             .chain(Parity::ALL.map(Kind::Parity))
             .chain([
                 Kind::Joystick,
+                Kind::Text,
                 Kind::PlaRom,
                 Kind::Pin,
                 Kind::Subcircuit(child),
@@ -396,12 +397,12 @@ fn fresh_placements_apply_label_size_and_respect_each_gate_family_limit() {
             e.set_tool(Tool::Place(kind));
             e.place(Point::new(50 + i as i32 * 100, 50));
             let c = e.session.circuit.components.last().unwrap();
-            let auto = if matches!(kind, Kind::Joystick | Kind::PlaRom) {
-                12
-            } else {
-                14
+            let expected = match kind {
+                Kind::Joystick => 12,
+                Kind::PlaRom => font.unwrap_or(12),
+                _ => font.unwrap_or(14),
             };
-            assert_eq!(c.font.size, font.unwrap_or(auto), "{kind:?}");
+            assert_eq!(c.font.size, expected, "{kind:?}");
             match kind {
                 Kind::Gate(g) if g.unary() => {
                     assert_eq!(

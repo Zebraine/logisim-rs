@@ -108,7 +108,7 @@ cargo run -p logisim-examples --release --locked -- assemble examples/game/snake
 仅保存已实现内容；导入遇到不支持的内容会报告省略并禁止覆盖原文件。
 `.circ` 库以可编辑快照导入。插件路径优先相对电路目录解析；缺失时可补选，未修复的元件显示静态图形、属性报错并输出 E。
 
-摇杆（Joystick）的标签字体不会写入 `.circ`，重新打开后字号恢复为 12。
+默认标签字号仅用于带标签的新元件。摇杆（Joystick）从放置到重新打开均保留固有字号 12。
 
 宿主不执行 Java/JAR。含 Wasm 元件的 `.circ` 使用本项目扩展，需 logisim-rs 运行并附带模块。
 不承诺完整兼容参考程序的全部元件、传播延迟与反馈行为。

@@ -245,7 +245,7 @@ registry![
         "editor.default_font_size",
         Editor,
         "Default label size",
-        "Auto uses each component’s label size (12 for Joystick and PLA ROM, usually 14).",
+        "Applies to new components with labels. Auto keeps their native size (12 for PLA ROM, usually 14).",
         Control::FontSize
     ),
     (
