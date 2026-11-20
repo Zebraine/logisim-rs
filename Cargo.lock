@@ -1337,6 +1337,7 @@ name = "logisim-rs"
 version = "0.1.0"
 dependencies = [
  "eframe",
+ "image",
  "logisim-core",
  "logisim-file",
  "logisim-plugin",

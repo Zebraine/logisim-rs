@@ -188,7 +188,9 @@ fn write_backup(target: &Path, backup: &Path, original: &[u8]) -> Result<()> {
         ),
         Err(e) => return Err(e.to_string()),
     };
-    atomic_replace(backup, original, previous.as_deref(), Some(permissions))
+    atomic_replace(backup, original, Some(permissions), || {
+        check_expected(backup, previous.as_deref())
+    })
 }
 
 fn check_expected(path: &Path, expected: Option<&[u8]>) -> Result<()> {
@@ -204,15 +206,15 @@ fn check_expected(path: &Path, expected: Option<&[u8]>) -> Result<()> {
     }
 }
 pub(crate) fn atomic_write(path: &Path, bytes: &[u8], expected: Option<&[u8]>) -> Result<()> {
-    atomic_replace(path, bytes, expected, None)
+    atomic_replace(path, bytes, None, || check_expected(path, expected))
 }
-fn atomic_replace(
+pub(crate) fn atomic_replace(
     path: &Path,
     bytes: &[u8],
-    expected: Option<&[u8]>,
     permissions: Option<fs::Permissions>,
+    verify: impl Fn() -> Result<()>,
 ) -> Result<()> {
-    check_expected(path, expected)?;
+    verify()?;
     static SEQUENCE: AtomicU64 = AtomicU64::new(0);
     let parent = path.parent().ok_or("Missing parent directory")?;
     let mut created = None;
@@ -246,7 +248,7 @@ fn atomic_replace(
         file.write_all(bytes).map_err(|e| e.to_string())?;
         file.sync_all().map_err(|e| e.to_string())?;
         drop(file);
-        check_expected(path, expected)?;
+        verify()?;
         fs::rename(&temp, path).map_err(|e| e.to_string())
     })();
     if result.is_err() {

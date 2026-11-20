@@ -13,6 +13,7 @@ pub(super) enum Mode {
     Memory,
     Library,
     Plugin,
+    ExportImage,
     Settings(logisim_ui::SettingsFileAction),
 }
 impl Mode {
@@ -20,6 +21,7 @@ impl Mode {
         match self {
             Self::Settings(_) => "json",
             Self::Plugin => "wasm",
+            Self::ExportImage => "png",
             Self::Memory => "hex",
             Self::Open | Self::Save | Self::Library => "circ",
         }
@@ -27,7 +29,7 @@ impl Mode {
     fn saving(self) -> bool {
         matches!(
             self,
-            Self::Save | Self::Settings(logisim_ui::SettingsFileAction::Export)
+            Self::Save | Self::ExportImage | Self::Settings(logisim_ui::SettingsFileAction::Export)
         )
     }
 }
@@ -90,6 +92,7 @@ impl Picker {
             Mode::Settings(logisim_ui::SettingsFileAction::Import) => {
                 ("import-settings", "Import settings…")
             }
+            Mode::ExportImage => ("export-image", "Export Image…"),
             Mode::Open => ("open-circuit", "Open circuit"),
             Mode::Save => ("save-circuit", "Save circuit as"),
             Mode::Memory => ("import-memory", "Import memory image"),
@@ -103,6 +106,8 @@ impl Picker {
             dialog.body(|ui| {
                 ui.label(tr(if matches!(self.mode, Mode::Settings(_)) {
                     "Settings files (.json)"
+                } else if self.mode == Mode::ExportImage {
+                    "Current canvas viewport (.png)"
                 } else if self.mode == Mode::Plugin {
                     "Wasm plugins provide component graphics and behavior."
                 } else if self.mode == Mode::Library {
@@ -204,18 +209,34 @@ impl Picker {
         }
         if let Some(mut path) = picked {
             if path.is_dir() {
+                if self.mode == Mode::ExportImage
+                    && path
+                        .extension()
+                        .is_some_and(|s| s.eq_ignore_ascii_case("png"))
+                {
+                    self.error = Some(tr("Choose a file, not a directory.").into());
+                    return Response::Wait;
+                }
                 self.enter(&path);
                 return Response::Wait;
             }
-            if matches!(self.mode, Mode::Settings(_)) {
+            if matches!(self.mode, Mode::Settings(_) | Mode::ExportImage) {
+                let extension = self.mode.extension();
                 if self.mode.saving() && path.extension().is_none() {
-                    path.as_mut_os_string().push(".json");
+                    path.set_extension(extension);
                 }
                 if !path
                     .extension()
-                    .is_some_and(|s| s.eq_ignore_ascii_case("json"))
+                    .is_some_and(|s| s.eq_ignore_ascii_case(extension))
                 {
-                    self.error = Some(tr("Choose a .json settings file.").into());
+                    self.error = Some(
+                        tr(if self.mode == Mode::ExportImage {
+                            "Choose a .png image file."
+                        } else {
+                            "Choose a .json settings file."
+                        })
+                        .into(),
+                    );
                     return Response::Wait;
                 }
             } else if self.mode == Mode::Save

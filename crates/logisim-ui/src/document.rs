@@ -16,6 +16,7 @@ pub enum FileAction {
     },
     Save,
     SaveAs,
+    ExportImage,
     Settings(SettingsFileAction),
     ImportMemory,
     ImportPlugin {

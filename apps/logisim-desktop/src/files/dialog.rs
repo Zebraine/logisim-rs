@@ -33,6 +33,11 @@ pub(super) enum Dialog {
         path: PathBuf,
         bytes: Vec<u8>,
     },
+    ReplaceImage(super::image::ImageTarget),
+    ImageMessage {
+        title: &'static str,
+        body: String,
+    },
     ReplaceSettings {
         path: PathBuf,
         bytes: Vec<u8>,
@@ -64,6 +69,16 @@ pub(super) enum Response {
     Pick(PathBuf),
 }
 impl Dialog {
+    pub(super) fn is_image(&self) -> bool {
+        matches!(
+            self,
+            Self::Picker(Picker {
+                mode: super::Mode::ExportImage,
+                ..
+            }) | Self::ReplaceImage(_)
+                | Self::ImageMessage { .. }
+        )
+    }
     pub(super) fn is_settings(&self) -> bool {
         matches!(
             self,
@@ -125,14 +140,14 @@ impl Dialog {
                 &logisim_ui::tf!("Replace your current preferences with the settings in {}? Your circuit, recent projects, window and panel layout are preserved.", path.file_name().expect("selected file").to_string_lossy()),
                 tr("Import settings"), || answer = Response::Import
             ),
-            Dialog::ReplaceSettings { path, .. } | Dialog::Replace { path, .. } => Window::prompt("replace-file").confirm(
+            Dialog::ReplaceImage(super::image::ImageTarget { path, .. }) | Dialog::ReplaceSettings { path, .. } | Dialog::Replace { path, .. } => Window::prompt("replace-file").confirm(
                 ctx,
                 tr("Replace existing file?"),
                 &path.to_string_lossy(),
                 tr("Replace"),
                 || answer = Response::Replace,
             ),
-            Dialog::SettingsMessage {title, body} => Window::prompt("settings-file-message").message(ctx,tr(title),body),
+            Dialog::ImageMessage {title, body} | Dialog::SettingsMessage {title, body} => Window::prompt("settings-file-message").message(ctx,tr(title),body),
             Dialog::Message { title, body } => {
                 Window::prompt("file-message").message(ctx, tr(title), body)
             }

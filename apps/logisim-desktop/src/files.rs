@@ -1,5 +1,6 @@
 //! File workflow: unsaved actions, protected imports and transactional saves.
 mod dialog;
+mod image;
 mod picker;
 mod settings;
 #[cfg(test)]
@@ -34,6 +35,7 @@ pub(crate) struct Files {
     pub storage: Storage,
     pub autosave: crate::recovery::Autosave,
     dialog: Option<Dialog>,
+    image_export: Option<image::ImageTarget>,
     after_save: Option<NextDocument>,
     directory: PathBuf,
     pub allow_close: bool,
@@ -46,6 +48,7 @@ impl Default for Files {
             storage: Storage::new(),
             autosave: Default::default(),
             dialog: None,
+            image_export: None,
             after_save: None,
             directory: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
             allow_close: false,
@@ -69,12 +72,12 @@ impl Files {
         self.autosave.publish(w);
     }
     pub fn busy(&self) -> bool {
-        self.dialog.is_some()
+        self.dialog.is_some() || self.image_export.is_some()
     }
     pub fn suspends_simulation(&self) -> bool {
         self.dialog
             .as_ref()
-            .is_some_and(|dialog| !dialog.is_settings())
+            .is_some_and(|dialog| !dialog.is_settings() && !dialog.is_image())
     }
     pub fn present(&self, workspace: &Workspace) -> DocumentView {
         DocumentView {
@@ -226,7 +229,12 @@ impl Files {
         if self.busy() && !clear_recovery {
             return;
         }
-        if !clear_recovery && !matches!(action, FileAction::ClearRecent | FileAction::Settings(_)) {
+        if !clear_recovery
+            && !matches!(
+                action,
+                FileAction::ClearRecent | FileAction::Settings(_) | FileAction::ExportImage
+            )
+        {
             workspace.finish_edit();
         }
         match action {
@@ -262,6 +270,7 @@ impl Files {
                 }
             }
             FileAction::Settings(action) => self.picker(Mode::Settings(action)),
+            FileAction::ExportImage => self.picker(Mode::ExportImage),
             FileAction::SaveAs => self.picker(Mode::Save),
             FileAction::ClearRecovery { disabled_autosave } => {
                 let result = if self.busy() {
@@ -343,6 +352,12 @@ impl Files {
                 .and_then(|p| p.file_name())
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_else(|| "Untitled.circ".into())
+        } else if mode == Mode::ExportImage {
+            let stem = self.storage.path.as_deref().and_then(Path::file_stem);
+            format!(
+                "{}.png",
+                stem.unwrap_or("circuit".as_ref()).to_string_lossy()
+            )
         } else if mode == Mode::Settings(logisim_ui::SettingsFileAction::Export) {
             "logisim-settings.json".into()
         } else {
@@ -402,7 +417,9 @@ impl Files {
             return;
         };
         let response = dialog.show(ctx);
-        if dialog.is_settings() {
+        if dialog.is_image() {
+            self.respond_to_image(dialog, response, preferences, ctx);
+        } else if dialog.is_settings() {
             self.respond_to_settings(dialog, response, preferences, workspace);
         } else {
             self.respond(dialog, response, ctx, workspace, sim);
