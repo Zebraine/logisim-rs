@@ -72,8 +72,9 @@ fn accent_presets_update_standard_visuals_with_readable_chrome_and_independent_s
         assert!(contrast(INK, c.selected) >= 4.5 && contrast(INK, c.soft) >= 4.5);
         let v = &ctx.global_style().visuals;
         assert_eq!(v.selection.bg_fill, c.selected);
-        assert_eq!(v.selection.stroke, Stroke::new(2., c.base));
-        assert_eq!(v.widgets.active.bg_stroke, v.selection.stroke);
+        assert_eq!(v.selection.stroke, Stroke::new(2., c.hover));
+        assert!(contrast(v.selection.stroke.color, v.selection.bg_fill) >= 4.5);
+        assert_eq!(v.widgets.active.bg_stroke, Stroke::new(2., c.base));
         assert_eq!(v.hyperlink_color, c.base);
         assert_eq!(v.widgets.hovered.weak_bg_fill, c.soft);
         assert_eq!((v.warn_fg_color, v.error_fg_color), (WARNING, DANGER));

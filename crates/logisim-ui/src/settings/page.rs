@@ -334,24 +334,36 @@ impl Page {
     }
     fn row(&mut self, ui: &mut Ui, e: &Entry, values: &mut Settings) {
         let width = ui.available_width();
-        let right = if matches!(e.control, super::registry::Control::SignalPalette) {
+        let right = if matches!(
+            e.control,
+            super::registry::Control::SignalPalette | super::registry::Control::Accent
+        ) {
             (width - 120.).clamp(216., 282.)
         } else {
             (width * 0.37).clamp(140., 190.)
         };
+        let enabled = !matches!(e.control, super::registry::Control::AutosaveMinutes)
+            || values.files.autosave;
         ui.horizontal(|ui| {
-            ui.allocate_ui_with_layout(
-                vec2((width - right - 4.).max(40.), theme::metrics(ui.ctx()).row),
-                Layout::top_down(Align::Min),
-                |ui| {
-                    ui.label(RichText::new(tr(e.label)).strong());
-                    ui.weak(tr(e.help));
-                },
-            );
+            let label_size = vec2((width - right - 4.).max(40.), theme::metrics(ui.ctx()).row);
+            let label = RichText::new(tr(e.label)).strong();
+            let help = tr(e.help);
+            if values.density == crate::Density::Compact && enabled {
+                ui.allocate_ui_with_layout(
+                    label_size,
+                    Layout::left_to_right(Align::Center),
+                    |ui| {
+                        ui.add(egui::Label::new(label).wrap()).on_hover_text(help);
+                    },
+                );
+            } else {
+                ui.allocate_ui_with_layout(label_size, Layout::top_down(Align::Min), |ui| {
+                    ui.label(label);
+                    ui.weak(help);
+                });
+            }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let defaults = Settings::default();
-                let enabled = !matches!(e.control, super::registry::Control::AutosaveMinutes)
-                    || values.files.autosave;
                 if e.changed(*values, defaults) {
                     if icons::button(ui, Icon::Restore, false, enabled, "Reset to default")
                         .clicked()

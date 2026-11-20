@@ -123,14 +123,19 @@ impl Workspace {
 
         let sidebar = m.sidebar;
         let canonical = crate::Density::Comfortable.metrics().sidebar;
-        let side_max = (ui.available_width() - 452.).clamp(sidebar.min, sidebar.max);
+        // Reserve the drawing region in window points even when interface text is enlarged.
+        // Only project the on-screen divider; keep its stored, density-independent width.
+        let scale = ui.ctx().zoom_factor().max(1.);
+        let side_max =
+            (ui.available_width() - 452. / scale).clamp(sidebar.min / scale, sidebar.max);
+        let side_min = sidebar.min.min(side_max);
         let size = canonical
             .project(self.layout.sidebar_width, sidebar)
             .min(side_max);
         let panel = prepare_panel(ui, "inspector", size, &mut self.navigation.last_width);
         Panel::left("inspector")
             .default_size(size)
-            .size_range(sidebar.min..=side_max)
+            .size_range(side_min..=side_max)
             .frame(Frame::NONE.fill(CHROME))
             .show(ui, |ui| {
                 let mut bounded = panel_contents(ui);
@@ -138,7 +143,7 @@ impl Workspace {
             });
         if let Some(new_size) = panel.committed(ui, 0) {
             self.layout.sidebar_width =
-                sidebar.project(new_size.clamp(sidebar.min, side_max), canonical);
+                sidebar.project(new_size.clamp(side_min, side_max), canonical);
         }
 
         egui::CentralPanel::default()
@@ -201,7 +206,12 @@ impl Workspace {
     }
 
     pub(super) fn zoom_controls(&mut self, ui: &mut Ui) {
+        let tight = ui.available_width() < theme::metrics(ui.ctx()).sidebar.min;
         ui.horizontal(|ui| {
+            if tight {
+                ui.spacing_mut().item_spacing.x = 1.;
+                ui.spacing_mut().button_padding.x = 2.;
+            }
             if icons::button(ui, Icon::Minus, false, true, "Zoom out").clicked() {
                 self.canvas.set_zoom(self.canvas.camera.zoom / 1.1);
             }
@@ -221,7 +231,9 @@ impl Workspace {
             if icons::button(ui, Icon::Plus, false, true, "Zoom in").clicked() {
                 self.canvas.set_zoom(self.canvas.camera.zoom * 1.1);
             }
-            ui.separator();
+            if !tight {
+                ui.separator();
+            }
             if icons::button(ui, Icon::Home, false, true, "Reset canvas · Ctrl+0").clicked() {
                 self.canvas.reset();
             }

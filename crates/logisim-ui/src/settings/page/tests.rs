@@ -16,8 +16,8 @@ fn registry_restores_each_field_without_changing_other_preferences() {
             restore_panels: false,
         },
         language: Language::SimplifiedChinese,
-        density: crate::Density::default(),
-        accent: crate::Accent::default(),
+        density: crate::Density::Compact,
+        accent: crate::Accent::Teal,
         ui_scale: UiScale::P150,
         reduce_motion: true,
         show_telemetry: false,
@@ -70,52 +70,58 @@ fn dialog_stays_centered_and_keeps_its_controls_visible_on_resize() {
             "/home/{}/preferences.json",
             "long-directory/".repeat(20)
         )));
-        for (width, height, scale) in [
-            (1200., 820., UiScale::P100),
-            (1440., 900., UiScale::P100),
-            (720., 480., UiScale::P100),
-            (720., 480., UiScale::P80),
-            (720., 480., UiScale::P90),
-            (720., 480., UiScale::P110),
-            (720., 480., UiScale::P125),
-            (720., 480., UiScale::P150),
-            (1200., 820., UiScale::P100),
-        ] {
-            app.apply_settings(Settings {
-                ui_scale: scale,
-                ..app.preferences()
-            });
-            let screen = egui::vec2(width, height) / (f32::from(scale.percent()) / 100.);
-            for cat in Category::ALL {
-                app.settings_page.select(cat);
-                let mut labels = vec![];
-                for _ in 0..4 {
-                    labels = frame_at_size(&ctx, &mut app, vec![], screen);
-                }
-                let bounds = ctx
-                    .memory(|m| m.area_rect(egui::Id::unique("settings-window")))
-                    .unwrap();
-                assert!(
-                    bounds.width() <= screen.x * 0.9 + 1. && bounds.height() <= screen.y * 0.9 + 1.,
-                    "{cat:?} {screen} {bounds:?}"
-                );
-                assert!(
-                    (bounds.center().to_vec2() - screen * 0.5).length() <= 1.,
-                    "off-center {cat:?} {screen} {bounds:?}"
-                );
-                let close = crate::i18n::with_language(lang, || tr("Close"));
-                let close_rect = labels.iter().rev().find(|(s, _)| s == close).unwrap().1;
-                assert!(bounds.contains_rect(close_rect));
-                assert!(egui::Rect::from_min_size(egui::Pos2::ZERO, screen).contains_rect(bounds));
-                if cat == Category::Appearance {
-                    let scale_rect = labels
-                        .iter()
-                        .rev()
-                        .find(|(s, _)| s == &format!("{}%", scale.percent()))
-                        .unwrap()
-                        .1;
-                    assert!(bounds.contains_rect(scale_rect));
-                    assert!(scale_rect.bottom() < close_rect.top());
+        for density in crate::Density::ALL {
+            for (width, height, scale) in [
+                (1200., 820., UiScale::P100),
+                (1440., 900., UiScale::P100),
+                (720., 480., UiScale::P100),
+                (720., 480., UiScale::P80),
+                (720., 480., UiScale::P90),
+                (720., 480., UiScale::P110),
+                (720., 480., UiScale::P125),
+                (720., 480., UiScale::P150),
+                (1200., 820., UiScale::P100),
+            ] {
+                app.apply_settings(Settings {
+                    density,
+                    ui_scale: scale,
+                    ..app.preferences()
+                });
+                let screen = egui::vec2(width, height) / (f32::from(scale.percent()) / 100.);
+                for cat in Category::ALL {
+                    app.settings_page.select(cat);
+                    let mut labels = vec![];
+                    for _ in 0..4 {
+                        labels = frame_at_size(&ctx, &mut app, vec![], screen);
+                    }
+                    let bounds = ctx
+                        .memory(|m| m.area_rect(egui::Id::unique("settings-window")))
+                        .unwrap();
+                    assert!(
+                        bounds.width() <= screen.x * 0.9 + 1.
+                            && bounds.height() <= screen.y * 0.9 + 1.,
+                        "{cat:?} {screen} {bounds:?}"
+                    );
+                    assert!(
+                        (bounds.center().to_vec2() - screen * 0.5).length() <= 1.,
+                        "off-center {cat:?} {screen} {bounds:?}"
+                    );
+                    let close = crate::i18n::with_language(lang, || tr("Close"));
+                    let close_rect = labels.iter().rev().find(|(s, _)| s == close).unwrap().1;
+                    assert!(bounds.contains_rect(close_rect));
+                    assert!(
+                        egui::Rect::from_min_size(egui::Pos2::ZERO, screen).contains_rect(bounds)
+                    );
+                    if cat == Category::Appearance {
+                        let scale_rect = labels
+                            .iter()
+                            .rev()
+                            .find(|(s, _)| s == &format!("{}%", scale.percent()))
+                            .unwrap()
+                            .1;
+                        assert!(bounds.contains_rect(scale_rect));
+                        assert!(scale_rect.bottom() < close_rect.top());
+                    }
                 }
             }
         }
@@ -227,7 +233,7 @@ fn workspace_history_actions_and_resets_leave_document_and_runtime_intact() {
 }
 
 #[test]
-fn editor_keys_find_the_same_control_in_both_languages() {
+fn appearance_and_editor_keys_find_the_same_control_in_both_languages() {
     use crate::tests::support::widgets::{frame, has};
     for language in Language::ALL {
         let ctx = Context::default();
@@ -237,7 +243,10 @@ fn editor_keys_find_the_same_control_in_both_languages() {
             ..Default::default()
         };
         app.set_language(language);
-        for entry in REGISTRY.iter().filter(|s| s.category == Category::Editor) {
+        for entry in REGISTRY
+            .iter()
+            .filter(|s| matches!(s.category, Category::Editor | Category::Appearance))
+        {
             app.settings_page.query = entry.key.into();
             for _ in 0..2 {
                 frame(&ctx, &mut app, vec![]);
@@ -256,55 +265,75 @@ fn compact_appearance_and_editor_scroll_exposes_every_setting_in_both_languages(
         .into_iter()
         .flat_map(|lang| [Category::Editor, Category::Appearance].map(|category| (lang, category)))
     {
-        let ctx = Context::default();
-        crate::configure(&ctx);
-        let mut app = Workspace {
-            settings_open: true,
-            ..Default::default()
-        };
-        app.set_language(lang);
-        app.settings_page.select(category);
-        let size = vec2(720., 480.);
-        let entries: Vec<_> = REGISTRY.iter().filter(|e| e.category == category).collect();
-        let mut visible = std::collections::BTreeSet::new();
-        for step in 0..18 {
-            let mut events = vec![Event::PointerMoved(egui::pos2(420., 330.))];
-            if step >= 3 {
-                events.push(Event::MouseWheel {
-                    unit: MouseWheelUnit::Line,
-                    delta: vec2(0., -1.),
-                    phase: TouchPhase::Move,
-                    source: MouseWheelSource::Unknown,
-                    modifiers: Modifiers::NONE,
-                });
-            }
-            let labels = frame_at_size(&ctx, &mut app, events, size);
-            if step < 2 {
-                continue;
-            }
-            // Use the fixed category picker and footer as the scrollable pane's bounds.
-            let close = crate::i18n::with_language(lang, || tr("Close"));
-            let close_rect = labels.iter().rfind(|(s, _)| s == close).unwrap().1;
-            let picker = crate::i18n::with_language(lang, || category.label());
-            let picker_rect = labels
-                .iter()
-                .find(|(s, r)| s == picker && r.center().y > 100.)
-                .unwrap()
-                .1;
-            for e in &entries {
-                let label = crate::i18n::with_language(lang, || tr(e.label));
-                if labels.iter().any(|(s, r)| {
-                    s == label
-                        && r.top() > picker_rect.bottom()
-                        && r.bottom() < close_rect.top()
-                        && r.left() >= 0.
-                        && r.right() <= size.x
-                }) {
-                    visible.insert(e.key);
+        for (density, scale) in [
+            (crate::Density::Comfortable, UiScale::P100),
+            (crate::Density::Compact, UiScale::P100),
+            (crate::Density::Compact, UiScale::P150),
+        ] {
+            let ctx = Context::default();
+            crate::configure(&ctx);
+            let mut app = Workspace {
+                settings_open: true,
+                ..Default::default()
+            };
+            app.apply_settings(Settings {
+                language: lang,
+                density,
+                ui_scale: scale,
+                ..app.preferences()
+            });
+            app.settings_page.select(category);
+            let size = vec2(720., 480.) / (f32::from(scale.percent()) / 100.);
+            let entries: Vec<_> = REGISTRY.iter().filter(|e| e.category == category).collect();
+            let mut visible = std::collections::BTreeSet::new();
+            for step in 0..36 {
+                let mut events = vec![Event::PointerMoved(egui::pos2(size.x * 0.6, size.y * 0.65))];
+                if step >= 3 {
+                    events.push(Event::MouseWheel {
+                        unit: MouseWheelUnit::Line,
+                        delta: vec2(0., -1.),
+                        phase: TouchPhase::Move,
+                        source: MouseWheelSource::Unknown,
+                        modifiers: Modifiers::NONE,
+                    });
+                }
+                let labels = frame_at_size(&ctx, &mut app, events, size);
+                if step < 2 {
+                    continue;
+                }
+                // Use the fixed category picker and footer as the scrollable pane's bounds.
+                let close = crate::i18n::with_language(lang, || tr("Close"));
+                let close_rect = labels.iter().rfind(|(s, _)| s == close).unwrap().1;
+                let picker = crate::i18n::with_language(lang, || category.label());
+                let bounds = ctx
+                    .memory(|m| m.area_rect(egui::Id::unique("settings-window")))
+                    .unwrap();
+                let picker_rect = labels
+                    .iter()
+                    .find(|(s, r)| {
+                        s == picker && bounds.contains_rect(*r) && r.top() > bounds.top() + 40.
+                    })
+                    .unwrap()
+                    .1;
+                for e in &entries {
+                    let label = crate::i18n::with_language(lang, || tr(e.label));
+                    if labels.iter().any(|(s, r)| {
+                        s == label
+                            && r.top() > picker_rect.bottom()
+                            && r.bottom() < close_rect.top()
+                            && r.left() >= bounds.left()
+                            && r.right() <= bounds.right()
+                    }) {
+                        visible.insert(e.key);
+                    }
                 }
             }
+            assert_eq!(
+                visible.len(),
+                entries.len(),
+                "{lang:?} {density:?} {scale:?}: {visible:?}"
+            );
         }
-        assert_eq!(visible.len(), entries.len(), "{lang:?}: {visible:?}");
     }
 }
 

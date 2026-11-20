@@ -25,6 +25,16 @@ pub(crate) struct AccentColors {
 }
 
 impl Accent {
+    pub(crate) const ALL: [Self; 3] = [Self::Indigo, Self::Blue, Self::Teal];
+
+    pub(crate) fn label(self) -> &'static str {
+        crate::i18n::tr(match self {
+            Self::Indigo => "Indigo",
+            Self::Blue => "Blue",
+            Self::Teal => "Teal",
+        })
+    }
+
     pub(crate) fn colors(self) -> AccentColors {
         let [base, hover, soft, selected] = match self {
             Self::Indigo => [0x4F46E5, 0x4338CA, 0xEEF2FF, 0xE0E7FF],
@@ -76,6 +86,15 @@ pub(crate) struct Metrics {
 }
 
 impl Density {
+    pub(crate) const ALL: [Self; 2] = [Self::Comfortable, Self::Compact];
+
+    pub(crate) fn label(self) -> &'static str {
+        crate::i18n::tr(match self {
+            Self::Comfortable => "Comfortable",
+            Self::Compact => "Compact",
+        })
+    }
+
     pub(crate) fn metrics(self) -> Metrics {
         match self {
             Self::Comfortable => Metrics {

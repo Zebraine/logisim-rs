@@ -35,14 +35,20 @@ fn row(
         badge_run.size().x + 12.0
     };
     let width = ui.available_width();
-    let run = ui.painter().layout(
-        name.to_owned(),
-        font,
-        theme::INK,
-        (width - leading - badge_width - 16.0).max(24.0),
-    );
+    let inline_width = width - leading - badge_width - 16.;
+    let stacked = !badge.is_empty() && inline_width < 64.;
+    let text_width = if stacked {
+        width - leading - 4.
+    } else {
+        inline_width
+    };
+    let badge_size = vec2(badge_width, 20.);
+    let run = ui
+        .painter()
+        .layout(name.to_owned(), font, theme::INK, text_width.max(24.));
+    let content_height = run.size().y + if stacked { badge_size.y + 2. } else { 0. };
     let (rect, response) =
-        ui.allocate_exact_size(vec2(width, height.max(run.size().y + 4.0)), Sense::click());
+        ui.allocate_exact_size(vec2(width, height.max(content_height + 4.)), Sense::click());
     response.widget_info(|| {
         egui::WidgetInfo::selected(egui::Role::ListBoxOption, ui.is_enabled(), selected, name)
     });
@@ -67,15 +73,19 @@ fn row(
         }
         theme::focus_ring(ui, &response);
         ui.painter().galley(
-            pos2(rect.left() + leading, rect.center().y - run.size().y / 2.0),
+            pos2(rect.left() + leading, rect.center().y - content_height / 2.),
             run,
             theme::INK,
         );
         if !badge.is_empty() {
-            let r = Align2::RIGHT_CENTER.anchor_size(
-                rect.right_center() - vec2(4.0, 0.0),
-                vec2(badge_width, 20.0),
-            );
+            let r = if stacked {
+                Align2::LEFT_BOTTOM.anchor_size(
+                    pos2(rect.left() + leading, rect.center().y + content_height / 2.),
+                    badge_size,
+                )
+            } else {
+                Align2::RIGHT_CENTER.anchor_size(rect.right_center() - vec2(4., 0.), badge_size)
+            };
             ui.painter().rect_filled(
                 r,
                 4,

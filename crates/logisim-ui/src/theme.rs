@@ -70,7 +70,8 @@ fn style_chrome(style: &mut egui::Style, m: chrome::Metrics, colors: chrome::Acc
     let v = &mut style.visuals;
     v.hyperlink_color = colors.base;
     v.selection.bg_fill = colors.selected;
-    v.selection.stroke = Stroke::new(2.0, colors.base);
+    // egui also uses this stroke for text on selected tabs and list items.
+    v.selection.stroke = Stroke::new(2.0, colors.hover);
     for (widget, fill, border, ink) in [
         (&mut v.widgets.noninteractive, CHROME, BORDER, INK),
         (&mut v.widgets.inactive, SURFACE, BORDER_STRONG, INK),
@@ -84,7 +85,7 @@ fn style_chrome(style: &mut egui::Style, m: chrome::Metrics, colors: chrome::Acc
             &mut v.widgets.open,
             colors.selected,
             colors.base,
-            colors.base,
+            colors.hover,
         ),
         (&mut v.widgets.active, colors.selected, colors.base, INK),
     ] {

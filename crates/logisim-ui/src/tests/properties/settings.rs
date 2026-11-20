@@ -6,7 +6,13 @@ use logisim_core::{Kind, Point};
 #[test]
 fn runtime_rates_are_visible_beside_controls_in_both_languages_and_narrow_windows() {
     for language in Language::ALL {
-        for size in [egui::vec2(1200.0, 820.0), egui::vec2(720.0, 480.0)] {
+        for (size, density, scale) in [
+            (egui::vec2(1200., 820.), Density::Comfortable, UiScale::P100),
+            (egui::vec2(720., 480.), Density::Comfortable, UiScale::P100),
+            (egui::vec2(720., 480.), Density::Compact, UiScale::P100),
+            (egui::vec2(480., 320.), Density::Comfortable, UiScale::P150),
+            (egui::vec2(480., 320.), Density::Compact, UiScale::P150),
+        ] {
             for (target_hz, actual_hz, target, actual) in [
                 (512, 512.3, "512", "512.3"),
                 (1024, 1024.0, "1k", "1.0k"),
@@ -16,7 +22,12 @@ fn runtime_rates_are_visible_beside_controls_in_both_languages_and_narrow_window
                 let ctx = Context::default();
                 configure(&ctx);
                 let mut app = Workspace::default();
-                app.set_language(language);
+                app.apply_settings(Settings {
+                    language,
+                    density,
+                    ui_scale: scale,
+                    ..app.preferences()
+                });
                 app.set_simulation(SimulationView {
                     enabled: true,
                     has_clocks: true,
@@ -30,6 +41,14 @@ fn runtime_rates_are_visible_beside_controls_in_both_languages_and_narrow_window
                 for _ in 0..3 {
                     labels = frame_at_size(&ctx, &mut app, vec![], size);
                 }
+                assert!(app.canvas.rect.width() * (f32::from(scale.percent()) / 100.) > 450.);
+                let grid = i18n::with_language(language, || i18n::tr("Grid"));
+                let grid_rect = labels.iter().find(|(text, _)| text == grid).unwrap().1;
+                assert!(
+                    grid_rect.right() <= app.canvas.rect.left() && grid_rect.bottom() <= size.y,
+                    "{density:?} {scale:?} grid {grid_rect:?} beside {:?}",
+                    app.canvas.rect
+                );
                 let expected = i18n::with_language(language, || {
                     [
                         tf!("FPS: {}", "59.9"),
@@ -320,6 +339,11 @@ fn search_matches_localized_descriptions_and_reset_requires_confirmation() {
             ..Default::default()
         };
         app.set_language(language);
+        app.apply_settings(Settings {
+            density: Density::Compact,
+            accent: Accent::Blue,
+            ..app.preferences()
+        });
         app.simulation_mut().steps = 23;
         let document = app.project().clone();
         let t = |s| i18n::with_language(language, || i18n::tr(s).to_owned());

@@ -18,13 +18,18 @@ pub(crate) struct Navigation {
 impl Workspace {
     pub(super) fn sidebar(&mut self, ui: &mut Ui) {
         let m = theme::metrics(ui.ctx());
+        let zoom_margin = if ui.available_width() < m.sidebar.min {
+            m.gap
+        } else {
+            m.card_margin
+        };
         Panel::bottom("zoom")
             .exact_size(m.zoom_bar)
             .frame(
                 Frame::NONE
                     .fill(theme::CHROME)
                     .inner_margin(Margin::symmetric(
-                        m.card_margin,
+                        zoom_margin,
                         ((m.zoom_bar - m.control) / 2.) as i8,
                     )),
             )

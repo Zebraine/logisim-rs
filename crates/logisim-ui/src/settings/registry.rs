@@ -1,5 +1,6 @@
 //! Stable setting identities and their bindings, shared by search, controls and reset.
 use super::*;
+use crate::{Accent, Density};
 use egui::Ui;
 
 #[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Eq)]
@@ -41,6 +42,8 @@ impl Category {
 pub(super) enum Control {
     Language,
     Scale,
+    Density,
+    Accent,
     SignalPalette,
     Toggle(fn(&mut Settings) -> &mut bool),
     Zoom,
@@ -105,6 +108,20 @@ registry![
         "Interface scale",
         "Resize text and controls throughout the app.",
         Control::Scale
+    ),
+    (
+        "appearance.density",
+        Appearance,
+        "Density",
+        "Adjust spacing and control sizes.",
+        Control::Density
+    ),
+    (
+        "appearance.accent",
+        Appearance,
+        "Accent",
+        "Choose the color of controls and selection outlines.",
+        Control::Accent
     ),
     (
         "appearance.reduce_motion",
@@ -243,6 +260,8 @@ impl Entry {
         match self.control {
             Control::Language => target.language = source.language,
             Control::SignalPalette => target.signal_palette = source.signal_palette,
+            Control::Density => target.density = source.density,
+            Control::Accent => target.accent = source.accent,
             Control::Scale => target.ui_scale = source.ui_scale,
             Control::Toggle(field) => *field(target) = *field(&mut source),
             Control::ProbeRadix => target.default_probe_radix = source.default_probe_radix,
@@ -266,6 +285,15 @@ impl Entry {
             Control::Language => choice(ui, &mut values.language, Language::ALL, |v| {
                 v.name().to_owned()
             }),
+            Control::Density => choice(ui, &mut values.density, Density::ALL, |v| {
+                v.label().to_owned()
+            }),
+            Control::Accent => {
+                swatches(ui, Accent::ALL.map(|a| (a.colors().base, a.label())));
+                choice(ui, &mut values.accent, Accent::ALL, |v| {
+                    v.label().to_owned()
+                })
+            }
             Control::SignalPalette => {
                 palette_preview(ui, values.signal_palette);
                 choice(ui, &mut values.signal_palette, SignalPalette::ALL, |v| {
@@ -355,7 +383,7 @@ impl Entry {
 }
 fn palette_preview(ui: &mut Ui, palette: SignalPalette) {
     use crate::SignalTone::*;
-    let swatches = [
+    let tones = [
         (Low, "Low signal"),
         (High, "High signal"),
         (Bus, "Bus signal"),
@@ -363,21 +391,24 @@ fn palette_preview(ui: &mut Ui, palette: SignalPalette) {
         (Error, "Signal error"),
         (WidthMismatch, "Width mismatch"),
     ];
-    let cell = egui::vec2(14., 26.);
+    swatches(ui, tones.map(|(tone, key)| (palette.color(tone), tr(key))));
+}
+
+fn swatches<const N: usize>(ui: &mut Ui, swatches: [(egui::Color32, &str); N]) {
+    let cell = egui::vec2(14., theme::metrics(ui.ctx()).control);
     let (area, _) = ui.allocate_exact_size(
         egui::vec2(cell.x * swatches.len() as f32, cell.y),
         egui::Sense::hover(),
     );
-    for (i, (tone, label)) in swatches.into_iter().enumerate() {
+    for (i, (color, label)) in swatches.into_iter().enumerate() {
         let rect = egui::Rect::from_min_size(area.min + egui::vec2(i as f32 * cell.x, 0.), cell);
-        ui.painter()
-            .circle_filled(rect.center(), 4.5, palette.color(tone));
+        ui.painter().circle_filled(rect.center(), 4.5, color);
         ui.interact(
             rect,
-            ui.make_persistent_id(("signal-swatch", i)),
+            ui.make_persistent_id(("swatch", i)),
             egui::Sense::hover(),
         )
-        .on_hover_text(tr(label));
+        .on_hover_text(label);
     }
 }
 
