@@ -33,8 +33,8 @@ fn registry_restores_each_field_without_changing_other_preferences() {
         default_probe_radix: logisim_core::Radix::Hex,
         default_pin_bits: 8,
         default_gate_size: logisim_core::GateSize::Medium,
-        default_font_size: None,
-        default_gate_inputs: 2,
+        default_font_size: Some(24),
+        default_gate_inputs: 4,
         default_tunnel_width: 13,
         remember_last_properties: true,
         simulation_mode: SimulationMode::Event,
@@ -1024,6 +1024,86 @@ fn shortcut_search_and_conflict_fit_the_viewport_in_both_languages() {
 }
 
 #[test]
+fn auto_label_size_disables_numeric_editing_until_unchecked() {
+    use egui::{Event, PointerButton};
+    for language in Language::ALL {
+        for size in [vec2(720., 480.), vec2(1200., 820.)] {
+            let ctx = Context::default();
+            crate::configure(&ctx);
+            let mut app = Workspace {
+                settings_open: true,
+                ..Default::default()
+            };
+            app.set_language(language);
+            app.settings_page.query = "editor.default_font_size".into();
+            let click_at = |app: &mut Workspace, pos| {
+                for pressed in [true, false] {
+                    frame_at_size(
+                        &ctx,
+                        app,
+                        vec![
+                            Event::PointerMoved(pos),
+                            Event::PointerButton {
+                                pos,
+                                button: PointerButton::Primary,
+                                pressed,
+                                modifiers: Modifiers::NONE,
+                            },
+                        ],
+                        size,
+                    );
+                }
+                frame_at_size(&ctx, app, vec![], size);
+            };
+            for _ in 0..3 {
+                frame_at_size(&ctx, &mut app, vec![], size);
+            }
+            let locate = |app: &mut Workspace, label: &str| {
+                let labels = frame_at_size(&ctx, app, vec![], size);
+                let bounds = ctx
+                    .memory(|m| m.area_rect(Id::unique("settings-window")))
+                    .unwrap();
+                labels
+                    .iter()
+                    .rev()
+                    .find(|(s, r)| s == label && bounds.contains_rect(*r))
+                    .unwrap()
+                    .1
+                    .center()
+            };
+            let number = locate(&mut app, "14");
+            click_at(&mut app, number);
+            assert!(!ctx.text_edit_focused());
+            assert_eq!(app.preferences().default_font_size, None);
+            let auto = locate(&mut app, language.translate("Auto"));
+            click_at(&mut app, auto);
+            assert_eq!(app.preferences().default_font_size, Some(14));
+            let number = locate(&mut app, "14");
+            click_at(&mut app, number);
+            assert!(ctx.text_edit_focused());
+            frame_at_size(
+                &ctx,
+                &mut app,
+                vec![
+                    Event::Text("24".into()),
+                    Event::Key {
+                        key: egui::Key::Enter,
+                        physical_key: None,
+                        modifiers: Modifiers::NONE,
+                        pressed: true,
+                        repeat: false,
+                    },
+                ],
+                size,
+            );
+            assert_eq!(app.preferences().default_font_size, Some(24));
+            click_at(&mut app, auto);
+            assert_eq!(app.preferences().default_font_size, None);
+        }
+    }
+}
+
+#[test]
 fn editor_default_rows_reset_at_both_window_sizes_without_editing_the_circuit() {
     use crate::tests::support::widgets::click;
     use egui::{Event, PointerButton};
@@ -1045,6 +1125,8 @@ fn editor_default_rows_reset_at_both_window_sizes_without_editing_the_circuit() 
             app.editor.session.selection.insert(id);
             app.apply_settings(Settings {
                 language,
+                default_font_size: Some(24),
+                default_gate_inputs: 4,
                 default_gate_size: GateSize::Wide,
                 default_tunnel_width: 17,
                 remember_last_properties: true,
@@ -1055,6 +1137,8 @@ fn editor_default_rows_reset_at_both_window_sizes_without_editing_the_circuit() 
             for (key, value) in [
                 ("editor.default_gate_size", t("Wide")),
                 ("editor.default_tunnel_width", "17"),
+                ("editor.default_font_size", "24"),
+                ("editor.default_gate_inputs", "4"),
                 ("editor.remember_last_properties", t("On")),
             ] {
                 app.settings_page.query = key.into();
@@ -1109,10 +1193,17 @@ fn editor_default_rows_reset_at_both_window_sizes_without_editing_the_circuit() 
                         (values.default_tunnel_width, values.remember_last_properties),
                         (1, true)
                     ),
+                    "editor.default_font_size" => assert_eq!(
+                        (values.default_font_size, values.default_gate_inputs),
+                        (None, 4)
+                    ),
+                    "editor.default_gate_inputs" => assert_eq!(values.default_gate_inputs, 2),
                     _ => assert!(!values.remember_last_properties),
                 }
             }
             app.apply_settings(Settings {
+                default_font_size: Some(20),
+                default_gate_inputs: 7,
                 default_gate_size: GateSize::Medium,
                 default_tunnel_width: 12,
                 remember_last_properties: true,

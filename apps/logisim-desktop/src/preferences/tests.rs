@@ -254,6 +254,8 @@ fn retry_after_write_failure_replays_only_local_changes_on_repaired_file() {
     fs::write(&directory, b"blocks directory creation").unwrap();
     w.apply_settings(Settings {
         truth_table: true,
+        default_font_size: Some(24),
+        default_gate_inputs: 4,
         default_gate_size: logisim_core::GateSize::Medium,
         default_tunnel_width: 17,
         remember_last_properties: true,
@@ -281,6 +283,8 @@ fn retry_after_write_failure_replays_only_local_changes_on_repaired_file() {
         restarted.preferences().default_gate_size,
         logisim_core::GateSize::Medium
     );
+    assert_eq!(restarted.preferences().default_font_size, Some(24));
+    assert_eq!(restarted.preferences().default_gate_inputs, 4);
     assert_eq!(restarted.preferences().default_tunnel_width, 17);
     assert!(restarted.preferences().remember_last_properties);
     assert_eq!(restarted.language(), Language::SimplifiedChinese);

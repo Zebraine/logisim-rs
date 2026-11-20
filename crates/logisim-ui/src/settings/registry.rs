@@ -55,7 +55,8 @@ pub(super) enum Control {
     RecentLimit,
     AutosaveMinutes,
     ProbeRadix,
-    BitWidth(fn(&mut Settings) -> &mut u8),
+    Integer(fn(&mut Settings) -> &mut u8, std::ops::RangeInclusive<u8>),
+    FontSize,
     GateSize,
 }
 pub(super) struct Entry {
@@ -209,7 +210,7 @@ registry![
         Editor,
         "Default pin width",
         "Set the bit width for new pins.",
-        Control::BitWidth(|s| &mut s.default_pin_bits)
+        Control::Integer(|s| &mut s.default_pin_bits, 1..=32)
     ),
     (
         "editor.default_gate_size",
@@ -223,7 +224,24 @@ registry![
         Editor,
         "Default tunnel width",
         "Set the bit width for new tunnels.",
-        Control::BitWidth(|s| &mut s.default_tunnel_width)
+        Control::Integer(|s| &mut s.default_tunnel_width, 1..=32)
+    ),
+    (
+        "editor.default_font_size",
+        Editor,
+        "Default label size",
+        "Auto uses each component’s label size (12 for Joystick and PLA ROM, usually 14).",
+        Control::FontSize
+    ),
+    (
+        "editor.default_gate_inputs",
+        Editor,
+        "Default gate inputs",
+        "Multi-input logic gates use up to 8 inputs. Parity gates use up to 32.",
+        Control::Integer(
+            |s| &mut s.default_gate_inputs,
+            Settings::DEFAULT_GATE_INPUTS_RANGE
+        )
     ),
     (
         "editor.remember_last_properties",
@@ -290,7 +308,8 @@ impl Entry {
             Control::Scale => target.ui_scale = source.ui_scale,
             Control::Toggle(field) => *field(target) = *field(&mut source),
             Control::ProbeRadix => target.default_probe_radix = source.default_probe_radix,
-            Control::BitWidth(field) => *field(target) = *field(&mut source),
+            Control::Integer(field, _) => *field(target) = *field(&mut source),
+            Control::FontSize => target.default_font_size = source.default_font_size,
             Control::GateSize => target.default_gate_size = source.default_gate_size,
             Control::Zoom => target.default_zoom = source.default_zoom,
             Control::Mode => target.simulation_mode = source.simulation_mode,
@@ -370,10 +389,24 @@ impl Entry {
                     |v| tr(v.name()).to_owned(),
                 )
             }
-            Control::BitWidth(field) => {
+            Control::FontSize => {
+                let mut auto = values.default_font_size.is_none();
+                let mut size = values.default_font_size.unwrap_or(14);
+                let number = ui.add_enabled(
+                    !auto,
+                    egui::DragValue::new(&mut size)
+                        .range(Settings::DEFAULT_FONT_SIZE_RANGE)
+                        .update_while_editing(false),
+                );
+                theme::focus_ring(ui, &number);
+                let toggle = ui.checkbox(&mut auto, tr("Auto"));
+                theme::focus_ring(ui, &toggle);
+                values.default_font_size = (!auto).then_some(size);
+            }
+            Control::Integer(field, ref range) => {
                 let r = ui.add(
                     egui::DragValue::new(field(values))
-                        .range(1..=32)
+                        .range(range.clone())
                         .update_while_editing(false),
                 );
                 theme::focus_ring(ui, &r);
