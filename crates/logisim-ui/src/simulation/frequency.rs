@@ -4,8 +4,7 @@ use crate::dialog::{Dialog, Dismiss};
 use crate::{TickHz, i18n::tr, tf};
 use egui::{Context, Key, TextEdit, Ui};
 
-pub const DEFAULT_TICK_HZ: u32 = 4;
-pub const MAX_TICK_HZ: u32 = 32768;
+pub use logisim_preferences::model::{DEFAULT_TICK_HZ, MAX_TICK_HZ};
 const PRESETS: [u32; 16] = [
     1,
     2,

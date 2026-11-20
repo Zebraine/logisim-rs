@@ -3,9 +3,8 @@ use logisim_core::Project;
 use logisim_file::MAX_BYTES;
 use std::{
     fs,
-    io::{Read, Write},
+    io::Read,
     path::{Path, PathBuf},
-    sync::atomic::{AtomicU64, Ordering},
 };
 
 type Result<T> = std::result::Result<T, String>;
@@ -208,51 +207,4 @@ fn check_expected(path: &Path, expected: Option<&[u8]>) -> Result<()> {
 pub(crate) fn atomic_write(path: &Path, bytes: &[u8], expected: Option<&[u8]>) -> Result<()> {
     atomic_replace(path, bytes, None, || check_expected(path, expected))
 }
-pub(crate) fn atomic_replace(
-    path: &Path,
-    bytes: &[u8],
-    permissions: Option<fs::Permissions>,
-    verify: impl Fn() -> Result<()>,
-) -> Result<()> {
-    verify()?;
-    static SEQUENCE: AtomicU64 = AtomicU64::new(0);
-    let parent = path.parent().ok_or("Missing parent directory")?;
-    let mut created = None;
-    for _ in 0..100 {
-        let temp = parent.join(format!(
-            ".logisim-rs-{}-{}.tmp",
-            std::process::id(),
-            SEQUENCE.fetch_add(1, Ordering::Relaxed)
-        ));
-        match fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&temp)
-        {
-            Ok(file) => {
-                created = Some((temp, file));
-                break;
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
-            Err(e) => return Err(e.to_string()),
-        }
-    }
-    let (temp, mut file) = created.ok_or("Could not create a temporary save file")?;
-    let result = (|| {
-        if let Some(permissions) =
-            permissions.or_else(|| fs::metadata(path).ok().map(|m| m.permissions()))
-        {
-            file.set_permissions(permissions)
-                .map_err(|e| e.to_string())?;
-        }
-        file.write_all(bytes).map_err(|e| e.to_string())?;
-        file.sync_all().map_err(|e| e.to_string())?;
-        drop(file);
-        verify()?;
-        fs::rename(&temp, path).map_err(|e| e.to_string())
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(&temp);
-    }
-    result
-}
+pub(crate) use logisim_preferences::storage::atomic_replace;

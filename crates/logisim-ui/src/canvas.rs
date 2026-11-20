@@ -1,4 +1,5 @@
 //! Viewport navigation, independent of circuit or simulator state.
+use crate::shortcuts::ChordUi as _;
 
 use egui::{Event, MouseWheelUnit, PointerButton, Rect, Sense, Ui, Vec2, vec2};
 

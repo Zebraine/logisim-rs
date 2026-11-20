@@ -1,7 +1,7 @@
 mod recovery;
 mod registry;
+pub use logisim_preferences::model::CONFIG_VERSION;
 pub use recovery::{RecoveryView, SnapshotState};
-pub const CONFIG_VERSION: u32 = 16;
 mod page;
 pub(crate) use page::Page;
 mod model;

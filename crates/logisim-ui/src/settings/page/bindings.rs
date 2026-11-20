@@ -1,3 +1,4 @@
+use crate::shortcuts::ChordUi as _;
 use crate::{
     i18n::tr,
     icons::{self, Icon},

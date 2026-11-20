@@ -185,3 +185,16 @@ fn tool_keys_can_be_reassigned_but_fixed_editing_chords_stay_reserved() {
         );
     }
 }
+
+#[test]
+fn persisted_key_names_round_trip_every_desktop_key() {
+    for &key in Key::ALL {
+        let chord = Chord::from_event(key, Modifiers::NONE, false);
+        let parsed = chord.to_string().parse::<Chord>();
+        if Chord::is_modifier(key) {
+            assert!(parsed.is_err());
+        } else {
+            assert_eq!(parsed, Ok(chord), "{key:?}");
+        }
+    }
+}

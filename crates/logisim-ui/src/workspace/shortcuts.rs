@@ -1,4 +1,5 @@
 //! Route workspace commands once, after the canvas and text fields have resolved focus.
+use crate::shortcuts::ChordUi as _;
 use crate::{
     FileAction, SimulationAction, Workspace,
     appearance::Command as Art,

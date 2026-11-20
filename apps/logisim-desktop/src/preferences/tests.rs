@@ -276,7 +276,8 @@ fn all_fields_restart_reset_and_atomic_conflict_protection() {
         prefs.synchronize(&mut w);
         prefs = Preferences::at(Some(path.clone()), &mut w);
         assert_eq!(w.preferences(), desired);
-        assert_eq!(fs::read_dir(&temp.0).unwrap().count(), 1);
+        assert!(temp.0.join("preferences.json.lock").is_file());
+        assert_eq!(fs::read_dir(&temp.0).unwrap().count(), 2);
     }
     fs::write(&path, "bad external edit").unwrap();
     w.apply_settings(alternative);
@@ -965,5 +966,101 @@ fn dark_artwork_contrast_round_trips_in_local_and_portable_settings() {
         Preferences::at(Some(path.clone()), &mut restarted);
         assert_eq!(restarted.preferences(), expected);
         assert_eq!(Preferences::export_settings(&restarted), portable);
+    }
+}
+
+#[test]
+fn agent_catalog_and_atomic_patch_round_trip_every_desktop_preference() {
+    use logisim_agent::{Operation, Request, Service};
+    use serde_json::{Value, json};
+    let temp = Temp::new();
+    let path = temp.0.join("preferences.json");
+    let config = Config {
+        recent: vec![temp.0.join("a.circ").display().to_string()],
+        ..Default::default()
+    };
+    let original = schema::encode(&config);
+    fs::write(&path, &original).unwrap();
+    let mut service = Service::default();
+    let settings = service
+        .call(Request::SettingsGet {
+            config: path.clone(),
+        })
+        .unwrap();
+    let mut expected: Value =
+        serde_json::from_slice(&schema::encode_settings(config.settings)).unwrap();
+    expected.as_object_mut().unwrap().remove("version");
+    assert_eq!(settings["settings"], expected);
+    let catalog = service.call(Request::SettingsCatalog {}).unwrap();
+    let entries = catalog["entries"].as_array().unwrap();
+    let field_count: usize = expected
+        .as_object()
+        .unwrap()
+        .values()
+        .map(|v| v.as_object().unwrap().len())
+        .sum();
+    assert_eq!(entries.len(), field_count);
+    let mut shortcut = 0;
+    let mut ops = Vec::new();
+    for entry in entries {
+        let key = entry["key"].as_str().unwrap();
+        let (section, field) = key.split_once('.').unwrap();
+        assert_eq!(expected[section][field], entry["default"], "{key}");
+        let value = match entry["type"].as_str().unwrap() {
+            "bool" => json!(!entry["default"].as_bool().unwrap()),
+            "enum" => entry["values"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|v| **v != entry["default"])
+                .unwrap()
+                .clone(),
+            "integer" => {
+                if entry["maximum"] == entry["default"] {
+                    entry["minimum"].clone()
+                } else {
+                    entry["maximum"].clone()
+                }
+            }
+            "chord" => {
+                shortcut += 1;
+                let key = match shortcut {
+                    36 => "a".into(),
+                    37 => "b".into(),
+                    _ => format!("f{shortcut}"),
+                };
+                json!(format!("primary+shift+alt+{key}"))
+            }
+            other => panic!("unsupported catalog type {other}"),
+        };
+        expected[section][field] = value.clone();
+        ops.push(Operation {
+            key: key.into(),
+            value,
+        });
+    }
+    assert_eq!(shortcut, 37);
+    let updated = service
+        .call(Request::SettingsPatch {
+            config: path.clone(),
+            dry_run: false,
+            ops,
+            expected_sha256: settings["source_sha256"].as_str().map(str::to_owned),
+        })
+        .unwrap();
+    assert_eq!(updated["settings"], expected);
+    let bytes = fs::read(&path).unwrap();
+    let decoded = schema::decode(&bytes).unwrap();
+    let mut desktop: Value =
+        serde_json::from_slice(&schema::encode_settings(decoded.settings)).unwrap();
+    assert_eq!(
+        desktop.as_object_mut().unwrap().remove("version"),
+        Some(json!(16))
+    );
+    assert_eq!(desktop, expected);
+    let old: Value = serde_json::from_slice(&original).unwrap();
+    let new: Value = serde_json::from_slice(&bytes).unwrap();
+    for key in ["recent", "window", "panels", "plugins"] {
+        assert_eq!(old[key], new[key]);
     }
 }

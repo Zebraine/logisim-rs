@@ -1,4 +1,5 @@
 //! Workspace toolbar; document and simulation commands stay in their existing layers.
+use crate::shortcuts::ShortcutCaptions as _;
 use crate::{
     Workspace,
     editor::Tool,

@@ -1,4 +1,6 @@
 //! Appearance gestures are previews until release, then join the project undo timeline.
+use crate::shortcuts::ChordUi as _;
+use crate::shortcuts::ShortcutCaptions as _;
 use crate::{
     artwork,
     canvas::Canvas,

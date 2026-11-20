@@ -1,30 +1,18 @@
 //! Window geometry in native logical pixels, independent of the workbench UI scale.
 use eframe::egui::{Context, Pos2, Vec2, ViewportCommand, ViewportInfo, pos2, vec2};
-use serde::{Deserialize, Serialize};
+pub(crate) use logisim_preferences::host::WindowState;
 
 const MIN: Vec2 = vec2(720., 480.);
 
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub(crate) struct WindowState {
-    width: f32,
-    height: f32,
-    x: Option<f32>,
-    y: Option<f32>,
-    maximized: bool,
+pub(crate) trait WindowGeometry: Sized {
+    fn size(self) -> Vec2;
+    fn position(self) -> Option<Pos2>;
+    fn bounded(self, monitor: Option<Vec2>) -> Self;
+    fn options(self) -> eframe::NativeOptions;
+    fn restore(self, ctx: &Context) -> Self;
+    fn observe(&mut self, info: &ViewportInfo, size: Vec2, zoom: f32);
 }
-impl Default for WindowState {
-    fn default() -> Self {
-        Self {
-            width: 1200.,
-            height: 820.,
-            x: None,
-            y: None,
-            maximized: false,
-        }
-    }
-}
-impl WindowState {
+impl WindowGeometry for WindowState {
     fn size(self) -> Vec2 {
         vec2(self.width, self.height)
     }
@@ -32,12 +20,7 @@ impl WindowState {
         Some(pos2(self.x?, self.y?))
     }
 
-    pub fn valid(self) -> bool {
-        self.size().is_finite()
-            && self.x.is_none_or(f32::is_finite)
-            && self.y.is_none_or(f32::is_finite)
-    }
-    pub fn bounded(mut self, monitor: Option<Vec2>) -> Self {
+    fn bounded(mut self, monitor: Option<Vec2>) -> Self {
         let mut size = self.size().max(MIN);
         if let Some(monitor) = monitor {
             size = size.min(monitor);
@@ -54,7 +37,7 @@ impl WindowState {
         self
     }
 
-    pub fn options(self) -> eframe::NativeOptions {
+    fn options(self) -> eframe::NativeOptions {
         let mut viewport = eframe::egui::ViewportBuilder::default()
             .with_inner_size(self.size())
             .with_min_inner_size(MIN)
@@ -71,7 +54,7 @@ impl WindowState {
     }
 
     /// Apply the normal rectangle first so unmaximizing returns to that rectangle.
-    pub fn restore(self, ctx: &Context) -> Self {
+    fn restore(self, ctx: &Context) -> Self {
         let zoom = ctx.zoom_factor();
         let (monitor, positioned, maximized) = ctx.input(|i| {
             let v = i.viewport();
@@ -103,7 +86,7 @@ impl WindowState {
         target
     }
 
-    pub fn observe(&mut self, info: &ViewportInfo, size: Vec2, zoom: f32) {
+    fn observe(&mut self, info: &ViewportInfo, size: Vec2, zoom: f32) {
         if info.minimized == Some(true) || info.fullscreen == Some(true) {
             return;
         }

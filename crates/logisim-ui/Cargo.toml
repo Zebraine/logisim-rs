@@ -8,6 +8,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+logisim-preferences.workspace = true
 serde.workspace = true
 egui.workspace = true
 fontique = { version = "=0.11.1", default-features = false, features = ["system", "fontconfig-dlopen"] }

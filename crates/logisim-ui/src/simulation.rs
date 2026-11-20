@@ -1,4 +1,5 @@
 //! Presentation and commands only; the desktop host owns the simulation service.
+use crate::shortcuts::ShortcutCaptions as _;
 mod frequency;
 use crate::shortcuts::{Command, Shortcuts};
 use crate::{i18n::tr, tf, theme};

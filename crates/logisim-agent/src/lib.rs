@@ -5,6 +5,7 @@ use std::{collections::HashMap, path::PathBuf};
 
 mod digest;
 pub mod io;
+mod settings;
 
 pub const PROTOCOL: u8 = 1;
 #[derive(Debug, Serialize)]
@@ -95,6 +96,14 @@ pub struct Service {
 impl Service {
     pub fn call(&mut self, request: Request) -> Result<Value> {
         match request {
+            Request::SettingsCatalog {} => Ok(settings::catalog()),
+            Request::SettingsGet { config } => settings::get(&config),
+            Request::SettingsPatch {
+                config,
+                expected_sha256,
+                ops,
+                dry_run,
+            } => settings::patch(&config, expected_sha256.as_deref(), ops, dry_run),
             Request::ProjectOpen { path } => {
                 let bytes = io::read(&path)?;
                 let xml =

@@ -6,26 +6,26 @@ use std::{
     path::Path,
 };
 
+pub(crate) fn file_error(e: std::io::Error) -> Error {
+    Error::new(
+        if e.kind() == std::io::ErrorKind::NotFound {
+            "not_found"
+        } else {
+            "io"
+        },
+        e,
+    )
+}
 pub fn read(path: &Path) -> Result<Vec<u8>> {
-    fn error(e: std::io::Error) -> Error {
-        Error::new(
-            if e.kind() == std::io::ErrorKind::NotFound {
-                "not_found"
-            } else {
-                "io"
-            },
-            e,
-        )
-    }
-    if !fs::metadata(path).map_err(error)?.is_file() {
+    if !fs::metadata(path).map_err(file_error)?.is_file() {
         return Err(Error::invalid("Expected a regular file."));
     }
     let mut bytes = Vec::new();
     fs::File::open(path)
-        .map_err(error)?
+        .map_err(file_error)?
         .take(logisim_file::MAX_BYTES as u64 + 1)
         .read_to_end(&mut bytes)
-        .map_err(error)?;
+        .map_err(file_error)?;
     if bytes.len() > logisim_file::MAX_BYTES {
         return Err(Error::new("too_large", "File exceeds 8 MiB."));
     }

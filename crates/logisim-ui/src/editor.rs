@@ -1,4 +1,5 @@
 //! Editing transactions and gestures. Simulation is deliberately separate.
+use crate::shortcuts::ShortcutCaptions as _;
 use crate::{i18n::tr, tf};
 
 use crate::{

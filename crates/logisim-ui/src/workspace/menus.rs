@@ -1,5 +1,6 @@
 //! Workspace menus; document and simulation commands stay in their existing layers.
 use crate::shortcuts::Command;
+use crate::shortcuts::ShortcutCaptions as _;
 use crate::{FileAction, Workspace, document::recent_button, i18n::tr, project::CircuitCommand};
 use egui::Ui;
 

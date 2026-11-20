@@ -15,6 +15,7 @@ mod storage;
 #[cfg(test)]
 mod tests;
 mod window;
+use window::WindowGeometry as _;
 
 fn main() -> eframe::Result {
     let mut workspace = logisim_ui::Workspace::default();

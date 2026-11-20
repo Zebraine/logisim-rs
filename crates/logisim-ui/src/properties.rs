@@ -1,4 +1,5 @@
 use crate::editor::{Editor, Tool, supported_gate_size};
+use crate::shortcuts::ShortcutCaptions as _;
 use crate::shortcuts::{Command, Shortcuts};
 use crate::{i18n::tr, tf, theme};
 use egui::{Frame, RichText, ScrollArea, Ui};

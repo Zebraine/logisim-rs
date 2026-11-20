@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "apps/logisim-desktop",
     "crates/logisim-agent",
+    "crates/logisim-preferences",
     "crates/logisim-core",
     "crates/logisim-examples",
     "plugins/course/components",
@@ -29,6 +30,7 @@ license = "MIT"
 publish = false
 
 [workspace.dependencies]
+logisim-preferences = { path = "crates/logisim-preferences" }
 logisim-core = { path = "crates/logisim-core" }
 logisim-course = { path = "plugins/course/components" }
 logisim-plugin-api = { path = "crates/logisim-plugin-api" }

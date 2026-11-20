@@ -2,9 +2,7 @@
 use logisim_ui::Workspace;
 use std::path::Path;
 
-pub(super) fn valid(path: &str) -> bool {
-    Path::new(path).is_absolute() && !path.contains('\0') && path.chars().count() <= 4096
-}
+use logisim_preferences::host::valid_recent as valid;
 pub(crate) fn record(workspace: &mut Workspace, path: &Path) {
     let Some(path) = path.to_str().filter(|s| valid(s)) else {
         return;

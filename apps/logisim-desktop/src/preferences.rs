@@ -332,7 +332,8 @@ impl Preferences {
         let bytes = schema::encode(&config);
         fs::create_dir_all(path.parent().expect("configuration directory"))
             .map_err(|err| err.to_string())?;
-        crate::storage::atomic_write(path, &bytes, self.loaded.json.as_deref())?;
+        logisim_preferences::storage::write_preferences(path, &bytes, self.loaded.json.as_deref())
+            .map_err(|e| e.to_string())?;
         self.loaded = Loaded {
             config,
             json: Some(bytes),

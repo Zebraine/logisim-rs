@@ -1,243 +1,29 @@
 //! Versioned disk representation. The UI owns the validated preference types.
-use logisim_core::{GateSize, Radix};
-use logisim_ui::{
-    Accent, DefaultZoom, Density, FontPreset, Language, Settings, SignalPalette, SimulationMode,
-    ThemeMode, TickHz, UiScale, WorkspaceSettings,
-};
+use logisim_ui::{Accent, Density, Language, Settings, SignalPalette, SimulationMode, ThemeMode};
 use serde::{Deserialize, Serialize};
 
+use crate::window::WindowGeometry as _;
 use crate::window::WindowState;
+use logisim_preferences::schema::{
+    self as wire, AccentCode, Appearance, DensityCode, Editor, General, Generation, LanguageCode,
+    ModeCode, SignalPaletteCode, Simulation, ThemeCode,
+};
 use logisim_ui::{CONFIG_VERSION, WorkspaceLayout};
-#[derive(Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-#[serde(bound(
-    deserialize = "R: Deserialize<'de>, W: Deserialize<'de>, P: Deserialize<'de>, F: Deserialize<'de>"
-))]
-struct File<R = Vec<String>, W = WindowState, P = WorkspaceLayout, F = PluginSettings> {
-    version: u32,
-    #[serde(default)]
-    shortcuts: logisim_ui::shortcuts::Shortcuts,
-    #[serde(default)]
-    files: logisim_ui::FileSettings,
-    #[serde(default, deserialize_with = "present")]
-    workspace: Option<WorkspaceSettings>,
-    #[serde(
-        default,
-        deserialize_with = "present",
-        skip_serializing_if = "Option::is_none"
-    )]
-    recent: Option<R>,
-    #[serde(
-        default,
-        deserialize_with = "present",
-        skip_serializing_if = "Option::is_none"
-    )]
-    window: Option<W>,
-    #[serde(
-        default,
-        deserialize_with = "present",
-        skip_serializing_if = "Option::is_none"
-    )]
-    panels: Option<P>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    plugins: Option<F>,
-    #[serde(default)]
-    general: General,
-    #[serde(default)]
-    appearance: Appearance,
-    #[serde(default)]
-    editor: Editor,
-    #[serde(default)]
-    simulation: Simulation,
-    #[serde(default)]
-    generation: Generation,
-}
+type File<R = Vec<String>, W = WindowState, P = WorkspaceLayout, F = PluginSettings> =
+    wire::File<R, W, P, F>;
 
-#[derive(Serialize, Deserialize, Default)]
-#[serde(default, deny_unknown_fields)]
-struct General {
-    #[serde(with = "LanguageCode")]
-    language: Language,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(remote = "Language")]
-enum LanguageCode {
-    #[serde(rename = "en")]
-    English,
-    #[serde(rename = "zh-CN")]
-    SimplifiedChinese,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-struct Appearance {
-    #[serde(with = "DensityCode")]
-    density: Density,
-    #[serde(with = "ThemeCode")]
-    theme: ThemeMode,
-    dark_artwork_contrast: bool,
-    #[serde(with = "AccentCode")]
-    accent: Accent,
-    ui_scale: f64,
-    reduce_motion: bool,
-    show_telemetry: bool,
-    #[serde(with = "SignalPaletteCode")]
-    signal_palette: SignalPalette,
-    show_wire_values: bool,
-    show_origin_marker: bool,
-}
-#[derive(Serialize, Deserialize)]
-#[serde(remote = "Density", rename_all = "lowercase")]
-enum DensityCode {
-    Comfortable,
-    Compact,
-}
-#[derive(Serialize, Deserialize)]
-#[serde(remote = "ThemeMode", rename_all = "lowercase")]
-enum ThemeCode {
-    Light,
-    Dark,
-}
-#[derive(Serialize, Deserialize)]
-#[serde(remote = "Accent", rename_all = "lowercase")]
-enum AccentCode {
-    Indigo,
-    Blue,
-    Teal,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(remote = "SignalPalette", rename_all = "kebab-case")]
-enum SignalPaletteCode {
-    Default,
-    HighContrast,
-    ColorblindSafe,
-}
-
-impl Default for Appearance {
-    fn default() -> Self {
-        Self {
-            density: Density::default(),
-            theme: ThemeMode::default(),
-            dark_artwork_contrast: true,
-            accent: Accent::default(),
-            ui_scale: 1.0,
-            reduce_motion: false,
-            show_telemetry: true,
-            signal_palette: SignalPalette::default(),
-            show_wire_values: true,
-            show_origin_marker: true,
-        }
+macro_rules! bridge {
+    ($read:ident,$write:ident,$ui:ident,$disk:ident; $($v:ident),+) => {
+        fn $read(value:$disk)->$ui {match value {$($disk::$v=>$ui::$v),+}}
+        fn $write(value:$ui)->$disk {match value {$($ui::$v=>$disk::$v),+}}
     }
 }
-
-#[derive(Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-struct Editor {
-    show_grid: bool,
-    #[serde(with = "ZoomCode")]
-    default_zoom: DefaultZoom,
-    highlight_net: bool,
-    show_connection_markers: bool,
-    invert_wheel_zoom: bool,
-    #[serde(with = "RadixCode")]
-    default_probe_radix: Radix,
-    default_pin_bits: u8,
-    #[serde(with = "GateSizeCode")]
-    default_gate_size: GateSize,
-    default_font_family: FontPreset,
-    default_font_bold: bool,
-    default_font_italic: bool,
-    default_font_size: Option<u8>,
-    default_gate_inputs: u8,
-    default_tunnel_width: u8,
-    remember_last_properties: bool,
-}
-#[derive(Serialize, Deserialize)]
-#[serde(remote = "GateSize", rename_all = "lowercase")]
-enum GateSizeCode {
-    Narrow,
-    Medium,
-    Wide,
-}
-
-impl Default for Editor {
-    fn default() -> Self {
-        let settings = Settings::default();
-        Self {
-            show_grid: settings.show_grid,
-            default_zoom: settings.default_zoom,
-            highlight_net: settings.highlight_net,
-            show_connection_markers: settings.show_connection_markers,
-            invert_wheel_zoom: settings.invert_wheel_zoom,
-            default_probe_radix: settings.default_probe_radix,
-            default_pin_bits: settings.default_pin_bits,
-            default_gate_size: settings.default_gate_size,
-            default_font_family: settings.default_font_family,
-            default_font_bold: settings.default_font_bold,
-            default_font_italic: settings.default_font_italic,
-            default_font_size: settings.default_font_size,
-            default_gate_inputs: settings.default_gate_inputs,
-            default_tunnel_width: settings.default_tunnel_width,
-            remember_last_properties: settings.remember_last_properties,
-        }
-    }
-}
-#[derive(Serialize, Deserialize)]
-#[serde(remote = "Radix", rename_all = "lowercase")]
-enum RadixCode {
-    Binary,
-    Octal,
-    Signed,
-    Unsigned,
-    Hex,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(remote = "DefaultZoom")]
-enum ZoomCode {
-    #[serde(rename = "fit")]
-    Fit,
-    #[serde(rename = "100%")]
-    Actual,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-struct Simulation {
-    #[serde(with = "ModeCode")]
-    mode: SimulationMode,
-    tick_hz: u32,
-}
-impl Default for Simulation {
-    fn default() -> Self {
-        Self {
-            mode: SimulationMode::default(),
-            tick_hz: TickHz::default().get(),
-        }
-    }
-}
-#[derive(Serialize, Deserialize)]
-#[serde(remote = "SimulationMode", rename_all = "lowercase")]
-enum ModeCode {
-    Stable,
-    Event,
-}
-
-#[derive(Serialize, Deserialize, Default)]
-#[serde(default, deny_unknown_fields)]
-struct Generation {
-    truth_table: bool,
-}
-
-// An omitted section receives defaults. An explicitly null section is invalid.
-fn present<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(
-    d: D,
-) -> Result<Option<T>, D::Error> {
-    T::deserialize(d).map(Some)
-}
-
+bridge!(language_from_disk,language_to_disk,Language,LanguageCode; English,SimplifiedChinese);
+bridge!(theme_from_disk,theme_to_disk,ThemeMode,ThemeCode; Light,Dark);
+bridge!(accent_from_disk,accent_to_disk,Accent,AccentCode; Indigo,Blue,Teal);
+bridge!(density_from_disk,density_to_disk,Density,DensityCode; Comfortable,Compact);
+bridge!(signal_palette_from_disk,signal_palette_to_disk,SignalPalette,SignalPaletteCode; Default,HighContrast,ColorblindSafe);
+bridge!(mode_from_disk,mode_to_disk,SimulationMode,ModeCode; Stable,Event);
 #[derive(Default, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub(super) struct PluginSettings {
@@ -281,17 +67,7 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Config, &'static str> {
     let recent = file.recent.unwrap_or_default();
     let panels = file.panels.unwrap_or_default();
     let window = file.window.unwrap_or_default();
-    if !window.valid()
-        || !(230.0..=380.0).contains(&panels.sidebar_width)
-        || !(0.25..=0.75).contains(&panels.split)
-        || recent.len() > 20
-        || recent
-            .iter()
-            .enumerate()
-            .any(|(i, p)| !super::recent::valid(p) || recent[..i].contains(p))
-    {
-        return Err("Unknown or invalid settings.");
-    }
+    logisim_preferences::host::validate(window, panels, &recent)?;
     Ok(Config {
         plugins: file.plugins.unwrap_or_default(),
         settings,
@@ -317,52 +93,21 @@ pub(super) fn decode_settings(bytes: &[u8]) -> Result<Settings, String> {
 }
 
 fn validated<R, W, P, F>(file: &File<R, W, P, F>) -> Result<Settings, &'static str> {
-    if !matches!(file.version, 1..=CONFIG_VERSION) {
-        return Err("Unsupported configuration version.");
-    }
-    if file.version == 1 && file.workspace.is_some() {
-        return Err("Unknown or invalid settings.");
-    }
+    let (ui_scale, tick_hz) = file.validate()?;
     let workspace = file.workspace.unwrap_or_default();
-    if !file.files.valid_interval() {
-        return Err("Invalid autosave interval.");
-    }
-    if !(1..=20).contains(&workspace.recent_limit) {
-        return Err("Recent project limit must be between 1 and 20.");
-    }
-    if !(1..=32).contains(&file.editor.default_pin_bits)
-        || !(1..=32).contains(&file.editor.default_tunnel_width)
-    {
-        return Err("Pin and tunnel widths must be between 1 and 32.");
-    }
-    if file
-        .editor
-        .default_font_size
-        .is_some_and(|size| !Settings::DEFAULT_FONT_SIZE_RANGE.contains(&size))
-    {
-        return Err("Default label size must be Auto or between 8 and 32.");
-    }
-    if !Settings::DEFAULT_GATE_INPUTS_RANGE.contains(&file.editor.default_gate_inputs) {
-        return Err("Default gate inputs must be between 2 and 32.");
-    }
-    let ui_scale = UiScale::ALL
-        .into_iter()
-        .find(|s| f64::from(s.percent()) / 100.0 == file.appearance.ui_scale)
-        .ok_or("Invalid interface scale.")?;
-    let tick_hz = TickHz::new(file.simulation.tick_hz).ok_or("Invalid tick frequency.")?;
     Ok(Settings {
         shortcuts: file.shortcuts,
         files: file.files,
         workspace,
-        language: file.general.language,
-        density: file.appearance.density,
-        theme: file.appearance.theme,
+        language: language_from_disk(file.general.language),
+        density: density_from_disk(file.appearance.density),
+        theme: theme_from_disk(file.appearance.theme),
         dark_artwork_contrast: file.appearance.dark_artwork_contrast,
-        accent: file.appearance.accent,
+        accent: accent_from_disk(file.appearance.accent),
         ui_scale,
         reduce_motion: file.appearance.reduce_motion,
         show_telemetry: file.appearance.show_telemetry,
-        signal_palette: file.appearance.signal_palette,
+        signal_palette: signal_palette_from_disk(file.appearance.signal_palette),
         show_wire_values: file.appearance.show_wire_values,
         show_origin_marker: file.appearance.show_origin_marker,
         show_grid: file.editor.show_grid,
@@ -380,7 +125,7 @@ fn validated<R, W, P, F>(file: &File<R, W, P, F>) -> Result<Settings, &'static s
         default_gate_inputs: file.editor.default_gate_inputs,
         default_tunnel_width: file.editor.default_tunnel_width,
         remember_last_properties: file.editor.remember_last_properties,
-        simulation_mode: file.simulation.mode,
+        simulation_mode: mode_from_disk(file.simulation.mode),
         tick_hz,
         truth_table: file.generation.truth_table,
     })
@@ -410,17 +155,17 @@ fn portable(s: Settings) -> File {
         shortcuts: s.shortcuts,
         files: s.files,
         general: General {
-            language: s.language,
+            language: language_to_disk(s.language),
         },
         appearance: Appearance {
-            density: s.density,
-            theme: s.theme,
+            density: density_to_disk(s.density),
+            theme: theme_to_disk(s.theme),
             dark_artwork_contrast: s.dark_artwork_contrast,
-            accent: s.accent,
+            accent: accent_to_disk(s.accent),
             ui_scale: f64::from(s.ui_scale.percent()) / 100.0,
             reduce_motion: s.reduce_motion,
             show_telemetry: s.show_telemetry,
-            signal_palette: s.signal_palette,
+            signal_palette: signal_palette_to_disk(s.signal_palette),
             show_wire_values: s.show_wire_values,
             show_origin_marker: s.show_origin_marker,
         },
@@ -442,7 +187,7 @@ fn portable(s: Settings) -> File {
             remember_last_properties: s.remember_last_properties,
         },
         simulation: Simulation {
-            mode: s.simulation_mode,
+            mode: mode_to_disk(s.simulation_mode),
             tick_hz: s.tick_hz.get(),
         },
         generation: Generation {

@@ -1,4 +1,6 @@
 //! Project navigation and the resizable lower inspector.
+use crate::shortcuts::ChordUi as _;
+use crate::shortcuts::ShortcutCaptions as _;
 use crate::{
     Workspace,
     i18n::tr,
