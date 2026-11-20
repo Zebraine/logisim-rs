@@ -140,6 +140,74 @@ fn appearance_clipboard_events_do_not_duplicate_paste_and_keep_ports_protected()
 }
 
 #[test]
+fn native_clipboard_publishes_appearance_shapes_once_and_preserves_the_circuit_clipboard() {
+    use crate::appearance::AppearanceEditor;
+    use crate::editor::CLIPBOARD_MARKER;
+    let (ctx, mut app) = setup();
+    app.editor.set_tool(crate::editor::Tool::Place(Kind::Pin));
+    app.editor.place(Point::new(100, 100));
+    app.editor.copy();
+    let size = egui::vec2(1200., 820.);
+    let send = |app: &mut Workspace, events| {
+        let mut output = ctx.run_ui(
+            RawInput {
+                events,
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, size)),
+                ..Default::default()
+            },
+            |ui| app.show(ui),
+        );
+        output.textures_delta.clear();
+        output
+            .platform_output
+            .commands
+            .into_iter()
+            .filter_map(|command| match command {
+                egui::OutputCommand::CopyText(s) => Some(s),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        send(&mut app, vec![Event::PointerMoved(egui::pos2(700., 400.))]),
+        [CLIPBOARD_MARKER]
+    );
+    app.editor.session.context.appearance_mode = true;
+    send(&mut app, vec![]);
+    key(&ctx, &mut app, Key::A, Modifiers::COMMAND);
+    let initial = AppearanceEditor::current(&app.editor).shapes;
+    let press = |key| Event::Key {
+        key,
+        physical_key: None,
+        modifiers: Modifiers::COMMAND,
+        pressed: true,
+        repeat: false,
+    };
+    let copied = send(&mut app, vec![press(Key::C), Event::Copy]);
+    assert_eq!(copied, ["logisim-rs appearance (paste in the same window)"]);
+    assert_eq!(app.appearance.clipboard, initial);
+    assert_eq!(send(&mut app, vec![Event::Cut, press(Key::X)]), copied);
+    assert_eq!(app.appearance.clipboard, initial);
+    assert!(AppearanceEditor::current(&app.editor).shapes.is_empty());
+    send(
+        &mut app,
+        vec![Event::Paste(copied[0].clone()), press(Key::V)],
+    );
+    assert_eq!(
+        AppearanceEditor::current(&app.editor).shapes.len(),
+        initial.len()
+    );
+    app.editor.session.context.appearance_mode = false;
+    send(&mut app, vec![Event::Paste(copied[0].clone())]);
+    assert_eq!(app.circuit().components.len(), 1);
+    send(
+        &mut app,
+        vec![Event::Paste(CLIPBOARD_MARKER.into()), press(Key::V)],
+    );
+    assert_eq!(app.circuit().components.len(), 2);
+}
+
+#[test]
 fn appearance_text_focus_keeps_edit_keys_out_of_artwork_commands() {
     use crate::appearance::Tool as ArtTool;
     let (ctx, mut app) = setup();

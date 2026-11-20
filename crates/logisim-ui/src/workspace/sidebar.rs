@@ -124,7 +124,7 @@ impl Workspace {
             );
             if ui.is_enabled()
                 && !ui.ctx().any_popup_open()
-                && crate::shortcuts::Chord::consume_primary(ui, egui::Key::F)
+                && crate::shortcuts::Chord::consume(ui, egui::Modifiers::COMMAND, egui::Key::F)
             {
                 response.request_focus();
             }

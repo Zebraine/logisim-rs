@@ -138,6 +138,21 @@ fn plugin_keys_preserve_order_ignore_repeat_and_leave_document_untouched() {
     key(&ctx, &mut app, Key::R, Modifiers::COMMAND);
     assert!(app.take_simulation_actions().is_empty());
 }
+
+#[test]
+fn an_active_plugin_keyboard_keeps_its_input_during_an_appearance_mode_transition() {
+    let (ctx, mut app, _) = setup_input();
+    app.preferences
+        .shortcuts
+        .bind(
+            crate::shortcuts::Command::AppearanceSelectAll,
+            "f6".parse().unwrap(),
+        )
+        .unwrap();
+    app.editor.session.context.appearance_mode = true;
+    key(&ctx, &mut app, Key::F6, Modifiers::NONE);
+    assert!(app.appearance.selected.is_empty());
+}
 #[test]
 fn plugin_capture_releases_on_focus_modal_tool_instance_and_definition_changes() {
     for case in 0..9 {

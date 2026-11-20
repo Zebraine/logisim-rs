@@ -690,3 +690,177 @@ fn entering_appearance_mode_blocks_a_later_tool_key_in_the_same_frame() {
     assert!(app.editor.session.context.appearance_mode);
     assert_eq!(app.editor.tool, crate::editor::Tool::Select);
 }
+
+#[test]
+fn appearance_bindings_leave_text_ime_and_modals_and_terminal_input_alone() {
+    use crate::shortcuts::Command::AppearanceSelectAll;
+    let ctx = Context::default();
+    configure(&ctx);
+    let mut app = Workspace::default();
+    app.editor.session.context.appearance_mode = true;
+    app.preferences
+        .shortcuts
+        .bind(AppearanceSelectAll, "f6".parse().unwrap())
+        .unwrap();
+    let size = vec2(1200., 820.);
+    let key = |key, modifiers| Event::Key {
+        key,
+        modifiers,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+    };
+    let attempt = || key(egui::Key::F6, Modifiers::NONE);
+    frame(
+        &ctx,
+        &mut app,
+        size,
+        vec![Event::PointerMoved(pos2(650., 420.))],
+    );
+    frame(
+        &ctx,
+        &mut app,
+        size,
+        vec![
+            attempt(),
+            Event::Ime(egui::ImeEvent::Preedit {
+                text: "字".into(),
+                active_range_chars: None,
+            }),
+        ],
+    );
+    assert!(app.appearance.selected.is_empty());
+    app.editor.simulation.keyboard_focus = Some(1);
+    frame(&ctx, &mut app, size, vec![attempt()]);
+    assert!(app.appearance.selected.is_empty());
+    app.editor.simulation.release_keyboard();
+    app.settings_open = true;
+    frame(&ctx, &mut app, size, vec![attempt()]);
+    assert!(app.appearance.selected.is_empty());
+    app.settings_open = false;
+    frame(&ctx, &mut app, size, vec![]);
+    frame(
+        &ctx,
+        &mut app,
+        size,
+        vec![key(egui::Key::F, Modifiers::COMMAND)],
+    );
+    frame(&ctx, &mut app, size, vec![attempt()]);
+    assert!(ctx.text_edit_focused());
+    assert!(app.appearance.selected.is_empty());
+}
+
+#[test]
+fn appearance_commands_follow_shape_selection_clipboard_history_and_layer_order() {
+    use crate::{
+        appearance::{AppearanceEditor, Target},
+        shortcuts::Command::*,
+    };
+    use egui::Key::*;
+    let ctx = Context::default();
+    configure(&ctx);
+    let mut app = Workspace::default();
+    let size = vec2(1200., 820.);
+    let mut settings = app.preferences();
+    for (i, command) in [
+        AppearanceUndo,
+        AppearanceRedo,
+        AppearanceCut,
+        AppearanceCopy,
+        AppearancePaste,
+        AppearanceDuplicate,
+        AppearanceSelectAll,
+        AppearanceRaise,
+        AppearanceLower,
+        AppearanceFront,
+        AppearanceBack,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        settings
+            .shortcuts
+            .bind(command, format!("f{}", i + 1).parse().unwrap())
+            .unwrap();
+    }
+    let press = |app: &mut Workspace, key, modifiers| {
+        frame(
+            &ctx,
+            app,
+            size,
+            vec![Event::Key {
+                key,
+                modifiers,
+                pressed: true,
+                repeat: false,
+                physical_key: None,
+            }],
+        )
+    };
+    app.editor.session.context.appearance_mode = true;
+    frame(
+        &ctx,
+        &mut app,
+        size,
+        vec![Event::PointerMoved(pos2(800., 400.))],
+    );
+    app.appearance.selected.insert(Target::Anchor);
+    let project = app.project().clone();
+    let camera = app.canvas.camera;
+    app.simulation_mut().steps = 9;
+    app.apply_settings(settings);
+    assert_eq!(app.project(), &project);
+    assert_eq!(app.appearance.selected, [Target::Anchor].into());
+    assert_eq!(app.canvas.camera.offset, camera.offset);
+    assert_eq!(app.canvas.camera.zoom, camera.zoom);
+    assert_eq!(app.simulation_mut().steps, 9);
+    assert!(app.take_simulation_actions().is_empty());
+    let shape_actions = [
+        AppearanceCut,
+        AppearanceCopy,
+        AppearanceDuplicate,
+        AppearanceRaise,
+        AppearanceLower,
+        AppearanceFront,
+        AppearanceBack,
+    ];
+    assert!(shape_actions.into_iter().all(|c| !app.command_enabled(c)));
+    assert!(
+        [AppearanceUndo, AppearanceRedo, AppearancePaste]
+            .into_iter()
+            .all(|c| !app.command_enabled(c))
+    );
+    assert!(app.command_enabled(AppearanceSelectAll));
+    let initial = AppearanceEditor::current(&app.editor).shapes;
+    let n = initial.len();
+    let first = initial[0].id;
+    press(&mut app, F7, Modifiers::NONE);
+    assert!(shape_actions.into_iter().all(|c| app.command_enabled(c)));
+    press(&mut app, F4, Modifiers::NONE);
+    assert_eq!(app.appearance.clipboard, initial);
+    assert!(app.command_enabled(AppearancePaste));
+    let count = |app: &Workspace| AppearanceEditor::current(&app.editor).shapes.len();
+    for (key, expected) in [(F6, 2 * n), (F5, 3 * n), (F3, 2 * n), (F1, 3 * n)] {
+        press(&mut app, key, Modifiers::NONE);
+        assert_eq!(count(&app), expected);
+    }
+    assert!(app.appearance.selected.is_empty());
+    assert!(app.command_enabled(AppearanceRedo));
+    press(&mut app, Y, Modifiers::COMMAND);
+    assert_eq!(count(&app), 3 * n);
+    press(&mut app, F2, Modifiers::NONE);
+    assert_eq!(count(&app), 2 * n);
+    app.appearance.selected.insert(Target::Shape(first));
+    for (key, index) in [(F8, 1), (F9, 0), (F10, 2 * n - 1), (F11, 0)] {
+        press(&mut app, key, Modifiers::NONE);
+        assert_eq!(
+            AppearanceEditor::current(&app.editor).shapes[index].id,
+            first
+        );
+    }
+    let before = app.project().clone();
+    for (key, mods) in [(ArrowUp, Modifiers::SHIFT), (ArrowDown, Modifiers::COMMAND)] {
+        press(&mut app, key, mods);
+    }
+    assert_eq!(app.project(), &before);
+}

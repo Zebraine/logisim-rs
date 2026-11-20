@@ -129,9 +129,9 @@ impl Chord {
         )
     }
 
-    pub(crate) fn consume_primary(ui: &egui::Ui, key: Key) -> bool {
+    pub(crate) fn consume(ui: &egui::Ui, mods: Modifiers, key: Key) -> bool {
         let mac = ui.ctx().os().is_mac();
-        let wanted = Self { key, mods: PRIMARY };
+        let wanted = Self { key, mods };
         ui.input_mut(|i| {
             let count = i.events.len();
             i.events.retain(|event| match event {

@@ -459,53 +459,8 @@ impl AppearanceEditor {
         })
     }
     fn shortcuts(&mut self, ui: &mut Ui, editor: &mut Editor) {
-        let shift = Modifiers::COMMAND.plus(Modifiers::SHIFT);
-        if ui.input_mut(|i| i.consume_key(shift, Key::Z)) {
-            self.cancel();
-            editor.redo();
-            self.selected.clear();
-        }
-        if ui.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::Z)) {
-            self.cancel();
-            editor.undo();
-            self.selected.clear();
-        }
-        for (modifiers, key, command) in [
-            (shift, Key::ArrowUp, Command::Front),
-            (shift, Key::ArrowDown, Command::Back),
-            (Modifiers::COMMAND, Key::ArrowUp, Command::Raise),
-            (Modifiers::COMMAND, Key::ArrowDown, Command::Lower),
-            (Modifiers::COMMAND, Key::D, Command::Duplicate),
-            (Modifiers::COMMAND, Key::A, Command::All),
-            (Modifiers::NONE, Key::Delete, Command::Delete),
-        ] {
-            if ui.input_mut(|i| i.consume_key(modifiers, key)) {
-                self.command(editor, command);
-            }
-        }
-        // Consume native clipboard events and key fallbacks once per action.
-        let events = ui.input(|i| i.events.clone());
-        for (key, command, native) in [
-            (
-                Key::C,
-                Command::Copy,
-                events.iter().any(|e| matches!(e, egui::Event::Copy)),
-            ),
-            (
-                Key::X,
-                Command::Cut,
-                events.iter().any(|e| matches!(e, egui::Event::Cut)),
-            ),
-            (
-                Key::V,
-                Command::Paste,
-                events.iter().any(|e| matches!(e, egui::Event::Paste(_))),
-            ),
-        ] {
-            let pressed = ui.input_mut(|i| i.consume_key(Modifiers::COMMAND, key));
-            if native || pressed {
-                self.command(editor, command);
-            }
+        if crate::shortcuts::Chord::consume(ui, Modifiers::NONE, Key::Delete) {
+            self.command(editor, Command::Delete);
         }
         if ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape)) {
             self.cancel();
@@ -527,7 +482,7 @@ impl AppearanceEditor {
             (Key::ArrowUp, Point::new(0, -1)),
             (Key::ArrowDown, Point::new(0, 1)),
         ] {
-            if ui.input_mut(|i| i.consume_key(Modifiers::NONE, key)) {
+            if crate::shortcuts::Chord::consume(ui, Modifiers::NONE, key) {
                 delta = delta + p;
             }
         }

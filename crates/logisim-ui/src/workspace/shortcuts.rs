@@ -21,68 +21,79 @@ impl Workspace {
         {
             return;
         }
-        let scope = if self.editor.session.context.appearance_mode {
-            Scope::Appearance
-        } else {
-            Scope::Canvas
-        };
-        let canvas =
+        let canvas_active =
             response.has_focus() || (response.hovered() && !ui.ctx().egui_wants_keyboard_input());
         let terminal = self.editor.simulation.keyboard_focus.is_some();
         let bindings = self.preferences.shortcuts;
         let mac = ui.ctx().os().is_mac();
-        let mut commands = Vec::new();
-        ui.input_mut(|i| {
-            i.events.retain(|event| {
-                let command = match event {
-                    Event::Key {
-                        pressed: true,
-                        key,
-                        modifiers,
-                        ..
-                    } => {
-                        let chord = Chord::from_event(*key, *modifiers, mac);
-                        let Some(command) = bindings.command(chord, scope, mac) else {
-                            return true;
-                        };
-                        // The simulated keyboard receives text, while its modified
-                        // simulation controls continue to operate the running circuit.
-                        if terminal && (command.group() != Group::Simulation || modifiers.is_none())
-                        {
-                            return true;
-                        }
-                        command
-                    }
-                    Event::Copy if !terminal => Command::Copy,
-                    Event::Cut if !terminal => Command::Cut,
-                    Event::Paste(text) if !terminal && text == CLIPBOARD_MARKER => Command::Paste,
-                    _ => return true,
-                };
-                if command.scope() != Scope::Global && !canvas {
-                    return true;
-                }
-                // A platform clipboard event can accompany its key event. Other
-                // actions, especially consecutive clock edges, stay ordered.
-                if !matches!(command, Command::Cut | Command::Copy | Command::Paste)
-                    || !commands.contains(&command)
-                {
-                    commands.push(command);
-                }
-                false
-            })
-        });
-        for command in commands {
+        let mut clipboard_commands = Vec::new();
+        // Execute in input order, outside the context lock. A command can switch
+        // editors or open a dialog before the next event in the very same frame.
+        let mut events = ui.input_mut(|input| std::mem::take(&mut input.events));
+        events.retain(|event| {
             if self.dialog_open() {
-                break;
+                return true;
             }
-            // A preceding command in the same input batch can open the appearance editor.
-            if command.group() == Group::Tools && self.editor.session.context.appearance_mode {
-                continue;
+            let scope = if self.editor.session.context.appearance_mode {
+                Scope::Appearance
+            } else {
+                Scope::Canvas
+            };
+            use Command::*;
+            let command = match event {
+                Event::Key {
+                    pressed: true,
+                    key,
+                    modifiers,
+                    ..
+                } => {
+                    let chord = Chord::from_event(*key, *modifiers, mac);
+                    let Some(command) = bindings.command(chord, scope, mac) else {
+                        return true;
+                    };
+                    if terminal && (command.group() != Group::Simulation || modifiers.is_none()) {
+                        return true;
+                    }
+                    command
+                }
+                Event::Copy if !terminal => {
+                    if scope == Scope::Appearance {
+                        AppearanceCopy
+                    } else {
+                        Copy
+                    }
+                }
+                Event::Cut if !terminal => {
+                    if scope == Scope::Appearance {
+                        AppearanceCut
+                    } else {
+                        Cut
+                    }
+                }
+                Event::Paste(_) if !terminal && scope == Scope::Appearance => AppearancePaste,
+                Event::Paste(text) if !terminal && text == CLIPBOARD_MARKER => Paste,
+                _ => return true,
+            };
+            if command.scope() != Scope::Global && !canvas_active {
+                return true;
+            }
+            // Some backends deliver both the physical shortcut and its native
+            // clipboard event. Publish/cut/paste once in the receiving editor.
+            if matches!(
+                command,
+                Copy | Cut | Paste | AppearanceCopy | AppearanceCut | AppearancePaste
+            ) {
+                if clipboard_commands.contains(&command) {
+                    return false;
+                }
+                clipboard_commands.push(command);
             }
             if self.command_enabled(command) {
                 self.run_command(command);
             }
-        }
+            false
+        });
+        ui.input_mut(|input| input.events = events);
     }
     pub(super) fn command_enabled(&self, c: Command) -> bool {
         use Command::*;
