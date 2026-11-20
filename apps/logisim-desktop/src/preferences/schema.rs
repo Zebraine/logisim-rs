@@ -208,7 +208,7 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Config, &'static str> {
     let recent = file.recent.unwrap_or_default();
     let panels = file.panels.unwrap_or_default();
     let window = file.window.unwrap_or_default();
-    if !(1..=30).contains(&file.files.autosave_minutes)
+    if !file.files.valid_interval()
         || !(1..=32).contains(&file.editor.default_pin_bits)
         || !window.valid()
         || !(230.0..=380.0).contains(&panels.sidebar_width)

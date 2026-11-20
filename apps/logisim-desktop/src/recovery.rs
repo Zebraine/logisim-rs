@@ -10,6 +10,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+const INVALID_INTERVAL: &str = "Autosave interval must be between 1 and 30 minutes.";
+
 #[derive(Default)]
 pub(crate) struct Autosave {
     directory: Option<PathBuf>,
@@ -18,6 +20,7 @@ pub(crate) struct Autosave {
     unavailable: bool,
     changed: bool,
     owned: Option<std::fs::File>,
+    written: Option<Project>,
     last_success: Option<Instant>,
     next_due: Option<Instant>,
     options: Option<FileSettings>,
@@ -49,6 +52,7 @@ impl Autosave {
                 if pair != self.observed || was_unavailable {
                     if pair != self.observed {
                         self.owned = None;
+                        self.written = None;
                     }
                     self.metadata = None;
                     self.error = None;
@@ -126,6 +130,7 @@ impl Autosave {
             }
         }
         self.changed = true;
+        self.written = Some(project.clone());
         Ok(project)
     }
     pub fn report(&mut self, error: String) {
@@ -158,8 +163,15 @@ impl Autosave {
         if self.options != Some(options) {
             self.next_due = None;
             self.options = Some(options);
+            if !options.valid_interval() {
+                self.report(INVALID_INTERVAL.into());
+            } else if self.error.as_deref() == Some(INVALID_INTERVAL) {
+                self.error = None;
+                self.changed = true;
+            }
         }
-        if !options.autosave
+        if !options.valid_interval()
+            || !options.autosave
             || !dirty
             || storage.protected.is_some()
             || (self.owned.is_none() && !self.observed.empty())
@@ -178,10 +190,15 @@ impl Autosave {
                 return;
             }
         }
+        self.next_due = Some(now + interval);
+        if self.written.as_ref() == Some(project) {
+            return;
+        }
         self.changed = true;
         let result = self.write(storage, project);
         match result {
             Ok(()) => {
+                self.written = Some(project.clone());
                 self.last_success = Some(now);
                 self.error = None;
             }
@@ -190,7 +207,6 @@ impl Autosave {
                 self.report(e);
             }
         }
-        self.next_due = Some(now + interval);
     }
     fn write(&mut self, storage: &Storage, project: &Project) -> Result<(), String> {
         let dir = self.dir()?.to_owned();
@@ -223,6 +239,7 @@ impl Autosave {
     pub fn finish_document(&mut self) {
         self.next_due = None;
         self.last_success = None;
+        self.written = None;
         if self.owned.is_some()
             && let Err(error) = self.clear_owned()
         {
@@ -263,6 +280,7 @@ impl Autosave {
         self.error = None;
         self.next_due = None;
         self.last_success = None;
+        self.written = None;
         self.changed = true;
         Ok(())
     }

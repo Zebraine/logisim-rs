@@ -336,3 +336,18 @@ fn wire_badges_leave_inspection_hit_selection_and_simulation_available() {
         assert!(app.take_simulation_actions().is_empty());
     }
 }
+
+#[test]
+fn programmatic_pin_width_is_bounded_when_placed() {
+    for (input, expected) in [(0, 1), (255, 32)] {
+        let mut app = crate::Workspace::default();
+        app.apply_settings(crate::Settings {
+            default_pin_bits: input,
+            ..app.preferences()
+        });
+        app.editor.set_tool(Tool::Place(Kind::Pin));
+        app.editor.place(Point::new(20, 20));
+        assert_eq!(app.circuit().components.last().unwrap().bits, expected);
+        assert_eq!(app.preferences().default_pin_bits, expected);
+    }
+}

@@ -403,3 +403,45 @@ fn density_and_accent_round_trip_independently_in_v6() {
         }
     }
 }
+
+#[test]
+fn programmatic_limits_bound_history_and_never_persist_an_invalid_interval() {
+    let temp = Temp::new();
+    let path = temp.0.join("preferences.json");
+    let mut ws = Workspace::default();
+    let mut prefs = Preferences::at(Some(path.clone()), &mut ws);
+    for (input, expected) in [(0, 1), (usize::MAX, 20)] {
+        let mut values = ws.preferences();
+        values.workspace.recent_limit = input;
+        values.default_pin_bits = u8::MAX;
+        ws.apply_settings(values);
+        let entries: Vec<_> = (0..25)
+            .map(|i| temp.0.join(format!("{i}.circ")).display().to_string())
+            .collect();
+        ws.set_recent(entries.clone());
+        recent::record(&mut ws, Path::new(&entries[0]));
+        assert_eq!(ws.recent(), &entries[..expected]);
+        ws.set_recent(entries.clone());
+        prefs.synchronize(&mut ws);
+        let bytes = fs::read(&path).unwrap();
+        let config = schema::decode(&bytes).unwrap();
+        assert_eq!(config.recent, entries[..expected]);
+        assert_eq!(config.settings.default_pin_bits, 32);
+        assert_eq!(config.settings.workspace.recent_limit, expected);
+        for invalid in [0, 31, u8::MAX] {
+            let mut values = ws.preferences();
+            values.files.autosave_minutes = invalid;
+            ws.apply_settings(values);
+            prefs.synchronize(&mut ws);
+            assert_eq!(fs::read(&path).unwrap(), bytes);
+        }
+        let mut corrected = ws.preferences();
+        corrected.files.autosave_minutes = 2;
+        ws.apply_settings(corrected);
+        prefs.synchronize(&mut ws);
+        assert_eq!(
+            schema::decode(&fs::read(&path).unwrap()).unwrap().settings,
+            corrected
+        );
+    }
+}

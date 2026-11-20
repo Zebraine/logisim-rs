@@ -60,6 +60,7 @@
     "Auto ticks": "自动时钟",
     "Automatic ticks · Ctrl+K": "自动时钟步进 · Ctrl+K",
     "Autosave": "自动保存",
+    "Autosave interval must be between 1 and 30 minutes.": "自动保存间隔必须在 1 到 30 分钟之间。",
     "Back": "返回",
     "Background": "背景",
     "Base": "基础",

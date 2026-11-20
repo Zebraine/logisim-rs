@@ -214,3 +214,84 @@ fn recovery_files_and_both_locks_are_reserved_project_destinations() {
     }
     assert!(!auto.reserved(&temp.path("project.circ")));
 }
+
+#[test]
+fn unchanged_checkpoints_keep_both_mtimes_and_failed_edits_retry() {
+    let tmp = Temp::new();
+    let dir = tmp.path("recovery");
+    let mut owner = Autosave::at(Some(dir.clone()));
+    let mut project = Project::default();
+    let now = write_checkpoint(&mut owner, &project);
+    let at = |s| now + Duration::from_secs(s);
+    let tick = |auto: &mut Autosave, s, project: &Project| {
+        auto.update(
+            at(s),
+            FileSettings::default(),
+            true,
+            &Storage::default(),
+            project,
+        )
+    };
+    let mtimes =
+        || [slot::DATA, slot::META].map(|f| fs::metadata(dir.join(f)).unwrap().modified().unwrap());
+    let old = mtimes();
+    for s in [600, 900] {
+        tick(&mut owner, s, &project);
+        assert_eq!(owner.last_success, Some(at(300)));
+        assert_eq!(owner.next_due, Some(at(s + 300)));
+        assert_eq!(mtimes(), old);
+    }
+    let before = project.clone();
+    project.main_circuit_mut().name = "next".into();
+    let lock = slot::try_lock(&dir, slot::LOCK).unwrap().unwrap();
+    tick(&mut owner, 1200, &project);
+    assert_eq!(owner.written.as_ref(), Some(&before));
+    drop(lock);
+    tick(&mut owner, 1499, &project);
+    assert_eq!(mtimes(), old);
+    tick(&mut owner, 1500, &project);
+    assert_eq!(owner.written.as_ref(), Some(&project));
+    assert_eq!(Pair::read(&dir).unwrap().project(&dir).unwrap(), project);
+    drop(owner);
+    let mut restored = Autosave::at(Some(dir.clone()));
+    let recovered = restored.recover(&mut Storage::default()).unwrap();
+    let old = mtimes();
+    tick(&mut restored, 1500, &recovered);
+    tick(&mut restored, 1800, &recovered);
+    assert_eq!(mtimes(), old);
+    assert!(restored.last_success.is_none());
+    restored.clear_owned().unwrap();
+    assert!(restored.written.is_none());
+    write_checkpoint(&mut restored, &recovered);
+    restored.finish_document();
+    assert!(restored.written.is_none() && !restored.pending());
+}
+
+#[test]
+fn invalid_minutes_report_once_and_suspend_writes_until_corrected() {
+    let temp = Temp::new();
+    let dir = temp.path("recovery");
+    let mut auto = Autosave::at(Some(dir.clone()));
+    let now = Instant::now();
+    for minutes in [0, 31, 255] {
+        let options = FileSettings {
+            autosave: true,
+            autosave_minutes: minutes,
+        };
+        for (frame, seconds) in [0, 1, 12000].into_iter().enumerate() {
+            auto.changed = false;
+            auto.update(
+                now + Duration::from_secs(seconds),
+                options,
+                true,
+                &Storage::default(),
+                &Project::default(),
+            );
+            assert_eq!(auto.error.as_deref(), Some(INVALID_INTERVAL));
+            assert_eq!(auto.changed, frame == 0);
+            assert!(auto.next_due.is_none() && !dir.exists());
+        }
+    }
+    write_checkpoint(&mut auto, &Project::default());
+    assert!(auto.error.is_none());
+}

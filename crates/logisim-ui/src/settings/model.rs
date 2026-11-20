@@ -66,6 +66,11 @@ pub struct WorkspaceSettings {
     pub restore_window: bool,
     pub restore_panels: bool,
 }
+impl WorkspaceSettings {
+    pub fn bounded_recent_limit(self) -> usize {
+        self.recent_limit.clamp(1, 20)
+    }
+}
 impl Default for WorkspaceSettings {
     fn default() -> Self {
         Self {
@@ -82,6 +87,11 @@ impl Default for WorkspaceSettings {
 pub struct FileSettings {
     pub autosave: bool,
     pub autosave_minutes: u8,
+}
+impl FileSettings {
+    pub fn valid_interval(self) -> bool {
+        (1..=30).contains(&self.autosave_minutes)
+    }
 }
 impl Default for FileSettings {
     fn default() -> Self {
@@ -161,7 +171,7 @@ impl Settings {
     pub(crate) fn placement_defaults(self) -> PlacementDefaults {
         PlacementDefaults {
             probe_radix: self.default_probe_radix,
-            pin_bits: self.default_pin_bits,
+            pin_bits: self.default_pin_bits.clamp(1, 32),
         }
     }
 

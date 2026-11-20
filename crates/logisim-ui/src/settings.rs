@@ -46,7 +46,7 @@ impl Workspace {
     pub fn preferences(&self) -> Settings {
         self.preferences
     }
-    pub fn apply_settings(&mut self, settings: Settings) {
+    pub fn apply_settings(&mut self, mut settings: Settings) {
         if self.preferences.truth_table != settings.truth_table {
             self.set_truth_table_generation(settings.truth_table);
         }
@@ -55,6 +55,8 @@ impl Workspace {
             .set_tick_rate(&mut self.preferences.tick_hz, settings.tick_hz);
         self.editor.display = settings.editor_display();
         self.editor.placement_defaults = settings.placement_defaults();
+        settings.default_pin_bits = self.editor.placement_defaults.pin_bits;
+        settings.workspace.recent_limit = settings.workspace.bounded_recent_limit();
         self.preferences = settings;
     }
     pub fn set_config_path(&mut self, path: Option<String>) {

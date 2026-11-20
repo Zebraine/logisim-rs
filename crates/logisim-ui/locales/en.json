@@ -60,6 +60,7 @@
     "Auto ticks": "Auto ticks",
     "Automatic ticks · Ctrl+K": "Automatic ticks · Ctrl+K",
     "Autosave": "Autosave",
+    "Autosave interval must be between 1 and 30 minutes.": "Autosave interval must be between 1 and 30 minutes.",
     "Back": "Back",
     "Background": "Background",
     "Base": "Base",

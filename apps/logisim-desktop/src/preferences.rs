@@ -185,6 +185,7 @@ impl Preferences {
         recent::truncate(workspace);
         let layout_due = self.layout_due.is_some_and(|at| Instant::now() >= at);
         if self.blocked
+            || !values.files.valid_interval()
             || (values == self.loaded.config.settings
                 && workspace.recent() == self.loaded.config.recent
                 && !(layout_due

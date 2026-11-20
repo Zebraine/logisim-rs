@@ -9,8 +9,8 @@ pub(crate) fn record(workspace: &mut Workspace, path: &Path) {
     let Some(path) = path.to_str().filter(|s| valid(s)) else {
         return;
     };
-    let limit = workspace.preferences().workspace.recent_limit;
-    if workspace.recent().first().is_some_and(|p| p == path) {
+    let limit = workspace.preferences().workspace.bounded_recent_limit();
+    if workspace.recent().len() <= limit && workspace.recent().first().is_some_and(|p| p == path) {
         return;
     }
     let recent = std::iter::once(path.to_owned())
@@ -27,7 +27,7 @@ pub(crate) fn remove(workspace: &mut Workspace, path: &Path) {
     }
 }
 pub(super) fn truncate(workspace: &mut Workspace) {
-    let limit = workspace.preferences().workspace.recent_limit;
+    let limit = workspace.preferences().workspace.bounded_recent_limit();
     if workspace.recent().len() > limit {
         workspace.set_recent(workspace.recent()[..limit].to_vec());
     }
