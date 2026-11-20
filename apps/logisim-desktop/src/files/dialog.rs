@@ -33,12 +33,25 @@ pub(super) enum Dialog {
         path: PathBuf,
         bytes: Vec<u8>,
     },
+    ReplaceSettings {
+        path: PathBuf,
+        bytes: Vec<u8>,
+    },
+    ImportSettings {
+        path: PathBuf,
+        settings: Box<crate::preferences::ValidatedSettings>,
+    },
+    SettingsMessage {
+        title: &'static str,
+        body: String,
+    },
     Message {
         title: String,
         body: String,
     },
 }
 pub(super) enum Response {
+    Import,
     Recover,
     ConfirmPlugins,
     BrowsePlugin(usize),
@@ -51,6 +64,17 @@ pub(super) enum Response {
     Pick(PathBuf),
 }
 impl Dialog {
+    pub(super) fn is_settings(&self) -> bool {
+        matches!(
+            self,
+            Self::Picker(Picker {
+                mode: super::Mode::Settings(_),
+                ..
+            }) | Self::ReplaceSettings { .. }
+                | Self::ImportSettings { .. }
+                | Self::SettingsMessage { .. }
+        )
+    }
     pub(super) fn show(&mut self, ctx: &egui::Context) -> Response {
         let mut answer = Response::Wait;
         let dismiss = match self {
@@ -96,13 +120,19 @@ impl Dialog {
                     });
                 })
             }
-            Dialog::Replace { path, .. } => Window::prompt("replace-file").confirm(
+            Dialog::ImportSettings { path, .. } => Window::prompt("confirm-settings-import").confirm(
+                ctx, tr("Import settings?"),
+                &logisim_ui::tf!("Replace your current preferences with the settings in {}? Your circuit, recent projects, window and panel layout are preserved.", path.file_name().expect("selected file").to_string_lossy()),
+                tr("Import settings"), || answer = Response::Import
+            ),
+            Dialog::ReplaceSettings { path, .. } | Dialog::Replace { path, .. } => Window::prompt("replace-file").confirm(
                 ctx,
                 tr("Replace existing file?"),
                 &path.to_string_lossy(),
                 tr("Replace"),
                 || answer = Response::Replace,
             ),
+            Dialog::SettingsMessage {title, body} => Window::prompt("settings-file-message").message(ctx,tr(title),body),
             Dialog::Message { title, body } => {
                 Window::prompt("file-message").message(ctx, tr(title), body)
             }

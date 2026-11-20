@@ -116,6 +116,9 @@ impl Workspace {
         );
         if let Some(action) = action {
             match action {
+                page::PageAction::SettingsFile(action) => {
+                    self.file_actions.push(crate::FileAction::Settings(action))
+                }
                 page::PageAction::Retry => self.retry_settings = true,
                 page::PageAction::OpenRecent(index) => {
                     self.settings_open = false;

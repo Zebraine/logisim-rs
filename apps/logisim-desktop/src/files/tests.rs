@@ -3,17 +3,35 @@ mod behavior;
 mod memory;
 mod plugin;
 mod recovery;
+mod settings;
 
 use super::*;
 use egui::{Event, Modifiers, PointerButton, Pos2, RawInput, Rect, Shape};
 use logisim_sim::ProjectSimulator as Simulator;
 
-#[derive(Default)]
 struct Harness {
+    config_dir: crate::tests::support::Temp,
+    preferences: crate::preferences::Preferences,
     ctx: egui::Context,
     ws: Workspace,
     files: Files,
     sim: Simulator,
+}
+impl Default for Harness {
+    fn default() -> Self {
+        let config = crate::tests::support::Temp::new();
+        let mut ws = Workspace::default();
+        let preferences =
+            crate::preferences::Preferences::at(Some(config.path("preferences.json")), &mut ws);
+        Self {
+            config_dir: config,
+            preferences,
+            ws,
+            ctx: Default::default(),
+            files: Default::default(),
+            sim: Default::default(),
+        }
+    }
 }
 impl Harness {
     fn frame(&mut self, events: Vec<Event>) -> Vec<(String, Pos2)> {
@@ -37,7 +55,12 @@ impl Harness {
                     self.files
                         .request(action, &self.ctx, &mut self.ws, &mut self.sim);
                 }
-                self.files.show(&self.ctx, &mut self.ws, &mut self.sim);
+                self.files.show(
+                    &self.ctx,
+                    &mut self.ws,
+                    &mut self.sim,
+                    &mut self.preferences,
+                );
             },
         );
         fn collect(shape: Shape, text: &mut Vec<(String, Pos2)>) {

@@ -67,6 +67,9 @@ impl Loaded {
         })
     }
 }
+/// A portable settings file that passed the same schema validation as local preferences.
+pub(crate) struct ValidatedSettings(Settings);
+
 pub(crate) struct Preferences {
     path: Option<PathBuf>,
     loaded: Loaded,
@@ -79,7 +82,7 @@ impl Preferences {
     pub fn load(workspace: &mut Workspace) -> Self {
         Self::at(config_path(), workspace)
     }
-    fn at(path: Option<PathBuf>, workspace: &mut Workspace) -> Self {
+    pub(crate) fn at(path: Option<PathBuf>, workspace: &mut Workspace) -> Self {
         let mut state = Self {
             path,
             loaded: Loaded::default(),
@@ -110,14 +113,14 @@ impl Preferences {
         schema::encode_settings(workspace.preferences())
     }
 
-    pub(crate) fn validate_import(bytes: &[u8]) -> Result<Settings, String> {
-        schema::decode_settings(bytes)
+    pub(crate) fn validate_import(bytes: &[u8]) -> Result<ValidatedSettings, String> {
+        schema::decode_settings(bytes).map(ValidatedSettings)
     }
 
     /// Commit the exact settings approved in the dialog before publishing them to the UI.
     pub(crate) fn import_settings(
         &mut self,
-        settings: Settings,
+        ValidatedSettings(settings): ValidatedSettings,
         workspace: &mut Workspace,
     ) -> Result<(), String> {
         if self.blocked {

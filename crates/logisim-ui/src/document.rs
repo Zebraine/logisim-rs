@@ -16,6 +16,7 @@ pub enum FileAction {
     },
     Save,
     SaveAs,
+    Settings(SettingsFileAction),
     ImportMemory,
     ImportPlugin {
         component: logisim_core::Id,

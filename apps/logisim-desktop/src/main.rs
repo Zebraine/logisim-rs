@@ -104,8 +104,12 @@ impl DesktopApp {
             self.files
                 .request(action, ui.ctx(), &mut self.workspace, &mut self.simulator);
         }
-        self.files
-            .show(ui.ctx(), &mut self.workspace, &mut self.simulator);
+        self.files.show(
+            ui.ctx(),
+            &mut self.workspace,
+            &mut self.simulator,
+            &mut self.preferences,
+        );
         self.sync_layout(ui);
         self.preferences.synchronize(&mut self.workspace);
         let context = ui.ctx().clone();
@@ -142,7 +146,7 @@ impl DesktopApp {
         }
         self.simulator.set_plugins(self.files.plugins.clone());
         self.simulator
-            .synchronize(&mut self.workspace, self.files.busy());
+            .synchronize(&mut self.workspace, self.files.suspends_simulation());
         for action in self.workspace.take_simulation_actions() {
             self.simulator.action(action);
         }

@@ -13,6 +13,23 @@ pub(super) enum Mode {
     Memory,
     Library,
     Plugin,
+    Settings(logisim_ui::SettingsFileAction),
+}
+impl Mode {
+    fn extension(self) -> &'static str {
+        match self {
+            Self::Settings(_) => "json",
+            Self::Plugin => "wasm",
+            Self::Memory => "hex",
+            Self::Open | Self::Save | Self::Library => "circ",
+        }
+    }
+    fn saving(self) -> bool {
+        matches!(
+            self,
+            Self::Save | Self::Settings(logisim_ui::SettingsFileAction::Export)
+        )
+    }
 }
 pub(super) struct Picker {
     pub mode: Mode,
@@ -45,15 +62,9 @@ impl Picker {
                     let path = entry.path();
                     let dir = path.is_dir();
                     if dir
-                        || path.extension().is_some_and(|s| {
-                            s.eq_ignore_ascii_case(if self.mode == Mode::Plugin {
-                                "wasm"
-                            } else if self.mode == Mode::Memory {
-                                "hex"
-                            } else {
-                                "circ"
-                            })
-                        })
+                        || path
+                            .extension()
+                            .is_some_and(|s| s.eq_ignore_ascii_case(self.mode.extension()))
                     {
                         self.entries.push((path, dir));
                     }
@@ -67,12 +78,18 @@ impl Picker {
     fn enter(&mut self, path: &Path) {
         self.directory = path.to_path_buf();
         self.refresh();
-        if self.mode != Mode::Save {
+        if !self.mode.saving() {
             self.path.clear();
         }
     }
     pub fn show(&mut self, ctx: &egui::Context) -> Response {
         let (id, title) = match self.mode {
+            Mode::Settings(logisim_ui::SettingsFileAction::Export) => {
+                ("export-settings", "Export settings…")
+            }
+            Mode::Settings(logisim_ui::SettingsFileAction::Import) => {
+                ("import-settings", "Import settings…")
+            }
             Mode::Open => ("open-circuit", "Open circuit"),
             Mode::Save => ("save-circuit", "Save circuit as"),
             Mode::Memory => ("import-memory", "Import memory image"),
@@ -84,7 +101,9 @@ impl Picker {
         let dismiss = Dialog::editor(id, 640., 480.).show(ctx, tr(title), |dialog| {
             let list_height = (dialog.body_height() - 144.).max(56.);
             dialog.body(|ui| {
-                ui.label(tr(if self.mode == Mode::Plugin {
+                ui.label(tr(if matches!(self.mode, Mode::Settings(_)) {
+                    "Settings files (.json)"
+                } else if self.mode == Mode::Plugin {
                     "Wasm plugins provide component graphics and behavior."
                 } else if self.mode == Mode::Library {
                     "Import an editable snapshot; saved projects do not need the source library."
@@ -164,11 +183,7 @@ impl Picker {
             });
             dialog.footer("Cancel", |ui| {
                 submit |= ui
-                    .button(tr(if self.mode == Mode::Save {
-                        "Save"
-                    } else {
-                        "Open"
-                    }))
+                    .button(tr(if self.mode.saving() { "Save" } else { "Open" }))
                     .clicked();
             });
         });
@@ -192,7 +207,18 @@ impl Picker {
                 self.enter(&path);
                 return Response::Wait;
             }
-            if self.mode == Mode::Save
+            if matches!(self.mode, Mode::Settings(_)) {
+                if self.mode.saving() && path.extension().is_none() {
+                    path.as_mut_os_string().push(".json");
+                }
+                if !path
+                    .extension()
+                    .is_some_and(|s| s.eq_ignore_ascii_case("json"))
+                {
+                    self.error = Some(tr("Choose a .json settings file.").into());
+                    return Response::Wait;
+                }
+            } else if self.mode == Mode::Save
                 && !path
                     .extension()
                     .is_some_and(|s| s.eq_ignore_ascii_case("circ"))

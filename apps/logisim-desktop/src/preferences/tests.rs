@@ -199,14 +199,23 @@ fn missing_fields_default_and_invalid_json_stays_intact_after_edits() {
 #[test]
 fn all_fields_restart_reset_and_atomic_conflict_protection() {
     use logisim_ui::{DefaultZoom, TickHz, UiScale};
+    let mut shortcuts = logisim_ui::shortcuts::Shortcuts::default();
+    shortcuts
+        .bind(logisim_ui::shortcuts::Command::Save, "f5".parse().unwrap())
+        .unwrap();
     let alternative = Settings {
-        shortcuts: Default::default(),
+        shortcuts,
         files: logisim_ui::FileSettings {
             autosave: false,
             autosave_minutes: 30,
             backup_before_save: true,
         },
-        workspace: Default::default(),
+        workspace: logisim_ui::WorkspaceSettings {
+            recent_limit: 3,
+            restore_window: false,
+            restore_panels: false,
+            reopen_last: true,
+        },
         language: Language::SimplifiedChinese,
         density: logisim_ui::Density::Compact,
         theme: logisim_ui::ThemeMode::Dark,
@@ -741,15 +750,16 @@ fn importing_commits_only_validated_preferences_and_keeps_local_history_and_geom
         "shortcuts":{"file.save":"f5"}, "simulation":{"mode":"event"}, "generation":{"truth_table":true},
         "recent":[],"window":{"width":720},"panels":{"split":0.25}
     }"#).unwrap();
+    let expected = imported.0;
     prefs.import_settings(imported, &mut ws).unwrap();
     prefs.synchronize(&mut ws);
-    assert_eq!(ws.preferences(), imported);
+    assert_eq!(ws.preferences(), expected);
     assert_eq!(ws.project(), &project);
     assert_eq!((ws.active_circuit(), ws.simulation_root()), (active, root));
     assert_eq!(ws.layout(), panels);
     assert_eq!(ws.recent(), recent);
     let exported = Preferences::export_settings(&ws);
-    assert_eq!(Preferences::validate_import(&exported).unwrap(), imported);
+    assert_eq!(schema::decode_settings(&exported).unwrap(), expected);
     let persisted = schema::decode(&fs::read(&path).unwrap()).unwrap();
     assert_eq!(
         (persisted.window, persisted.panels, persisted.recent),
@@ -758,7 +768,7 @@ fn importing_commits_only_validated_preferences_and_keeps_local_history_and_geom
     let mut restarted = Workspace::default();
     let prefs = Preferences::at(Some(path.clone()), &mut restarted);
     assert!(prefs.is_config_path(&path));
-    assert_eq!(restarted.preferences(), imported);
+    assert_eq!(restarted.preferences(), expected);
     assert_eq!(restarted.recent(), recent);
 }
 
@@ -774,7 +784,8 @@ fn refused_import_preserves_live_settings_and_conflicting_or_protected_config() 
     let mut prefs = Preferences::at(Some(path.clone()), &mut ws);
     fs::write(&path, b"external edit").unwrap();
     for _ in 0..2 {
-        assert!(prefs.import_settings(settings, &mut ws).is_err());
+        let validated = Preferences::validate_import(&schema::encode_settings(settings)).unwrap();
+        assert!(prefs.import_settings(validated, &mut ws).is_err());
         assert_eq!(ws.preferences(), Settings::default());
         assert_eq!(fs::read(&path).unwrap(), b"external edit");
         prefs = Preferences::at(Some(path.clone()), &mut ws);

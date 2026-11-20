@@ -22,6 +22,7 @@ pub(super) enum PageAction {
     ClearRecent,
     ClearRecovery { disabled_autosave: bool },
     ResetLayout,
+    SettingsFile(crate::SettingsFileAction),
 }
 
 #[derive(Default)]
@@ -257,6 +258,19 @@ impl Page {
                 } else if ui.button(tr("Reset all")).clicked() {
                     self.confirm_reset = true;
                 }
+            });
+            ui.add_space(f32::from(theme::metrics(ui.ctx()).gap));
+            theme::card(ui, tr("Settings file"), |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    for (label, command) in [
+                        ("Export settings…", crate::SettingsFileAction::Export),
+                        ("Import settings…", crate::SettingsFileAction::Import),
+                    ] {
+                        if ui.button(tr(label)).clicked() {
+                            *action = Some(PageAction::SettingsFile(command));
+                        }
+                    }
+                });
             });
             return;
         }

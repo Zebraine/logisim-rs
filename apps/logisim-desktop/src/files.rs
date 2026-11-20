@@ -1,6 +1,7 @@
 //! File workflow: unsaved actions, protected imports and transactional saves.
 mod dialog;
 mod picker;
+mod settings;
 #[cfg(test)]
 mod tests;
 
@@ -62,6 +63,11 @@ impl Files {
     }
     pub fn busy(&self) -> bool {
         self.dialog.is_some()
+    }
+    pub fn suspends_simulation(&self) -> bool {
+        self.dialog
+            .as_ref()
+            .is_some_and(|dialog| !dialog.is_settings())
     }
     pub fn present(&self, workspace: &Workspace) -> DocumentView {
         DocumentView {
@@ -196,7 +202,7 @@ impl Files {
         if self.busy() && !clear_recovery {
             return;
         }
-        if !clear_recovery && action != FileAction::ClearRecent {
+        if !clear_recovery && !matches!(action, FileAction::ClearRecent | FileAction::Settings(_)) {
             workspace.finish_edit();
         }
         match action {
@@ -226,6 +232,7 @@ impl Files {
                     });
                 }
             }
+            FileAction::Settings(action) => self.picker(Mode::Settings(action)),
             FileAction::SaveAs => self.picker(Mode::Save),
             FileAction::ClearRecovery { disabled_autosave } => {
                 let result = if self.busy() {
@@ -307,6 +314,8 @@ impl Files {
                 .and_then(|p| p.file_name())
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_else(|| "Untitled.circ".into())
+        } else if mode == Mode::Settings(logisim_ui::SettingsFileAction::Export) {
+            "logisim-settings.json".into()
         } else {
             String::new()
         };
@@ -353,12 +362,22 @@ impl Files {
             Err(e) => self.error(format!("{}\n\n{}", path.display(), tr(&e))),
         }
     }
-    pub fn show(&mut self, ctx: &egui::Context, workspace: &mut Workspace, sim: &mut impl Host) {
+    pub fn show(
+        &mut self,
+        ctx: &egui::Context,
+        workspace: &mut Workspace,
+        sim: &mut impl Host,
+        preferences: &mut crate::preferences::Preferences,
+    ) {
         let Some(mut dialog) = self.dialog.take() else {
             return;
         };
         let response = dialog.show(ctx);
-        self.respond(dialog, response, ctx, workspace, sim);
+        if dialog.is_settings() {
+            self.respond_to_settings(dialog, response, preferences, workspace);
+        } else {
+            self.respond(dialog, response, ctx, workspace, sim);
+        }
     }
     fn respond(
         &mut self,

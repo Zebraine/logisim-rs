@@ -1478,3 +1478,67 @@ fn theme_choice_applies_immediately_and_resets_in_both_languages_and_sizes() {
         }
     }
 }
+
+#[test]
+fn advanced_settings_file_buttons_dispatch_in_both_languages_and_window_sizes() {
+    use crate::{FileAction, SettingsFileAction};
+    for language in Language::ALL {
+        for size in [vec2(720., 480.), vec2(1200., 820.)] {
+            let ctx = Context::default();
+            crate::configure(&ctx);
+            let mut app = Workspace {
+                settings_open: true,
+                ..Default::default()
+            };
+            app.set_language(language);
+            app.settings_page.select(Category::Advanced);
+            app.editor
+                .set_tool(crate::editor::Tool::Place(logisim_core::Kind::Pin));
+            app.editor.place(logisim_core::Point::new(100, 100));
+            app.editor.set_tool(crate::editor::Tool::Select);
+            app.canvas.camera.offset = vec2(63., 41.);
+            app.canvas.camera.zoom = 1.25;
+            app.simulation_mut().enabled = false;
+            app.simulation_mut().steps = 17;
+            let selection = app.editor.session.selection.clone();
+            let project = app.project().clone();
+            let before = app.preferences();
+            for (label, action) in [
+                ("Export settings…", SettingsFileAction::Export),
+                ("Import settings…", SettingsFileAction::Import),
+            ] {
+                for _ in 0..2 {
+                    frame_at_size(&ctx, &mut app, vec![], size);
+                }
+                let labels = frame_at_size(&ctx, &mut app, vec![], size);
+                let label = crate::i18n::with_language(language, || tr(label));
+                let rect = labels.iter().find(|(s, _)| s == label).unwrap().1;
+                let bounds = ctx
+                    .memory(|m| m.area_rect(Id::unique("settings-window")))
+                    .unwrap();
+                assert!(bounds.contains_rect(rect));
+                tap(&ctx, size, &mut app, rect.center());
+                assert_eq!(app.take_file_actions(), [FileAction::Settings(action)]);
+                assert!(app.settings_open);
+                assert_eq!(app.project(), &project);
+                assert_eq!(app.preferences(), before);
+            }
+            // The host publishes the validated set through this same workspace entry point.
+            app.apply_settings(Settings {
+                default_font_size: Some(23),
+                theme: crate::ThemeMode::Dark,
+                simulation_mode: SimulationMode::Event,
+                ..before
+            });
+            assert_eq!(app.editor.session.selection, selection);
+            assert_eq!(
+                (app.canvas.camera.offset, app.canvas.camera.zoom),
+                (vec2(63., 41.), 1.25)
+            );
+            assert!(app.editor.can_undo());
+            assert!(!app.simulation_mut().enabled);
+            assert_eq!(app.simulation_mut().steps, 17);
+            assert_eq!(app.project(), &project);
+        }
+    }
+}

@@ -272,7 +272,10 @@ pub(super) fn decode_settings(bytes: &[u8]) -> Result<Settings, String> {
     // Host history and geometry can occur in a local config copied by the user.
     // Deserialize only the portable sections, retaining serde's strict field checks.
     let file: File<IgnoredAny, IgnoredAny, IgnoredAny> =
-        serde_json::from_slice(bytes).map_err(|error| error.to_string())?;
+        serde_json::from_slice(bytes).map_err(|error| match error.classify() {
+            serde_json::error::Category::Data => logisim_ui::tf!("Invalid preference: {}", error),
+            _ => logisim_ui::tf!("Invalid settings JSON: {}", error),
+        })?;
     validated(&file).map_err(str::to_owned)
 }
 
