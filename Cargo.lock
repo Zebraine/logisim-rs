@@ -1229,6 +1229,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
 
 [[package]]
+name = "logisim-agent"
+version = "0.3.0"
+dependencies = [
+ "getrandom 0.4.3",
+ "logisim-core",
+ "logisim-file",
+ "logisim-plugin",
+ "logisim-sim",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "logisim-core"
 version = "0.3.0"
 dependencies = [

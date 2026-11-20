@@ -1,0 +1,20 @@
+[package]
+name = "logisim-agent"
+description = "Headless project, simulation and preference service"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+logisim-core.workspace = true
+logisim-file.workspace = true
+logisim-sim.workspace = true
+logisim-plugin.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+getrandom = "=0.4.3"
+
+[lints]
+workspace = true
