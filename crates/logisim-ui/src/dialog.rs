@@ -31,6 +31,16 @@ impl Dialog {
         }
     }
 
+    pub fn standard(id: &'static str, ctx: &Context) -> Self {
+        let size = crate::theme::metrics(ctx).dialog;
+        Self::editor(id, size.x, size.y)
+    }
+
+    pub fn large(id: &'static str, ctx: &Context) -> Self {
+        let size = crate::theme::metrics(ctx).large_dialog;
+        Self::editor(id, size.x, size.y)
+    }
+
     pub fn show(
         self,
         ctx: &Context,

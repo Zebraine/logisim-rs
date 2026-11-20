@@ -98,17 +98,21 @@ fn accent_presets_update_standard_visuals_with_readable_chrome_and_independent_s
 
 #[test]
 fn metrics_have_the_prescribed_sizes_in_logical_points() {
-    for (density, sizes, sidebar, dialog) in [
+    for (density, sizes, sidebar, dialog, large_dialog, settings) in [
         (
             Density::Comfortable,
             [30., 50., 78., 40., 28., 30., 8., 28.],
             [230., 320., 380.],
+            vec2(660., 540.),
+            vec2(800., 620.),
             vec2(760., 560.),
         ),
         (
             Density::Compact,
             [28., 44., 68., 34., 24., 26., 6., 26.],
             [210., 280., 340.],
+            vec2(620., 500.),
+            vec2(740., 580.),
             vec2(720., 520.),
         ),
     ] {
@@ -134,7 +138,10 @@ fn metrics_have_the_prescribed_sizes_in_logical_points() {
             sizes
         );
         assert_eq!([m.sidebar.min, m.sidebar.default, m.sidebar.max], sidebar);
-        assert_eq!(m.settings_size, dialog);
+        assert_eq!(
+            (m.dialog, m.large_dialog, m.settings_size),
+            (dialog, large_dialog, settings)
+        );
         assert_eq!(ctx.global_style().spacing.interact_size.y, m.control);
     }
 }
