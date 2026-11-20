@@ -125,7 +125,12 @@ fn missing_fields_default_and_invalid_json_stays_intact_after_edits() {
     for json in [
         "{",
         "{}",
-        r#"{"version":8}"#,
+        r#"{"version":9}"#,
+        r#"{"version":8,"editor":{"default_gate_size":"large"}}"#,
+        r#"{"version":8,"editor":{"default_tunnel_width":0}}"#,
+        r#"{"version":8,"editor":{"default_tunnel_width":33}}"#,
+        r#"{"version":8,"editor":{"default_tunnel_width":"8"}}"#,
+        r#"{"version":8,"editor":{"remember_last_properties":1}}"#,
         r#"{"version":7,"shortcuts":null}"#,
         r#"{"version":7,"shortcuts":{"edit.unknown":"f3"}}"#,
         r#"{"version":7,"shortcuts":{"file.new":"primary+maybe"}}"#,
@@ -191,6 +196,9 @@ fn all_fields_restart_reset_and_atomic_conflict_protection() {
         invert_wheel_zoom: true,
         default_probe_radix: logisim_core::Radix::Hex,
         default_pin_bits: 8,
+        default_gate_size: logisim_core::GateSize::Wide,
+        default_tunnel_width: 32,
+        remember_last_properties: true,
         simulation_mode: SimulationMode::Event,
         tick_hz: TickHz::new(32768).unwrap(),
         truth_table: true,
@@ -317,8 +325,8 @@ fn layout_waits_for_idle_or_close_and_restores_only_when_enabled() {
 }
 
 #[test]
-fn earlier_preferences_migrate_to_v7_and_all_radix_codes_round_trip() {
-    for version in 1..=6 {
+fn earlier_preferences_migrate_to_v8_and_editor_defaults_round_trip() {
+    for version in 1..=7 {
         let json = serde_json::json!({"version":version,"editor":{"show_grid":false}});
         let config = schema::decode(json.to_string().as_bytes()).unwrap();
         assert_eq!(
@@ -329,7 +337,7 @@ fn earlier_preferences_migrate_to_v7_and_all_radix_codes_round_trip() {
             }
         );
         let encoded: serde_json::Value = serde_json::from_slice(&schema::encode(&config)).unwrap();
-        assert_eq!(encoded["version"], 7);
+        assert_eq!(encoded["version"], 8);
         assert_eq!(encoded["appearance"]["density"], "comfortable");
         assert_eq!(encoded["appearance"]["accent"], "indigo");
         assert_eq!(
@@ -341,6 +349,22 @@ fn earlier_preferences_migrate_to_v7_and_all_radix_codes_round_trip() {
         assert_eq!(encoded["appearance"]["show_origin_marker"], true);
         assert_eq!(encoded["editor"]["default_probe_radix"], "binary");
         assert_eq!(encoded["editor"]["default_pin_bits"], 1);
+        assert_eq!(encoded["editor"]["default_gate_size"], "narrow");
+        assert_eq!(encoded["editor"]["default_tunnel_width"], 1);
+        assert_eq!(encoded["editor"]["remember_last_properties"], false);
+    }
+    for (code, size) in [
+        ("narrow", logisim_core::GateSize::Narrow),
+        ("medium", logisim_core::GateSize::Medium),
+        ("wide", logisim_core::GateSize::Wide),
+    ] {
+        let json = serde_json::json!({"version":8,"editor":{"default_gate_size":code,"default_tunnel_width":32,"remember_last_properties":true}});
+        let config = schema::decode(json.to_string().as_bytes()).unwrap();
+        assert_eq!(config.settings.default_gate_size, size);
+        assert_eq!(config.settings.default_tunnel_width, 32);
+        assert!(config.settings.remember_last_properties);
+        let encoded: serde_json::Value = serde_json::from_slice(&schema::encode(&config)).unwrap();
+        assert_eq!(encoded["editor"]["default_gate_size"], code);
     }
     for (code, radix) in ["binary", "octal", "signed", "unsigned", "hex"]
         .into_iter()
@@ -519,6 +543,6 @@ fn shortcut_defaults_and_partial_bindings_round_trip_and_survive_retry() {
     assert_eq!(schema::decode(&saved).unwrap().settings.shortcuts, expected);
     assert_eq!(w.language(), Language::SimplifiedChinese);
     let json: serde_json::Value = serde_json::from_slice(&saved).unwrap();
-    assert_eq!(json["version"], 7);
+    assert_eq!(json["version"], 8);
     assert_eq!(json["shortcuts"].as_object().unwrap().len(), Command::COUNT);
 }

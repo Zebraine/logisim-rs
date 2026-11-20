@@ -1,7 +1,7 @@
 //! Application preferences, independent of documents, cameras and runtime snapshots.
 use super::SignalPalette;
 use crate::{Accent, DEFAULT_TICK_HZ, Density, Language, MAX_TICK_HZ, SimulationMode};
-use logisim_core::Radix;
+use logisim_core::{GateSize, Radix};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum UiScale {
@@ -123,6 +123,9 @@ pub struct Settings {
     pub invert_wheel_zoom: bool,
     pub default_probe_radix: Radix,
     pub default_pin_bits: u8,
+    pub default_gate_size: GateSize,
+    pub default_tunnel_width: u8,
+    pub remember_last_properties: bool,
     pub simulation_mode: SimulationMode,
     pub tick_hz: TickHz,
     pub truth_table: bool,
@@ -149,6 +152,9 @@ impl Default for Settings {
             invert_wheel_zoom: false,
             default_probe_radix: Radix::Binary,
             default_pin_bits: 1,
+            default_gate_size: GateSize::Narrow,
+            default_tunnel_width: 1,
+            remember_last_properties: false,
             simulation_mode: SimulationMode::default(),
             tick_hz: TickHz::default(),
             truth_table: false,

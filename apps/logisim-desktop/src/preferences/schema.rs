@@ -1,5 +1,5 @@
 //! Versioned disk representation. The UI owns the validated preference types.
-use logisim_core::Radix;
+use logisim_core::{GateSize, Radix};
 use logisim_ui::{
     Accent, DefaultZoom, Density, Language, Settings, SignalPalette, SimulationMode, TickHz,
     UiScale, WorkspaceSettings,
@@ -116,7 +116,19 @@ struct Editor {
     #[serde(with = "RadixCode")]
     default_probe_radix: Radix,
     default_pin_bits: u8,
+    #[serde(with = "GateSizeCode")]
+    default_gate_size: GateSize,
+    default_tunnel_width: u8,
+    remember_last_properties: bool,
 }
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "GateSize", rename_all = "lowercase")]
+enum GateSizeCode {
+    Narrow,
+    Medium,
+    Wide,
+}
+
 impl Default for Editor {
     fn default() -> Self {
         let settings = Settings::default();
@@ -128,6 +140,9 @@ impl Default for Editor {
             invert_wheel_zoom: settings.invert_wheel_zoom,
             default_probe_radix: settings.default_probe_radix,
             default_pin_bits: settings.default_pin_bits,
+            default_gate_size: settings.default_gate_size,
+            default_tunnel_width: settings.default_tunnel_width,
+            remember_last_properties: settings.remember_last_properties,
         }
     }
 }
@@ -212,6 +227,7 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Config, &'static str> {
     let window = file.window.unwrap_or_default();
     if !file.files.valid_interval()
         || !(1..=32).contains(&file.editor.default_pin_bits)
+        || !(1..=32).contains(&file.editor.default_tunnel_width)
         || !window.valid()
         || !(230.0..=380.0).contains(&panels.sidebar_width)
         || !(0.25..=0.75).contains(&panels.split)
@@ -253,6 +269,9 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Config, &'static str> {
             invert_wheel_zoom: file.editor.invert_wheel_zoom,
             default_probe_radix: file.editor.default_probe_radix,
             default_pin_bits: file.editor.default_pin_bits,
+            default_gate_size: file.editor.default_gate_size,
+            default_tunnel_width: file.editor.default_tunnel_width,
+            remember_last_properties: file.editor.remember_last_properties,
             simulation_mode: file.simulation.mode,
             tick_hz,
             truth_table: file.generation.truth_table,
@@ -290,6 +309,9 @@ pub(super) fn encode(config: &Config) -> Vec<u8> {
             invert_wheel_zoom: s.invert_wheel_zoom,
             default_probe_radix: s.default_probe_radix,
             default_pin_bits: s.default_pin_bits,
+            default_gate_size: s.default_gate_size,
+            default_tunnel_width: s.default_tunnel_width,
+            remember_last_properties: s.remember_last_properties,
         },
         simulation: Simulation {
             mode: s.simulation_mode,
