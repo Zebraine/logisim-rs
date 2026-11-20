@@ -10,19 +10,27 @@ pub enum Group {
     Project,
     Tools,
     Simulation,
+    Appearance,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Scope {
     Global,
     Canvas,
+    Appearance,
+}
+impl Scope {
+    pub(crate) fn overlaps(self, other: Self) -> bool {
+        self == other || self == Self::Global || other == Self::Global
+    }
 }
 impl Group {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::File,
         Self::Edit,
         Self::Project,
         Self::Tools,
         Self::Simulation,
+        Self::Appearance,
     ];
     pub fn label(self) -> &'static str {
         match self {
@@ -31,6 +39,7 @@ impl Group {
             Self::Project => "Project",
             Self::Tools => "Tools",
             Self::Simulation => "Simulation",
+            Self::Appearance => "Appearance",
         }
     }
 }
@@ -40,7 +49,7 @@ macro_rules! commands {
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
         pub enum Command { $($variant,)* }
         impl Command {
-            pub const ALL: [Self; 26] = [$(Self::$variant,)*];
+            pub const ALL: [Self; 37] = [$(Self::$variant,)*];
             pub const COUNT: usize = Self::ALL.len();
             pub const fn id(self) -> &'static str { match self { $(Self::$variant => $id,)* } }
             pub const fn label(self) -> &'static str { match self { $(Self::$variant => $label,)* } }
@@ -78,11 +87,23 @@ commands! {
     Reset, "simulation.reset", "Reset Simulation", Simulation, PRIMARY, R;
     Tick, "simulation.tick", "Tick once", Simulation, PRIMARY, T;
     AutomaticTicks, "simulation.automatic_ticks", "Automatic ticks", Simulation, PRIMARY, K;
+    AppearanceUndo, "appearance.undo", "Undo", Appearance, PRIMARY, Z;
+    AppearanceRedo, "appearance.redo", "Redo", Appearance, PRIMARY_SHIFT, Z;
+    AppearanceCut, "appearance.cut", "Cut", Appearance, PRIMARY, X;
+    AppearanceCopy, "appearance.copy", "Copy", Appearance, PRIMARY, C;
+    AppearancePaste, "appearance.paste", "Paste", Appearance, PRIMARY, V;
+    AppearanceDuplicate, "appearance.duplicate", "Duplicate", Appearance, PRIMARY, D;
+    AppearanceSelectAll, "appearance.select_all", "Select All", Appearance, PRIMARY, A;
+    AppearanceRaise, "appearance.raise", "Raise", Appearance, PRIMARY, ArrowUp;
+    AppearanceLower, "appearance.lower", "Lower", Appearance, PRIMARY, ArrowDown;
+    AppearanceFront, "appearance.front", "Bring to Front", Appearance, Modifiers::SHIFT, ArrowUp;
+    AppearanceBack, "appearance.back", "Send to Back", Appearance, Modifiers::SHIFT, ArrowDown;
 }
 impl Command {
     pub fn scope(self) -> Scope {
         match self.group() {
             Group::File | Group::Project => Scope::Global,
+            Group::Appearance => Scope::Appearance,
             Group::Edit | Group::Tools | Group::Simulation => Scope::Canvas,
         }
     }
@@ -161,7 +182,7 @@ impl Chord {
         out.push_str(self.key.name());
         out
     }
-    fn fixed(self, command: Command) -> bool {
+    fn fixed(self) -> bool {
         // If two logical chords coincide on either supported platform, a
         // portable configuration must not distinguish them.
         let m = Self::from_event(self.key, self.mods, false).mods;
@@ -175,11 +196,7 @@ impl Chord {
             // Windows translates these physical combinations into native clipboard events.
             Insert if m.command || m.shift => true,
             F | Num0 | Y if m == PRIMARY => true,
-            ArrowUp | ArrowDown if m == PRIMARY || m == PRIMARY_SHIFT => true,
-            // The appearance editor keeps its original editing shortcuts.
-            _ => Command::ALL.into_iter().any(|c| {
-                c.group() == Group::Edit && c != command && self.matches(c.default_chord(), false)
-            }),
+            _ => false,
         }
     }
 }
@@ -242,17 +259,17 @@ impl Default for Shortcuts {
     }
 }
 impl Shortcuts {
-    pub(crate) fn command(&self, chord: Chord, mac: bool) -> Option<Command> {
+    pub(crate) fn command(&self, chord: Chord, scope: Scope, mac: bool) -> Option<Command> {
         let legacy_redo = Chord {
             key: Key::Y,
             mods: PRIMARY,
         };
-        if legacy_redo.matches(chord, mac) {
+        if scope == Scope::Canvas && legacy_redo.matches(chord, mac) {
             return Some(Command::Redo);
         }
         Command::ALL
             .into_iter()
-            .find(|c| self.get(*c).matches(chord, mac))
+            .find(|c| c.scope().overlaps(scope) && self.get(*c).matches(chord, mac))
     }
     pub(crate) fn caption(&self, c: Command, ui: &egui::Ui) -> String {
         self.caption_with(c, c.label(), ui)
@@ -268,13 +285,14 @@ impl Shortcuts {
         self.0[c as usize]
     }
     fn validate(&self, c: Command, chord: Chord) -> Result<(), Conflict> {
-        if let Some(other) = Command::ALL
-            .into_iter()
-            .find(|other| *other != c && self.get(*other).matches(chord, false))
-        {
+        if let Some(other) = Command::ALL.into_iter().find(|other| {
+            *other != c
+                && c.scope().overlaps(other.scope())
+                && self.get(*other).matches(chord, false)
+        }) {
             return Err(Conflict::Command(other));
         }
-        if chord.fixed(c) {
+        if chord.fixed() {
             return Err(Conflict::Fixed);
         }
         Ok(())

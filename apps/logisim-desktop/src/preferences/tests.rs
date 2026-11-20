@@ -125,12 +125,18 @@ fn missing_fields_default_and_invalid_json_stays_intact_after_edits() {
     for json in [
         "{",
         "{}",
-        r#"{"version":10}"#,
+        r#"{"version":11}"#,
         r#"{"version":8,"editor":{"default_gate_size":"large"}}"#,
         r#"{"version":8,"editor":{"default_tunnel_width":0}}"#,
         r#"{"version":8,"editor":{"default_tunnel_width":33}}"#,
         r#"{"version":8,"editor":{"default_tunnel_width":"8"}}"#,
         r#"{"version":8,"editor":{"remember_last_properties":1}}"#,
+        r#"{"version":10,"shortcuts":{"appearance.invalid":"f3"}}"#,
+        r#"{"version":10,"shortcuts":{"appearance.copy":"ctrl+??"}}"#,
+        r#"{"version":10,"shortcuts":{"appearance.copy":"delete"}}"#,
+        r#"{"version":10,"shortcuts":{"appearance.copy":"f3","appearance.cut":"f3"}}"#,
+        r#"{"version":10,"shortcuts":{"appearance.copy":"primary+s"}}"#,
+        r#"{"version":9,"shortcuts":{"file.save":"shift+up"}}"#,
         r#"{"version":9,"shortcuts":{"tool.missing":"f3"}}"#,
         r#"{"version":9,"shortcuts":{"tool.text":"primary+bad"}}"#,
         r#"{"version":9,"shortcuts":{"tool.poke":"f6","tool.poke":"p"}}"#,
@@ -343,8 +349,8 @@ fn layout_waits_for_idle_or_close_and_restores_only_when_enabled() {
 }
 
 #[test]
-fn earlier_preferences_migrate_to_v9_and_editor_defaults_round_trip() {
-    for version in 1..=8 {
+fn earlier_preferences_migrate_to_v10_and_editor_defaults_round_trip() {
+    for version in 1..=9 {
         let json = serde_json::json!({"version":version,"editor":{"show_grid":false}});
         let config = schema::decode(json.to_string().as_bytes()).unwrap();
         assert_eq!(
@@ -355,7 +361,7 @@ fn earlier_preferences_migrate_to_v9_and_editor_defaults_round_trip() {
             }
         );
         let encoded: serde_json::Value = serde_json::from_slice(&schema::encode(&config)).unwrap();
-        assert_eq!(encoded["version"], 9);
+        assert_eq!(encoded["version"], 10);
         assert_eq!(encoded["appearance"]["density"], "comfortable");
         assert_eq!(encoded["appearance"]["accent"], "indigo");
         assert_eq!(
@@ -529,6 +535,17 @@ fn shortcut_defaults_and_partial_bindings_round_trip_and_survive_retry() {
         "primary+r",
         "primary+t",
         "primary+k",
+        "primary+z",
+        "primary+shift+z",
+        "primary+x",
+        "primary+c",
+        "primary+v",
+        "primary+d",
+        "primary+a",
+        "primary+up",
+        "primary+down",
+        "shift+up",
+        "shift+down",
     ];
     assert_eq!(expected.len(), Command::COUNT);
     for (c, key) in Command::ALL.into_iter().zip(expected) {
@@ -538,6 +555,9 @@ fn shortcut_defaults_and_partial_bindings_round_trip_and_survive_retry() {
     let mut shortcuts = schema::decode(bytes).unwrap().settings.shortcuts;
     shortcuts
         .bind(Command::ToolPoke, "f6".parse().unwrap())
+        .unwrap();
+    shortcuts
+        .bind(Command::AppearanceDuplicate, "f6".parse().unwrap())
         .unwrap();
     assert_eq!(shortcuts.get(Command::New), Command::New.default_chord());
     assert_eq!(shortcuts.get(Command::Save).label(false), "Ctrl+Shift+F8");
@@ -571,36 +591,46 @@ fn shortcut_defaults_and_partial_bindings_round_trip_and_survive_retry() {
     assert_eq!(schema::decode(&saved).unwrap().settings.shortcuts, expected);
     assert_eq!(w.language(), Language::SimplifiedChinese);
     let json: serde_json::Value = serde_json::from_slice(&saved).unwrap();
-    assert_eq!(json["version"], 9);
+    assert_eq!(json["version"], 10);
     assert_eq!(json["shortcuts"].as_object().unwrap().len(), Command::COUNT);
 }
 
 #[test]
-fn complete_v8_shortcuts_keep_custom_keys_and_gain_only_the_six_tool_defaults() {
+fn complete_v8_and_v9_shortcuts_keep_custom_keys_and_gain_missing_defaults() {
     use logisim_ui::shortcuts::{Command, Group};
-    let mut legacy = serde_json::Map::new();
-    for c in Command::ALL
-        .into_iter()
-        .filter(|c| c.group() != Group::Tools)
-    {
-        legacy.insert(c.id().into(), c.default_chord().to_string().into());
+    for version in [8, 9] {
+        let mut legacy = serde_json::Map::new();
+        for c in Command::ALL.into_iter().filter(|c| {
+            c.group() != Group::Appearance && (version >= 9 || c.group() != Group::Tools)
+        }) {
+            legacy.insert(c.id().into(), c.default_chord().to_string().into());
+        }
+        assert_eq!(legacy.len(), if version == 8 { 20 } else { 26 });
+        if version == 9 {
+            legacy.insert("tool.poke".into(), "f5".into());
+        }
+        legacy.insert("file.save".into(), "f2".into());
+        let file = serde_json::json!({"version":version,"shortcuts":legacy});
+        let config = schema::decode(file.to_string().as_bytes()).unwrap();
+        let saved: serde_json::Value = serde_json::from_slice(&schema::encode(&config)).unwrap();
+        assert_eq!(saved["version"], 10);
+        assert_eq!(saved["shortcuts"]["file.save"], "f2");
+        for (id, chord) in [
+            ("tool.select", "v"),
+            ("tool.poke", if version == 8 { "p" } else { "f5" }),
+            ("tool.wire", "w"),
+            ("tool.text", "t"),
+            ("tool.tunnel", "u"),
+            ("tool.rotate", "r"),
+        ] {
+            assert_eq!(saved["shortcuts"][id], chord);
+        }
+        assert_eq!(saved["shortcuts"].as_object().unwrap().len(), 37);
+        for c in Command::ALL
+            .into_iter()
+            .filter(|c| c.group() == Group::Appearance)
+        {
+            assert_eq!(saved["shortcuts"][c.id()], c.default_chord().to_string());
+        }
     }
-    assert_eq!(legacy.len(), 20);
-    legacy.insert("file.save".into(), "f2".into());
-    let file = serde_json::json!({"version":8,"shortcuts":legacy});
-    let config = schema::decode(file.to_string().as_bytes()).unwrap();
-    let saved: serde_json::Value = serde_json::from_slice(&schema::encode(&config)).unwrap();
-    assert_eq!(saved["version"], 9);
-    assert_eq!(saved["shortcuts"]["file.save"], "f2");
-    for (id, chord) in [
-        ("tool.select", "v"),
-        ("tool.poke", "p"),
-        ("tool.wire", "w"),
-        ("tool.text", "t"),
-        ("tool.tunnel", "u"),
-        ("tool.rotate", "r"),
-    ] {
-        assert_eq!(saved["shortcuts"][id], chord);
-    }
-    assert_eq!(saved["shortcuts"].as_object().unwrap().len(), 26);
 }

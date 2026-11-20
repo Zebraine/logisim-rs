@@ -1,7 +1,8 @@
 //! Route workspace commands once, after the canvas and text fields have resolved focus.
 use crate::{
     FileAction, SimulationAction, Workspace,
-    editor::{CLIPBOARD_MARKER, Tool},
+    appearance::Command as Art,
+    editor::{CLIPBOARD_MARKER, Editor, Tool},
     project::CircuitCommand,
     shortcuts::{Chord, Command, Group, Scope},
 };
@@ -20,9 +21,13 @@ impl Workspace {
         {
             return;
         }
-        let canvas = !self.editor.session.context.appearance_mode
-            && (response.has_focus()
-                || (response.hovered() && !ui.ctx().egui_wants_keyboard_input()));
+        let scope = if self.editor.session.context.appearance_mode {
+            Scope::Appearance
+        } else {
+            Scope::Canvas
+        };
+        let canvas =
+            response.has_focus() || (response.hovered() && !ui.ctx().egui_wants_keyboard_input());
         let terminal = self.editor.simulation.keyboard_focus.is_some();
         let bindings = self.preferences.shortcuts;
         let mac = ui.ctx().os().is_mac();
@@ -37,7 +42,7 @@ impl Workspace {
                         ..
                     } => {
                         let chord = Chord::from_event(*key, *modifiers, mac);
-                        let Some(command) = bindings.command(chord, mac) else {
+                        let Some(command) = bindings.command(chord, scope, mac) else {
                             return true;
                         };
                         // The simulated keyboard receives text, while its modified
@@ -53,7 +58,7 @@ impl Workspace {
                     Event::Paste(text) if !terminal && text == CLIPBOARD_MARKER => Command::Paste,
                     _ => return true,
                 };
-                if command.scope() == Scope::Canvas && !canvas {
+                if command.scope() != Scope::Global && !canvas {
                     return true;
                 }
                 // A platform clipboard event can accompany its key event. Other
@@ -83,10 +88,16 @@ impl Workspace {
         use Command::*;
         let editor = &self.editor;
         match c {
-            Undo => editor.can_undo(),
-            Redo => editor.can_redo(),
+            Undo | AppearanceUndo => editor.can_undo(),
+            Redo | AppearanceRedo => editor.can_redo(),
             Cut | Copy | Duplicate => !editor.session.selection.is_empty(),
             Paste => editor.can_paste(),
+            AppearanceCut | AppearanceCopy | AppearanceDuplicate | AppearanceRaise
+            | AppearanceLower | AppearanceFront | AppearanceBack => {
+                self.appearance.has_selected_shape()
+            }
+            AppearancePaste => !self.appearance.clipboard.is_empty(),
+            AppearanceSelectAll => true,
             ToolRotate => editor.can_rotate(),
             ReturnParent => !editor.session.context.path.is_empty(),
             Step => !editor.simulation.view.enabled && !editor.simulation.view.limited,
@@ -104,6 +115,17 @@ impl Workspace {
             Save => self.file_actions.push(FileAction::Save),
             SaveAs => self.file_actions.push(FileAction::SaveAs),
             Exit => self.file_actions.push(FileAction::Close),
+            AppearanceUndo => self.appearance.history(&mut self.editor, Editor::undo),
+            AppearanceRedo => self.appearance.history(&mut self.editor, Editor::redo),
+            AppearanceCut => self.appearance.command(&mut self.editor, Art::Cut),
+            AppearanceCopy => self.appearance.command(&mut self.editor, Art::Copy),
+            AppearancePaste => self.appearance.command(&mut self.editor, Art::Paste),
+            AppearanceDuplicate => self.appearance.command(&mut self.editor, Art::Duplicate),
+            AppearanceSelectAll => self.appearance.command(&mut self.editor, Art::All),
+            AppearanceRaise => self.appearance.command(&mut self.editor, Art::Raise),
+            AppearanceLower => self.appearance.command(&mut self.editor, Art::Lower),
+            AppearanceFront => self.appearance.command(&mut self.editor, Art::Front),
+            AppearanceBack => self.appearance.command(&mut self.editor, Art::Back),
             Undo => self.editor.undo(),
             Redo => self.editor.redo(),
             Copy => self.editor.copy(),

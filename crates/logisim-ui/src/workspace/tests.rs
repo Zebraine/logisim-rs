@@ -483,7 +483,11 @@ fn remapped_commands_follow_scope_and_dispatch_their_own_actions() {
     configure(&ctx);
     let mut w = Workspace::default();
     let mut settings = w.preferences();
-    for (i, c) in Command::ALL.into_iter().enumerate() {
+    for (i, c) in Command::ALL
+        .into_iter()
+        .filter(|c| c.scope() != crate::shortcuts::Scope::Appearance)
+        .enumerate()
+    {
         settings
             .shortcuts
             .bind(c, format!("f{}", i + 1).parse().unwrap())

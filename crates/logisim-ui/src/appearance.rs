@@ -244,6 +244,14 @@ impl AppearanceEditor {
             ((artwork::vector(at) - world).length() <= tolerance + 4.0).then_some((target, 0))
         }
     }
+    pub(crate) fn history(&mut self, editor: &mut Editor, action: fn(&mut Editor)) {
+        self.cancel();
+        action(editor);
+        self.selected.clear();
+    }
+    pub(crate) fn has_selected_shape(&self) -> bool {
+        self.selected.iter().any(|t| matches!(t, Target::Shape(_)))
+    }
     pub fn command(&mut self, editor: &mut Editor, command: Command) {
         self.cancel();
         editor.commit_properties();
