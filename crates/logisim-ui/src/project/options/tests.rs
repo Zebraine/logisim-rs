@@ -174,7 +174,23 @@ fn overview_counts_definitions_and_reports_exact_manifest_matches_and_live_libra
     for (id, status) in [("test.present", "Loaded"), ("test.other", "Missing")] {
         assert!((rect(&labels, id).center().y - rect(&labels, status).center().y).abs() < 2.);
     }
-    assert!(has(&labels, "/archive/other.wasm"));
+    let pointer = rect(&labels, "test.other").center();
+    frame_at_size(
+        &ctx,
+        &mut app,
+        vec![
+            Event::PointerMoved(pointer),
+            Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: vec2(0., -180.),
+                phase: egui::TouchPhase::Move,
+                source: egui::MouseWheelSource::Unknown,
+                modifiers: Modifiers::NONE,
+            },
+        ],
+        size,
+    );
+    assert!(has(&overview(&ctx, &mut app, size), "/archive/other.wasm"));
     assert_eq!(
         app.imported_library_counts().collect::<Vec<_>>(),
         [("Library {}", 1)]

@@ -17,10 +17,8 @@ enum Action {
 impl Workspace {
     pub(super) fn project_options(&mut self, ctx: &Context) {
         let mut action = None;
-        let dismiss = Dialog::editor("project-options", 780., 640.).show(
-            ctx,
-            tr("Project Options"),
-            |dialog| {
+        let dismiss =
+            Dialog::large("project-options", ctx).show(ctx, tr("Project Options"), |dialog| {
                 dialog.body(|ui| {
                     let gap = f32::from(theme::metrics(ctx).gap);
                     theme::card(ui, tr("Summary"), |ui| self.project_summary(ui));
@@ -36,8 +34,7 @@ impl Workspace {
                     });
                 });
                 dialog.footer("Close", |_| {});
-            },
-        );
+            });
         match action {
             Some(Action::Open(id)) => {
                 self.editor.switch_circuit(id);

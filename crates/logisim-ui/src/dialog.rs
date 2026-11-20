@@ -11,7 +11,13 @@ pub enum Dismiss {
 
 pub struct Dialog {
     id: Id,
-    size: Option<Vec2>,
+    size: Size,
+}
+
+enum Size {
+    Prompt,
+    Report(Vec2),
+    Editor(Vec2),
 }
 
 impl Dialog {
@@ -19,7 +25,7 @@ impl Dialog {
     pub fn prompt(id: &'static str) -> Self {
         Self {
             id: Id::unique(id),
-            size: None,
+            size: Size::Prompt,
         }
     }
 
@@ -27,7 +33,15 @@ impl Dialog {
     pub fn editor(id: &'static str, width: f32, height: f32) -> Self {
         Self {
             id: Id::unique(id),
-            size: Some(vec2(width, height)),
+            size: Size::Editor(vec2(width, height)),
+        }
+    }
+
+    /// Reports can contain long diagnostics, but short status messages need only one row.
+    pub(crate) fn report(id: &'static str, ctx: &Context) -> Self {
+        Self {
+            id: Id::unique(id),
+            size: Size::Report(crate::theme::metrics(ctx).dialog),
         }
     }
 
@@ -58,10 +72,10 @@ impl Dialog {
                 ui.separator();
                 contents(&mut DialogUi {
                     ui,
-                    editor: self.size.is_some(),
+                    editor: matches!(self.size, Size::Editor(_)),
                 });
             };
-            if let Some(size) = self.size {
+            if let Size::Editor(size) = self.size {
                 let min = (vec2(640., 440.).min(size) - margin).min(limit);
                 egui::Resize::default()
                     .id_salt(("dialog-size", size.x.to_bits(), size.y.to_bits()))
@@ -76,8 +90,13 @@ impl Dialog {
                         render(ui);
                     });
             } else {
-                ui.set_width(400_f32.min(limit.x));
-                ui.set_max_height(limit.y);
+                let available = if let Size::Report(size) = self.size {
+                    (size - margin).min(limit)
+                } else {
+                    vec2(400_f32.min(limit.x), limit.y)
+                };
+                ui.set_width(available.x);
+                ui.set_max_height(available.y);
                 render(ui);
             }
         });

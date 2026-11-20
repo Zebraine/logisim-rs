@@ -305,7 +305,7 @@ impl MemoryEditor {
         } else {
             "RAM contents"
         });
-        let window = crate::dialog::Dialog::editor("memory_contents_editor", 660., 550.);
+        let window = crate::dialog::Dialog::standard("memory_contents_editor", ctx);
         let mut edit = None;
         let dismiss = window.show(ctx, title, |dialog| {
             dialog.body(|ui| {

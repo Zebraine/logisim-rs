@@ -98,7 +98,7 @@ impl Picker {
         };
         let mut picked = None;
         let mut submit = false;
-        let dismiss = Dialog::editor(id, 640., 480.).show(ctx, tr(title), |dialog| {
+        let dismiss = Dialog::standard(id, ctx).show(ctx, tr(title), |dialog| {
             let list_height = (dialog.body_height() - 144.).max(56.);
             dialog.body(|ui| {
                 ui.label(tr(if matches!(self.mode, Mode::Settings(_)) {

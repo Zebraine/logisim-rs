@@ -97,7 +97,101 @@ pub(crate) struct PlaEditor {
     original: Pla,
     draft: Pla,
 }
+const COLUMN: f32 = 30.;
+const GAP: f32 = 4.;
+
 impl PlaEditor {
+    fn planes(&mut self, ui: &mut Ui, inputs: u8, terms: u8, outputs: u8) {
+        let columns = inputs + outputs;
+        // Leave room for the term number, the plane separator and the vertical scrollbar.
+        let capacity =
+            ((ui.available_width() - 72.) / (COLUMN + GAP)).clamp(1., f32::from(columns)) as u8;
+        let planes = if columns <= capacity {
+            [0..columns, columns..columns]
+        } else {
+            [0..inputs, inputs..columns]
+        };
+        for plane in planes {
+            let end = plane.end;
+            for start in plane.step_by(usize::from(capacity)) {
+                let band = start..end.min(start + capacity);
+                if start > 0 {
+                    ui.separator();
+                }
+                egui::Grid::new(("pla-planes", start))
+                    .min_col_width(0.)
+                    .spacing(egui::vec2(GAP, GAP))
+                    .striped(true)
+                    .show(ui, |ui| {
+                        ui.strong(tr("Term"));
+                        for col in band.clone() {
+                            if col == inputs && start < inputs {
+                                ui.label("→");
+                            }
+                            ui.monospace(if col < inputs {
+                                format!("I{}", inputs - 1 - col)
+                            } else {
+                                format!("Q{}", columns - 1 - col)
+                            });
+                        }
+                        ui.end_row();
+                        for row in 0..terms {
+                            ui.monospace((row + 1).to_string());
+                            for col in band.clone() {
+                                if col == inputs && start < inputs {
+                                    ui.label("→");
+                                }
+                                ui.push_id((row, col), |ui| {
+                                    if col < inputs {
+                                        let value = self.draft.input(row, col);
+                                        let label = match value {
+                                            PlaInput::Disconnected => "—",
+                                            PlaInput::Direct => "1",
+                                            PlaInput::Inverted => "0",
+                                        };
+                                        if ui
+                                            .add_sized(
+                                                [COLUMN, 25.],
+                                                egui::Button::new(label)
+                                                    .selected(value != PlaInput::Disconnected),
+                                            )
+                                            .on_hover_text(tf!(
+                                                "Term {} · input bit {}",
+                                                row + 1,
+                                                inputs - 1 - col
+                                            ))
+                                            .clicked()
+                                        {
+                                            self.draft.set_input(row, col, value.next());
+                                        }
+                                    } else {
+                                        let output = col - inputs;
+                                        let value = self.draft.output(row, output);
+                                        if ui
+                                            .add_sized(
+                                                [COLUMN, 25.],
+                                                egui::Button::new(if value { "●" } else { "·" })
+                                                    .selected(value),
+                                            )
+                                            .on_hover_text(tf!(
+                                                "Term {} · output bit {}",
+                                                row + 1,
+                                                columns - 1 - col
+                                            ))
+                                            .clicked()
+                                        {
+                                            self.draft.set_output(row, output, !value);
+                                        }
+                                    }
+                                });
+                            }
+                            ui.end_row();
+                        }
+                    });
+            }
+        }
+    }
+
     pub fn show(&mut self, ctx: &egui::Context, editor: &mut Editor) {
         let Some((placing, id)) = editor.pla_target else {
             self.context = None;
@@ -136,8 +230,11 @@ impl PlaEditor {
         }
         let (inputs, terms, outputs) = self.draft.dimensions();
         let mut apply = false;
-        let width = (100.0 + f32::from(inputs + outputs) * 44.0).clamp(640.0, 1100.0);
-        let dismiss = crate::dialog::Dialog::editor("pla_program_editor", width, 520.).show(
+        let m = crate::theme::metrics(ctx);
+        let frame_width = 2. * (f32::from(m.dialog_margin) + 1.);
+        let width = (frame_width + 72. + f32::from(inputs + outputs) * (COLUMN + GAP))
+            .clamp(m.dialog.x, m.large_dialog.x);
+        let dismiss = crate::dialog::Dialog::editor("pla_program_editor", width, m.dialog.y).show(
             ctx,
             tr("PLA programming table"),
             |dialog| {
@@ -158,80 +255,7 @@ impl PlaEditor {
                 "Columns run from high bit to low bit. Empty terms or outputs evaluate to E.",
             ));
                     ui.separator();
-                    egui::ScrollArea::horizontal()
-                        .id_salt("pla_planes_scroll")
-                        .auto_shrink([false, true])
-                        .show(ui, |ui| {
-                            egui::Grid::new("pla_planes")
-                                .spacing(egui::vec2(4.0, 4.0))
-                                .striped(true)
-                                .show(ui, |ui| {
-                                    ui.strong(tr("Term"));
-                                    for col in 0..inputs {
-                                        ui.monospace(format!("I{}", inputs - 1 - col));
-                                    }
-                                    ui.label("→");
-                                    for col in 0..outputs {
-                                        ui.monospace(format!("Q{}", outputs - 1 - col));
-                                    }
-                                    ui.end_row();
-                                    for row in 0..terms {
-                                        ui.monospace(format!("{}", row + 1));
-                                        for col in 0..inputs {
-                                            ui.push_id(("input", row, col), |ui| {
-                                                let value = self.draft.input(row, col);
-                                                let label = match value {
-                                                    PlaInput::Disconnected => "—",
-                                                    PlaInput::Direct => "1",
-                                                    PlaInput::Inverted => "0",
-                                                };
-                                                if ui
-                                                    .add_sized(
-                                                        [30.0, 25.0],
-                                                        egui::Button::new(label).selected(
-                                                            value != PlaInput::Disconnected,
-                                                        ),
-                                                    )
-                                                    .on_hover_text(tf!(
-                                                        "Term {} · input bit {}",
-                                                        row + 1,
-                                                        inputs - 1 - col
-                                                    ))
-                                                    .clicked()
-                                                {
-                                                    self.draft.set_input(row, col, value.next());
-                                                }
-                                            });
-                                        }
-                                        ui.label("→");
-                                        for col in 0..outputs {
-                                            ui.push_id(("output", row, col), |ui| {
-                                                let value = self.draft.output(row, col);
-                                                if ui
-                                                    .add_sized(
-                                                        [30.0, 25.0],
-                                                        egui::Button::new(if value {
-                                                            "●"
-                                                        } else {
-                                                            "·"
-                                                        })
-                                                        .selected(value),
-                                                    )
-                                                    .on_hover_text(tf!(
-                                                        "Term {} · output bit {}",
-                                                        row + 1,
-                                                        outputs - 1 - col
-                                                    ))
-                                                    .clicked()
-                                                {
-                                                    self.draft.set_output(row, col, !value);
-                                                }
-                                            });
-                                        }
-                                        ui.end_row();
-                                    }
-                                });
-                        });
+                    self.planes(ui, inputs, terms, outputs);
                     apply = ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Enter));
                 });
                 dialog.footer("Cancel", |ui| {

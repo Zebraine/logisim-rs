@@ -137,7 +137,7 @@ impl Generator {
         if !truth_table_generation {
             self.hide_truth_table();
         }
-        let dismiss = crate::dialog::Dialog::editor("circuit-generator", 800., 620.).show(
+        let dismiss = crate::dialog::Dialog::large("circuit-generator", ctx).show(
             ctx,
             tr("Combinational Circuit Generator"),
             |dialog| {
@@ -424,55 +424,68 @@ impl Generator {
         ui.weak(tr("Click an output: 0 → 1 → x. x is a don't-care and will become 0 or 1 in the generated circuit."));
         let mut edit = None;
         let columns = self.analysis.inputs().len() + self.analysis.outputs().len();
-        let cell_width = 64.0;
-        let width = columns as f32 * (cell_width + ui.spacing().item_spacing.x);
-        egui::ScrollArea::both()
+        let spacing = ui.spacing().item_spacing;
+        let width = (ui.available_width() - ui.spacing().scroll.allocated_width()).max(1.);
+        let per_line = ((width + spacing.x) / (40. + spacing.x)).floor().max(1.) as usize;
+        let per_line = per_line.min(columns.max(1));
+        let cell_width = ((width + spacing.x) / per_line as f32 - spacing.x).min(64.);
+        let lines = columns.div_ceil(per_line).max(1);
+        let cell_height = crate::theme::metrics(ui.ctx()).control;
+        let row_height = (cell_height + spacing.y) * lines as f32 - spacing.y;
+        let inputs = self.analysis.inputs();
+        let outputs = self.analysis.outputs();
+        egui::ScrollArea::vertical()
             .id_salt("truth-table")
             .max_height((height - 24.0).max(60.0))
-            .show_rows(ui, 24.0, self.analysis.rows() + 1, |ui, range| {
-                ui.set_min_width(width);
+            .show_rows(ui, row_height, self.analysis.rows() + 1, |ui, range| {
                 for display_row in range {
                     ui.push_id(display_row, |ui| {
-                        ui.horizontal(|ui| {
-                            if display_row == 0 {
-                                for name in self
-                                    .analysis
-                                    .inputs()
-                                    .iter()
-                                    .map(String::as_str)
-                                    .chain(self.analysis.outputs().iter().map(|o| o.name()))
-                                {
-                                    ui.add_sized(
-                                        [cell_width, 24.0],
-                                        egui::Label::new(egui::RichText::new(name).strong())
-                                            .truncate(),
-                                    )
-                                    .on_hover_text(name);
+                        for start in (0..columns).step_by(per_line) {
+                            ui.horizontal(|ui| {
+                                for col in start..(start + per_line).min(columns) {
+                                    let name = if col < inputs.len() {
+                                        inputs[col].as_str()
+                                    } else {
+                                        outputs[col - inputs.len()].name()
+                                    };
+                                    let size = [cell_width, cell_height];
+                                    if display_row == 0 {
+                                        ui.add_sized(
+                                            size,
+                                            egui::Label::new(egui::RichText::new(name).strong())
+                                                .truncate(),
+                                        )
+                                        .on_hover_text(name);
+                                    } else if col < inputs.len() {
+                                        let text = if self
+                                            .analysis
+                                            .input_value(display_row - 1, col)
+                                            .unwrap()
+                                        {
+                                            "1"
+                                        } else {
+                                            "0"
+                                        };
+                                        ui.add_sized(
+                                            size,
+                                            egui::Label::new(egui::RichText::new(text).monospace()),
+                                        )
+                                        .on_hover_text(name);
+                                    } else {
+                                        let output = col - inputs.len();
+                                        let row = display_row - 1;
+                                        let cell = outputs[output].values()[row];
+                                        if ui
+                                            .add_sized(size, egui::Button::new(cell.text()))
+                                            .on_hover_text(name)
+                                            .clicked()
+                                        {
+                                            edit = Some((output, row, cell.next()));
+                                        }
+                                    }
                                 }
-                                return;
-                            }
-                            let row = display_row - 1;
-                            for input in 0..self.analysis.inputs().len() {
-                                let text = if self.analysis.input_value(row, input).unwrap() {
-                                    "1"
-                                } else {
-                                    "0"
-                                };
-                                ui.add_sized(
-                                    [cell_width, 24.0],
-                                    egui::Label::new(egui::RichText::new(text).monospace()),
-                                );
-                            }
-                            for (output, column) in self.analysis.outputs().iter().enumerate() {
-                                let cell = column.values()[row];
-                                if ui
-                                    .add_sized([cell_width, 24.0], egui::Button::new(cell.text()))
-                                    .clicked()
-                                {
-                                    edit = Some((output, row, cell.next()));
-                                }
-                            }
-                        })
+                            });
+                        }
                     });
                 }
             });

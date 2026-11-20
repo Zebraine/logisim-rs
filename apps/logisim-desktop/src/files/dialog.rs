@@ -150,7 +150,7 @@ fn resolve_plugins(
     resolution: &mut crate::plugins::Resolution,
     answer: &mut Response,
 ) -> Dismiss {
-    let window = Window::editor("locate-plugins", 700., 460.);
+    let window = Window::standard("locate-plugins", ctx);
     window.show(ctx, tr("Locate circuit plugins"), |dialog| {
         dialog.body(|ui| {
             ui.label(tr(

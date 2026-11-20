@@ -35,6 +35,9 @@ impl Default for Harness {
 }
 impl Harness {
     fn frame(&mut self, events: Vec<Event>) -> Vec<(String, Pos2)> {
+        self.frame_at(events, egui::vec2(1200., 820.))
+    }
+    fn frame_at(&mut self, events: Vec<Event>, size: egui::Vec2) -> Vec<(String, Pos2)> {
         self.sim
             .synchronize(self.ws.project(), self.ws.simulation_root());
         self.sim.advance(64);
@@ -45,7 +48,7 @@ impl Harness {
         ));
         let mut out = self.ctx.run_ui(
             RawInput {
-                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(1200.0, 820.0))),
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, size)),
                 events,
                 ..Default::default()
             },
@@ -55,12 +58,14 @@ impl Harness {
                     self.files
                         .request(action, &self.ctx, &mut self.ws, &mut self.sim);
                 }
-                self.files.show(
-                    &self.ctx,
-                    &mut self.ws,
-                    &mut self.sim,
-                    &mut self.preferences,
-                );
+                logisim_ui::i18n::with_language(self.ws.language(), || {
+                    self.files.show(
+                        &self.ctx,
+                        &mut self.ws,
+                        &mut self.sim,
+                        &mut self.preferences,
+                    )
+                });
             },
         );
         fn collect(shape: Shape, text: &mut Vec<(String, Pos2)>) {
@@ -102,6 +107,65 @@ impl Harness {
                     modifiers: Modifiers::NONE,
                 },
             ]);
+        }
+    }
+}
+
+#[test]
+fn file_picker_scrolls_independently_of_its_path_and_footer() {
+    use logisim_ui::{Density, Language, Settings, i18n::with_language};
+    let dir = crate::tests::support::Temp::new();
+    for i in 0..40 {
+        std::fs::write(dir.path(&format!("circuit-{i:02}.circ")), "").unwrap();
+    }
+    for language in Language::ALL {
+        for density in [Density::Comfortable, Density::Compact] {
+            for size in [egui::vec2(720., 480.), egui::vec2(1200., 820.)] {
+                let mut h = Harness::default();
+                h.ws.apply_settings(Settings {
+                    language,
+                    density,
+                    ..Default::default()
+                });
+                h.files.directory.clone_from(&dir.0);
+                h.files.picker(Mode::Open);
+                for _ in 0..3 {
+                    h.frame_at(vec![], size);
+                }
+                let labels = h.frame_at(vec![], size);
+                let bounds = h
+                    .ctx
+                    .memory(|m| m.area_rect(egui::Id::unique("open-circuit")))
+                    .unwrap();
+                assert!(
+                    bounds.width() <= size.x * 0.9 + 1. && bounds.height() <= size.y * 0.9 + 1.
+                );
+                let at = |labels: &[(String, Pos2)], key: &str| {
+                    labels.iter().rfind(|(s, _)| s == key).unwrap().1
+                };
+                let first = at(&labels, "circuit-00.circ");
+                let footer = with_language(language, || tr("Cancel"));
+                let cancel = at(&labels, footer);
+                assert!(bounds.contains(cancel) && cancel.y > first.y);
+                for _ in 0..5 {
+                    h.frame_at(
+                        vec![
+                            Event::PointerMoved(first),
+                            Event::MouseWheel {
+                                unit: egui::MouseWheelUnit::Point,
+                                delta: egui::vec2(0., -550.),
+                                modifiers: Modifiers::NONE,
+                                phase: egui::TouchPhase::Move,
+                                source: egui::MouseWheelSource::Unknown,
+                            },
+                        ],
+                        size,
+                    );
+                }
+                let labels = h.frame_at(vec![], size);
+                assert!(at(&labels, "circuit-39.circ").y < cancel.y);
+                assert_eq!(at(&labels, footer), cancel);
+            }
         }
     }
 }

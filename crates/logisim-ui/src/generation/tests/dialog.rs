@@ -289,3 +289,62 @@ fn variable_add_controls_follow_table_expression_and_output_limits() {
             .any(|(label, rect)| label == "Add" && rect.bottom() <= 480.0)
     );
 }
+
+#[test]
+fn wide_truth_table_reflows_and_the_last_output_remains_editable() {
+    use crate::tests::support::widgets::frame_at_size;
+    let ctx = egui::Context::default();
+    let size = egui::vec2(720., 480.);
+    let mut w = Workspace::default();
+    w.set_truth_table_generation(true);
+    w.generator.analysis = w.generator.analysis.truth_table(|| false).unwrap();
+    for i in 1..17 {
+        w.generator.analysis.add_output(format!("O{i}")).unwrap();
+    }
+    w.generator
+        .analysis
+        .set_cell(16, 0, logisim_core::generation::Cell::One)
+        .unwrap();
+    w.open_generator();
+    w.generator.tab = Tab::Table;
+    for _ in 0..3 {
+        frame_at_size(&ctx, &mut w, vec![], size);
+    }
+    let labels = frame_at_size(&ctx, &mut w, vec![], size);
+    let rect = |s: &str| labels.iter().find(|(label, _)| label == s).unwrap().1;
+    let end = rect("O16");
+    assert!(end.top() > rect("O1").bottom());
+    let bounds = ctx
+        .memory(|m| m.area_rect(egui::Id::unique("circuit-generator")))
+        .unwrap();
+    assert!(bounds.contains_rect(end));
+    // The value in the final column of the first row occupies the same band and x offset.
+    let first = w.generator.analysis.outputs()[16].values()[0];
+    let pos = labels
+        .iter()
+        .find(|(text, r)| {
+            text == first.text()
+                && r.top() > end.bottom()
+                && (r.center().x - end.center().x).abs() < 1.
+        })
+        .expect("value beneath the wrapped output header")
+        .1
+        .center();
+    for pressed in [true, false] {
+        frame_at_size(
+            &ctx,
+            &mut w,
+            vec![
+                egui::Event::PointerMoved(pos),
+                egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ],
+            size,
+        );
+    }
+    assert_eq!(w.generator.analysis.outputs()[16].values()[0], first.next());
+}

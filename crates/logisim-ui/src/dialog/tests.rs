@@ -91,3 +91,83 @@ fn escape_and_backdrop_never_confirm_a_destructive_prompt() {
     assert!(frame(vec![click(false)]) == Dismiss::Close);
     assert!(!accepted);
 }
+
+#[test]
+fn workbench_dialog_footers_stay_in_view_in_each_density_and_language() {
+    use crate::{
+        Density, Language, Settings, Workspace,
+        editor::Tool,
+        i18n::{tr, with_language},
+        tests::support::widgets::frame_at_size,
+    };
+    use logisim_core::Kind;
+    for density in Density::ALL {
+        for language in Language::ALL {
+            for size in [vec2(720., 480.), vec2(1200., 820.)] {
+                let ctx = Context::default();
+                crate::configure(&ctx);
+                for (id, footer) in [
+                    ("circuit-analysis", "Close"),
+                    ("circuit-generator", "Build Circuit"),
+                    ("memory_contents_editor", "Next page"),
+                    ("pla_program_editor", "Apply"),
+                    ("project-options", "Close"),
+                ] {
+                    let mut w = Workspace::default();
+                    w.apply_settings(Settings {
+                        density,
+                        language,
+                        ..Default::default()
+                    });
+                    match id {
+                        "circuit-analysis" => {
+                            w.set_document(crate::DocumentView {
+                                partial: true,
+                                ..Default::default()
+                            });
+                            w.request_analysis();
+                        }
+                        "circuit-generator" => w.open_generator(),
+                        "memory_contents_editor" => {
+                            w.editor.set_tool(Tool::Place(Kind::Rom));
+                            w.editor.memory_target = Some((true, w.editor.template.id));
+                        }
+                        "pla_program_editor" => {
+                            w.editor.set_tool(Tool::Place(Kind::PlaRom));
+                            w.editor.template.pla.resize(32, 24, 32);
+                            w.editor.pla_target = Some((true, w.editor.template.id));
+                        }
+                        "project-options" => w.project_options_open = true,
+                        _ => unreachable!(),
+                    }
+                    for _ in 0..3 {
+                        frame_at_size(&ctx, &mut w, vec![], size);
+                    }
+                    let labels = frame_at_size(&ctx, &mut w, vec![], size);
+                    let bounds = ctx.memory(|m| m.area_rect(Id::unique(id))).unwrap();
+                    assert!(
+                        bounds.width() <= size.x * 0.9 + 1. && bounds.height() <= size.y * 0.9 + 1.,
+                        "{id} {bounds:?}"
+                    );
+                    let text = with_language(language, || tr(footer));
+                    let button = labels.iter().rfind(|(s, _)| s == text).unwrap().1;
+                    assert!(
+                        bounds.contains_rect(button),
+                        "{id} {density:?} {language:?}"
+                    );
+                    if id == "pla_program_editor" {
+                        for (text, rect) in labels
+                            .iter()
+                            .filter(|(s, _)| s.starts_with('I') && s[1..].parse::<u8>().is_ok())
+                        {
+                            assert!(
+                                rect.left() >= bounds.left() && rect.right() <= bounds.right(),
+                                "{text} {rect:?}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
