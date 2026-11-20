@@ -128,6 +128,30 @@ cargo test --workspace --all-features --locked --offline
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the development and release workflow. Plugin source builds, ABI checks, and release packaging are documented in [.github/workflows/ci.yml](.github/workflows/ci.yml) and [.github/workflows/release.yml](.github/workflows/release.yml).
 
+## Headless agent
+
+Build the separate binary with `cargo build --release --locked -p logisim-agent`. Point a local MCP client at `target/release/logisim-agent` with the single argument `mcp`, or use the JSON CLI directly.
+
+```sh
+logisim-agent settings catalog
+logisim-agent settings get --config /path/to/preferences.json
+logisim-agent settings patch --config /path/to/preferences.json --ops edits.json --dry-run
+```
+
+An edits file such as `{"ops":[{"key":"appearance.theme","value":"dark"}]}` changes portable v16 preferences. Set `expected_sha256` to the `source_sha256` from the get response to require that exact revision. Use `--apply` to commit. The desktop and agent coordinate atomic updates using a sibling `.lock` file. Recent files, window geometry, panel layout and the local plugin directory stay in the host configuration.
+
+For a circuit, run `logisim-agent cli` and send one JSON object per line in the same process:
+
+```jsonl
+{"tool":"project_open","arguments":{"path":"examples/course/single-cycle.circ"}}
+{"tool":"project_snapshot","arguments":{"session":"ID_FROM_OPEN"}}
+{"tool":"simulation_open","arguments":{"session":"ID_FROM_OPEN"}}
+{"tool":"simulation_state","arguments":{"session":"ID_FROM_OPEN"}}
+{"tool":"project_close","arguments":{"session":"ID_FROM_OPEN"}}
+```
+
+Use the returned `data.session_id` in subsequent requests. The same eight operations are available over MCP. A project snapshot covers every circuit definition. Simulation state describes the main circuit after initial propagation, with four-state port and wire values, dependency status and diagnostics. Clocks remain at tick zero. Closing the session or its process releases the in-memory snapshot.
+
 ## Known limitations
 
 - A Joystick's label font is not serialized in the existing `.circ` format; it keeps its intrinsic size of 12 after reopening, even if a different default label size is configured.

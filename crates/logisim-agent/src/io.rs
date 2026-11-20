@@ -17,6 +17,9 @@ pub(crate) fn file_error(e: std::io::Error) -> Error {
     )
 }
 pub fn read(path: &Path) -> Result<Vec<u8>> {
+    if path.to_str().is_none() {
+        return Err(Error::invalid("Protocol paths must be valid UTF-8."));
+    }
     if !fs::metadata(path).map_err(file_error)?.is_file() {
         return Err(Error::invalid("Expected a regular file."));
     }

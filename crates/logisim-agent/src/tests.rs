@@ -39,10 +39,9 @@ fn settings_patch_validates_the_entire_transaction_before_writing() {
     use std::fs;
     let temp = Temp::new();
     let path = temp.0.join("prefs.json");
-    let bytes =
-        br#"{"version":16,"recent":["/local.circ"],"plugins":{"fallback_directory":"/local"}}"#;
-    fs::write(&path, bytes).unwrap();
-    let hash = digest::sha256(bytes);
+    let bytes=serde_json::to_vec(&json!({"version":16,"recent":[temp.0.join("local.circ")],"plugins":{"fallback_directory":temp.0}})).unwrap();
+    fs::write(&path, &bytes).unwrap();
+    let hash = digest::sha256(&bytes);
     let edit = |key: &str, value: Value| Operation {
         key: key.into(),
         value,
@@ -209,23 +208,20 @@ fn course_modules_are_loaded_only_from_recorded_and_matching_paths() {
     let file = fs::read_to_string(&real).unwrap();
     let temp = Temp::new();
     let altered = temp.0.join("copy.circ");
+    fs::copy(
+        repo.join("plugins/display/display.wasm"),
+        temp.0.join("wrong.wasm"),
+    )
+    .unwrap();
     for (path, substitute, expected) in [
         (&real, None, "loaded"),
-        (&altered, Some("missing.wasm".to_owned()), "missing"),
-        (
-            &altered,
-            Some(
-                repo.join("plugins/display/display.wasm")
-                    .display()
-                    .to_string(),
-            ),
-            "missing",
-        ),
+        (&altered, Some("missing.wasm"), "missing"),
+        (&altered, Some("wrong.wasm"), "missing"),
     ] {
         if let Some(substitute) = substitute {
             fs::write(
                 path,
-                file.replace("../../plugins/course/course.wasm", &substitute),
+                file.replace("../../plugins/course/course.wasm", substitute),
             )
             .unwrap();
         }
@@ -290,4 +286,22 @@ fn parse_problems_are_reported_and_sessions_are_process_local() {
             .code,
         "unknown_session"
     );
+}
+
+#[test]
+fn positional_json_sections_cannot_be_overwritten_as_settings_objects() {
+    let temp = Temp::new();
+    let path = temp.0.join("prefs.json");
+    for bytes in [r#"[16]"#, r#"{"version":16,"editor":[]}"#] {
+        std::fs::write(&path, bytes).unwrap();
+        let ops = vec![Operation {
+            key: "editor.default_font_size".into(),
+            value: 24.into(),
+        }];
+        assert_eq!(
+            settings::patch(&path, None, ops, false).unwrap_err().code,
+            "invalid_settings"
+        );
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), bytes);
+    }
 }

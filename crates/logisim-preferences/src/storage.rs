@@ -89,11 +89,17 @@ pub fn write_preferences(
     let mut lock_name = target.as_os_str().to_owned();
     lock_name.push(".lock");
     let lock = fs::OpenOptions::new()
+        .read(true)
         .write(true)
         .create(true)
         .truncate(false)
         .open(lock_name)
         .map_err(io)?;
+    if !lock.metadata().map_err(io)?.is_file() {
+        return Err(WriteError::Io(
+            "Expected a regular preferences lock file.".into(),
+        ));
+    }
     match lock.try_lock() {
         Ok(()) => {}
         Err(TryLockError::WouldBlock) => return Err(WriteError::Conflict),
@@ -122,7 +128,6 @@ pub fn write_preferences(
             _ => Err(WriteError::Conflict),
         }
     };
-    check()?;
     let mut reason = None;
     // Verify again just before the rename, including changes by non-cooperating editors.
     atomic_replace(&target, bytes, None, || {

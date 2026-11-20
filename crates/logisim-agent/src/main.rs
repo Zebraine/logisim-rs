@@ -1,3 +1,4 @@
+mod mcp;
 use logisim_agent::{Error, Patch, Request, Result, Service, envelope, io};
 use std::{
     ffi::OsString,
@@ -41,7 +42,7 @@ fn parse(args: &[OsString]) -> Result<Request> {
             let dry_run = mode
                 .take()
                 .ok_or_else(|| Error::invalid("Specify --dry-run or --apply."))?;
-            let patch: Patch = serde_json::from_slice(&io::read(path)?).map_err(Error::invalid)?;
+            let patch = Patch::from_bytes(&io::read(path)?)?;
             Request::SettingsPatch {
                 config,
                 dry_run,
@@ -75,6 +76,10 @@ fn parse(args: &[OsString]) -> Result<Request> {
 
 fn run() -> std::io::Result<bool> {
     let args: Vec<_> = std::env::args_os().skip(1).collect();
+    if args == [OsString::from("mcp")] {
+        mcp::run(std::io::stdin().lock(), std::io::stdout().lock())?;
+        return Ok(true);
+    }
     let mut service = Service::default();
     let mut out = std::io::stdout().lock();
     if args != [OsString::from("cli")] {
@@ -89,7 +94,7 @@ fn run() -> std::io::Result<bool> {
     }
     io::lines(std::io::stdin().lock(), |line| {
         let result = line
-            .and_then(|v| serde_json::from_value(v).map_err(Error::invalid))
+            .and_then(Request::from_json)
             .and_then(|r| service.call(r));
         io::write(&mut out, &envelope(result))
     })?;

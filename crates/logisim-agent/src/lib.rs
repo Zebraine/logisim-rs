@@ -86,6 +86,39 @@ pub enum Request {
     },
 }
 
+// Serde structs also accept positional arrays. Protocol v1 uses named objects so
+// a write always has an explicit mode and every edit identifies its key.
+fn check_arguments(arguments: &Value) -> Result<()> {
+    if !arguments.is_object() {
+        return Err(Error::invalid(
+            "Expected a JSON object with named arguments.",
+        ));
+    }
+    if let Some(ops) = arguments.get("ops").and_then(Value::as_array)
+        && ops.iter().any(|op| !op.is_object())
+    {
+        return Err(Error::invalid(
+            "Each operation must be an object with key and value.",
+        ));
+    }
+    Ok(())
+}
+
+impl Patch {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        let value = serde_json::from_slice(bytes).map_err(|e| Error::new("invalid_json", e))?;
+        check_arguments(&value)?;
+        // Decode the original object to retain serde's duplicate-field checks.
+        serde_json::from_slice(bytes).map_err(Error::invalid)
+    }
+}
+impl Request {
+    pub fn from_json(value: Value) -> Result<Self> {
+        check_arguments(&value["arguments"])?;
+        serde_json::from_value(value).map_err(Error::invalid)
+    }
+}
+
 #[derive(Default)]
 pub struct Service {
     sessions: HashMap<String, Session>,

@@ -128,6 +128,30 @@ cargo test --workspace --all-features --locked --offline
 
 开发、检查和发布流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。插件构建、ABI 校验和发布打包见 [.github/workflows/ci.yml](.github/workflows/ci.yml) 与 [.github/workflows/release.yml](.github/workflows/release.yml)。
 
+## 无界面 Agent
+
+用 `cargo build --release --locked -p logisim-agent` 构建独立程序。本地 MCP 客户端可将 `target/release/logisim-agent` 设为命令，参数为 `mcp`。也可以直接使用 JSON CLI。
+
+```sh
+logisim-agent settings catalog
+logisim-agent settings get --config /path/to/preferences.json
+logisim-agent settings patch --config /path/to/preferences.json --ops edits.json --dry-run
+```
+
+例如，`{"ops":[{"key":"appearance.theme","value":"dark"}]}` 修改 v16 便携偏好。可在同一 JSON 对象中将 `expected_sha256` 设为读取时返回的 `source_sha256`，要求原文件仍为该版本。确认预演结果后，用 `--apply` 写入。桌面端与 Agent 通过同目录的 `.lock` 文件协调原子更新，保留最近工程、窗口几何、面板布局和本机插件目录。
+
+读取电路时，启动 `logisim-agent cli`，在同一个进程内逐行发送 JSON。
+
+```jsonl
+{"tool":"project_open","arguments":{"path":"examples/course/single-cycle.circ"}}
+{"tool":"project_snapshot","arguments":{"session":"ID_FROM_OPEN"}}
+{"tool":"simulation_open","arguments":{"session":"ID_FROM_OPEN"}}
+{"tool":"simulation_state","arguments":{"session":"ID_FROM_OPEN"}}
+{"tool":"project_close","arguments":{"session":"ID_FROM_OPEN"}}
+```
+
+将 `ID_FROM_OPEN` 换成首次返回的 `data.session_id`。MCP 提供相同的八个操作。工程快照包含全部电路定义，仿真快照给出主电路初始传播后的端口和导线四态值、插件加载状态与诊断。时钟保持在第零拍。关闭会话或退出进程即释放快照。
+
 ## 已知限制
 
 - Joystick 的标签字体不写入现有 `.circ` 格式；重开后保持固有字号 12，即使配置了其他默认标签字号。

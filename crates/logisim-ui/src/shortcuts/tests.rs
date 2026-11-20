@@ -193,6 +193,10 @@ fn persisted_key_names_round_trip_every_desktop_key() {
         let parsed = chord.to_string().parse::<Chord>();
         if Chord::is_modifier(key) {
             assert!(parsed.is_err());
+            assert_eq!(
+                Shortcuts::default().bind(Command::Save, chord),
+                Err(Conflict::Fixed)
+            );
         } else {
             assert_eq!(parsed, Ok(chord), "{key:?}");
         }

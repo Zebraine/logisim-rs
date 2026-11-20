@@ -159,7 +159,8 @@ impl Chord {
             "Space" | "0" | "1" | "Left" | "Right" | "Up" | "Down" if m == 0 => true,
             "Insert" => m & (PRIMARY | SHIFT) != 0,
             "F" | "0" | "Y" if m == PRIMARY => true,
-            _ => false,
+            // Capture can produce modifier-only keys; only keys in the portable vocabulary can bind.
+            _ => keys::canonical(self.key).is_none(),
         }
     }
 }

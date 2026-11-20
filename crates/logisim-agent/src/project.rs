@@ -31,12 +31,35 @@ impl Session {
     }
     pub fn snapshot(&self, id: &str) -> Value {
         let mut result = self.summary(id);
-        let circuits:Vec<_>=self.project.circuits.iter().map(|def|{
-            let components:Vec<_>=def.circuit.components.iter().map(component).collect();
-            let wires:Vec<_>=def.circuit.wires.iter().map(|w|json!({"id":w.id,"from":point(w.a),"to":point(w.b)})).collect();
-            let ports:Vec<_>=def.interface().ports.iter().map(|p|json!({"pin":p.pin,"label":p.label,"bits":p.bits,"output":p.output,"offset":point(p.offset)})).collect();
-            json!({"id":def.id,"name":def.name,"main":def.id==self.project.main,"components":components,"wires":wires,"interface_ports":ports})
-        }).collect();
+        let mut circuits = Vec::with_capacity(self.project.circuits.len());
+        for def in &self.project.circuits {
+            let components: Vec<_> = def.circuit.components.iter().map(component).collect();
+            let wires: Vec<_> = def
+                .circuit
+                .wires
+                .iter()
+                .map(|wire| {
+                    json!({
+                        "id": wire.id, "from": point(wire.a), "to": point(wire.b)
+                    })
+                })
+                .collect();
+            let ports: Vec<_> = def
+                .interface()
+                .ports
+                .iter()
+                .map(|port| {
+                    json!({
+                        "pin": port.pin, "label": port.label, "bits": port.bits,
+                        "output": port.output, "offset": point(port.offset)
+                    })
+                })
+                .collect();
+            circuits.push(json!({
+                "id": def.id, "name": def.name, "main": def.id == self.project.main,
+                "components": components, "wires": wires, "interface_ports": ports
+            }));
+        }
         result["circuits"] = circuits.into();
         result["plugin_sources"] = json!(self.project.plugin_sources);
         result

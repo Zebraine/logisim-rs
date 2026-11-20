@@ -12,16 +12,25 @@ fn invalid(message: impl ToString) -> Error {
     Error::new("invalid_settings", message)
 }
 
-fn portable(bytes: &[u8]) -> Result<Value> {
+fn decode(bytes: &[u8]) -> Result<(Value, Value)> {
     let file: File = serde_json::from_slice(bytes).map_err(invalid)?;
     file.validate_local().map_err(invalid)?;
     let mut settings = serde_json::to_value(file.portable()).map_err(invalid)?;
     settings.as_object_mut().unwrap().remove("version");
-    Ok(settings)
+    let document: Value = serde_json::from_slice(bytes).map_err(invalid)?;
+    let object = document
+        .as_object()
+        .ok_or_else(|| invalid("Expected a configuration object."))?;
+    for section in settings.as_object().unwrap().keys() {
+        if object.get(section).is_some_and(|v| !v.is_object()) {
+            return Err(invalid(format!("Expected an object for {section}.")));
+        }
+    }
+    Ok((document, settings))
 }
 
 pub fn catalog() -> Value {
-    let defaults = portable(&serde_json::to_vec(&json!({"version":CONFIG_VERSION})).unwrap())
+    let (_, defaults) = decode(&serde_json::to_vec(&json!({"version":CONFIG_VERSION})).unwrap())
         .expect("valid schema defaults");
     let mut entries = Vec::new();
     for (section, fields) in defaults.as_object().unwrap() {
@@ -74,7 +83,7 @@ fn range(min: u32, max: u32) -> Value {
 pub fn get(path: &Path) -> Result<Value> {
     let bytes = io::read(path)?;
     Ok(
-        json!({"path":path,"version":CONFIG_VERSION,"source_sha256":sha256(&bytes),"settings":portable(&bytes)?,"warnings":[]}),
+        json!({"path":path,"version":CONFIG_VERSION,"source_sha256":sha256(&bytes),"settings":decode(&bytes)?.1,"warnings":[]}),
     )
 }
 
@@ -101,8 +110,7 @@ pub fn patch(
             return Err(Error::new("conflict", "Source SHA-256 does not match."));
         }
     }
-    let before = portable(&bytes)?;
-    let mut document: Value = serde_json::from_slice(&bytes).map_err(invalid)?;
+    let (mut document, before) = decode(&bytes)?;
     let mut seen = HashSet::new();
     for op in ops {
         let (section, field) = op
@@ -129,7 +137,7 @@ pub fn patch(
     if encoded.len() > logisim_file::MAX_BYTES {
         return Err(Error::new("too_large", "Result exceeds 8 MiB."));
     }
-    let after = portable(&encoded)?;
+    let (_, after) = decode(&encoded)?;
     let changed = before != after;
     if !dry_run && changed {
         write_preferences(&path, &encoded, Some(&bytes)).map_err(|e| {
