@@ -311,6 +311,11 @@ impl ProjectSimulator {
     pub fn ticks(&self) -> u64 {
         self.ticks
     }
+    /// True for actual clock sources in the active hierarchy. A persistence display can
+    /// consume desktop ticks on its own, but is not a clock source for headless controls.
+    pub fn has_clock_source(&self) -> bool {
+        self.states.values().any(|s| !s.sim.plan.clocks.is_empty())
+    }
     pub fn has_clocks(&self) -> bool {
         self.states.values().any(|s| s.sim.has_clocks())
     }

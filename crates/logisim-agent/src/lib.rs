@@ -11,6 +11,7 @@ mod simulation;
 use project::Session;
 pub use project::patch::ProjectOp;
 pub use simulation::SimulationMode;
+use simulation::control::{Action, Input};
 
 pub const PROTOCOL: u8 = 1;
 #[derive(Debug, Serialize)]
@@ -100,6 +101,37 @@ pub enum Request {
     SimulationState {
         session: String,
     },
+    SimulationSetInput {
+        session: String,
+        id: logisim_core::Id,
+        #[serde(default, deserialize_with = "supplied")]
+        value: Option<u32>,
+        #[serde(default, deserialize_with = "supplied")]
+        unknown: Option<bool>,
+    },
+    SimulationSettle {
+        session: String,
+    },
+    SimulationStep {
+        session: String,
+    },
+    SimulationTick {
+        session: String,
+    },
+    SimulationReset {
+        session: String,
+    },
+    SimulationSetEnabled {
+        session: String,
+        enabled: bool,
+    },
+}
+
+// Missing optional arguments and explicit JSON null have different meanings in the protocol.
+fn supplied<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(
+    d: D,
+) -> std::result::Result<Option<T>, D::Error> {
+    T::deserialize(d).map(Some)
 }
 
 // Serde structs also accept positional arrays. Protocol v1 uses named objects so
@@ -157,6 +189,11 @@ pub struct Service {
     sessions: HashMap<String, Session>,
 }
 impl Service {
+    fn control(&mut self, session: &str, action: Action) -> Result<Value> {
+        let doc = self.sessions.get_mut(session).ok_or_else(unknown_session)?;
+        let runtime = doc.simulation.as_mut().ok_or_else(simulation_not_open)?;
+        runtime.control(&doc.project, session, action)
+    }
     pub fn call(&mut self, request: Request) -> Result<Value> {
         match request {
             Request::SettingsCatalog {} => Ok(settings::catalog()),
@@ -217,6 +254,30 @@ impl Service {
                 state["opened"] = true.into();
                 state["created"] = created.into();
                 Ok(state)
+            }
+            Request::SimulationSetInput {
+                session,
+                id,
+                value,
+                unknown,
+            } => {
+                let input = match (value, unknown) {
+                    (Some(n), None) => Input::Known(n),
+                    (None, Some(true)) => Input::Unknown,
+                    _ => {
+                        return Err(Error::invalid(
+                            "Specify exactly one of value or unknown:true.",
+                        ));
+                    }
+                };
+                self.control(&session, Action::SetInput(id, input))
+            }
+            Request::SimulationSettle { session } => self.control(&session, Action::Settle),
+            Request::SimulationStep { session } => self.control(&session, Action::Step),
+            Request::SimulationTick { session } => self.control(&session, Action::Tick),
+            Request::SimulationReset { session } => self.control(&session, Action::Reset),
+            Request::SimulationSetEnabled { session, enabled } => {
+                self.control(&session, Action::SetEnabled(enabled))
             }
             Request::SimulationState { session } => {
                 let doc = self.sessions.get(&session).ok_or_else(unknown_session)?;

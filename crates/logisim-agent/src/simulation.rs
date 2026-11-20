@@ -1,4 +1,5 @@
 //! Session-owned main-circuit simulation and current signal observations.
+pub(crate) mod control;
 use crate::io;
 use logisim_core::{
     Kind, Project,
@@ -122,6 +123,7 @@ pub(crate) struct Runtime {
     engine: Engine,
     plugins: Vec<Value>,
     failure: Option<String>,
+    step_origin: u64,
 }
 
 impl Runtime {
@@ -137,6 +139,7 @@ impl Runtime {
             engine: Engine::Stable,
             plugins,
             failure: None,
+            step_origin: 0,
         };
         runtime.initialize();
         runtime
@@ -144,8 +147,8 @@ impl Runtime {
 
     fn initialize(&mut self) {
         self.failure = self.sim.error().map(str::to_owned);
+        self.check_execution();
         if self.failure.is_some() {
-            self.sim.set_enabled(false);
             return;
         }
         self.engine = match self.mode {
@@ -267,7 +270,7 @@ impl Runtime {
         for (path, id, message) in sim.plugin_failures() {
             diagnostics.push(json!({"problem":"plugin_error","instance_path":path,"components":[id],"wires":[],"message":message}));
         }
-        json!({"session_id":session,"main":project.main,"enabled":sim.enabled(),"limited":sim.limited(),"steps":sim.steps(),"ticks":sim.ticks(),
+        json!({"session_id":session,"main":project.main,"enabled":sim.enabled(),"limited":sim.limited(),"steps":sim.steps() - self.step_origin,"ticks":sim.ticks(),
         "pending_count":sim.pending_count(),"mode":self.mode,"error":self.failure,"engine":engine,"fallback_reason":fallback,"components":components,"wires":wires,"pins":pins,"probes":probes,"inputs":inputs,"diagnostics":diagnostics,"plugins":self.plugins})
     }
 }
