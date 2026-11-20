@@ -35,6 +35,25 @@ impl UiScale {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum FontPreset {
+    #[default]
+    Dialog,
+    Monospace,
+    Serif,
+}
+
+impl FontPreset {
+    pub fn family(self) -> &'static str {
+        match self {
+            Self::Dialog => "Dialog",
+            Self::Monospace => "Monospace",
+            Self::Serif => "Serif",
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum DefaultZoom {
     #[default]
@@ -128,6 +147,9 @@ pub struct Settings {
     pub default_probe_radix: Radix,
     pub default_pin_bits: u8,
     pub default_gate_size: GateSize,
+    pub default_font_family: FontPreset,
+    pub default_font_bold: bool,
+    pub default_font_italic: bool,
     pub default_font_size: Option<u8>,
     pub default_gate_inputs: u8,
     pub default_tunnel_width: u8,
@@ -161,6 +183,9 @@ impl Default for Settings {
             default_probe_radix: Radix::Binary,
             default_pin_bits: 1,
             default_gate_size: GateSize::Narrow,
+            default_font_family: FontPreset::Dialog,
+            default_font_bold: false,
+            default_font_italic: false,
             default_font_size: None,
             default_gate_inputs: 2,
             default_tunnel_width: 1,
@@ -240,9 +265,7 @@ impl Settings {
                 .with_changes(before.shortcuts, after.shortcuts)?;
         }
         for entry in super::registry::REGISTRY {
-            if entry.changed(after, before) {
-                entry.copy(&mut self, after);
-            }
+            entry.merge(&mut self, before, after);
         }
         Ok(self)
     }

@@ -125,7 +125,9 @@ fn missing_fields_default_and_invalid_json_stays_intact_after_edits() {
     for json in [
         "{",
         "{}",
-        r#"{"version":16}"#,
+        r#"{"version":17}"#,
+        r#"{"version":16,"editor":{"default_font_family":"unknown"}}"#,
+        r#"{"version":16,"editor":{"default_font_italic":1}}"#,
         r#"{"version":15,"appearance":{"dark_artwork_contrast":"false"}}"#,
         r#"{"version":15,"appearance":{"dark_artwork_contrast":null}}"#,
         r#"{"version":13,"appearance":{"theme":"system"}}"#,
@@ -237,6 +239,9 @@ fn all_fields_restart_reset_and_atomic_conflict_protection() {
         default_probe_radix: logisim_core::Radix::Hex,
         default_pin_bits: 8,
         default_gate_size: logisim_core::GateSize::Wide,
+        default_font_family: logisim_ui::FontPreset::Monospace,
+        default_font_bold: true,
+        default_font_italic: true,
         default_font_size: Some(24),
         default_gate_inputs: 4,
         default_tunnel_width: 32,
@@ -294,6 +299,9 @@ fn retry_after_write_failure_replays_only_local_changes_on_repaired_file() {
             ..w.preferences().files
         },
         truth_table: true,
+        default_font_family: logisim_ui::FontPreset::Monospace,
+        default_font_bold: true,
+        default_font_italic: true,
         default_font_size: Some(24),
         default_gate_inputs: 4,
         default_gate_size: logisim_core::GateSize::Medium,
@@ -405,8 +413,8 @@ fn layout_waits_for_idle_or_close_and_restores_only_when_enabled() {
 }
 
 #[test]
-fn earlier_preferences_migrate_to_v15_and_editor_defaults_round_trip() {
-    for version in 1..=14 {
+fn earlier_preferences_migrate_to_v16_and_editor_defaults_round_trip() {
+    for version in 1..=15 {
         let json = serde_json::json!({"version":version,"editor":{"show_grid":false}});
         let config = schema::decode(json.to_string().as_bytes()).unwrap();
         assert_eq!(
@@ -417,7 +425,10 @@ fn earlier_preferences_migrate_to_v15_and_editor_defaults_round_trip() {
             }
         );
         let encoded: serde_json::Value = serde_json::from_slice(&schema::encode(&config)).unwrap();
-        assert_eq!(encoded["version"], 15);
+        assert_eq!(encoded["version"], 16);
+        assert_eq!(encoded["editor"]["default_font_family"], "dialog");
+        assert_eq!(encoded["editor"]["default_font_bold"], false);
+        assert_eq!(encoded["editor"]["default_font_italic"], false);
         assert_eq!(encoded["appearance"]["dark_artwork_contrast"], true);
         assert!(config.plugins.fallback_directory.is_none());
         assert_eq!(encoded["appearance"]["theme"], "light");
@@ -440,6 +451,22 @@ fn earlier_preferences_migrate_to_v15_and_editor_defaults_round_trip() {
         );
         assert_eq!(encoded["editor"]["default_gate_inputs"], 2);
         assert_eq!(encoded["editor"]["remember_last_properties"], false);
+    }
+    for preset in [
+        logisim_ui::FontPreset::Dialog,
+        logisim_ui::FontPreset::Monospace,
+        logisim_ui::FontPreset::Serif,
+    ] {
+        let settings = Settings {
+            default_font_family: preset,
+            default_font_bold: true,
+            default_font_italic: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            schema::decode_settings(&schema::encode_settings(settings)).unwrap(),
+            settings
+        );
     }
     for (font, inputs) in [(None, 2), (Some(8), 32), (Some(32), 4)] {
         let json = serde_json::json!({"version":11,"editor":{"default_font_size":font,"default_gate_inputs":inputs}});
@@ -701,13 +728,15 @@ fn portable_files_migrate_validate_bindings_and_ignore_host_metadata() {
         assert_eq!(
             serde_json::from_slice::<serde_json::Value>(&schema::encode_settings(settings))
                 .unwrap()["version"],
-            15
+            16
         );
     }
     for json in [
         "",
         "{}",
-        r#"{"version":16}"#,
+        r#"{"version":17}"#,
+        r#"{"version":16,"editor":{"default_font_family":"unknown"}}"#,
+        r#"{"version":16,"editor":{"default_font_italic":1}}"#,
         r#"{"version":15,"appearance":{"dark_artwork_contrast":"false"}}"#,
         r#"{"version":15,"appearance":{"dark_artwork_contrast":null}}"#,
         r#"{"version":13,"unknown":null}"#,
@@ -858,7 +887,7 @@ fn fallback_directory_is_validated_local_state_and_survives_portable_transfers()
         assert_eq!(saved.plugins.directory(), Some(local.as_path()));
         let exported: serde_json::Value =
             serde_json::from_slice(&Preferences::export_settings(&ws)).unwrap();
-        assert_eq!(exported["version"], 15);
+        assert_eq!(exported["version"], 16);
         assert_eq!(exported["general"]["language"], "zh-CN");
         assert_eq!(exported["appearance"]["theme"], "dark");
         assert_eq!(

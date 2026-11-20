@@ -1,8 +1,8 @@
 //! Versioned disk representation. The UI owns the validated preference types.
 use logisim_core::{GateSize, Radix};
 use logisim_ui::{
-    Accent, DefaultZoom, Density, Language, Settings, SignalPalette, SimulationMode, ThemeMode,
-    TickHz, UiScale, WorkspaceSettings,
+    Accent, DefaultZoom, Density, FontPreset, Language, Settings, SignalPalette, SimulationMode,
+    ThemeMode, TickHz, UiScale, WorkspaceSettings,
 };
 use serde::{Deserialize, Serialize};
 
@@ -146,6 +146,9 @@ struct Editor {
     default_pin_bits: u8,
     #[serde(with = "GateSizeCode")]
     default_gate_size: GateSize,
+    default_font_family: FontPreset,
+    default_font_bold: bool,
+    default_font_italic: bool,
     default_font_size: Option<u8>,
     default_gate_inputs: u8,
     default_tunnel_width: u8,
@@ -171,6 +174,9 @@ impl Default for Editor {
             default_probe_radix: settings.default_probe_radix,
             default_pin_bits: settings.default_pin_bits,
             default_gate_size: settings.default_gate_size,
+            default_font_family: settings.default_font_family,
+            default_font_bold: settings.default_font_bold,
+            default_font_italic: settings.default_font_italic,
             default_font_size: settings.default_font_size,
             default_gate_inputs: settings.default_gate_inputs,
             default_tunnel_width: settings.default_tunnel_width,
@@ -367,6 +373,9 @@ fn validated<R, W, P, F>(file: &File<R, W, P, F>) -> Result<Settings, &'static s
         default_probe_radix: file.editor.default_probe_radix,
         default_pin_bits: file.editor.default_pin_bits,
         default_gate_size: file.editor.default_gate_size,
+        default_font_family: file.editor.default_font_family,
+        default_font_bold: file.editor.default_font_bold,
+        default_font_italic: file.editor.default_font_italic,
         default_font_size: file.editor.default_font_size,
         default_gate_inputs: file.editor.default_gate_inputs,
         default_tunnel_width: file.editor.default_tunnel_width,
@@ -424,6 +433,9 @@ fn portable(s: Settings) -> File {
             default_probe_radix: s.default_probe_radix,
             default_pin_bits: s.default_pin_bits,
             default_gate_size: s.default_gate_size,
+            default_font_family: s.default_font_family,
+            default_font_bold: s.default_font_bold,
+            default_font_italic: s.default_font_italic,
             default_font_size: s.default_font_size,
             default_gate_inputs: s.default_gate_inputs,
             default_tunnel_width: s.default_tunnel_width,

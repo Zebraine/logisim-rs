@@ -1,13 +1,15 @@
 mod recovery;
 mod registry;
 pub use recovery::{RecoveryView, SnapshotState};
-pub const CONFIG_VERSION: u32 = 15;
+pub const CONFIG_VERSION: u32 = 16;
 mod page;
 pub(crate) use page::Page;
 mod model;
 pub use crate::theme::SignalPalette;
 use crate::{Language, Workspace, i18n::tr, theme};
-pub use model::{DefaultZoom, FileSettings, Settings, TickHz, UiScale, WorkspaceSettings};
+pub use model::{
+    DefaultZoom, FileSettings, FontPreset, Settings, TickHz, UiScale, WorkspaceSettings,
+};
 pub(crate) use model::{EditorDisplay, PlacementDefaults};
 
 /// Host execution preference, independent of the document and its undo history.

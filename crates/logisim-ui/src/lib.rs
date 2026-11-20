@@ -29,7 +29,7 @@ mod settings;
 pub mod shortcuts;
 pub use i18n::Language;
 pub use settings::{
-    CONFIG_VERSION, DefaultZoom, FileSettings, RecoveryView, Settings, SignalPalette,
+    CONFIG_VERSION, DefaultZoom, FileSettings, FontPreset, RecoveryView, Settings, SignalPalette,
     SimulationMode, SnapshotState, TickHz, UiScale, WorkspaceSettings,
 };
 mod libraries;

@@ -57,6 +57,8 @@ pub(super) enum Control {
     AutosaveMinutes,
     ProbeRadix,
     Integer(fn(&mut Settings) -> &mut u8, std::ops::RangeInclusive<u8>),
+    FontFamily,
+    FontStyle,
     FontSize,
     GateSize,
 }
@@ -242,6 +244,20 @@ registry![
         Control::Integer(|s| &mut s.default_tunnel_width, 1..=32)
     ),
     (
+        "editor.default_font_family",
+        Editor,
+        "Default font family",
+        "Choose the label font for new components.",
+        Control::FontFamily
+    ),
+    (
+        "editor.default_font_bold",
+        Editor,
+        "Default font style",
+        "Use bold or italic labels on new components.",
+        Control::FontStyle
+    ),
+    (
         "editor.default_font_size",
         Editor,
         "Default label size",
@@ -310,6 +326,11 @@ registry![
 ];
 impl Entry {
     pub fn matches(&self, query: &str) -> bool {
+        if matches!(self.control, Control::FontStyle)
+            && "editor.default_font_italic".contains(query)
+        {
+            return true;
+        }
         [self.key, tr(self.label), tr(self.help)]
             .iter()
             .any(|s| s.to_lowercase().contains(query))
@@ -332,6 +353,11 @@ impl Entry {
             Control::Toggle(field) => *field(target) = *field(&mut source),
             Control::ProbeRadix => target.default_probe_radix = source.default_probe_radix,
             Control::Integer(field, _) => *field(target) = *field(&mut source),
+            Control::FontFamily => target.default_font_family = source.default_font_family,
+            Control::FontStyle => {
+                target.default_font_bold = source.default_font_bold;
+                target.default_font_italic = source.default_font_italic;
+            }
             Control::FontSize => target.default_font_size = source.default_font_size,
             Control::GateSize => target.default_gate_size = source.default_gate_size,
             Control::Zoom => target.default_zoom = source.default_zoom,
@@ -341,6 +367,19 @@ impl Entry {
             }
             Control::RecentLimit => target.workspace.recent_limit = source.workspace.recent_limit,
             Control::Frequency => target.tick_hz = source.tick_hz,
+        }
+    }
+    pub fn merge(&self, target: &mut Settings, before: Settings, after: Settings) {
+        // The two checkboxes share a reset button, but Retry replays each edit separately.
+        if matches!(self.control, Control::FontStyle) {
+            if before.default_font_bold != after.default_font_bold {
+                target.default_font_bold = after.default_font_bold;
+            }
+            if before.default_font_italic != after.default_font_italic {
+                target.default_font_italic = after.default_font_italic;
+            }
+        } else if self.changed(after, before) {
+            self.copy(target, after);
         }
     }
     pub fn changed(&self, current: Settings, baseline: Settings) -> bool {
@@ -426,6 +465,18 @@ impl Entry {
                     [Narrow, Medium, Wide],
                     |v| tr(v.name()).to_owned(),
                 )
+            }
+            Control::FontFamily => choice(
+                ui,
+                &mut values.default_font_family,
+                [FontPreset::Dialog, FontPreset::Monospace, FontPreset::Serif],
+                |v| tr(v.family()).to_owned(),
+            ),
+            Control::FontStyle => {
+                let italic = ui.checkbox(&mut values.default_font_italic, tr("Italic"));
+                theme::focus_ring(ui, &italic);
+                let bold = ui.checkbox(&mut values.default_font_bold, tr("Bold"));
+                theme::focus_ring(ui, &bold);
             }
             Control::FontSize => {
                 let mut auto = values.default_font_size.is_none();

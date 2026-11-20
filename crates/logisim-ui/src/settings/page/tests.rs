@@ -125,6 +125,9 @@ fn registry_restores_each_field_without_changing_other_preferences() {
         default_probe_radix: logisim_core::Radix::Hex,
         default_pin_bits: 8,
         default_gate_size: logisim_core::GateSize::Medium,
+        default_font_family: crate::FontPreset::Serif,
+        default_font_bold: true,
+        default_font_italic: true,
         default_font_size: Some(24),
         default_gate_inputs: 4,
         default_tunnel_width: 13,
@@ -152,6 +155,21 @@ fn registry_restores_each_field_without_changing_other_preferences() {
         e.copy(&mut restored, defaults);
     }
     assert_eq!(restored, defaults);
+    let style = REGISTRY
+        .iter()
+        .find(|e| e.key == "editor.default_font_bold")
+        .unwrap();
+    assert!(style.matches("editor.default_font_italic"));
+    let local = Settings {
+        default_font_bold: true,
+        ..defaults
+    };
+    let repaired = Settings {
+        default_font_italic: true,
+        ..defaults
+    };
+    let merged = repaired.with_changes(defaults, local).unwrap();
+    assert!(merged.default_font_bold && merged.default_font_italic);
 }
 
 #[test]
