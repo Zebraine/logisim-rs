@@ -8,6 +8,7 @@ mod tests;
 use dialog::{Dialog, Response};
 use picker::{Mode, Picker};
 
+use crate::plugins::Resolution;
 use crate::simulation::Host;
 use crate::storage::{self, SaveMode, Storage};
 use eframe::egui;
@@ -22,6 +23,12 @@ pub(super) enum NextDocument {
     Recent(PathBuf),
     Close,
 }
+
+enum ResolutionReason {
+    Document(Vec<String>),
+    Repair,
+}
+
 pub(crate) struct Files {
     pub plugins: logisim_plugin::Registry,
     pub storage: Storage,
@@ -107,21 +114,38 @@ impl Files {
         &mut self,
         workspace: &mut Workspace,
         sim: &mut impl Host,
-        warnings: Vec<String>,
+        reason: ResolutionReason,
     ) {
-        let resolution = crate::plugins::Resolution::new(
+        let repair = matches!(reason, ResolutionReason::Repair);
+        let warnings = match reason {
+            ResolutionReason::Document(warnings) => warnings,
+            ResolutionReason::Repair => Vec::new(),
+        };
+        let resolution = Resolution::new(
             workspace.project(),
             crate::plugins::base(self.storage.path.as_deref()),
             warnings,
         );
-        self.plugins = resolution.registry();
-        workspace.set_plugin_catalogue(self.plugins.libraries().collect());
-        sim.set_plugins(self.plugins.clone());
-        if resolution.missing() {
+        let missing = resolution.missing();
+        // A new document needs its own registry immediately. A repair can be cancelled.
+        if !repair || !missing {
+            self.activate_plugins(&resolution, workspace, sim);
+        }
+        if missing {
             self.dialog = Some(Dialog::Plugins(Box::new(resolution)));
         } else {
             self.import_warnings(resolution.warnings);
         }
+    }
+    fn activate_plugins(
+        &mut self,
+        resolution: &Resolution,
+        workspace: &mut Workspace,
+        sim: &mut impl Host,
+    ) {
+        self.plugins = resolution.registry();
+        workspace.set_plugin_catalogue(self.plugins.libraries().collect());
+        sim.set_plugins(self.plugins.clone());
     }
     pub fn startup(
         &mut self,
@@ -174,7 +198,7 @@ impl Files {
                     .to_path_buf();
                 workspace.replace_project(circuit);
                 sim.new_document();
-                self.resolve_plugins(workspace, sim, warnings);
+                self.resolve_plugins(workspace, sim, ResolutionReason::Document(warnings));
                 true
             }
             Err(e) => {
@@ -218,7 +242,7 @@ impl Files {
             FileAction::LoadPlugin => self.picker(Mode::Plugin),
             FileAction::ResolvePlugins => {
                 if workspace.plugin_dependencies().any(|(_, loaded)| !loaded) {
-                    self.resolve_plugins(workspace, sim, Vec::new());
+                    self.resolve_plugins(workspace, sim, ResolutionReason::Repair);
                 }
             }
             FileAction::ImportPlugin { component, import } => {
@@ -413,7 +437,11 @@ impl Files {
                         }
                         workspace.replace_project(project);
                         sim.new_document();
-                        self.resolve_plugins(workspace, sim, Vec::new());
+                        self.resolve_plugins(
+                            workspace,
+                            sim,
+                            ResolutionReason::Document(Vec::new()),
+                        );
                     }
                     Err(_) => {
                         self.dialog = Some(Dialog::Recovery {
@@ -435,9 +463,7 @@ impl Files {
                 }
                 let sources = resolution.sources(&workspace.project().plugin_sources);
                 workspace.set_plugin_sources(sources);
-                self.plugins = resolution.registry();
-                workspace.set_plugin_catalogue(self.plugins.libraries().collect());
-                sim.set_plugins(self.plugins.clone());
+                self.activate_plugins(&resolution, workspace, sim);
                 self.import_warnings(resolution.warnings);
             }
             (Dialog::Plugins(mut resolution), Response::CheckPlugin(index)) => {
@@ -542,7 +568,11 @@ impl Files {
                     match crate::library_import::load(&path, workspace.project()) {
                         Ok(imported) => {
                             workspace.apply_library_import(imported);
-                            self.resolve_plugins(workspace, sim, vec![]);
+                            self.resolve_plugins(
+                                workspace,
+                                sim,
+                                ResolutionReason::Document(vec![]),
+                            );
                             if let Some(parent) = path.parent() {
                                 self.directory = parent.to_path_buf();
                             }

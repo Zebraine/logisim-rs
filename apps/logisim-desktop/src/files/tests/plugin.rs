@@ -25,6 +25,13 @@ fn missing_and_invalid_confirm_keep_static_definitions_and_valid_plugins_running
         // A previously loaded module must not hide a missing dependency in this file.
         files.plugins.load(&bytes_b).unwrap();
         files.load(&path, &mut workspace, &mut sim);
+        if !replacement.is_empty() {
+            let dialog = files.dialog.take().unwrap();
+            files.respond(dialog, Response::Cancel, &ctx, &mut workspace, &mut sim);
+            let active = files.plugins.clone();
+            files.request(FileAction::ResolvePlugins, &ctx, &mut workspace, &mut sim);
+            assert!(active.same(&files.plugins));
+        }
         let Dialog::Plugins(mut resolution) =
             files.dialog.take().expect("missing dependency dialog")
         else {
@@ -42,7 +49,6 @@ fn missing_and_invalid_confirm_keep_static_definitions_and_valid_plugins_running
             &mut sim,
         );
         assert!(!files.busy());
-        sim.set_plugins(files.plugins.clone());
         sim.synchronize(workspace.project(), workspace.project().main);
         sim.advance(32);
         let c = &workspace.project().main_circuit().circuit;
@@ -109,4 +115,98 @@ fn browse_cancel_keeps_resolution_and_new_clears_old_catalogue() {
     files.request(FileAction::New, &ctx, &mut workspace, &mut sim);
     assert_eq!(workspace.project(), &logisim_core::Project::default());
     assert_eq!(files.plugins.manifests().count(), 0);
+}
+
+#[test]
+fn project_options_repairs_only_on_confirm_and_records_one_undoable_source_edit() {
+    let temp = Temp::new();
+    let (project, wasm) = fixture("test.repair", 1);
+    let path = temp.path("project.circ");
+    let original = logisim_file::serialize(&project).unwrap();
+    fs::write(&path, &original).unwrap();
+    let candidate = temp.path("candidate.wasm");
+    fs::write(&candidate, wasm).unwrap();
+    let mut h = super::Harness::default();
+    assert!(h.files.load(&path, &mut h.ws, &mut h.sim));
+    h.click("Cancel");
+    let before = h.ws.project().clone();
+    let registry = h.files.plugins.clone();
+    let repair = |h: &mut super::Harness| {
+        h.click("Project");
+        h.click("Project Options…");
+        h.click("Resolve missing…");
+        assert!(matches!(h.files.dialog, Some(Dialog::Plugins(_))));
+        assert!(!h.frame(vec![]).iter().any(|(s, _)| s == "Project Options"));
+        h.click("Browse…");
+        assert!(matches!(h.files.dialog, Some(Dialog::PluginPicker { .. })));
+        h.click("candidate.wasm");
+        h.click("Open");
+        h.click("Check");
+        assert!(h.frame(vec![]).iter().any(|(s, _)| s == "Plugin ready"));
+    };
+    repair(&mut h);
+    assert!(registry.same(&h.files.plugins));
+    h.click("Cancel");
+    assert!(!h.files.busy() && registry.same(&h.files.plugins));
+    assert_eq!(h.ws.project(), &before);
+    assert!(!h.ws.plugin_dependencies().next().unwrap().1);
+    assert!(!h.files.present(&h.ws).dirty);
+    assert_eq!(h.sim.plugin_failures().len(), 1);
+    assert_eq!(fs::read_to_string(&path).unwrap(), original);
+
+    repair(&mut h);
+    h.click("Confirm");
+    h.frame(vec![]);
+    assert!(!h.files.busy() && h.files.present(&h.ws).dirty);
+    assert_eq!(h.ws.project().circuits, before.circuits);
+    let (source, loaded) = h.ws.plugin_dependencies().next().unwrap();
+    assert!(loaded);
+    assert_eq!(Path::new(&source.path), candidate.canonicalize().unwrap());
+    assert_eq!(h.files.plugins.manifests().count(), 1);
+    assert!(h.sim.plugin_failures().is_empty());
+    let output = before.main_circuit().circuit.components[0].id;
+    assert_eq!(
+        h.sim
+            .view(&[])
+            .unwrap()
+            .port_value(output, 0)
+            .unwrap()
+            .number(),
+        Some(1)
+    );
+    assert_eq!(fs::read_to_string(&path).unwrap(), original);
+
+    let active = h.files.plugins.clone();
+    h.files
+        .request(FileAction::ResolvePlugins, &h.ctx, &mut h.ws, &mut h.sim);
+    assert!(!h.files.busy() && active.same(&h.files.plugins));
+    h.click_at(egui::pos2(1050., 730.));
+    h.frame(vec![egui::Event::Key {
+        key: egui::Key::Z,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::COMMAND,
+    }]);
+    assert_eq!(h.ws.project(), &before);
+    assert!(!h.files.present(&h.ws).dirty);
+}
+
+#[test]
+fn reappearing_recorded_module_resolves_without_an_empty_dialog_or_a_document_edit() {
+    let temp = Temp::new();
+    let (project, wasm) = fixture("test.reappeared", 0);
+    let path = temp.path("project.circ");
+    fs::write(&path, logisim_file::serialize(&project).unwrap()).unwrap();
+    let mut h = super::Harness::default();
+    assert!(h.files.load(&path, &mut h.ws, &mut h.sim));
+    h.click("Cancel");
+    let before = h.ws.project().clone();
+    fs::write(temp.path("missing.wasm"), wasm).unwrap();
+    h.files
+        .request(FileAction::ResolvePlugins, &h.ctx, &mut h.ws, &mut h.sim);
+    assert!(!h.files.busy());
+    assert!(h.ws.plugin_dependencies().next().unwrap().1);
+    assert_eq!(h.ws.project(), &before);
+    assert!(!h.files.present(&h.ws).dirty);
 }
