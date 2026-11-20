@@ -305,3 +305,5 @@ fn positional_json_sections_cannot_be_overwritten_as_settings_objects() {
         assert_eq!(std::fs::read_to_string(&path).unwrap(), bytes);
     }
 }
+
+mod project_patch;

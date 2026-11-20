@@ -74,7 +74,7 @@ pub fn write_preferences(
     bytes: &[u8],
     expected: Option<&[u8]>,
 ) -> std::result::Result<(), WriteError> {
-    use std::{fs::TryLockError, io::ErrorKind};
+    use std::io::ErrorKind;
     let io = |e: std::io::Error| WriteError::Io(e.to_string());
     let target = match path.canonicalize() {
         Ok(target) => target,
@@ -86,6 +86,15 @@ pub fn write_preferences(
         }
         Err(e) => return Err(io(e)),
     };
+    let _lock = lock_target(&target)?;
+    replace_checked(&target, bytes, expected, None)
+}
+
+/// Lock a stable sibling inode across backup and target replacements. The empty sidecar stays
+/// in place after unlocking so all cooperating writers continue to lock the same inode.
+pub fn lock_target(target: &Path) -> std::result::Result<fs::File, WriteError> {
+    use std::fs::TryLockError;
+    let io = |e: std::io::Error| WriteError::Io(e.to_string());
     let mut lock_name = target.as_os_str().to_owned();
     lock_name.push(".lock");
     let lock = fs::OpenOptions::new()
@@ -96,19 +105,26 @@ pub fn write_preferences(
         .open(lock_name)
         .map_err(io)?;
     if !lock.metadata().map_err(io)?.is_file() {
-        return Err(WriteError::Io(
-            "Expected a regular preferences lock file.".into(),
-        ));
+        return Err(WriteError::Io("Expected a regular lock file.".into()));
     }
     match lock.try_lock() {
         Ok(()) => {}
         Err(TryLockError::WouldBlock) => return Err(WriteError::Conflict),
         Err(TryLockError::Error(e)) => return Err(io(e)),
     }
-    // The on-disk lock file remains after unlocking. Removing it would let two writers
-    // lock different inodes for the same configuration.
+    Ok(lock)
+}
+
+pub fn replace_checked(
+    target: &Path,
+    bytes: &[u8],
+    expected: Option<&[u8]>,
+    permissions: Option<fs::Permissions>,
+) -> std::result::Result<(), WriteError> {
+    use std::io::ErrorKind;
+    let io = |e: std::io::Error| WriteError::Io(e.to_string());
     let check = || -> std::result::Result<(), WriteError> {
-        match (fs::File::open(&target), expected) {
+        match (fs::File::open(target), expected) {
             (Ok(file), Some(old)) => {
                 if !file.metadata().map_err(io)?.is_file() {
                     return Err(WriteError::Conflict);
@@ -130,7 +146,7 @@ pub fn write_preferences(
     };
     let mut reason = None;
     // Verify again just before the rename, including changes by non-cooperating editors.
-    atomic_replace(&target, bytes, None, || {
+    atomic_replace(target, bytes, permissions, || {
         check().map_err(|e| {
             let message = e.to_string();
             reason = Some(e);
@@ -138,4 +154,42 @@ pub fn write_preferences(
         })
     })
     .map_err(|e| reason.unwrap_or(WriteError::Io(e)))
+}
+
+/// Atomically rotate one generation using the target's original bytes. Existing backups
+/// must be writable regular files and retain their permissions.
+pub fn write_backup(target: &Path, backup: &Path, original: &[u8], max_bytes: usize) -> Result<()> {
+    const REGULAR: &str = "The backup path must be a writable regular file.";
+    let (previous, permissions) = match fs::symlink_metadata(backup) {
+        Ok(meta) => {
+            if !meta.is_file() || meta.permissions().readonly() {
+                return Err(REGULAR.into());
+            }
+            let file = fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(backup)
+                .map_err(|e| e.to_string())?;
+            if !file.metadata().map_err(|e| e.to_string())?.is_file() {
+                return Err(REGULAR.into());
+            }
+            let mut data = Vec::new();
+            file.take(max_bytes as u64 + 1)
+                .read_to_end(&mut data)
+                .map_err(|e| e.to_string())?;
+            if data.len() > max_bytes {
+                return Err("Backup exceeds the file size limit.".into());
+            }
+            (Some(data), meta.permissions())
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => (
+            None,
+            fs::metadata(target)
+                .map_err(|e| e.to_string())?
+                .permissions(),
+        ),
+        Err(e) => return Err(e.to_string()),
+    };
+    replace_checked(backup, original, previous.as_deref(), Some(permissions))
+        .map_err(|e| e.to_string())
 }

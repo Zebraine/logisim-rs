@@ -9,6 +9,7 @@ mod project;
 mod settings;
 mod simulation;
 use project::Session;
+pub use project::patch::ProjectOp;
 
 pub const PROTOCOL: u8 = 1;
 #[derive(Debug, Serialize)]
@@ -47,9 +48,9 @@ pub struct Operation {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Patch {
+pub struct Patch<T = Operation> {
     pub expected_sha256: Option<String>,
-    pub ops: Vec<Operation>,
+    pub ops: Vec<T>,
 }
 #[derive(Debug, Deserialize)]
 #[serde(
@@ -75,6 +76,18 @@ pub enum Request {
     ProjectSnapshot {
         session: String,
     },
+    ProjectPatch {
+        session: String,
+        dry_run: bool,
+        expected_sha256: Option<String>,
+        ops: Vec<ProjectOp>,
+    },
+    ProjectSave {
+        session: String,
+        expected_sha256: Option<String>,
+        #[serde(default = "backup_enabled")]
+        backup: bool,
+    },
     ProjectClose {
         session: String,
     },
@@ -95,27 +108,44 @@ fn check_arguments(arguments: &Value) -> Result<()> {
         ));
     }
     if let Some(ops) = arguments.get("ops").and_then(Value::as_array)
-        && ops.iter().any(|op| !op.is_object())
+        && let Some(index) = ops.iter().position(|op| !op.is_object())
     {
-        return Err(Error::invalid(
-            "Each operation must be an object with key and value.",
+        return Err(project::patch::indexed(
+            Error::invalid("Each operation must be a named JSON object."),
+            index,
         ));
     }
     Ok(())
 }
 
-impl Patch {
+fn decode_error<T: serde::de::DeserializeOwned>(value: &Value, err: serde_json::Error) -> Error {
+    if let Some(ops) = value["ops"].as_array() {
+        for (i, op) in ops.iter().enumerate() {
+            if let Err(e) = T::deserialize(op) {
+                return project::patch::indexed(Error::invalid(e), i);
+            }
+        }
+    }
+    Error::invalid(err)
+}
+impl<T: serde::de::DeserializeOwned> Patch<T> {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         let value = serde_json::from_slice(bytes).map_err(|e| Error::new("invalid_json", e))?;
         check_arguments(&value)?;
         // Decode the original object to retain serde's duplicate-field checks.
-        serde_json::from_slice(bytes).map_err(Error::invalid)
+        serde_json::from_slice(bytes).map_err(|e| decode_error::<T>(&value, e))
     }
 }
 impl Request {
     pub fn from_json(value: Value) -> Result<Self> {
         check_arguments(&value["arguments"])?;
-        serde_json::from_value(value).map_err(Error::invalid)
+        Self::deserialize(&value).map_err(|e| {
+            if value["tool"] == "project_patch" {
+                decode_error::<ProjectOp>(&value["arguments"], e)
+            } else {
+                Error::invalid(e)
+            }
+        })
     }
 }
 
@@ -143,6 +173,25 @@ impl Service {
                 self.sessions.insert(id, session);
                 Ok(data)
             }
+            Request::ProjectPatch {
+                session,
+                dry_run,
+                expected_sha256,
+                ops,
+            } => self
+                .sessions
+                .get_mut(&session)
+                .ok_or_else(unknown_session)?
+                .patch(&session, expected_sha256.as_deref(), dry_run, &ops),
+            Request::ProjectSave {
+                session,
+                expected_sha256,
+                backup,
+            } => self
+                .sessions
+                .get_mut(&session)
+                .ok_or_else(unknown_session)?
+                .save(&session, expected_sha256.as_deref(), backup),
             Request::ProjectClose { session } => {
                 self.sessions.remove(&session).ok_or_else(unknown_session)?;
                 Ok(json!({"session_id":session,"closed":true}))
@@ -178,6 +227,10 @@ impl Service {
                 }),
         }
     }
+}
+
+fn backup_enabled() -> bool {
+    true
 }
 
 fn unknown_session() -> Error {

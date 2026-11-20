@@ -104,13 +104,14 @@ impl Storage {
             if self.protected.as_ref() == Some(&backup) {
                 return Err("The backup would replace the protected source. Choose a different destination.".into());
             }
-            write_backup(&path, &backup, original).map_err(|cause| {
-                logisim_ui::tf!(
-                    "Could not write backup {}. Save stopped.\n{}",
-                    backup.display(),
-                    logisim_ui::i18n::tr(&cause)
-                )
-            })?;
+            logisim_preferences::storage::write_backup(&path, &backup, original, MAX_BYTES)
+                .map_err(|cause| {
+                    logisim_ui::tf!(
+                        "Could not write backup {}. Save stopped.\n{}",
+                        backup.display(),
+                        logisim_ui::i18n::tr(&cause)
+                    )
+                })?;
         }
         atomic_write(&path, text.as_bytes(), expected)?;
         self.path = Some(path);
@@ -164,34 +165,6 @@ pub(crate) fn destination(path: &Path) -> Result<PathBuf> {
     Ok(parent.canonicalize().map_err(|e| e.to_string())?.join(name))
 }
 const CHANGED: &str = "The destination changed, cannot be read, or needs overwrite confirmation. Use Save As and choose the file again.";
-fn write_backup(target: &Path, backup: &Path, original: &[u8]) -> Result<()> {
-    const REGULAR: &str = "The backup path must be a writable regular file.";
-    let (previous, permissions) = match fs::symlink_metadata(backup) {
-        Ok(meta) => {
-            if !meta.is_file() || meta.permissions().readonly() {
-                return Err(REGULAR.into());
-            }
-            // Atomic rename alone could replace a file that the user cannot write.
-            let file = fs::OpenOptions::new()
-                .read(true)
-                .write(true)
-                .open(backup)
-                .map_err(|e| e.to_string())?;
-            (Some(read_bytes(file, REGULAR)?), meta.permissions())
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => (
-            None,
-            fs::metadata(target)
-                .map_err(|e| e.to_string())?
-                .permissions(),
-        ),
-        Err(e) => return Err(e.to_string()),
-    };
-    atomic_replace(backup, original, Some(permissions), || {
-        check_expected(backup, previous.as_deref())
-    })
-}
-
 fn check_expected(path: &Path, expected: Option<&[u8]>) -> Result<()> {
     match (read(path), expected) {
         (Ok(actual), Some(expected)) if actual == expected => Ok(()),

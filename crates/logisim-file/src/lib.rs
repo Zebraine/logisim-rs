@@ -32,6 +32,11 @@ pub use logisim_core::Project as Document;
 pub use read::parse;
 pub use write::serialize;
 
+/// Check one prospective component edit against the same attribute codec used at save time.
+pub fn validate_component(component: &logisim_core::Component, document: &Document) -> Result<()> {
+    component::write(&mut String::new(), component, document)
+}
+
 pub const MAX_BYTES: usize = 8 * 1024 * 1024;
 /// Project-wide budget, independent of the per-circuit topology budget.
 pub use logisim_core::{MAX_CIRCUIT_ITEMS, MAX_PROJECT_ITEMS as MAX_ITEMS};

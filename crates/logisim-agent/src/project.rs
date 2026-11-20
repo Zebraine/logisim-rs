@@ -1,5 +1,8 @@
 //! Project sessions and projections of their circuit-scoped item identities.
+mod edit;
+pub(crate) mod patch;
 mod properties;
+mod save;
 use crate::{Error, Result, digest, io};
 use logisim_core::{Component, Point, Project};
 use serde_json::{Value, json};
@@ -26,6 +29,28 @@ impl Session {
             warnings: imported.warnings,
             simulation: None,
         })
+    }
+    fn check_editable(&self, expected: Option<&str>) -> Result<()> {
+        if !self.warnings.is_empty() {
+            let mut e = Error::new(
+                "partial_project",
+                "This import reported omissions. Patching and saving are disabled.",
+            );
+            e.details["warnings"] = json!(self.warnings);
+            return Err(e);
+        }
+        if let Some(hash) = expected {
+            if hash.len() != 64 || !hash.bytes().all(|c| c.is_ascii_hexdigit()) {
+                return Err(Error::invalid("Expected 64 hexadecimal SHA-256 digits."));
+            }
+            if !self.sha256.eq_ignore_ascii_case(hash) {
+                return Err(Error::new(
+                    "conflict",
+                    "Expected SHA-256 differs from the session source.",
+                ));
+            }
+        }
+        Ok(())
     }
     pub fn summary(&self, id: &str) -> Value {
         json!({"session_id":id,"path":self.path,"source_sha256":self.sha256,"schema":1,"main":self.project.main,"partial":!self.warnings.is_empty(),"warnings":self.warnings})
@@ -65,6 +90,22 @@ impl Session {
         result["plugin_sources"] = json!(self.project.plugin_sources);
         result
     }
+}
+
+// Custom appearance ports, for example, bind pins by coordinates in .circ, even though
+// they have independent IDs in memory. Never commit a result that the reader would omit.
+fn saveable(project: &Project) -> Result<String> {
+    let xml = logisim_file::serialize(project).map_err(|e| Error::new("invalid_project", e))?;
+    let reopened = logisim_file::parse(&xml).map_err(|e| Error::new("invalid_project", e))?;
+    if !reopened.warnings.is_empty() {
+        let mut error = Error::new(
+            "invalid_project",
+            "Edited project would reopen with import warnings.",
+        );
+        error.details["warnings"] = json!(reopened.warnings);
+        return Err(error);
+    }
+    Ok(xml)
 }
 
 fn point(p: Point) -> [i32; 2] {
