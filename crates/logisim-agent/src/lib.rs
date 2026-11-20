@@ -5,7 +5,10 @@ use std::{collections::HashMap, path::PathBuf};
 
 mod digest;
 pub mod io;
+mod project;
 mod settings;
+mod simulation;
+use project::Session;
 
 pub const PROTOCOL: u8 = 1;
 #[derive(Debug, Serialize)]
@@ -83,12 +86,6 @@ pub enum Request {
     },
 }
 
-struct Session {
-    project: logisim_core::Project,
-    path: PathBuf,
-    sha256: String,
-    warnings: Vec<String>,
-}
 #[derive(Default)]
 pub struct Service {
     sessions: HashMap<String, Session>,
@@ -105,37 +102,56 @@ impl Service {
                 dry_run,
             } => settings::patch(&config, expected_sha256.as_deref(), ops, dry_run),
             Request::ProjectOpen { path } => {
-                let bytes = io::read(&path)?;
-                let xml =
-                    std::str::from_utf8(&bytes).map_err(|e| Error::new("invalid_project", e))?;
-                let imported =
-                    logisim_file::parse(xml).map_err(|e| Error::new("invalid_project", e))?;
-                let mut random = [0u8; 16];
+                let session = Session::open(&path)?;
+                let mut random = [0; 16];
                 getrandom::fill(&mut random).map_err(|e| Error::new("unavailable", e))?;
                 let id = format!("{:032x}", u128::from_be_bytes(random));
-                let session = Session {
-                    project: imported.document,
-                    path: path.canonicalize().map_err(|e| Error::new("io", e))?,
-                    sha256: digest::sha256(&bytes),
-                    warnings: imported.warnings,
-                };
-                let data = json!({"session_id":id,"path":session.path,"source_sha256":session.sha256,"schema":1,"main":session.project.main,"partial":!session.warnings.is_empty(),"warnings":session.warnings});
+                let data = session.summary(&id);
                 self.sessions.insert(id, session);
                 Ok(data)
             }
             Request::ProjectClose { session } => {
-                self.sessions.remove(&session).ok_or_else(|| {
-                    Error::new(
-                        "unknown_session",
-                        "Project session is not open in this process.",
-                    )
-                })?;
+                self.sessions.remove(&session).ok_or_else(unknown_session)?;
                 Ok(json!({"session_id":session,"closed":true}))
             }
-            _ => Err(Error::new("unknown_tool", "Tool is not available.")),
+            Request::ProjectSnapshot { session } => Ok(self
+                .sessions
+                .get(&session)
+                .ok_or_else(unknown_session)?
+                .snapshot(&session)),
+            Request::SimulationOpen { session } => {
+                let doc = self
+                    .sessions
+                    .get_mut(&session)
+                    .ok_or_else(unknown_session)?;
+                let state = doc
+                    .simulation
+                    .get_or_insert_with(|| simulation::observe(&doc.project, &doc.path, &session));
+                Ok(
+                    json!({"session_id":session,"main":doc.project.main,"opened":true,"engine":state["engine"],"error":state["error"],"plugins":state["plugins"]}),
+                )
+            }
+            Request::SimulationState { session } => self
+                .sessions
+                .get(&session)
+                .ok_or_else(unknown_session)?
+                .simulation
+                .clone()
+                .ok_or_else(|| {
+                    Error::new(
+                        "simulation_not_open",
+                        "Open the simulation for this project session first.",
+                    )
+                }),
         }
     }
 }
 
+fn unknown_session() -> Error {
+    Error::new(
+        "unknown_session",
+        "Project session is not open in this process.",
+    )
+}
 #[cfg(test)]
 mod tests;

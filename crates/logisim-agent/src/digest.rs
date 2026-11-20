@@ -22,17 +22,17 @@ pub(crate) fn sha256(bytes: &[u8]) -> String {
         0x1f83d9ab,
         0x5be0cd19,
     ];
-    let mut blocks = bytes.chunks_exact(64);
+    let (blocks, remainder) = bytes.as_chunks::<64>();
     let mut tail = [0u8; 128];
-    let n = blocks.remainder().len();
-    tail[..n].copy_from_slice(blocks.remainder());
+    let n = remainder.len();
+    tail[..n].copy_from_slice(remainder);
     tail[n] = 0x80;
     let end = if n < 56 { 64 } else { 128 };
     tail[end - 8..end].copy_from_slice(&(bytes.len() as u64 * 8).to_be_bytes());
-    for block in blocks.by_ref().chain(tail[..end].chunks_exact(64)) {
+    for block in blocks.iter().chain(tail[..end].as_chunks::<64>().0) {
         let mut w = [0u32; 64];
-        for (slot, word) in w.iter_mut().zip(block.chunks_exact(4)) {
-            *slot = u32::from_be_bytes(word.try_into().unwrap());
+        for (slot, word) in w.iter_mut().zip(block.as_chunks::<4>().0) {
+            *slot = u32::from_be_bytes(*word);
         }
         for i in 16..64 {
             let x = w[i - 15];

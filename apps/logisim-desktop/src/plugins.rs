@@ -285,12 +285,5 @@ fn load(
     components: &[api::Component],
 ) -> Result<Plugin, String> {
     let bytes = crate::storage::read_file(path, tr("Choose a regular .wasm file."))?;
-    let plugin = Plugin::load(&bytes)?;
-    if plugin.manifest().id != id || plugin.manifest().version != version {
-        return Err(tr("Plugin identity or version does not match the circuit.").into());
-    }
-    for c in components {
-        plugin.check_component(c)?;
-    }
-    Ok(plugin)
+    Plugin::load_dependency(&bytes, id, version, components).map_err(|e| tr(&e).to_owned())
 }

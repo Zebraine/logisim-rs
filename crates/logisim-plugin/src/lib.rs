@@ -67,6 +67,22 @@ impl Plugin {
             interaction,
         })
     }
+    /// Load only the module with the identity and tool definitions saved in this project.
+    pub fn load_dependency<'a>(
+        bytes: &[u8],
+        id: &str,
+        version: &str,
+        components: impl IntoIterator<Item = &'a Component>,
+    ) -> Result<Self> {
+        let plugin = Self::load(bytes)?;
+        if plugin.manifest.id != id || plugin.manifest.version != version {
+            return Err("Plugin identity or version does not match the circuit.".into());
+        }
+        for component in components {
+            plugin.check_component(component)?;
+        }
+        Ok(plugin)
+    }
     pub fn library(&self) -> logisim_plugin_api::presentation::Library {
         logisim_plugin_api::presentation::Library {
             manifest: self.manifest.clone(),

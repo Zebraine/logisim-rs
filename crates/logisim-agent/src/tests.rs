@@ -135,3 +135,159 @@ fn competing_settings_writers_cannot_both_commit_the_same_revision() {
         );
     });
 }
+
+fn open(service: &mut Service, path: &std::path::Path) -> String {
+    service
+        .call(Request::ProjectOpen { path: path.into() })
+        .unwrap()["session_id"]
+        .as_str()
+        .unwrap()
+        .into()
+}
+
+#[test]
+fn snapshots_and_settled_signals_share_ids_and_never_write_the_source() {
+    use std::fs;
+    let temp = Temp::new();
+    let path = temp.0.join("demo.circ");
+    let xml = r##"<project version="1.0" source="logisim-rs-plugin-v1"><lib name="w" desc="#Wiring"/><main name="main"/><circuit name="main">
+    <comp lib="w" name="Constant" loc="(0,0)"><a name="value" val="1"/></comp>
+    <comp lib="w" name="Probe" loc="(60,0)"><a name="label" val="sense"/></comp>
+    <wire from="(0,0)" to="(60,0)"/><comp lib="w" name="Pin" loc="(0,40)"><a name="label" val="input"/></comp>
+    </circuit><circuit name="child"/></project>"##;
+    fs::write(&path, xml).unwrap();
+    let mut s = Service::default();
+    let session = open(&mut s, &path);
+    let state = || Request::SimulationState {
+        session: session.clone(),
+    };
+    let snap = || Request::ProjectSnapshot {
+        session: session.clone(),
+    };
+    assert_eq!(s.call(state()).unwrap_err().code, "simulation_not_open");
+    let snapshot = s.call(snap()).unwrap();
+    assert_eq!(snapshot, s.call(snap()).unwrap());
+    assert_eq!(snapshot["source_sha256"], digest::sha256(xml.as_bytes()));
+    assert_eq!(snapshot["circuits"].as_array().unwrap().len(), 2);
+    assert_eq!(
+        snapshot["circuits"][0]["interface_ports"][0]["label"],
+        "input"
+    );
+    s.call(Request::SimulationOpen {
+        session: session.clone(),
+    })
+    .unwrap();
+    let data = s.call(state()).unwrap();
+    assert_eq!(data["error"], Value::Null);
+    assert_eq!(data["ticks"], 0);
+    assert_eq!(data["diagnostics"], json!([]));
+    assert_eq!(data["wires"][0]["tone"], "high");
+    assert_eq!(
+        data["wires"][0]["id"],
+        snapshot["circuits"][0]["wires"][0]["id"]
+    );
+    assert_eq!(data["probes"][0]["value"]["number"], 1);
+    assert_eq!(data["pins"][0]["id"], data["inputs"][0]["id"]);
+    assert_eq!(s.call(state()).unwrap(), data);
+    assert_eq!(s.call(snap()).unwrap(), snapshot);
+    s.call(Request::ProjectClose {
+        session: session.clone(),
+    })
+    .unwrap();
+    assert_eq!(s.call(state()).unwrap_err().code, "unknown_session");
+    assert_eq!(s.call(snap()).unwrap_err().code, "unknown_session");
+    assert_ne!(session, open(&mut s, &path));
+    assert_eq!(fs::read_to_string(&path).unwrap(), xml);
+    assert_eq!(fs::read_dir(&temp.0).unwrap().count(), 1);
+}
+
+#[test]
+fn course_modules_are_loaded_only_from_recorded_and_matching_paths() {
+    use std::{fs, path::Path};
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let real = repo.join("examples/course/single-cycle.circ");
+    let file = fs::read_to_string(&real).unwrap();
+    let temp = Temp::new();
+    let altered = temp.0.join("copy.circ");
+    for (path, substitute, expected) in [
+        (&real, None, "loaded"),
+        (&altered, Some("missing.wasm".to_owned()), "missing"),
+        (
+            &altered,
+            Some(
+                repo.join("plugins/display/display.wasm")
+                    .display()
+                    .to_string(),
+            ),
+            "missing",
+        ),
+    ] {
+        if let Some(substitute) = substitute {
+            fs::write(
+                path,
+                file.replace("../../plugins/course/course.wasm", &substitute),
+            )
+            .unwrap();
+        }
+        let mut service = Service::default();
+        let session = open(&mut service, path);
+        let initial = service
+            .call(Request::SimulationOpen {
+                session: session.clone(),
+            })
+            .unwrap();
+        assert_eq!(initial["plugins"][0]["status"], expected);
+        let data = service.call(Request::SimulationState { session }).unwrap();
+        if expected == "missing" {
+            assert!(!data["plugins"][0]["error"].as_str().unwrap().is_empty());
+            assert!(
+                data["diagnostics"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|d| d["problem"] == "plugin_error")
+            );
+        }
+        assert_eq!(data["ticks"], 0);
+    }
+}
+
+#[test]
+fn parse_problems_are_reported_and_sessions_are_process_local() {
+    let temp = Temp::new();
+    let path = temp.0.join("problem.circ");
+    let mut s = Service::default();
+    assert_eq!(
+        s.call(Request::ProjectOpen { path: path.clone() })
+            .unwrap_err()
+            .code,
+        "not_found"
+    );
+    std::fs::write(&path, "<invalid/>").unwrap();
+    assert_eq!(
+        s.call(Request::ProjectOpen { path: path.clone() })
+            .unwrap_err()
+            .code,
+        "invalid_project"
+    );
+    std::fs::write(
+        &path,
+        r##"<project version="1.0"><main name="main"/><circuit name="main"/></project>"##,
+    )
+    .unwrap();
+    let session = open(&mut s, &path);
+    assert_eq!(
+        s.call(Request::ProjectSnapshot {
+            session: session.clone()
+        })
+        .unwrap()["partial"],
+        true
+    );
+    assert_eq!(
+        Service::default()
+            .call(Request::ProjectSnapshot { session })
+            .unwrap_err()
+            .code,
+        "unknown_session"
+    );
+}
