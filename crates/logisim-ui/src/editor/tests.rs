@@ -297,12 +297,15 @@ fn wire_badges_leave_inspection_hit_selection_and_simulation_available() {
         output.textures_delta.clear();
         output.shapes
     };
-    for (palette, visible) in [
-        (SignalPalette::Default, true),
-        (SignalPalette::HighContrast, false),
-        (SignalPalette::ColorblindSafe, true),
+    frame(&mut app, vec![]);
+    let camera = (app.canvas.camera.offset, app.canvas.camera.zoom);
+    for (mode, palette, visible) in [
+        (crate::ThemeMode::Light, SignalPalette::Default, true),
+        (crate::ThemeMode::Dark, SignalPalette::HighContrast, false),
+        (crate::ThemeMode::Dark, SignalPalette::ColorblindSafe, true),
     ] {
         app.apply_settings(Settings {
+            theme: mode,
             signal_palette: palette,
             show_wire_values: visible,
             ..app.preferences()
@@ -317,7 +320,20 @@ fn wire_badges_leave_inspection_hit_selection_and_simulation_available() {
             app.canvas.screen(Point::new(50, 80)),
             app.canvas.screen(Point::new(350, 80)),
         ];
-        assert!(painted.iter().any(|s| matches!(&s.shape,Shape::LineSegment{points,stroke} if *points==segment && stroke.width==3. && stroke.color==palette.color(crate::ThemeMode::Light, SignalTone::Bus))));
+        assert!(painted.iter().any(|s| matches!(&s.shape,Shape::LineSegment{points,stroke} if *points==segment && stroke.width==3. && stroke.color==palette.color(mode, SignalTone::Bus))));
+        if visible && mode == crate::ThemeMode::Dark {
+            let p = crate::theme::palette(&ctx);
+            let badge = painted
+                .iter()
+                .find_map(|s| match &s.shape {
+                    Shape::Text(t) if t.galley.job.text == "A5" => Some(t),
+                    _ => None,
+                })
+                .unwrap();
+            assert_eq!(badge.galley.job.sections[0].format.color, p.ink);
+            assert!(painted.iter().any(|s| matches!(&s.shape, Shape::Rect(r) if r.rect.contains(badge.pos) && r.fill == p.surface && r.stroke.color == p.border_strong)));
+        }
+        assert_eq!((app.canvas.camera.offset, app.canvas.camera.zoom), camera);
         assert_eq!(app.editor.hit(vec2(100., 80.), 2.), Some(id));
         let pointer = app.canvas.screen(Point::new(100, 80));
         frame(&mut app, vec![Event::PointerMoved(pointer)]);

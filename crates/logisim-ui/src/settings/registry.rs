@@ -46,6 +46,7 @@ pub(super) enum Control {
     Language,
     Scale,
     Density,
+    Theme,
     Accent,
     SignalPalette,
     Toggle(fn(&mut Settings) -> &mut bool),
@@ -120,6 +121,13 @@ registry![
         "Density",
         "Adjust spacing and control sizes.",
         Control::Density
+    ),
+    (
+        "appearance.theme",
+        Appearance,
+        "Theme",
+        "Choose the theme for the workbench and canvas.",
+        Control::Theme
     ),
     (
         "appearance.accent",
@@ -311,6 +319,7 @@ impl Entry {
             Control::Language => target.language = source.language,
             Control::SignalPalette => target.signal_palette = source.signal_palette,
             Control::Density => target.density = source.density,
+            Control::Theme => target.theme = source.theme,
             Control::Accent => target.accent = source.accent,
             Control::Scale => target.ui_scale = source.ui_scale,
             Control::Toggle(field) => *field(target) = *field(&mut source),
@@ -340,6 +349,18 @@ impl Entry {
             Control::Density => choice(ui, &mut values.density, Density::ALL, |v| {
                 v.label().to_owned()
             }),
+            Control::Theme => choice(
+                ui,
+                &mut values.theme,
+                [crate::ThemeMode::Light, crate::ThemeMode::Dark],
+                |mode| {
+                    tr(match mode {
+                        crate::ThemeMode::Light => "Light",
+                        crate::ThemeMode::Dark => "Dark",
+                    })
+                    .to_owned()
+                },
+            ),
             Control::Accent => {
                 swatches(
                     ui,
@@ -469,9 +490,10 @@ fn palette_preview(ui: &mut Ui, palette: SignalPalette) {
         (Error, "Signal error"),
         (WidthMismatch, "Width mismatch"),
     ];
+    let mode = theme::palette(ui.ctx()).mode;
     swatches(
         ui,
-        tones.map(|(tone, key)| (palette.color(theme::palette(ui.ctx()).mode, tone), tr(key))),
+        tones.map(|(tone, key)| (palette.color(mode, tone), tr(key))),
     );
 }
 

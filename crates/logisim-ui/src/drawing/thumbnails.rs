@@ -1,4 +1,4 @@
-//! Normalized document geometry, rasterized once per display density.
+//! Normalized document geometry, rasterized for the current display density and theme.
 //! Running signals and canvas camera changes never touch this cache.
 use super::{bounds, half_height, local, pin_width, pos, text_width};
 use crate::{artwork, theme};

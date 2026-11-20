@@ -456,20 +456,25 @@ fn selection_and_primary_button_paint_with_each_accent() {
     app.replace_circuit(circuit);
     app.editor.session.selection.insert(wire);
     let size = vec2(1200., 820.);
-    for accent in [Accent::Indigo, Accent::Blue, Accent::Teal] {
+    for (theme, accent) in [ThemeMode::Light, ThemeMode::Dark]
+        .into_iter()
+        .flat_map(|theme| Accent::ALL.map(|accent| (theme, accent)))
+    {
         app.apply_settings(Settings {
+            theme,
             accent,
             ..app.preferences()
         });
         frame(&ctx, &mut app, size, vec![]);
-        let output = ctx.run_ui(
+        let mut output = ctx.run_ui(
             RawInput {
                 screen_rect: Some(Rect::from_min_size(Pos2::ZERO, size)),
                 ..Default::default()
             },
             |ui| app.show(ui),
         );
-        let c = accent.colors(crate::ThemeMode::Light);
+        output.textures_delta.clear();
+        let c = accent.colors(theme);
         let shapes = || output.shapes.iter().map(|s| &s.shape);
         assert!(shapes().any(|s| matches!(s,Shape::Rect(r) if r.fill==c.base && r.rect.width()>=59. && r.rect.top()<80.)), "primary button");
         assert!(shapes().any(|s| matches!(s,Shape::Rect(r) if r.fill==c.selected && r.rect.width()>80. && r.rect.left()<320.)), "selected catalogue tab");

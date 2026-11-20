@@ -1,9 +1,28 @@
 use super::*;
 use crate::tests::support::widgets::frame_at_size;
 
+fn tap(ctx: &Context, size: egui::Vec2, app: &mut Workspace, pos: egui::Pos2) {
+    use egui::{Event, PointerButton};
+    for pressed in [true, false] {
+        frame_at_size(
+            ctx,
+            app,
+            vec![
+                Event::PointerMoved(pos),
+                Event::PointerButton {
+                    pos,
+                    pressed,
+                    button: PointerButton::Primary,
+                    modifiers: Modifiers::NONE,
+                },
+            ],
+            size,
+        );
+    }
+}
+
 #[test]
 fn backup_search_toggle_and_resets_work_in_both_files_layouts() {
-    use egui::{Event, PointerButton};
     let entry = REGISTRY
         .iter()
         .find(|e| e.key == "files.backup_before_save")
@@ -26,24 +45,6 @@ fn backup_search_toggle_and_resets_work_in_both_files_layouts() {
                 }
                 frame_at_size(&ctx, app, vec![], size)
             };
-            let tap = |app: &mut Workspace, pos| {
-                for pressed in [true, false] {
-                    frame_at_size(
-                        &ctx,
-                        app,
-                        vec![
-                            Event::PointerMoved(pos),
-                            Event::PointerButton {
-                                pos,
-                                pressed,
-                                button: PointerButton::Primary,
-                                modifiers: Modifiers::NONE,
-                            },
-                        ],
-                        size,
-                    );
-                }
-            };
             for query in ["backup", entry.key, t(entry.label)] {
                 app.settings_page.query = query.into();
                 let labels = render(&mut app);
@@ -55,11 +56,16 @@ fn backup_search_toggle_and_resets_work_in_both_files_layouts() {
                 let toggle = at(t("Off"));
                 assert!(bounds.contains_rect(at(t(entry.label))) && bounds.contains_rect(help));
                 assert!(help.right() < toggle.left() && bounds.contains_rect(toggle));
-                tap(&mut app, toggle.center());
+                tap(&ctx, size, &mut app, toggle.center());
                 assert!(app.preferences().files.backup_before_save);
                 let labels = render(&mut app);
                 let on = labels.iter().rev().find(|(s, _)| s == t("On")).unwrap().1;
-                tap(&mut app, egui::pos2(bounds.right() - 36., on.center().y));
+                tap(
+                    &ctx,
+                    size,
+                    &mut app,
+                    egui::pos2(bounds.right() - 36., on.center().y),
+                );
                 assert!(!app.preferences().files.backup_before_save);
                 assert!(!app.preferences().files.autosave);
             }
@@ -74,7 +80,7 @@ fn backup_search_toggle_and_resets_work_in_both_files_layouts() {
                     .unwrap()
                     .1
                     .center();
-                tap(&mut app, position);
+                tap(&ctx, size, &mut app, position);
             }
             assert_eq!(app.preferences().files, FileSettings::default());
             assert!(
@@ -102,7 +108,7 @@ fn registry_restores_each_field_without_changing_other_preferences() {
         },
         language: Language::SimplifiedChinese,
         density: crate::Density::Compact,
-        theme: crate::ThemeMode::Light,
+        theme: crate::ThemeMode::Dark,
         accent: crate::Accent::Teal,
         ui_scale: UiScale::P150,
         reduce_motion: true,
@@ -1421,5 +1427,54 @@ fn shortcut_capture_ends_on_window_or_keyboard_focus_loss() {
         assert!(!has(&labels, "Press a shortcut… Esc to cancel"));
         assert_eq!(app.preferences().shortcuts, Shortcuts::default());
         assert!(app.settings_open);
+    }
+}
+
+#[test]
+fn theme_choice_applies_immediately_and_resets_in_both_languages_and_sizes() {
+    for language in Language::ALL {
+        let t = |s| crate::i18n::with_language(language, || tr(s));
+        for size in [vec2(720., 480.), vec2(1200., 820.)] {
+            let ctx = Context::default();
+            crate::configure(&ctx);
+            let mut app = Workspace {
+                settings_open: true,
+                ..Default::default()
+            };
+            app.set_language(language);
+            app.settings_page.query = "appearance.theme".into();
+            let at = |app: &mut Workspace, text| {
+                for _ in 0..2 {
+                    frame_at_size(&ctx, app, vec![], size);
+                }
+                frame_at_size(&ctx, app, vec![], size)
+                    .into_iter()
+                    .rev()
+                    .find(|(s, _)| s == text)
+                    .unwrap()
+                    .1
+                    .center()
+            };
+            let choice = at(&mut app, t("Light"));
+            tap(&ctx, size, &mut app, choice);
+            let dark = at(&mut app, t("Dark"));
+            tap(&ctx, size, &mut app, dark);
+            let choice = at(&mut app, t("Dark"));
+            assert_eq!(app.preferences().theme, crate::ThemeMode::Dark);
+            assert!(ctx.global_style().visuals.dark_mode);
+            let bounds = ctx
+                .memory(|m| m.area_rect(Id::unique("settings-window")))
+                .unwrap();
+            assert!(bounds.contains(choice));
+            tap(
+                &ctx,
+                size,
+                &mut app,
+                egui::pos2(bounds.right() - 36., choice.y),
+            );
+            at(&mut app, t("Light"));
+            assert_eq!(app.preferences().theme, crate::ThemeMode::Light);
+            assert!(!ctx.global_style().visuals.dark_mode);
+        }
     }
 }

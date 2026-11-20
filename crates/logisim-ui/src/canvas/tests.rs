@@ -46,7 +46,16 @@ fn toggling_origin_changes_only_the_two_cross_strokes() {
     canvas.camera.zoom_at(1.75, vec2(0., 0.));
     canvas.camera.pan(vec2(11., 19.));
     let camera = canvas.camera;
-    for show_grid in [false, true] {
+    for (theme, show_grid) in [crate::ThemeMode::Light, crate::ThemeMode::Dark]
+        .into_iter()
+        .flat_map(|mode| [false, true].map(|grid| (mode, grid)))
+    {
+        crate::Settings {
+            theme,
+            ..Default::default()
+        }
+        .apply_appearance(&ctx);
+        let p = crate::theme::palette(&ctx);
         let mut render = |show_origin_marker| {
             let mut out = ctx.run_ui(
                 egui::RawInput {
@@ -68,6 +77,11 @@ fn toggling_origin_changes_only_the_two_cross_strokes() {
             out.shapes.into_iter().map(|s| s.shape).collect::<Vec<_>>()
         };
         let off = render(false);
+        assert!(
+            off.iter()
+                .any(|s| matches!(s, egui::Shape::Rect(r) if r.fill == p.canvas))
+        );
+        assert_eq!(off.iter().any(|s| matches!(s, egui::Shape::Mesh(m) if !m.vertices.is_empty() && m.vertices.iter().all(|v| v.color == p.grid()))),show_grid);
         let mut on = render(true);
         let origin = canvas.screen(logisim_core::Point::ZERO);
         for delta in [vec2(0., 3.), vec2(3., 0.)] {
@@ -75,7 +89,7 @@ fn toggling_origin_changes_only_the_two_cross_strokes() {
                 on.pop(),
                 Some(egui::Shape::line_segment(
                     [origin - delta, origin + delta],
-                    egui::Stroke::new(1., crate::theme::palette(&ctx).faint)
+                    egui::Stroke::new(1., p.faint)
                 ))
             );
         }

@@ -202,41 +202,88 @@ fn live_component_ink_tracks_palette_and_preserves_document_artwork() {
         view.indicators.insert(c.id, [true; 8]);
         view.storage.insert(c.id, high);
         view.memories.entry(c.id).or_default().fill(0, 1, 1);
-        for (palette, accent) in SignalPalette::ALL.into_iter().zip([
-            crate::Accent::Teal,
-            crate::Accent::Indigo,
-            crate::Accent::Blue,
-        ]) {
-            crate::theme::apply_chrome(
-                &ctx,
-                crate::ThemeMode::Light,
-                crate::Density::Compact,
-                accent,
-            );
-            palette.apply(&ctx);
-            let mut out = ctx.run_ui(Default::default(), |ui| {
-                component(ui.painter(), &canvas, &c, false, false, Some(&view))
+        for mode in [crate::ThemeMode::Light, crate::ThemeMode::Dark] {
+            for (palette, accent) in SignalPalette::ALL.into_iter().zip([
+                crate::Accent::Teal,
+                crate::Accent::Indigo,
+                crate::Accent::Blue,
+            ]) {
+                crate::theme::apply_chrome(&ctx, mode, crate::Density::Compact, accent);
+                palette.apply(&ctx);
+                let mut out = ctx.run_ui(Default::default(), |ui| {
+                    component(ui.painter(), &canvas, &c, false, false, Some(&view))
+                });
+                out.textures_delta.clear();
+                let shapes = || out.shapes.iter().map(|s| &s.shape);
+                let text_has = |label: &str, color| {
+                    shapes().any(|s| matches!(s, Shape::Text(t)
+                        if t.galley.job.text == label
+                            && t.galley.job.sections.iter().any(|section| section.format.color == color)))
+                };
+                assert!(
+                    text_has("document label", label_color),
+                    "{kind:?} document label"
+                );
+                let high = palette.color(mode, SignalTone::High);
+                match kind {
+                    Kind::Led => assert!(shapes().any(|s| matches!(s, Shape::Circle(c)
+                        if c.fill == custom_lamp && c.stroke.color == high))),
+                    Kind::SevenSegment | Kind::HexDisplay => {
+                        for ink in [high, custom_lamp] {
+                            let segment = shapes().any(|s| matches!(s, Shape::LineSegment { stroke, .. } if stroke.color == ink));
+                            assert!(segment, "{kind:?} segment");
+                        }
+                    }
+                    _ => assert!(
+                        text_has("1", palette.text_color(mode, SignalTone::High)),
+                        "{kind:?} stored or port value"
+                    ),
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn dark_default_bodies_selection_and_ghost_preserve_stored_colors() {
+    let ctx = egui::Context::default();
+    crate::Settings {
+        theme: crate::ThemeMode::Dark,
+        ..Default::default()
+    }
+    .apply_appearance(&ctx);
+    let p = theme::palette(&ctx);
+    let accent = theme::colors(&ctx).base;
+    let canvas = Canvas {
+        rect: Rect::from_min_size(Pos2::ZERO, vec2(500., 400.)),
+        ..Default::default()
+    };
+    for (rgb, expected) in [
+        ([51, 65, 85], p.ink),
+        ([0, 0, 0], p.ink),
+        ([58, 122, 171], Color32::from_rgb(58, 122, 171)),
+    ] {
+        let mut c = Component::new(Kind::Gate(Gate::And), Point::new(200, 160));
+        c.color = rgb;
+        c.color_alpha = 187;
+        let original = c.clone();
+        for ghost in [false, true] {
+            let mut output = ctx.run_ui(Default::default(), |ui| {
+                component(ui.painter(), &canvas, &c, !ghost, ghost, None)
             });
-            out.textures_delta.clear();
-            let shapes = || out.shapes.iter().map(|s| &s.shape);
-            let text_has = |label: &str, color| {
-                shapes().any(|s| matches!(s, Shape::Text(t) if
-                t.galley.job.text == label && t.galley.job.sections.iter().any(|s| s.format.color == color)))
+            output.textures_delta.clear();
+            let shapes = || output.shapes.iter().map(|s| &s.shape);
+            let ink = if ghost {
+                accent.gamma_multiply(0.45)
+            } else {
+                Color32::from_rgba_unmultiplied(expected.r(), expected.g(), expected.b(), 187)
             };
             assert!(
-                text_has("document label", label_color),
-                "{kind:?} document label"
+                shapes().any(|s| matches!(s,Shape::LineSegment{stroke,..} if stroke.color == ink))
             );
-            let high = palette.color(crate::ThemeMode::Light, SignalTone::High);
-            match kind {
-                Kind::Led => assert!(shapes().any(|s| matches!(s,Shape::Circle(c) if c.fill == custom_lamp && c.stroke.color == high))),
-                Kind::SevenSegment | Kind::HexDisplay => {
-                    for ink in [high, custom_lamp] {
-                        assert!(shapes().any(|s| matches!(s,Shape::LineSegment{stroke,..} if stroke.color == ink)), "{kind:?} segment");
-                    }
-                }
-                _ => assert!(text_has("1",palette.text_color(crate::ThemeMode::Light, SignalTone::High)), "{kind:?} stored or port value"),
-            }
+            assert_eq!(shapes().any(|s| matches!(s,Shape::Mesh(m) if m.vertices.iter().any(|v| v.color == p.surface))),!ghost);
+            assert_eq!(shapes().filter(|s| matches!(s,Shape::Rect(r) if r.fill==accent && r.rect.size()==Vec2::splat(5.))).count(),if ghost {0} else {4});
+            assert_eq!(c, original);
         }
     }
 }

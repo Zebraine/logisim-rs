@@ -341,6 +341,7 @@ fn search_matches_localized_descriptions_and_reset_requires_confirmation() {
         app.set_language(language);
         app.apply_settings(Settings {
             density: Density::Compact,
+            theme: ThemeMode::Dark,
             accent: Accent::Blue,
             ..app.preferences()
         });

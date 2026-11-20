@@ -132,6 +132,12 @@ fn style_chrome(
     v.faint_bg_color = p.sunken;
     v.extreme_bg_color = p.surface;
     v.text_edit_bg_color = Some(p.surface);
+    if p.mode == ThemeMode::Dark {
+        v.code_bg_color = p.sunken;
+        v.text_cursor.stroke.color = colors.base;
+        v.ime_composition.active_underline_stroke.color = colors.base;
+        v.ime_composition.inactive_underline_stroke.color = p.muted;
+    }
     v.weak_text_color = Some(p.muted);
     v.warn_fg_color = p.warning;
     v.error_fg_color = p.danger;
