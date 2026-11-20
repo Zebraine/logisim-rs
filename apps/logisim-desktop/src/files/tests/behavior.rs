@@ -10,6 +10,10 @@ fn project_options_navigates_and_records_main_against_the_file_baseline() {
     let mut project = Project::default();
     let child = project.add("second".into()).unwrap();
     let original = project.main;
+    let pin = project
+        .main_circuit_mut()
+        .circuit
+        .add_component(Component::new(Kind::Pin, Point::ZERO));
     h.files
         .storage
         .save(&project, &path, SaveMode::Current)
@@ -42,6 +46,12 @@ fn project_options_navigates_and_records_main_against_the_file_baseline() {
     assert!(!h.files.present(&h.ws).dirty);
     // Open the original again, then promote the other row without navigating to it.
     h.click("Open");
+    h.frame(vec![]);
+    crate::simulation::apply_project(
+        &mut h.sim,
+        &[],
+        logisim_ui::SimulationAction::SetInput { id: pin, value: 1 },
+    );
     open_overview(&mut h);
     last_action(&mut h, "Set as Main");
     assert_eq!(h.ws.active_circuit(), original);
@@ -49,6 +59,7 @@ fn project_options_navigates_and_records_main_against_the_file_baseline() {
     assert!(h.files.present(&h.ws).dirty);
     h.ws.set_document(h.files.present(&h.ws));
     assert!(h.frame(vec![]).iter().any(|(s, _)| s == "Unsaved changes"));
+    assert_eq!(h.sim.input(pin).unwrap().number(), Some(1));
     h.click("Close");
     h.click_at(egui::pos2(1050., 730.));
     for (modifiers, main, dirty) in [
@@ -69,6 +80,8 @@ fn project_options_navigates_and_records_main_against_the_file_baseline() {
         assert_eq!(h.ws.project().main, main);
         assert_eq!(h.ws.active_circuit(), original);
         assert_eq!(h.files.present(&h.ws).dirty, dirty);
+        h.frame(vec![]);
+        assert_eq!(h.sim.input(pin).unwrap().number(), Some(1));
     }
     open_overview(&mut h);
     h.click("Load Plugin…");

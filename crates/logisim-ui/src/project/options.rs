@@ -252,3 +252,6 @@ fn field(ui: &mut Ui, label: &str, value: &str) {
 fn clipped(ui: &mut Ui, text: &str) {
     ui.add(Label::new(text).truncate());
 }
+
+#[cfg(test)]
+mod tests;
