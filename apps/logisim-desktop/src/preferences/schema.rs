@@ -1,8 +1,8 @@
 //! Versioned disk representation. The UI owns the validated preference types.
 use logisim_core::{GateSize, Radix};
 use logisim_ui::{
-    Accent, DefaultZoom, Density, Language, Settings, SignalPalette, SimulationMode, TickHz,
-    UiScale, WorkspaceSettings,
+    Accent, DefaultZoom, Density, Language, Settings, SignalPalette, SimulationMode, ThemeMode,
+    TickHz, UiScale, WorkspaceSettings,
 };
 use serde::{Deserialize, Serialize};
 
@@ -57,6 +57,8 @@ enum LanguageCode {
 struct Appearance {
     #[serde(with = "DensityCode")]
     density: Density,
+    #[serde(with = "ThemeCode")]
+    theme: ThemeMode,
     #[serde(with = "AccentCode")]
     accent: Accent,
     ui_scale: f64,
@@ -72,6 +74,12 @@ struct Appearance {
 enum DensityCode {
     Comfortable,
     Compact,
+}
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "ThemeMode", rename_all = "lowercase")]
+enum ThemeCode {
+    Light,
+    Dark,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "Accent", rename_all = "lowercase")]
@@ -93,6 +101,7 @@ impl Default for Appearance {
     fn default() -> Self {
         Self {
             density: Density::default(),
+            theme: ThemeMode::default(),
             accent: Accent::default(),
             ui_scale: 1.0,
             reduce_motion: false,
@@ -264,6 +273,7 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Config, &'static str> {
             workspace,
             language: file.general.language,
             density: file.appearance.density,
+            theme: file.appearance.theme,
             accent: file.appearance.accent,
             ui_scale,
             reduce_motion: file.appearance.reduce_motion,
@@ -304,6 +314,7 @@ pub(super) fn encode(config: &Config) -> Vec<u8> {
         },
         appearance: Appearance {
             density: s.density,
+            theme: s.theme,
             accent: s.accent,
             ui_scale: f64::from(s.ui_scale.percent()) / 100.0,
             reduce_motion: s.reduce_motion,

@@ -2,6 +2,13 @@
 use egui::{Color32, Context, Id, Vec2, vec2};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ThemeMode {
+    #[default]
+    Light,
+    Dark,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Density {
     #[default]
     Comfortable,

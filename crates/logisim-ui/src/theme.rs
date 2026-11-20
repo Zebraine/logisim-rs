@@ -2,7 +2,7 @@
 use egui::{Color32, Context, FontId, Response, Stroke, StrokeKind, TextStyle, Ui, vec2};
 
 mod chrome;
-pub use chrome::{Accent, Density};
+pub use chrome::{Accent, Density, ThemeMode};
 pub(crate) use chrome::{Metrics, apply_chrome, colors, metrics};
 const fn rgb(hex: u32) -> Color32 {
     let [_, r, g, b] = hex.to_be_bytes();

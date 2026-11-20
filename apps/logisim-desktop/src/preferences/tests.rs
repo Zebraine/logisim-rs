@@ -125,7 +125,9 @@ fn missing_fields_default_and_invalid_json_stays_intact_after_edits() {
     for json in [
         "{",
         "{}",
-        r#"{"version":13}"#,
+        r#"{"version":14}"#,
+        r#"{"version":13,"appearance":{"theme":"system"}}"#,
+        r#"{"version":13,"appearance":{"theme":null}}"#,
         r#"{"version":12,"files":{"backup_before_save":"true"}}"#,
         r#"{"version":12,"files":{"backup_before_save":1}}"#,
         r#"{"version":12,"files":{"backup_before_save":null}}"#,
@@ -207,6 +209,7 @@ fn all_fields_restart_reset_and_atomic_conflict_protection() {
         workspace: Default::default(),
         language: Language::SimplifiedChinese,
         density: logisim_ui::Density::Compact,
+        theme: logisim_ui::ThemeMode::Dark,
         accent: logisim_ui::Accent::Teal,
         ui_scale: UiScale::P125,
         reduce_motion: true,
@@ -373,8 +376,8 @@ fn layout_waits_for_idle_or_close_and_restores_only_when_enabled() {
 }
 
 #[test]
-fn earlier_preferences_migrate_to_v12_and_editor_defaults_round_trip() {
-    for version in 1..=11 {
+fn earlier_preferences_migrate_to_v13_and_editor_defaults_round_trip() {
+    for version in 1..=12 {
         let json = serde_json::json!({"version":version,"editor":{"show_grid":false}});
         let config = schema::decode(json.to_string().as_bytes()).unwrap();
         assert_eq!(
@@ -385,7 +388,8 @@ fn earlier_preferences_migrate_to_v12_and_editor_defaults_round_trip() {
             }
         );
         let encoded: serde_json::Value = serde_json::from_slice(&schema::encode(&config)).unwrap();
-        assert_eq!(encoded["version"], 12);
+        assert_eq!(encoded["version"], 13);
+        assert_eq!(encoded["appearance"]["theme"], "light");
         assert_eq!(encoded["appearance"]["density"], "comfortable");
         assert_eq!(encoded["appearance"]["accent"], "indigo");
         assert_eq!(
