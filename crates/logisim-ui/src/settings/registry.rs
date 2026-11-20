@@ -43,6 +43,8 @@ pub(super) enum Control {
     Mode,
     Frequency,
     RecentLimit,
+    ProbeRadix,
+    PinBits,
 }
 pub(super) struct Entry {
     pub key: &'static str,
@@ -128,6 +130,41 @@ registry![
         Control::Zoom
     ),
     (
+        "editor.highlight_net",
+        Editor,
+        "Highlight connected net",
+        "Highlight every wire connected to the selected wire.",
+        Control::Toggle(|s| &mut s.highlight_net)
+    ),
+    (
+        "editor.show_connection_markers",
+        Editor,
+        "Show connection markers",
+        "Mark junctions and dangling wire ends.",
+        Control::Toggle(|s| &mut s.show_connection_markers)
+    ),
+    (
+        "editor.invert_wheel_zoom",
+        Editor,
+        "Invert wheel zoom",
+        "Reverse the mouse wheel direction for canvas zoom.",
+        Control::Toggle(|s| &mut s.invert_wheel_zoom)
+    ),
+    (
+        "editor.default_probe_radix",
+        Editor,
+        "Default probe radix",
+        "Set the number format for new probes.",
+        Control::ProbeRadix
+    ),
+    (
+        "editor.default_pin_bits",
+        Editor,
+        "Default pin width",
+        "Set the bit width for new pins.",
+        Control::PinBits
+    ),
+    (
         "simulation.mode",
         Simulation,
         "Simulation mode",
@@ -167,6 +204,8 @@ impl Entry {
             Control::Language => target.language = source.language,
             Control::Scale => target.ui_scale = source.ui_scale,
             Control::Toggle(field) => *field(target) = *field(&mut source),
+            Control::ProbeRadix => target.default_probe_radix = source.default_probe_radix,
+            Control::PinBits => target.default_pin_bits = source.default_pin_bits,
             Control::Zoom => target.default_zoom = source.default_zoom,
             Control::Mode => target.simulation_mode = source.simulation_mode,
             Control::RecentLimit => target.workspace.recent_limit = source.workspace.recent_limit,
@@ -211,6 +250,20 @@ impl Entry {
                     )
                 });
                 theme::focus_ring(ui, &response);
+            }
+            Control::ProbeRadix => choice(
+                ui,
+                &mut values.default_probe_radix,
+                logisim_core::Radix::ALL,
+                |v| tr(v.name()).to_owned(),
+            ),
+            Control::PinBits => {
+                let r = ui.add(
+                    egui::DragValue::new(&mut values.default_pin_bits)
+                        .range(1..=32)
+                        .update_while_editing(false),
+                );
+                theme::focus_ring(ui, &r);
             }
             Control::RecentLimit => {
                 let r = ui.add(

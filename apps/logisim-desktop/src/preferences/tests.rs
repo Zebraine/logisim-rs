@@ -125,7 +125,10 @@ fn missing_fields_default_and_invalid_json_stays_intact_after_edits() {
     for json in [
         "{",
         "{}",
-        r#"{"version":3}"#,
+        r#"{"version":4}"#,
+        r#"{"version":3,"editor":{"default_probe_radix":"decimal"}}"#,
+        r#"{"version":3,"editor":{"default_pin_bits":0}}"#,
+        r#"{"version":3,"editor":{"default_pin_bits":33}}"#,
         r#"{"version":1,"other":0}"#,
         r#"{"version":1,"simulation":{"typo":4}}"#,
         r#"{"version":1,"simulation":{"tick_hz":32769}}"#,
@@ -154,6 +157,11 @@ fn all_fields_restart_reset_and_atomic_conflict_protection() {
         show_telemetry: false,
         show_grid: false,
         default_zoom: DefaultZoom::Actual,
+        highlight_net: false,
+        show_connection_markers: false,
+        invert_wheel_zoom: true,
+        default_probe_radix: logisim_core::Radix::Hex,
+        default_pin_bits: 8,
         simulation_mode: SimulationMode::Event,
         tick_hz: TickHz::new(32768).unwrap(),
         truth_table: true,
@@ -229,7 +237,7 @@ fn v1_migrates_and_v2_history_is_validated_and_limited_on_edit() {
     let bytes = fs::read(&path).unwrap();
     assert_eq!(
         serde_json::from_slice::<serde_json::Value>(&bytes).unwrap()["version"],
-        2
+        logisim_ui::CONFIG_VERSION
     );
     let saved = schema::decode(&bytes).unwrap();
     assert_eq!(saved.recent, [a.to_str().unwrap()]);
@@ -277,4 +285,34 @@ fn layout_waits_for_idle_or_close_and_restores_only_when_enabled() {
         schema::decode(&fs::read(path).unwrap()).unwrap().panels,
         panels
     );
+}
+
+#[test]
+fn earlier_editor_preferences_migrate_to_v3_and_all_radix_codes_round_trip() {
+    for version in [1, 2, 3] {
+        let json = serde_json::json!({"version":version,"editor":{"show_grid":false}});
+        let config = schema::decode(json.to_string().as_bytes()).unwrap();
+        assert_eq!(
+            config.settings,
+            Settings {
+                show_grid: false,
+                ..Settings::default()
+            }
+        );
+        let encoded: serde_json::Value = serde_json::from_slice(&schema::encode(&config)).unwrap();
+        assert_eq!(encoded["version"], 3);
+        assert_eq!(encoded["editor"]["default_probe_radix"], "binary");
+        assert_eq!(encoded["editor"]["default_pin_bits"], 1);
+    }
+    for (code, radix) in ["binary", "octal", "signed", "unsigned", "hex"]
+        .into_iter()
+        .zip(logisim_core::Radix::ALL)
+    {
+        let json = serde_json::json!({"version":3,"editor":{"default_probe_radix":code,"default_pin_bits":32}});
+        let config = schema::decode(json.to_string().as_bytes()).unwrap();
+        assert_eq!(config.settings.default_probe_radix, radix);
+        let encoded: serde_json::Value = serde_json::from_slice(&schema::encode(&config)).unwrap();
+        assert_eq!(encoded["editor"]["default_probe_radix"], code);
+        assert_eq!(encoded["editor"]["default_pin_bits"], 32);
+    }
 }

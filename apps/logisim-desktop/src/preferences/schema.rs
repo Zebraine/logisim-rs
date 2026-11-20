@@ -1,4 +1,5 @@
 //! Versioned disk representation. The UI owns the validated preference types.
+use logisim_core::Radix;
 use logisim_ui::{
     DefaultZoom, Language, Settings, SimulationMode, TickHz, UiScale, WorkspaceSettings,
 };
@@ -69,15 +70,37 @@ struct Editor {
     show_grid: bool,
     #[serde(with = "ZoomCode")]
     default_zoom: DefaultZoom,
+    highlight_net: bool,
+    show_connection_markers: bool,
+    invert_wheel_zoom: bool,
+    #[serde(with = "RadixCode")]
+    default_probe_radix: Radix,
+    default_pin_bits: u8,
 }
 impl Default for Editor {
     fn default() -> Self {
+        let settings = Settings::default();
         Self {
-            show_grid: true,
-            default_zoom: DefaultZoom::Fit,
+            show_grid: settings.show_grid,
+            default_zoom: settings.default_zoom,
+            highlight_net: settings.highlight_net,
+            show_connection_markers: settings.show_connection_markers,
+            invert_wheel_zoom: settings.invert_wheel_zoom,
+            default_probe_radix: settings.default_probe_radix,
+            default_pin_bits: settings.default_pin_bits,
         }
     }
 }
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "Radix", rename_all = "lowercase")]
+enum RadixCode {
+    Binary,
+    Octal,
+    Signed,
+    Unsigned,
+    Hex,
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "DefaultZoom")]
 enum ZoomCode {
@@ -132,7 +155,7 @@ pub(super) struct Config {
 
 pub(super) fn decode(bytes: &[u8]) -> Result<Config, &'static str> {
     let file: File = serde_json::from_slice(bytes).map_err(|_| "Unknown or invalid settings.")?;
-    if !matches!(file.version, 1 | CONFIG_VERSION) {
+    if !matches!(file.version, 1 | 2 | CONFIG_VERSION) {
         return Err("Unsupported configuration version.");
     }
     if file.version == 1
@@ -147,7 +170,8 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Config, &'static str> {
     let recent = file.recent.unwrap_or_default();
     let panels = file.panels.unwrap_or_default();
     let window = file.window.unwrap_or_default();
-    if !window.valid()
+    if !(1..=32).contains(&file.editor.default_pin_bits)
+        || !window.valid()
         || !(230.0..=380.0).contains(&panels.sidebar_width)
         || !(0.25..=0.75).contains(&panels.split)
         || !(1..=20).contains(&workspace.recent_limit)
@@ -176,6 +200,11 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Config, &'static str> {
             show_telemetry: file.appearance.show_telemetry,
             show_grid: file.editor.show_grid,
             default_zoom: file.editor.default_zoom,
+            highlight_net: file.editor.highlight_net,
+            show_connection_markers: file.editor.show_connection_markers,
+            invert_wheel_zoom: file.editor.invert_wheel_zoom,
+            default_probe_radix: file.editor.default_probe_radix,
+            default_pin_bits: file.editor.default_pin_bits,
             simulation_mode: file.simulation.mode,
             tick_hz,
             truth_table: file.generation.truth_table,
@@ -201,6 +230,11 @@ pub(super) fn encode(config: &Config) -> Vec<u8> {
         editor: Editor {
             show_grid: s.show_grid,
             default_zoom: s.default_zoom,
+            highlight_net: s.highlight_net,
+            show_connection_markers: s.show_connection_markers,
+            invert_wheel_zoom: s.invert_wheel_zoom,
+            default_probe_radix: s.default_probe_radix,
+            default_pin_bits: s.default_pin_bits,
         },
         simulation: Simulation {
             mode: s.simulation_mode,

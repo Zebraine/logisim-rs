@@ -1,5 +1,5 @@
 mod registry;
-pub const CONFIG_VERSION: u32 = 2;
+pub const CONFIG_VERSION: u32 = 3;
 mod page;
 pub(crate) use page::Page;
 mod model;

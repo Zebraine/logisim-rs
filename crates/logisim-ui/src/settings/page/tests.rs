@@ -17,6 +17,11 @@ fn registry_restores_each_field_without_changing_other_preferences() {
         show_telemetry: false,
         show_grid: false,
         default_zoom: DefaultZoom::Actual,
+        highlight_net: false,
+        show_connection_markers: false,
+        invert_wheel_zoom: true,
+        default_probe_radix: logisim_core::Radix::Hex,
+        default_pin_bits: 8,
         simulation_mode: SimulationMode::Event,
         tick_hz: TickHz::new(1).unwrap(),
         truth_table: true,
@@ -209,5 +214,28 @@ fn workspace_history_actions_and_resets_leave_document_and_runtime_intact() {
         let labels = frame(&ctx, &mut app, vec![]);
         let label = crate::i18n::with_language(language, || tr("Restore inspector layout"));
         assert!(has(&labels, label));
+    }
+}
+
+#[test]
+fn editor_keys_find_the_same_control_in_both_languages() {
+    use crate::tests::support::widgets::{frame, has};
+    for language in Language::ALL {
+        let ctx = Context::default();
+        crate::configure(&ctx);
+        let mut app = Workspace {
+            settings_open: true,
+            ..Default::default()
+        };
+        app.set_language(language);
+        for entry in REGISTRY.iter().filter(|s| s.category == Category::Editor) {
+            app.settings_page.query = entry.key.into();
+            for _ in 0..2 {
+                frame(&ctx, &mut app, vec![]);
+            }
+            let labels = frame(&ctx, &mut app, vec![]);
+            let label = crate::i18n::with_language(language, || tr(entry.label));
+            assert!(has(&labels, label), "{}", entry.key);
+        }
     }
 }

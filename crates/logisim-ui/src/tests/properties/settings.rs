@@ -379,7 +379,17 @@ fn grid_zoom_frequency_motion_and_telemetry_share_the_workbench_controls() {
     assert!(!app.preferences().show_grid);
     app.settings_open = true;
     click(&ctx, &mut app, "Editor");
+    let key = |key, modifiers| Event::Key {
+        key,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers,
+    };
+    frame(&ctx, &mut app, vec![key(Key::F, Modifiers::COMMAND)]);
+    frame(&ctx, &mut app, vec![Event::Text("editor.show_grid".into())]);
     click(&ctx, &mut app, "Off");
+    frame(&ctx, &mut app, vec![key(Key::Escape, Modifiers::NONE)]);
     assert!(app.preferences().show_grid);
     click(&ctx, &mut app, "Fit to canvas");
     click(&ctx, &mut app, "100%");
