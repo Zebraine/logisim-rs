@@ -18,6 +18,7 @@ fn deadlines_reset_on_options_and_failure_without_writing_source_or_protected_im
     let mut options = FileSettings {
         autosave: true,
         autosave_minutes: 1,
+        backup_before_save: true,
     };
     auto.update(time(0), options, false, &disk, &project);
     project
@@ -296,8 +297,8 @@ fn invalid_minutes_report_once_and_suspend_writes_until_corrected() {
     let now = Instant::now();
     for minutes in [0, 31, 255] {
         let options = FileSettings {
-            autosave: true,
             autosave_minutes: minutes,
+            ..FileSettings::default()
         };
         for (frame, seconds) in [0, 1, 12000].into_iter().enumerate() {
             auto.changed = false;

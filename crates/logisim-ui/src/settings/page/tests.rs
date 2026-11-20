@@ -9,6 +9,7 @@ fn registry_restores_each_field_without_changing_other_preferences() {
         files: FileSettings {
             autosave: false,
             autosave_minutes: 30,
+            ..FileSettings::default()
         },
         workspace: WorkspaceSettings {
             recent_limit: 3,

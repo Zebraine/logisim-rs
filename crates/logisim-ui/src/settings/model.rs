@@ -87,6 +87,7 @@ impl Default for WorkspaceSettings {
 pub struct FileSettings {
     pub autosave: bool,
     pub autosave_minutes: u8,
+    pub backup_before_save: bool,
 }
 impl FileSettings {
     pub fn valid_interval(self) -> bool {
@@ -98,6 +99,7 @@ impl Default for FileSettings {
         Self {
             autosave: true,
             autosave_minutes: 5,
+            backup_before_save: false,
         }
     }
 }

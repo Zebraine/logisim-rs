@@ -125,7 +125,10 @@ fn missing_fields_default_and_invalid_json_stays_intact_after_edits() {
     for json in [
         "{",
         "{}",
-        r#"{"version":12}"#,
+        r#"{"version":13}"#,
+        r#"{"version":12,"files":{"backup_before_save":"true"}}"#,
+        r#"{"version":12,"files":{"backup_before_save":1}}"#,
+        r#"{"version":12,"files":{"backup_before_save":null}}"#,
         r#"{"version":11,"editor":{"default_font_size":7}}"#,
         r#"{"version":11,"editor":{"default_font_size":33}}"#,
         r#"{"version":11,"editor":{"default_font_size":14.5}}"#,
@@ -199,6 +202,7 @@ fn all_fields_restart_reset_and_atomic_conflict_protection() {
         files: logisim_ui::FileSettings {
             autosave: false,
             autosave_minutes: 30,
+            backup_before_save: true,
         },
         workspace: Default::default(),
         language: Language::SimplifiedChinese,
@@ -364,8 +368,8 @@ fn layout_waits_for_idle_or_close_and_restores_only_when_enabled() {
 }
 
 #[test]
-fn earlier_preferences_migrate_to_v11_and_editor_defaults_round_trip() {
-    for version in 1..=10 {
+fn earlier_preferences_migrate_to_v12_and_editor_defaults_round_trip() {
+    for version in 1..=11 {
         let json = serde_json::json!({"version":version,"editor":{"show_grid":false}});
         let config = schema::decode(json.to_string().as_bytes()).unwrap();
         assert_eq!(
@@ -376,12 +380,12 @@ fn earlier_preferences_migrate_to_v11_and_editor_defaults_round_trip() {
             }
         );
         let encoded: serde_json::Value = serde_json::from_slice(&schema::encode(&config)).unwrap();
-        assert_eq!(encoded["version"], 11);
+        assert_eq!(encoded["version"], 12);
         assert_eq!(encoded["appearance"]["density"], "comfortable");
         assert_eq!(encoded["appearance"]["accent"], "indigo");
         assert_eq!(
             encoded["files"],
-            serde_json::json!({"autosave":true,"autosave_minutes":5})
+            serde_json::json!({"autosave":true,"autosave_minutes":5,"backup_before_save":false})
         );
         assert_eq!(encoded["appearance"]["signal_palette"], "default");
         assert_eq!(encoded["appearance"]["show_wire_values"], true);
@@ -470,7 +474,8 @@ fn individual_file_preferences_default_independently() {
             config.settings.files,
             logisim_ui::FileSettings {
                 autosave: enabled,
-                autosave_minutes: minutes
+                autosave_minutes: minutes,
+                backup_before_save: false,
             }
         );
     }
