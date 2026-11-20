@@ -886,6 +886,13 @@ fn editor_default_rows_reset_at_both_window_sizes_without_editing_the_circuit() 
                     .unwrap()
                     .1;
                 let pos = egui::pos2(bounds.right() - 36., value_rect.center().y);
+                let help = t(REGISTRY.iter().find(|entry| entry.key == key).unwrap().help);
+                let help_rect = labels.iter().find(|(text, _)| text == help).unwrap().1;
+                assert!(bounds.contains_rect(help_rect));
+                assert!(
+                    help_rect.right() < value_rect.left(),
+                    "{language:?} {size:?} {key}"
+                );
                 for pressed in [true, false] {
                     frame_at_size(
                         &ctx,

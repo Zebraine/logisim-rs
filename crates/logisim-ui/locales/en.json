@@ -732,7 +732,7 @@
     "Set the bit width for new pins.": "Set the bit width for new pins.",
     "Set the bit width for new tunnels.": "Set the bit width for new tunnels.",
     "Set the number format for new probes.": "Set the number format for new probes.",
-    "Set the size for new logic and parity gates.": "Set the size for new logic and parity gates.",
+    "New logic and parity gates use this size. Buffer size is fixed. NOT supports Narrow and Wide. For NOT, Medium uses Narrow.": "New logic and parity gates use this size. Buffer size is fixed. NOT supports Narrow and Wide. For NOT, Medium uses Narrow.",
     "Set the zoom when opening a circuit or entering a subcircuit.": "Set the zoom when opening a circuit or entering a subcircuit.",
     "Settings": "Settings",
     "Settings need attention.": "Settings need attention.",

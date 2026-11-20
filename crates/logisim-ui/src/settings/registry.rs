@@ -215,7 +215,7 @@ registry![
         "editor.default_gate_size",
         Editor,
         "Default gate size",
-        "Set the size for new logic and parity gates.",
+        "New logic and parity gates use this size. Buffer size is fixed. NOT supports Narrow and Wide. For NOT, Medium uses Narrow.",
         Control::GateSize
     ),
     (

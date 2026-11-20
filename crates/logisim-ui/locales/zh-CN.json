@@ -732,7 +732,7 @@
     "Set the bit width for new pins.": "设置新引脚的位宽。",
     "Set the bit width for new tunnels.": "设置新隧道的数据位宽。",
     "Set the number format for new probes.": "设置新探针显示数值的进制。",
-    "Set the size for new logic and parity gates.": "设置新逻辑门和奇偶校验门的尺寸。",
+    "New logic and parity gates use this size. Buffer size is fixed. NOT supports Narrow and Wide. For NOT, Medium uses Narrow.": "设置新逻辑门和奇偶校验门的尺寸。缓冲器尺寸固定。非门仅支持窄和宽，选择“中”时使用“窄”。",
     "Set the zoom when opening a circuit or entering a subcircuit.": "设置打开电路或进入子电路时的画布缩放。",
     "Settings": "设置",
     "Settings need attention.": "设置需要处理。",
