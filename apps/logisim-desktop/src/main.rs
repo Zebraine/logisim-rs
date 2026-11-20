@@ -8,6 +8,7 @@ mod library_import;
 mod memory_import;
 mod plugins;
 mod preferences;
+mod recovery;
 mod runtime_rates;
 mod simulation;
 mod storage;
@@ -25,6 +26,7 @@ fn main() -> eframe::Result {
         Box::new(move |cc| {
             logisim_ui::configure(&cc.egui_ctx);
             workspace.preferences().apply_appearance(&cc.egui_ctx);
+            let files = files::Files::with_recovery(preferences.recovery_directory());
             let mut app = DesktopApp {
                 analysis: Default::default(),
                 generation: Default::default(),
@@ -38,7 +40,7 @@ fn main() -> eframe::Result {
                     move || ctx.request_repaint()
                 }),
                 rates: Default::default(),
-                files: Default::default(),
+                files,
                 window_title: String::new(),
             };
             logisim_ui::i18n::with_language(app.workspace.language(), || {
@@ -112,6 +114,15 @@ impl DesktopApp {
         self.generation
             .update(&mut self.workspace, move || context.request_repaint());
         let view = self.files.present(&self.workspace);
+        if !self.files.allow_close {
+            self.files.autosave.update(
+                std::time::Instant::now(),
+                self.workspace.preferences().files,
+                view.dirty,
+                &self.files.storage,
+                self.workspace.project(),
+            );
+        }
         let title = format!(
             "Logisim rs — {} · {}{}{}",
             view.circuit_name,

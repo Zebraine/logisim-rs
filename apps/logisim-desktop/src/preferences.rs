@@ -98,6 +98,11 @@ impl Preferences {
         }
         state
     }
+    pub fn recovery_directory(&self) -> Option<PathBuf> {
+        self.path
+            .as_ref()
+            .map(|path| path.with_file_name("recovery"))
+    }
     pub fn initial_window(&self, workspace: &Workspace) -> WindowState {
         if workspace.preferences().workspace.restore_window {
             self.window

@@ -22,6 +22,11 @@ pub(crate) struct Storage {
     disk: Vec<u8>,
 }
 impl Storage {
+    pub fn source_checksum(&self) -> Option<u64> {
+        self.path
+            .as_ref()
+            .map(|_| crate::recovery::checksum(&self.disk))
+    }
     pub fn new() -> Self {
         Self::default()
     }

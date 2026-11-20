@@ -24,6 +24,7 @@ pub(super) enum NextDocument {
 pub(crate) struct Files {
     pub plugins: logisim_plugin::Registry,
     pub storage: Storage,
+    pub autosave: crate::recovery::Autosave,
     dialog: Option<Dialog>,
     after_save: Option<NextDocument>,
     directory: PathBuf,
@@ -34,6 +35,7 @@ impl Default for Files {
         Self {
             plugins: Default::default(),
             storage: Storage::new(),
+            autosave: Default::default(),
             dialog: None,
             after_save: None,
             directory: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
@@ -42,6 +44,12 @@ impl Default for Files {
     }
 }
 impl Files {
+    pub fn with_recovery(directory: Option<PathBuf>) -> Self {
+        Self {
+            autosave: crate::recovery::Autosave::at(directory),
+            ..Default::default()
+        }
+    }
     pub fn busy(&self) -> bool {
         self.dialog.is_some()
     }
@@ -114,8 +122,13 @@ impl Files {
         }
     }
     pub fn load(&mut self, path: &Path, workspace: &mut Workspace, sim: &mut impl Host) -> bool {
+        if storage::destination(path).is_ok_and(|p| self.autosave.reserved(&p)) {
+            self.error(tr("Open the snapshot through recovery.").into());
+            return false;
+        }
         match self.storage.load(path) {
             Ok((circuit, warnings)) => {
+                self.autosave.finish_document();
                 crate::preferences::recent::record(
                     workspace,
                     self.storage.path.as_deref().expect("loaded document path"),
@@ -219,6 +232,7 @@ impl Files {
     ) {
         match target {
             NextDocument::New => {
+                self.autosave.finish_document();
                 self.plugins = Default::default();
                 workspace.set_plugin_catalogue(vec![]);
                 self.storage = Storage::new();
@@ -230,6 +244,7 @@ impl Files {
                 self.load(&path, workspace, sim);
             }
             NextDocument::Close => {
+                self.autosave.finish_document();
                 self.allow_close = true;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             }
@@ -261,8 +276,13 @@ impl Files {
         sim: &mut impl Host,
     ) {
         let save_as = matches!(mode, SaveMode::Selected(_));
+        if storage::destination(path).is_ok_and(|p| self.autosave.reserved(&p)) {
+            self.error(tr("Recovery files cannot be used as a project destination.").into());
+            return;
+        }
         match self.storage.save(workspace.project(), path, mode) {
             Ok(()) => {
+                self.autosave.finish_document();
                 if save_as {
                     crate::preferences::recent::record(
                         workspace,
