@@ -10,7 +10,8 @@ use crate::window::WindowState;
 use logisim_ui::{CONFIG_VERSION, WorkspaceLayout};
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct File {
+#[serde(bound(deserialize = "R: Deserialize<'de>, W: Deserialize<'de>, P: Deserialize<'de>"))]
+struct File<R = Vec<String>, W = WindowState, P = WorkspaceLayout> {
     version: u32,
     #[serde(default)]
     shortcuts: logisim_ui::shortcuts::Shortcuts,
@@ -18,12 +19,24 @@ struct File {
     files: logisim_ui::FileSettings,
     #[serde(default, deserialize_with = "present")]
     workspace: Option<WorkspaceSettings>,
-    #[serde(default, deserialize_with = "present")]
-    recent: Option<Vec<String>>,
-    #[serde(default, deserialize_with = "present")]
-    window: Option<WindowState>,
-    #[serde(default, deserialize_with = "present")]
-    panels: Option<WorkspaceLayout>,
+    #[serde(
+        default,
+        deserialize_with = "present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    recent: Option<R>,
+    #[serde(
+        default,
+        deserialize_with = "present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    window: Option<W>,
+    #[serde(
+        default,
+        deserialize_with = "present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    panels: Option<P>,
     #[serde(default)]
     general: General,
     #[serde(default)]
@@ -223,34 +236,19 @@ pub(super) struct Config {
 
 pub(super) fn decode(bytes: &[u8]) -> Result<Config, &'static str> {
     let file: File = serde_json::from_slice(bytes).map_err(|_| "Unknown or invalid settings.")?;
-    if !matches!(file.version, 1..=CONFIG_VERSION) {
-        return Err("Unsupported configuration version.");
-    }
+    let settings = validated(&file)?;
     if file.version == 1
-        && (file.recent.is_some()
-            || file.workspace.is_some()
-            || file.panels.is_some()
-            || file.window.is_some())
+        && (file.recent.is_some() || file.panels.is_some() || file.window.is_some())
     {
         return Err("Unknown or invalid settings.");
     }
-    let workspace = file.workspace.unwrap_or_default();
     let recent = file.recent.unwrap_or_default();
     let panels = file.panels.unwrap_or_default();
     let window = file.window.unwrap_or_default();
-    if !file.files.valid_interval()
-        || !(1..=32).contains(&file.editor.default_pin_bits)
-        || !(1..=32).contains(&file.editor.default_tunnel_width)
-        || file
-            .editor
-            .default_font_size
-            .is_some_and(|size| !Settings::DEFAULT_FONT_SIZE_RANGE.contains(&size))
-        || !Settings::DEFAULT_GATE_INPUTS_RANGE.contains(&file.editor.default_gate_inputs)
-        || !window.valid()
+    if !window.valid()
         || !(230.0..=380.0).contains(&panels.sidebar_width)
         || !(0.25..=0.75).contains(&panels.split)
-        || !(1..=20).contains(&workspace.recent_limit)
-        || recent.len() > workspace.recent_limit
+        || recent.len() > 20
         || recent
             .iter()
             .enumerate()
@@ -258,54 +256,110 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Config, &'static str> {
     {
         return Err("Unknown or invalid settings.");
     }
+    Ok(Config {
+        settings,
+        recent,
+        panels,
+        window: window.bounded(None),
+    })
+}
+
+pub(super) fn decode_settings(bytes: &[u8]) -> Result<Settings, String> {
+    use serde::de::IgnoredAny;
+    if bytes.len() > logisim_file::MAX_BYTES {
+        return Err("File exceeds the 8 MiB limit.".into());
+    }
+    // Host history and geometry can occur in a local config copied by the user.
+    // Deserialize only the portable sections, retaining serde's strict field checks.
+    let file: File<IgnoredAny, IgnoredAny, IgnoredAny> =
+        serde_json::from_slice(bytes).map_err(|error| error.to_string())?;
+    validated(&file).map_err(str::to_owned)
+}
+
+fn validated<R, W, P>(file: &File<R, W, P>) -> Result<Settings, &'static str> {
+    if !matches!(file.version, 1..=CONFIG_VERSION) {
+        return Err("Unsupported configuration version.");
+    }
+    if file.version == 1 && file.workspace.is_some() {
+        return Err("Unknown or invalid settings.");
+    }
+    let workspace = file.workspace.unwrap_or_default();
+    if !file.files.valid_interval() {
+        return Err("Invalid autosave interval.");
+    }
+    if !(1..=20).contains(&workspace.recent_limit) {
+        return Err("Recent project limit must be between 1 and 20.");
+    }
+    if !(1..=32).contains(&file.editor.default_pin_bits)
+        || !(1..=32).contains(&file.editor.default_tunnel_width)
+    {
+        return Err("Pin and tunnel widths must be between 1 and 32.");
+    }
+    if file
+        .editor
+        .default_font_size
+        .is_some_and(|size| !Settings::DEFAULT_FONT_SIZE_RANGE.contains(&size))
+    {
+        return Err("Default label size must be Auto or between 8 and 32.");
+    }
+    if !Settings::DEFAULT_GATE_INPUTS_RANGE.contains(&file.editor.default_gate_inputs) {
+        return Err("Default gate inputs must be between 2 and 32.");
+    }
     let ui_scale = UiScale::ALL
         .into_iter()
         .find(|s| f64::from(s.percent()) / 100.0 == file.appearance.ui_scale)
         .ok_or("Invalid interface scale.")?;
     let tick_hz = TickHz::new(file.simulation.tick_hz).ok_or("Invalid tick frequency.")?;
-    Ok(Config {
-        panels,
-        window: window.bounded(None),
-        recent,
-        settings: Settings {
-            shortcuts: file.shortcuts,
-            files: file.files,
-            workspace,
-            language: file.general.language,
-            density: file.appearance.density,
-            theme: file.appearance.theme,
-            accent: file.appearance.accent,
-            ui_scale,
-            reduce_motion: file.appearance.reduce_motion,
-            show_telemetry: file.appearance.show_telemetry,
-            signal_palette: file.appearance.signal_palette,
-            show_wire_values: file.appearance.show_wire_values,
-            show_origin_marker: file.appearance.show_origin_marker,
-            show_grid: file.editor.show_grid,
-            default_zoom: file.editor.default_zoom,
-            highlight_net: file.editor.highlight_net,
-            show_connection_markers: file.editor.show_connection_markers,
-            invert_wheel_zoom: file.editor.invert_wheel_zoom,
-            default_probe_radix: file.editor.default_probe_radix,
-            default_pin_bits: file.editor.default_pin_bits,
-            default_gate_size: file.editor.default_gate_size,
-            default_font_size: file.editor.default_font_size,
-            default_gate_inputs: file.editor.default_gate_inputs,
-            default_tunnel_width: file.editor.default_tunnel_width,
-            remember_last_properties: file.editor.remember_last_properties,
-            simulation_mode: file.simulation.mode,
-            tick_hz,
-            truth_table: file.generation.truth_table,
-        },
+    Ok(Settings {
+        shortcuts: file.shortcuts,
+        files: file.files,
+        workspace,
+        language: file.general.language,
+        density: file.appearance.density,
+        theme: file.appearance.theme,
+        accent: file.appearance.accent,
+        ui_scale,
+        reduce_motion: file.appearance.reduce_motion,
+        show_telemetry: file.appearance.show_telemetry,
+        signal_palette: file.appearance.signal_palette,
+        show_wire_values: file.appearance.show_wire_values,
+        show_origin_marker: file.appearance.show_origin_marker,
+        show_grid: file.editor.show_grid,
+        default_zoom: file.editor.default_zoom,
+        highlight_net: file.editor.highlight_net,
+        show_connection_markers: file.editor.show_connection_markers,
+        invert_wheel_zoom: file.editor.invert_wheel_zoom,
+        default_probe_radix: file.editor.default_probe_radix,
+        default_pin_bits: file.editor.default_pin_bits,
+        default_gate_size: file.editor.default_gate_size,
+        default_font_size: file.editor.default_font_size,
+        default_gate_inputs: file.editor.default_gate_inputs,
+        default_tunnel_width: file.editor.default_tunnel_width,
+        remember_last_properties: file.editor.remember_last_properties,
+        simulation_mode: file.simulation.mode,
+        tick_hz,
+        truth_table: file.generation.truth_table,
     })
 }
 pub(super) fn encode(config: &Config) -> Vec<u8> {
-    let s = config.settings;
-    let file = File {
+    bytes(&File {
         panels: Some(config.panels),
         window: Some(config.window),
-        workspace: Some(s.workspace),
         recent: Some(config.recent.clone()),
+        ..portable(config.settings)
+    })
+}
+
+pub(super) fn encode_settings(settings: Settings) -> Vec<u8> {
+    bytes(&portable(settings))
+}
+
+fn portable(s: Settings) -> File {
+    File {
+        recent: None,
+        window: None,
+        panels: None,
+        workspace: Some(s.workspace),
         version: CONFIG_VERSION,
         shortcuts: s.shortcuts,
         files: s.files,
@@ -344,9 +398,12 @@ pub(super) fn encode(config: &Config) -> Vec<u8> {
         generation: Generation {
             truth_table: s.truth_table,
         },
-    };
+    }
+}
+
+fn bytes(file: &File) -> Vec<u8> {
     let mut bytes =
-        serde_json::to_vec_pretty(&file).expect("typed preferences have a JSON representation");
+        serde_json::to_vec_pretty(file).expect("typed preferences have a JSON representation");
     bytes.push(b'\n');
     bytes
 }

@@ -238,6 +238,23 @@ fn all_fields_restart_reset_and_atomic_conflict_protection() {
     let mut w = Workspace::default();
     let mut prefs = Preferences::at(Some(path.clone()), &mut w);
     for desired in [alternative, Settings::default()] {
+        let bytes = schema::encode_settings(desired);
+        assert_eq!(schema::decode_settings(&bytes).unwrap(), desired);
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(json.as_object().unwrap().len(), 9);
+        for key in [
+            "version",
+            "general",
+            "appearance",
+            "editor",
+            "files",
+            "workspace",
+            "shortcuts",
+            "simulation",
+            "generation",
+        ] {
+            assert!(json.get(key).is_some(), "{key}");
+        }
         w.apply_settings(desired);
         prefs.synchronize(&mut w);
         prefs = Preferences::at(Some(path.clone()), &mut w);
@@ -659,4 +676,32 @@ fn complete_v8_and_v9_shortcuts_keep_custom_keys_and_gain_missing_defaults() {
             assert_eq!(saved["shortcuts"][c.id()], c.default_chord().to_string());
         }
     }
+}
+
+#[test]
+fn portable_files_migrate_validate_bindings_and_ignore_host_metadata() {
+    for version in 1..=logisim_ui::CONFIG_VERSION {
+        let json = serde_json::json!({"version":version, "recent":["private path"], "window":null, "panels":{}});
+        let settings = schema::decode_settings(&serde_json::to_vec(&json).unwrap()).unwrap();
+        assert_eq!(settings, Settings::default());
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&schema::encode_settings(settings))
+                .unwrap()["version"],
+            13
+        );
+    }
+    for json in [
+        "",
+        "{}",
+        r#"{"version":14}"#,
+        r#"{"version":13,"unknown":null}"#,
+        r#"{"version":13,"editor":{"new_option":2}}"#,
+        r#"{"version":13,"appearance":{"theme":"system"}}"#,
+        r#"{"version":13,"editor":{"default_font_size":33}}"#,
+        r#"{"version":13,"version":12}"#,
+        r#"{"version":13,"shortcuts":{"file.save":"primary+o"}}"#,
+    ] {
+        assert!(schema::decode_settings(json.as_bytes()).is_err(), "{json}");
+    }
+    assert!(schema::decode_settings(&vec![b' '; logisim_file::MAX_BYTES + 1]).is_err());
 }

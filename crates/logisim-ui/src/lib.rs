@@ -14,7 +14,7 @@ mod latches;
 mod parity;
 mod transistors;
 mod workspace;
-pub use document::{DocumentView, FileAction};
+pub use document::{DocumentView, FileAction, SettingsFileAction};
 pub use workspace::{LayoutTab, WorkspaceLayout};
 mod drawing;
 mod editor;

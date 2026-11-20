@@ -1,5 +1,11 @@
 //! File commands and document labels; filesystem work belongs to the host.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SettingsFileAction {
+    Export,
+    Import,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FileAction {
     New,
     Open,
