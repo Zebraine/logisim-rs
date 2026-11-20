@@ -10,6 +10,7 @@ mod settings;
 mod simulation;
 use project::Session;
 pub use project::patch::ProjectOp;
+pub use simulation::SimulationMode;
 
 pub const PROTOCOL: u8 = 1;
 #[derive(Debug, Serialize)]
@@ -93,6 +94,8 @@ pub enum Request {
     },
     SimulationOpen {
         session: String,
+        #[serde(default)]
+        mode: SimulationMode,
     },
     SimulationState {
         session: String,
@@ -201,30 +204,25 @@ impl Service {
                 .get(&session)
                 .ok_or_else(unknown_session)?
                 .snapshot(&session)),
-            Request::SimulationOpen { session } => {
+            Request::SimulationOpen { session, mode } => {
                 let doc = self
                     .sessions
                     .get_mut(&session)
                     .ok_or_else(unknown_session)?;
-                let state = doc
-                    .simulation
-                    .get_or_insert_with(|| simulation::observe(&doc.project, &doc.path, &session));
-                Ok(
-                    json!({"session_id":session,"main":doc.project.main,"opened":true,"engine":state["engine"],"error":state["error"],"plugins":state["plugins"]}),
-                )
+                let created = doc.simulation.is_none();
+                let runtime = doc.simulation.get_or_insert_with(|| {
+                    simulation::Runtime::open(&doc.project, &doc.path, mode)
+                });
+                let mut state = runtime.state(&doc.project, &session);
+                state["opened"] = true.into();
+                state["created"] = created.into();
+                Ok(state)
             }
-            Request::SimulationState { session } => self
-                .sessions
-                .get(&session)
-                .ok_or_else(unknown_session)?
-                .simulation
-                .clone()
-                .ok_or_else(|| {
-                    Error::new(
-                        "simulation_not_open",
-                        "Open the simulation for this project session first.",
-                    )
-                }),
+            Request::SimulationState { session } => {
+                let doc = self.sessions.get(&session).ok_or_else(unknown_session)?;
+                let runtime = doc.simulation.as_ref().ok_or_else(simulation_not_open)?;
+                Ok(runtime.state(&doc.project, &session))
+            }
         }
     }
 }
@@ -233,6 +231,12 @@ fn backup_enabled() -> bool {
     true
 }
 
+fn simulation_not_open() -> Error {
+    Error::new(
+        "simulation_not_open",
+        "Open the simulation for this project session first.",
+    )
+}
 fn unknown_session() -> Error {
     Error::new(
         "unknown_session",

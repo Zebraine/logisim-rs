@@ -211,6 +211,13 @@ impl Simulator {
     pub fn plugin_graphics(&self, id: Id) -> Option<&[api::Shape]> {
         self.plugin_states.get(&id).map(|s| s.graphics.as_slice())
     }
+    /// An instantiated module failed during execution. Unavailable modules remain diagnostic-only.
+    pub(crate) fn runtime_plugin_failure(&self) -> Option<&str> {
+        self.plugin_states
+            .values()
+            .filter(|s| s.instance.is_some())
+            .find_map(|s| s.error.as_deref())
+    }
     pub fn plugin_errors(&self) -> impl Iterator<Item = (Id, &str)> {
         self.plugin_states
             .iter()

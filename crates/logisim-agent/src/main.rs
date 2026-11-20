@@ -93,7 +93,10 @@ fn parse(args: &[OsString]) -> Result<Request> {
                 }
                 ("project", "snapshot") => Request::ProjectSnapshot { session },
                 ("project", "close") => Request::ProjectClose { session },
-                ("simulation", "open") => Request::SimulationOpen { session },
+                ("simulation", "open") => Request::SimulationOpen {
+                    session,
+                    mode: Default::default(),
+                },
                 ("simulation", "state") => Request::SimulationState { session },
                 _ => return Err(Error::invalid("Unknown command.")),
             }

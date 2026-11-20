@@ -173,6 +173,7 @@ fn snapshots_and_settled_signals_share_ids_and_never_write_the_source() {
         "input"
     );
     s.call(Request::SimulationOpen {
+        mode: Default::default(),
         session: session.clone(),
     })
     .unwrap();
@@ -229,6 +230,7 @@ fn course_modules_are_loaded_only_from_recorded_and_matching_paths() {
         let session = open(&mut service, path);
         let initial = service
             .call(Request::SimulationOpen {
+                mode: Default::default(),
                 session: session.clone(),
             })
             .unwrap();
@@ -307,3 +309,29 @@ fn positional_json_sections_cannot_be_overwritten_as_settings_objects() {
 }
 
 mod project_patch;
+
+#[test]
+fn repeat_open_and_save_retain_the_initialized_engine_and_observations() {
+    let temp = Temp::new();
+    let path = temp.0.join("clock.circ");
+    std::fs::write(&path, r##"<project source="logisim-rs-plugin-v1" version="1.0"><lib name="w" desc="#Wiring"/><main name="top"/><circuit name="top"><comp lib="w" name="Clock" loc="(20,20)"/></circuit></project>"##).unwrap();
+    let mut service = Service::default();
+    let session = open(&mut service, &path);
+    let mut call = |name: &str, mut args: Value| {
+        args["session"] = json!(session);
+        service
+            .call(Request::from_json(json!({"tool":name,"arguments":args})).unwrap())
+            .unwrap()
+    };
+    let initial = call("simulation_open", json!({"mode":"event"}));
+    assert_eq!(initial["created"], true);
+    assert_eq!(initial["engine"], "event");
+    assert_eq!(initial["pending_count"], 0);
+    let observed = call("simulation_state", json!({}));
+    assert!(observed.get("changed").is_none());
+    call("project_save", json!({"backup":false}));
+    let reopened = call("simulation_open", json!({"mode":"stable"}));
+    assert_eq!(reopened["created"], false);
+    assert_eq!(reopened["mode"], "event");
+    assert_eq!(call("simulation_state", json!({})), observed);
+}

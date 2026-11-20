@@ -13,7 +13,7 @@ pub(crate) struct Session {
     pub path: PathBuf,
     sha256: String,
     warnings: Vec<String>,
-    pub simulation: Option<Value>,
+    pub simulation: Option<crate::simulation::Runtime>,
 }
 
 impl Session {

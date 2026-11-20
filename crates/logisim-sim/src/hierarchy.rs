@@ -60,6 +60,12 @@ impl Default for ProjectSimulator {
     }
 }
 impl ProjectSimulator {
+    /// First execution fault across active instances, excluding missing modules.
+    pub fn runtime_plugin_failure(&self) -> Option<&str> {
+        self.states
+            .values()
+            .find_map(|s| s.sim.runtime_plugin_failure())
+    }
     pub fn plugin_failures(&self) -> Vec<(Vec<Id>, Id, String)> {
         self.states
             .iter()
