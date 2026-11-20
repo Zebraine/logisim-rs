@@ -123,7 +123,7 @@ impl Workspace {
             );
             if ui.is_enabled()
                 && !ui.ctx().any_popup_open()
-                && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::F))
+                && crate::shortcuts::Chord::consume_primary(ui, egui::Key::F)
             {
                 response.request_focus();
             }

@@ -270,22 +270,7 @@ impl SimulationUi {
             }
         )
     }
-    pub fn shortcuts(&mut self, ui: &Ui, selected: &BTreeSet<Id>) {
-        for (key, action) in [
-            (Key::E, SimulationAction::ToggleEnabled),
-            (Key::I, SimulationAction::Step),
-            (Key::R, SimulationAction::Reset),
-            (Key::T, SimulationAction::Tick),
-            (Key::K, SimulationAction::ToggleTicks),
-        ] {
-            if ui.input_mut(|i| i.consume_key(Modifiers::COMMAND, key))
-                && (action != SimulationAction::Step || !self.view.enabled)
-                && (action != SimulationAction::Tick || self.can_tick())
-                && (action != SimulationAction::ToggleTicks || self.view.has_clocks)
-            {
-                self.actions.push(action);
-            }
-        }
+    pub fn input_shortcuts(&mut self, ui: &Ui, selected: &BTreeSet<Id>) {
         if selected.len() == 1
             && let Some(id) = selected.first()
             && self.view.inputs.contains_key(id)
@@ -525,7 +510,7 @@ impl SimulationUi {
         );
         r.on_hover_text(self.status());
     }
-    fn can_tick(&self) -> bool {
+    pub(crate) fn can_tick(&self) -> bool {
         self.view.has_clocks && self.view.pending == 0 && !self.view.limited
     }
     pub fn overview(&self, ui: &mut Ui) {

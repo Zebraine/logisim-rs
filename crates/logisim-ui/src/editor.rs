@@ -17,7 +17,7 @@ mod signals;
 use history::History;
 pub(crate) use session::{EditSession, Snapshot};
 
-const CLIPBOARD_MARKER: &str = "logisim-rs selection (paste into the same window)";
+pub(crate) const CLIPBOARD_MARKER: &str = "logisim-rs selection (paste into the same window)";
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum Tool {
@@ -457,9 +457,7 @@ impl Editor {
         if keyboard {
             if self.simulation.plugin_keyboard.is_some() {
                 self.simulation.plugin_keyboard_input(ui);
-                self.simulation.shortcuts(ui, &BTreeSet::new());
             } else if let Some(id) = self.simulation.keyboard_focus {
-                self.simulation.shortcuts(ui, &BTreeSet::new());
                 if !crate::terminal::input(ui, id, &mut self.simulation.actions) {
                     self.simulation.release_keyboard();
                 }
@@ -992,44 +990,13 @@ impl Editor {
         }
     }
     fn shortcuts(&mut self, ui: &mut Ui) {
-        self.simulation.shortcuts(ui, &self.session.selection);
+        self.simulation.input_shortcuts(ui, &self.session.selection);
         let consume = |key, modifiers| ui.input_mut(|i| i.consume_key(modifiers, key));
         if consume(Key::Escape, Modifiers::NONE) {
             self.simulation.release_momentary();
             self.cancel_gesture();
             self.tool = Tool::Select;
             return;
-        }
-        if consume(Key::Z, Modifiers::COMMAND | Modifiers::SHIFT)
-            || consume(Key::Y, Modifiers::COMMAND)
-        {
-            self.redo();
-        } else if consume(Key::Z, Modifiers::COMMAND) {
-            self.undo();
-        }
-        let (copy, cut, paste) = ui.input(|i| {
-            (
-                i.events.iter().any(|e| matches!(e, egui::Event::Copy)),
-                i.events.iter().any(|e| matches!(e, egui::Event::Cut)),
-                i.events
-                    .iter()
-                    .any(|e| matches!(e, egui::Event::Paste(text) if text == CLIPBOARD_MARKER)),
-            )
-        });
-        if copy || consume(Key::C, Modifiers::COMMAND) {
-            self.copy();
-        }
-        if cut || consume(Key::X, Modifiers::COMMAND) {
-            self.cut();
-        }
-        if paste || consume(Key::V, Modifiers::COMMAND) {
-            self.paste();
-        }
-        if consume(Key::D, Modifiers::COMMAND) {
-            self.duplicate();
-        }
-        if consume(Key::A, Modifiers::COMMAND) {
-            self.select_all();
         }
         if consume(Key::Delete, Modifiers::NONE) || consume(Key::Backspace, Modifiers::NONE) {
             self.delete();

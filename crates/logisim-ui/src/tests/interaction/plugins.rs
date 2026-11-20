@@ -130,7 +130,7 @@ fn plugin_keys_preserve_order_ignore_repeat_and_leave_document_untouched() {
     assert_eq!(app.canvas.camera.offset, camera);
     assert_eq!(app.editor.tool, Tool::Poke);
     key(&ctx, &mut app, Key::R, Modifiers::COMMAND);
-    assert_eq!(app.take_simulation_actions(), [SimulationAction::Reset]);
+    assert!(app.take_simulation_actions().is_empty());
 }
 #[test]
 fn plugin_capture_releases_on_focus_modal_tool_instance_and_definition_changes() {

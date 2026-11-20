@@ -79,6 +79,15 @@ pub struct Chord {
     key: Key,
 }
 impl Chord {
+    pub(crate) fn consume_primary(ui: &egui::Ui, key: Key) -> bool {
+        let mac = ui.ctx().os().is_mac();
+        let wanted = Self { key, mods: PRIMARY };
+        ui.input_mut(|i| {
+            let count = i.events.len();
+            i.events.retain(|e| !matches!(e, egui::Event::Key { key, modifiers, pressed: true, .. } if wanted.matches(Self::from_event(*key, *modifiers, mac), mac)));
+            i.events.len() != count
+        })
+    }
     /// egui sets both ctrl and command for the same key on Windows and Linux.
     pub fn from_event(key: Key, modifiers: Modifiers, mac: bool) -> Self {
         Self {
@@ -193,6 +202,18 @@ impl Default for Shortcuts {
     }
 }
 impl Shortcuts {
+    pub(crate) fn command(&self, chord: Chord, mac: bool) -> Option<Command> {
+        let legacy_redo = Chord {
+            key: Key::Y,
+            mods: PRIMARY,
+        };
+        if legacy_redo.matches(chord, mac) {
+            return Some(Command::Redo);
+        }
+        Command::ALL
+            .into_iter()
+            .find(|c| self.get(*c).matches(chord, mac))
+    }
     pub fn get(&self, c: Command) -> Chord {
         self.0[c as usize]
     }

@@ -92,7 +92,7 @@ impl Canvas {
             && !ui.ctx().any_popup_open()
             && (response.has_focus()
                 || (response.hovered() && !ui.ctx().egui_wants_keyboard_input()))
-            && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::Num0))
+            && crate::shortcuts::Chord::consume_primary(ui, egui::Key::Num0)
         {
             self.reset();
         }

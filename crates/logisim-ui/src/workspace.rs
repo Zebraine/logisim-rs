@@ -3,6 +3,7 @@ mod dialogs;
 mod layout;
 mod library;
 mod menus;
+mod shortcuts;
 mod sidebar;
 pub(crate) use sidebar::Navigation;
 mod catalogue;

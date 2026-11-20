@@ -474,3 +474,114 @@ fn selection_and_primary_button_paint_with_each_accent() {
         assert_eq!(shapes().filter(|s|matches!(s,Shape::Rect(r) if r.fill==c.base && r.rect.size()==Vec2::splat(6.))).count(),2);
     }
 }
+
+#[test]
+fn remapped_commands_follow_scope_and_dispatch_their_own_actions() {
+    use crate::shortcuts::Command;
+    use logisim_core::{Point, Project};
+    let ctx = Context::default();
+    configure(&ctx);
+    let mut w = Workspace::default();
+    let mut settings = w.preferences();
+    for (i, c) in Command::ALL.into_iter().enumerate() {
+        settings
+            .shortcuts
+            .bind(c, format!("f{}", i + 1).parse().unwrap())
+            .unwrap();
+    }
+    w.apply_settings(settings);
+    let size = vec2(1200., 820.);
+    let press = |w: &mut Workspace, c: Command| {
+        let key = egui::Key::from_name(&settings.shortcuts.get(c).label(false)).unwrap();
+        frame(
+            &ctx,
+            w,
+            size,
+            vec![Event::Key {
+                key,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: Modifiers::NONE,
+            }],
+        );
+    };
+    frame(
+        &ctx,
+        &mut w,
+        size,
+        vec![Event::PointerMoved(pos2(15., 100.))],
+    );
+    for (c, action) in [
+        (Command::New, FileAction::New),
+        (Command::Open, FileAction::Open),
+        (Command::Save, FileAction::Save),
+        (Command::SaveAs, FileAction::SaveAs),
+        (Command::Exit, FileAction::Close),
+    ] {
+        press(&mut w, c);
+        assert_eq!(w.take_file_actions(), [action]);
+    }
+    press(&mut w, Command::Reset);
+    assert!(w.take_simulation_actions().is_empty());
+    press(&mut w, Command::AddCircuit);
+    assert!(w.name_dialog.take().is_some());
+    for _ in 0..2 {
+        frame(&ctx, &mut w, size, vec![]);
+    }
+    press(&mut w, Command::ToggleAppearance);
+    assert!(w.editor.session.context.appearance_mode);
+    press(&mut w, Command::ToggleAppearance);
+    let mut project = Project::default();
+    let child = project.add("child".into()).unwrap();
+    let instance = project.instance(child, Point::ZERO).unwrap();
+    let id = project.main_circuit_mut().circuit.add_component(instance);
+    w.replace_project(project);
+    w.editor.enter_instance(id);
+    press(&mut w, Command::ReturnParent);
+    assert!(w.editor.session.context.path.is_empty());
+    frame(
+        &ctx,
+        &mut w,
+        size,
+        vec![Event::PointerMoved(pos2(710., 400.))],
+    );
+    w.editor.place(Point::new(200, 200));
+    let count = w.circuit().components.len();
+    press(&mut w, Command::Undo);
+    assert_eq!(w.circuit().components.len(), count - 1);
+    press(&mut w, Command::Redo);
+    assert_eq!(w.circuit().components.len(), count);
+    press(&mut w, Command::Copy);
+    assert!(w.editor.can_paste());
+    press(&mut w, Command::Cut);
+    assert_eq!(w.circuit().components.len(), count - 1);
+    press(&mut w, Command::Paste);
+    assert_eq!(w.circuit().components.len(), count);
+    press(&mut w, Command::Duplicate);
+    assert_eq!(w.circuit().components.len(), count + 1);
+    press(&mut w, Command::SelectAll);
+    assert_eq!(w.editor.session.selection.len(), count + 1);
+    w.simulation_mut().has_clocks = true;
+    w.simulation_mut().enabled = false;
+    for (c, action) in [
+        (Command::Toggle, SimulationAction::ToggleEnabled),
+        (Command::Step, SimulationAction::Step),
+        (Command::Reset, SimulationAction::Reset),
+        (Command::Tick, SimulationAction::Tick),
+        (Command::AutomaticTicks, SimulationAction::ToggleTicks),
+    ] {
+        press(&mut w, c);
+        assert_eq!(w.take_simulation_actions(), [action]);
+    }
+    w.simulation_mut().limited = true;
+    w.simulation_mut().has_clocks = false;
+    for c in [Command::Step, Command::Tick, Command::AutomaticTicks] {
+        press(&mut w, c);
+    }
+    assert!(w.take_simulation_actions().is_empty());
+    w.settings_open = true;
+    press(&mut w, Command::Save);
+    press(&mut w, Command::Reset);
+    assert!(w.take_file_actions().is_empty() && w.take_simulation_actions().is_empty());
+}

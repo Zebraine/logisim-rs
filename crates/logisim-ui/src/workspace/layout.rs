@@ -1,12 +1,11 @@
 //! Workspace layout; document and simulation commands stay in their existing layers.
 use crate::{
-    FileAction, Workspace, appearance,
+    Workspace, appearance,
     canvas::{MAX_ZOOM, MIN_ZOOM},
     drawing,
     editor::Tool,
     i18n::{self, tr},
     icons::{self, Icon},
-    project::CircuitCommand,
     theme::{self, CHROME},
 };
 use egui::{Frame, Margin, Panel, Ui, vec2};
@@ -56,49 +55,6 @@ impl Workspace {
             || self.preferences.default_zoom == crate::DefaultZoom::Fit;
     }
     fn show_inner(&mut self, ui: &mut Ui) {
-        if ui.is_enabled()
-            && !ui.ctx().any_popup_open()
-            && ui.input_mut(|i| {
-                i.consume_key(
-                    egui::Modifiers::COMMAND.plus(egui::Modifiers::SHIFT),
-                    egui::Key::E,
-                )
-            })
-        {
-            self.finish_edit();
-            self.editor.session.context.appearance_mode =
-                !self.editor.session.context.appearance_mode;
-        }
-        if ui.is_enabled() && !ui.ctx().any_popup_open() {
-            if ui.input_mut(|i| {
-                i.consume_key(
-                    egui::Modifiers::COMMAND.plus(egui::Modifiers::SHIFT),
-                    egui::Key::N,
-                )
-            }) {
-                self.circuit_command(CircuitCommand::Add);
-            }
-            if ui.input_mut(|i| i.consume_key(egui::Modifiers::ALT, egui::Key::ArrowLeft)) {
-                self.editor.leave_instance();
-            }
-        }
-        if ui.is_enabled() && !ui.ctx().any_popup_open() {
-            for (modifiers, key, action) in [
-                (
-                    egui::Modifiers::COMMAND.plus(egui::Modifiers::SHIFT),
-                    egui::Key::S,
-                    FileAction::SaveAs,
-                ),
-                (egui::Modifiers::COMMAND, egui::Key::S, FileAction::Save),
-                (egui::Modifiers::COMMAND, egui::Key::O, FileAction::Open),
-                (egui::Modifiers::COMMAND, egui::Key::N, FileAction::New),
-                (egui::Modifiers::COMMAND, egui::Key::Q, FileAction::Close),
-            ] {
-                if ui.input_mut(|i| i.consume_key(modifiers, key)) {
-                    self.file_actions.push(action);
-                }
-            }
-        }
         let m = theme::metrics(ui.ctx());
         Panel::top("menus")
             .exact_size(m.menu)
@@ -190,6 +146,7 @@ impl Workspace {
                 self.canvas.typing =
                     self.editor.simulation.typing() && self.editor.tool == Tool::Poke;
                 let response = self.canvas.show(ui, &self.preferences);
+                self.dispatch_shortcuts(ui, &response);
                 if self.editor.session.context.appearance_mode {
                     self.appearance
                         .show(ui, &mut self.editor, &mut self.canvas, &response);
