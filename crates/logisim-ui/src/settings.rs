@@ -54,8 +54,11 @@ impl Workspace {
             .simulation
             .set_tick_rate(&mut self.preferences.tick_hz, settings.tick_hz);
         self.editor.display = settings.editor_display();
-        self.editor.placement_defaults = settings.placement_defaults();
-        settings.default_pin_bits = self.editor.placement_defaults.pin_bits;
+        let defaults = settings.placement_defaults();
+        self.editor
+            .configure_placement(defaults, settings.remember_last_properties);
+        settings.default_pin_bits = defaults.pin_bits;
+        settings.default_tunnel_width = defaults.tunnel_bits;
         settings.workspace.recent_limit = settings.workspace.bounded_recent_limit();
         self.preferences = settings;
     }

@@ -351,3 +351,162 @@ fn programmatic_pin_width_is_bounded_when_placed() {
         assert_eq!(app.preferences().default_pin_bits, expected);
     }
 }
+
+#[test]
+fn new_gate_parity_and_tunnel_templates_use_current_defaults_only_on_creation() {
+    use crate::{Settings, Workspace};
+    use logisim_core::{GateSize, Parity};
+    let mut app = Workspace::default();
+    app.apply_settings(Settings {
+        default_gate_size: GateSize::Wide,
+        default_tunnel_width: 8,
+        ..app.preferences()
+    });
+    // AND also happens to be the editor's initial, unused fallback.
+    for gate in [
+        Gate::And,
+        Gate::Not,
+        Gate::Buffer,
+        Gate::Or,
+        Gate::Nand,
+        Gate::Nor,
+        Gate::Xor,
+        Gate::Xnor,
+    ] {
+        app.editor.set_tool(Tool::Place(Kind::Gate(gate)));
+        assert_eq!(app.editor.template.gate_options.size, GateSize::Wide);
+    }
+    for parity in Parity::ALL {
+        app.editor.set_tool(Tool::Place(Kind::Parity(parity)));
+        assert_eq!(app.editor.template.parity.size, GateSize::Wide);
+        assert_eq!(app.editor.template.gate_width(), 70);
+    }
+    app.editor.set_tool(Tool::Place(Kind::Tunnel));
+    assert_eq!(app.editor.template.bits, 8);
+    app.editor.template.label = "local".into();
+    app.editor.place(Point::new(60, 60));
+    app.editor.copy();
+    let original = app.project().clone();
+    let selection = app.editor.session.selection.clone();
+    let camera = app.canvas.camera;
+    app.editor.simulation.view.steps = 37;
+    for width in [0, 32, 255] {
+        app.apply_settings(Settings {
+            default_gate_size: GateSize::Medium,
+            default_tunnel_width: width,
+            ..app.preferences()
+        });
+        assert_eq!(app.preferences().default_tunnel_width, width.clamp(1, 32));
+        assert_eq!(app.editor.template.bits, 8);
+        assert_eq!(app.project(), &original);
+        assert_eq!(app.editor.session.selection, selection);
+        assert_eq!(app.canvas.camera.offset, camera.offset);
+        assert_eq!(app.canvas.camera.zoom, camera.zoom);
+        assert_eq!(app.editor.simulation.view.steps, 37);
+        assert!(app.take_simulation_actions().is_empty());
+    }
+    app.editor.set_tool(Tool::Place(Kind::Gate(Gate::And)));
+    assert_eq!(app.editor.template.gate_options.size, GateSize::Medium);
+    app.editor.set_tool(Tool::Place(Kind::Tunnel));
+    assert_eq!(app.editor.template.bits, 32);
+    assert_eq!(app.editor.template.label, "tunnel");
+    app.editor.paste();
+    assert_eq!(app.circuit().components.last().unwrap().bits, 8);
+    assert_eq!(app.circuit().components.last().unwrap().label, "local");
+}
+
+#[test]
+fn remembered_templates_follow_builtin_kinds_and_survive_document_changes_only_in_session() {
+    use crate::{Settings, Workspace};
+    use logisim_core::{GateSize, Parity};
+    let mut app = Workspace::default();
+    let settings = Settings {
+        remember_last_properties: true,
+        default_gate_size: GateSize::Medium,
+        ..app.preferences()
+    };
+    app.apply_settings(settings);
+    assert!(!app.document.dirty && !app.editor.can_undo());
+    let pin = Tool::Place(Kind::Pin);
+    let parity = Tool::Place(Kind::Parity(Parity::Odd));
+    let a = Tool::Place(Kind::Gate(Gate::And));
+    let b = Tool::Place(Kind::Gate(Gate::Or));
+    app.editor.set_tool(pin);
+    app.editor.template.bits = 12;
+    app.editor.template.label = "address".into();
+    let manual = app.editor.template.clone();
+    app.editor.place(Point::new(50, 50));
+    app.editor.set_tool(a);
+    app.editor.template.gate_options.size = GateSize::Wide;
+    app.editor.set_tool(b);
+    assert_eq!(app.editor.template.gate_options.size, GateSize::Medium);
+    app.editor.set_tool(parity);
+    app.editor.template.parity.size = GateSize::Narrow;
+    app.editor.set_tool(a);
+    assert_eq!(app.editor.template.gate_options.size, GateSize::Wide);
+    app.editor.set_tool(pin);
+    assert_eq!(app.editor.template, manual);
+    let stored = app.project().clone();
+    app.replace_project(Project::default());
+    for tool in [parity, pin] {
+        app.editor.set_tool(tool);
+        if tool == pin {
+            assert_eq!(app.editor.template, manual);
+        } else {
+            assert_eq!(app.editor.template.parity.size, GateSize::Narrow);
+        }
+    }
+    let before = app.editor.template.clone();
+    app.apply_settings(Settings {
+        remember_last_properties: false,
+        ..settings
+    });
+    assert_eq!(app.editor.template, before);
+    app.editor.set_tool(pin);
+    assert_eq!(app.editor.template, before);
+    app.editor.set_tool(a);
+    assert_eq!(app.editor.template.gate_options.size, GateSize::Medium);
+    app.editor.set_tool(pin);
+    assert_eq!(app.editor.template.bits, 1);
+    app.apply_settings(settings);
+    app.editor.set_tool(a);
+    assert_eq!(app.editor.template.gate_options.size, GateSize::Medium);
+    assert_eq!(stored.main_circuit().circuit.components[0].bits, 12);
+    assert!(!app.editor.can_undo());
+    let mut restarted = Editor::new(stored, settings);
+    restarted.set_tool(pin);
+    assert_eq!(restarted.template.bits, 1);
+}
+
+#[test]
+fn project_and_plugin_templates_stay_out_of_builtin_memory() {
+    let mut project = Project::default();
+    let child = project.add("child".into()).unwrap();
+    let mut e = Editor::new(
+        project,
+        crate::Settings {
+            remember_last_properties: true,
+            ..Default::default()
+        },
+    );
+    for kind in [Kind::Plugin, Kind::Subcircuit(child)] {
+        e.set_tool(Tool::Place(kind));
+        e.template.label = "transient".into();
+        e.set_tool(Tool::Place(Kind::Pin));
+        assert!(
+            !e.remembered_templates
+                .as_ref()
+                .unwrap()
+                .iter()
+                .any(|c| c.kind == kind)
+        );
+        e.set_tool(Tool::Place(kind));
+        assert_ne!(e.template.label, "transient");
+        if let Kind::Subcircuit(id) = kind {
+            assert_eq!(
+                e.template,
+                e.session.project.instance(id, Point::ZERO).unwrap()
+            );
+        }
+    }
+}

@@ -149,7 +149,7 @@ impl Workspace {
             .actions
             .iter()
             .any(|a| matches!(a, crate::SimulationAction::SetTickRate(_)));
-        self.editor = Editor::new(project, self.preferences);
+        self.editor.replace_document(project, self.preferences);
         if pending_rate {
             self.editor
                 .simulation

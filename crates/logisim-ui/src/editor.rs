@@ -63,7 +63,11 @@ pub(crate) struct Editor {
     pub project_error: Option<String>,
     pub tool: Tool,
     pub display: crate::settings::EditorDisplay,
-    pub placement_defaults: crate::settings::PlacementDefaults,
+    placement_defaults: crate::settings::PlacementDefaults,
+    // The initial fallback template has never been selected from the catalogue.
+    template_chosen: bool,
+    // The current template stays in its own field; this holds the other used kinds.
+    remembered_templates: Option<Vec<Component>>,
     pub template: Component,
     pub memory_target: Option<(bool, Id)>,
     pub pla_target: Option<(bool, Id)>,
@@ -88,6 +92,8 @@ impl Editor {
             session: EditSession::new(project),
             display: settings.editor_display(),
             placement_defaults: settings.placement_defaults(),
+            template_chosen: false,
+            remembered_templates: settings.remember_last_properties.then(Vec::new),
             history: History::default(),
             open_instance: None,
             analyze_circuit: None,
@@ -212,6 +218,59 @@ impl Editor {
         }
         self.wire_start = None;
     }
+    pub fn configure_placement(
+        &mut self,
+        defaults: crate::settings::PlacementDefaults,
+        remember: bool,
+    ) {
+        self.placement_defaults = defaults;
+        if remember {
+            self.remembered_templates.get_or_insert_with(Vec::new);
+        } else {
+            self.remembered_templates = None;
+        }
+    }
+
+    fn remember_template(&mut self, template: Component, chosen: bool) {
+        if chosen
+            && !matches!(template.kind, Kind::Plugin | Kind::Subcircuit(_))
+            && let Some(memory) = &mut self.remembered_templates
+        {
+            memory.push(template);
+        }
+    }
+
+    pub fn replace_document(&mut self, project: Project, settings: crate::Settings) {
+        let old = std::mem::replace(self, Self::new(project, settings));
+        self.remembered_templates = old.remembered_templates;
+        self.remember_template(old.template, old.template_chosen);
+    }
+
+    fn placement_template(&mut self, kind: Kind) -> Component {
+        if let Kind::Subcircuit(id) = kind {
+            return self
+                .session
+                .project
+                .instance(id, Point::ZERO)
+                .unwrap_or_else(|| Component::new(kind, Point::ZERO));
+        }
+        if let Some(memory) = &mut self.remembered_templates
+            && let Some(index) = memory.iter().position(|template| template.kind == kind)
+        {
+            return memory.swap_remove(index);
+        }
+        let mut template = Component::new(kind, Point::ZERO);
+        match kind {
+            Kind::Pin => template.bits = self.placement_defaults.pin_bits,
+            Kind::Probe => template.radix = self.placement_defaults.probe_radix,
+            Kind::Gate(_) => template.gate_options.size = self.placement_defaults.gate_size,
+            Kind::Parity(_) => template.parity.size = self.placement_defaults.gate_size,
+            Kind::Tunnel => template.bits = self.placement_defaults.tunnel_bits,
+            _ => {}
+        }
+        template
+    }
+
     pub fn set_tool(&mut self, tool: Tool) {
         self.simulation.release_keyboard();
         self.simulation.release_momentary();
@@ -219,21 +278,11 @@ impl Editor {
         self.commit_properties();
         self.tool = tool;
         if let Tool::Place(kind) = tool {
-            if self.template.kind != kind {
-                self.template = if let Kind::Subcircuit(id) = kind {
-                    self.session
-                        .project
-                        .instance(id, Point::ZERO)
-                        .unwrap_or_else(|| Component::new(kind, Point::ZERO))
-                } else {
-                    let mut template = Component::new(kind, Point::ZERO);
-                    match kind {
-                        Kind::Pin => template.bits = self.placement_defaults.pin_bits,
-                        Kind::Probe => template.radix = self.placement_defaults.probe_radix,
-                        _ => {}
-                    }
-                    template
-                };
+            if !self.template_chosen || self.template.kind != kind {
+                let next = self.placement_template(kind);
+                let previous = std::mem::replace(&mut self.template, next);
+                self.remember_template(previous, self.template_chosen);
+                self.template_chosen = true;
             }
             self.session.selection.clear();
         }

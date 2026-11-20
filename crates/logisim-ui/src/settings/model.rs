@@ -173,6 +173,8 @@ pub(crate) struct EditorDisplay {
 pub(crate) struct PlacementDefaults {
     pub probe_radix: Radix,
     pub pin_bits: u8,
+    pub gate_size: GateSize,
+    pub tunnel_bits: u8,
 }
 
 impl Settings {
@@ -180,6 +182,8 @@ impl Settings {
         PlacementDefaults {
             probe_radix: self.default_probe_radix,
             pin_bits: self.default_pin_bits.clamp(1, 32),
+            gate_size: self.default_gate_size,
+            tunnel_bits: self.default_tunnel_width.clamp(1, 32),
         }
     }
 
