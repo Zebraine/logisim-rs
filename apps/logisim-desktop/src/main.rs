@@ -13,27 +13,26 @@ mod simulation;
 mod storage;
 #[cfg(test)]
 mod tests;
+mod window;
 
 fn main() -> eframe::Result {
+    let mut workspace = logisim_ui::Workspace::default();
+    let preferences = preferences::Preferences::load(&mut workspace);
+    let window = preferences.initial_window(&workspace);
     eframe::run_native(
         "Logisim rs — main · Untitled",
-        eframe::NativeOptions {
-            viewport: eframe::egui::ViewportBuilder::default()
-                .with_inner_size([1200.0, 820.0])
-                .with_min_inner_size([720.0, 480.0])
-                .with_app_id("logisim-rs"),
-            ..Default::default()
-        },
-        Box::new(|cc| {
+        window.options(),
+        Box::new(move |cc| {
             logisim_ui::configure(&cc.egui_ctx);
-            let mut workspace = logisim_ui::Workspace::default();
-            let preferences = preferences::Preferences::load(&mut workspace);
             workspace.preferences().apply_appearance(&cc.egui_ctx);
             let mut app = DesktopApp {
                 analysis: Default::default(),
                 generation: Default::default(),
+                last_panels: workspace.layout(),
                 workspace,
                 preferences,
+                window,
+                restore_window: true,
                 simulator: simulation::worker::Worker::new({
                     let ctx = cc.egui_ctx.clone();
                     move || ctx.request_repaint()
@@ -63,6 +62,9 @@ struct DesktopApp {
     rates: runtime_rates::RuntimeRates,
     files: files::Files,
     window_title: String,
+    window: window::WindowState,
+    restore_window: bool,
+    last_panels: logisim_ui::WorkspaceLayout,
 }
 
 impl eframe::App for DesktopApp {
@@ -101,6 +103,27 @@ impl DesktopApp {
         }
         self.files
             .show(ui.ctx(), &mut self.workspace, &mut self.simulator);
+        let before_window = self.window;
+        if std::mem::take(&mut self.restore_window) {
+            self.window = self.window.restore(ui.ctx());
+        } else {
+            let zoom = ui.ctx().zoom_factor();
+            ui.input(|i| {
+                self.window
+                    .observe(i.viewport(), i.viewport_rect().size(), zoom)
+            });
+        }
+        let panels = self.workspace.layout();
+        let options = self.workspace.preferences().workspace;
+        self.preferences.observe_layout(
+            (options.restore_window && before_window != self.window).then_some(self.window),
+            (options.restore_panels && self.last_panels != panels).then_some(panels),
+            std::time::Instant::now(),
+        );
+        self.last_panels = panels;
+        if self.files.allow_close {
+            self.preferences.flush_layout();
+        }
         self.preferences.synchronize(&mut self.workspace);
         let context = ui.ctx().clone();
         self.analysis

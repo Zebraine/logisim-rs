@@ -15,6 +15,7 @@ mod parity;
 mod transistors;
 mod workspace;
 pub use document::{DocumentView, FileAction};
+pub use workspace::{LayoutTab, WorkspaceLayout};
 mod drawing;
 mod editor;
 pub mod i18n;
@@ -57,6 +58,7 @@ pub use theme::configure;
 #[derive(Default)]
 pub struct Workspace {
     navigation: workspace::Navigation,
+    layout: WorkspaceLayout,
     analysis: analysis::AnalysisUi,
     generator: generation::Generator,
     generated_expressions: generation::Memory,

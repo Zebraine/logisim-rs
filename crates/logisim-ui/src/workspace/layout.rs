@@ -127,11 +127,19 @@ impl Workspace {
             .show(ui, |ui| self.toolbar(ui));
 
         let side_max = (ui.available_width() - 452.0).clamp(230.0, 380.0);
+        let size = self.layout.sidebar_width.min(side_max);
+        let panel = prepare_panel(ui, "inspector", size, &mut self.navigation.last_width);
         Panel::left("inspector")
-            .default_size(320.0_f32.min(side_max))
+            .default_size(size)
             .size_range(230.0..=side_max)
             .frame(Frame::NONE.fill(CHROME))
-            .show(ui, |ui| self.sidebar(ui));
+            .show(ui, |ui| {
+                let mut bounded = panel_contents(ui);
+                self.sidebar(&mut bounded);
+            });
+        if let Some(new_size) = panel.committed(ui, 0) {
+            self.layout.sidebar_width = new_size.clamp(230., side_max);
+        }
 
         egui::CentralPanel::default()
             .frame(Frame::NONE)
@@ -219,5 +227,42 @@ impl Workspace {
             }
             ui.checkbox(&mut self.preferences.show_grid, tr("Grid"));
         });
+    }
+}
+
+/// Keep the native panel at its assigned size even when a child requests more room.
+pub(super) fn panel_contents(ui: &mut Ui) -> Ui {
+    let rect = ui.available_rect_before_wrap();
+    ui.expand_to_include_rect(rect);
+    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect));
+    child.shrink_clip_rect(rect);
+    child
+}
+
+/// Re-seed egui's native resize handle when the projected preference changes,
+/// e.g. after a host resize or a layout reset. Keep its normal drag and keyboard behavior.
+pub(super) fn prepare_panel(ui: &Ui, salt: &str, size: f32, last: &mut f32) -> PanelSize {
+    use egui::containers::panel::PanelState;
+    let id = ui.scope_id().with(salt);
+    if *last != size {
+        ui.data_mut(|data| data.remove::<PanelState>(id));
+        *last = size;
+    }
+    PanelSize {
+        id,
+        before: PanelState::load(ui.ctx(), id).map(|p| p.size()),
+    }
+}
+
+pub(super) struct PanelSize {
+    id: egui::Id,
+    before: Option<egui::Vec2>,
+}
+impl PanelSize {
+    pub(super) fn committed(self, ui: &Ui, axis: usize) -> Option<f32> {
+        let before = self.before?[axis];
+        let after = egui::containers::panel::PanelState::load(ui.ctx(), self.id)?.size()[axis];
+        // PanelState retains the pre-drag size until the native handle commits.
+        ((before - after).abs() > 0.01).then_some(after)
     }
 }

@@ -8,16 +8,10 @@ use crate::{
 };
 use egui::{Frame, Margin, Panel, RichText, ScrollArea, Ui, vec2};
 
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
-enum Tab {
-    #[default]
-    Circuits,
-    Components,
-}
-
 #[derive(Default)]
 pub(crate) struct Navigation {
-    tab: Tab,
+    pub(super) last_height: f32,
+    pub(super) last_width: f32,
     query: String,
 }
 
@@ -33,34 +27,42 @@ impl Workspace {
             .show(ui, |ui| self.zoom_controls(ui));
 
         let height = ui.available_height();
+        let min = (height * 0.25).max(144.).min(height * 0.52);
+        let max = (height * 0.75).min(height - 100.).max(min);
+        let size = (height * self.layout.split).clamp(min, max);
+        let panel =
+            super::layout::prepare_panel(ui, "project", size, &mut self.navigation.last_height);
         Panel::top("project")
             .resizable(true)
-            .default_size(height * 0.52)
-            .size_range(144.0..=(height - (height * 0.45).clamp(126.0, 180.0)).max(144.0))
+            .default_size(size)
+            .size_range(min..=max)
             .frame(
                 Frame::NONE
                     .fill(theme::SURFACE)
                     .inner_margin(Margin::symmetric(8, 4)),
             )
             .show(ui, |ui| {
+                let mut contents = super::layout::panel_contents(ui);
+                let ui = &mut contents;
                 self.document_header(ui);
                 ui.horizontal(|ui| {
                     let width = (ui.available_width() - 4.0) / 2.0;
-                    for (tab, label) in
-                        [(Tab::Circuits, "Circuits"), (Tab::Components, "Components")]
-                    {
+                    for (tab, label) in [
+                        (super::LayoutTab::Circuits, "Circuits"),
+                        (super::LayoutTab::Components, "Components"),
+                    ] {
                         if ui
                             .add_sized(
                                 [width, 28.0],
-                                egui::Button::selectable(self.navigation.tab == tab, tr(label)),
+                                egui::Button::selectable(self.layout.tab == tab, tr(label)),
                             )
                             .clicked()
                         {
-                            self.navigation.tab = tab;
+                            self.layout.tab = tab;
                         }
                     }
                 });
-                let components = self.navigation.tab == Tab::Components;
+                let components = self.layout.tab == super::LayoutTab::Components;
                 let query = self.navigation.query.trim().to_lowercase();
                 let count = self.result_count(components, &query);
                 ui.horizontal(|ui| {
@@ -98,6 +100,9 @@ impl Workspace {
                         }
                     });
             });
+        if let Some(new_size) = panel.committed(ui, 1) {
+            self.layout.split = (new_size / height).clamp(0.25, 0.75);
+        }
         egui::CentralPanel::default()
             .frame(Frame::NONE.fill(theme::CHROME))
             .show(ui, |ui| {

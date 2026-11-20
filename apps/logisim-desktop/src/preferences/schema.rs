@@ -4,7 +4,8 @@ use logisim_ui::{
 };
 use serde::{Deserialize, Serialize};
 
-use logisim_ui::CONFIG_VERSION;
+use crate::window::WindowState;
+use logisim_ui::{CONFIG_VERSION, WorkspaceLayout};
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct File {
@@ -13,6 +14,10 @@ struct File {
     workspace: Option<WorkspaceSettings>,
     #[serde(default, deserialize_with = "present")]
     recent: Option<Vec<String>>,
+    #[serde(default, deserialize_with = "present")]
+    window: Option<WindowState>,
+    #[serde(default, deserialize_with = "present")]
+    panels: Option<WorkspaceLayout>,
     #[serde(default)]
     general: General,
     #[serde(default)]
@@ -121,6 +126,8 @@ fn present<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(
 pub(super) struct Config {
     pub settings: Settings,
     pub recent: Vec<String>,
+    pub window: WindowState,
+    pub panels: WorkspaceLayout,
 }
 
 pub(super) fn decode(bytes: &[u8]) -> Result<Config, &'static str> {
@@ -128,12 +135,22 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Config, &'static str> {
     if !matches!(file.version, 1 | CONFIG_VERSION) {
         return Err("Unsupported configuration version.");
     }
-    if file.version == 1 && (file.recent.is_some() || file.workspace.is_some()) {
+    if file.version == 1
+        && (file.recent.is_some()
+            || file.workspace.is_some()
+            || file.panels.is_some()
+            || file.window.is_some())
+    {
         return Err("Unknown or invalid settings.");
     }
     let workspace = file.workspace.unwrap_or_default();
     let recent = file.recent.unwrap_or_default();
-    if !(1..=20).contains(&workspace.recent_limit)
+    let panels = file.panels.unwrap_or_default();
+    let window = file.window.unwrap_or_default();
+    if !window.valid()
+        || !(230.0..=380.0).contains(&panels.sidebar_width)
+        || !(0.25..=0.75).contains(&panels.split)
+        || !(1..=20).contains(&workspace.recent_limit)
         || recent.len() > workspace.recent_limit
         || recent
             .iter()
@@ -148,6 +165,8 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Config, &'static str> {
         .ok_or("Invalid interface scale.")?;
     let tick_hz = TickHz::new(file.simulation.tick_hz).ok_or("Invalid tick frequency.")?;
     Ok(Config {
+        panels,
+        window: window.bounded(None),
         recent,
         settings: Settings {
             workspace,
@@ -166,6 +185,8 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Config, &'static str> {
 pub(super) fn encode(config: &Config) -> Vec<u8> {
     let s = config.settings;
     let file = File {
+        panels: Some(config.panels),
+        window: Some(config.window),
         workspace: Some(s.workspace),
         recent: Some(config.recent.clone()),
         version: CONFIG_VERSION,

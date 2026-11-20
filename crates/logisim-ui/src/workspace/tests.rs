@@ -321,3 +321,31 @@ fn initial_zoom_follows_instance_navigation_in_both_directions() {
         check_zoom(&app, 1600.);
     }
 }
+
+#[test]
+fn restored_sidebar_projects_onto_narrow_canvas_without_losing_preferred_width() {
+    let ctx = Context::default();
+    configure(&ctx);
+    let mut app = Workspace::default();
+    let layout = WorkspaceLayout {
+        sidebar_width: 374.,
+        split: 0.63,
+        tab: LayoutTab::Components,
+    };
+    app.set_layout(layout);
+    for width in [1200., 720., 1200.] {
+        for _ in 0..3 {
+            frame(&ctx, &mut app, vec2(width, 820.), vec![]);
+        }
+        let canvas = app.canvas.rect;
+        assert!(canvas.width() > 450.);
+        assert_eq!(canvas.left(), layout.sidebar_width.min(width - 452.));
+        assert_eq!(app.layout(), layout);
+    }
+    let camera = app.canvas.camera;
+    app.set_layout(WorkspaceLayout::default());
+    frame(&ctx, &mut app, vec2(1200., 820.), vec![]);
+    assert_eq!(app.canvas.rect.left(), 320.);
+    assert_eq!(app.canvas.camera.zoom, camera.zoom);
+    assert_eq!(app.canvas.camera.offset, camera.offset);
+}

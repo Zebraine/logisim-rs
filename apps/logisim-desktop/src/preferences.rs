@@ -1,8 +1,11 @@
 //! Atomic, versioned application preferences. Invalid input is read-only until repaired.
 pub(crate) mod recent;
 mod schema;
+use crate::window::WindowState;
+use logisim_ui::WorkspaceLayout;
 use logisim_ui::{Language, Settings, SimulationMode, Workspace};
 use schema::Config;
+use std::time::{Duration, Instant};
 use std::{
     fs,
     io::ErrorKind,
@@ -68,6 +71,9 @@ pub(crate) struct Preferences {
     path: Option<PathBuf>,
     loaded: Loaded,
     blocked: bool,
+    window: WindowState,
+    panels: WorkspaceLayout,
+    layout_due: Option<Instant>,
 }
 impl Preferences {
     pub fn load(workspace: &mut Workspace) -> Self {
@@ -78,11 +84,43 @@ impl Preferences {
             path,
             loaded: Loaded::default(),
             blocked: false,
+            window: WindowState::default(),
+            panels: WorkspaceLayout::default(),
+            layout_due: None,
         };
         state.reload(workspace);
         workspace.apply_settings(state.loaded.config.settings);
         workspace.set_recent(state.loaded.config.recent.clone());
+        state.window = state.loaded.config.window;
+        state.panels = state.loaded.config.panels;
+        if workspace.preferences().workspace.restore_panels {
+            workspace.set_layout(state.panels);
+        }
         state
+    }
+    pub fn initial_window(&self, workspace: &Workspace) -> WindowState {
+        if workspace.preferences().workspace.restore_window {
+            self.window
+        } else {
+            WindowState::default()
+        }
+    }
+    pub fn observe_layout(
+        &mut self,
+        window: Option<WindowState>,
+        panels: Option<WorkspaceLayout>,
+        now: Instant,
+    ) {
+        let window = window.unwrap_or(self.window);
+        let panels = panels.unwrap_or(self.panels);
+        if (window, panels) != (self.window, self.panels) {
+            self.window = window;
+            self.panels = panels;
+            self.layout_due = Some(now + Duration::from_millis(500));
+        }
+    }
+    pub fn flush_layout(&mut self) {
+        self.layout_due = Some(Instant::now());
     }
     fn reload(&mut self, workspace: &mut Workspace) -> bool {
         let Some(path) = self.path.as_ref() else {
@@ -114,7 +152,15 @@ impl Preferences {
         if self.path.is_none() {
             self.path = config_path();
         }
+        let local_window = self.window != self.loaded.config.window;
+        let local_panels = self.panels != self.loaded.config.panels;
         if self.reload(workspace) {
+            if !local_window {
+                self.window = self.loaded.config.window;
+            }
+            if !local_panels {
+                self.panels = self.loaded.config.panels;
+            }
             if !recent_changed {
                 workspace.set_recent(self.loaded.config.recent.clone());
             }
@@ -132,14 +178,28 @@ impl Preferences {
         }
         let values = workspace.preferences();
         recent::truncate(workspace);
+        let layout_due = self.layout_due.is_some_and(|at| Instant::now() >= at);
         if self.blocked
             || (values == self.loaded.config.settings
-                && workspace.recent() == self.loaded.config.recent)
+                && workspace.recent() == self.loaded.config.recent
+                && !(layout_due
+                    && (self.window != self.loaded.config.window
+                        || self.panels != self.loaded.config.panels)))
         {
             return;
         }
         let path = self.path.as_ref().expect("loaded configuration path");
         let config = Config {
+            window: if layout_due {
+                self.window
+            } else {
+                self.loaded.config.window
+            },
+            panels: if layout_due {
+                self.panels
+            } else {
+                self.loaded.config.panels
+            },
             settings: values,
             recent: workspace.recent().to_vec(),
         };
@@ -149,6 +209,9 @@ impl Preferences {
             .and_then(|()| crate::storage::atomic_write(path, &bytes, self.loaded.json.as_deref()));
         match save {
             Ok(()) => {
+                if layout_due {
+                    self.layout_due = None;
+                }
                 self.loaded = Loaded {
                     config,
                     json: Some(bytes),

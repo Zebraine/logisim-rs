@@ -245,3 +245,36 @@ fn v1_migrates_and_v2_history_is_validated_and_limited_on_edit() {
         assert!(schema::decode(bad.as_bytes()).is_err(), "{bad}");
     }
 }
+
+#[test]
+fn layout_waits_for_idle_or_close_and_restores_only_when_enabled() {
+    let temp = Temp::new();
+    let path = temp.0.join("preferences.json");
+    let mut ui = Workspace::default();
+    let mut prefs = Preferences::at(Some(path.clone()), &mut ui);
+    let panels = WorkspaceLayout {
+        sidebar_width: 367.,
+        split: 0.67,
+        tab: logisim_ui::LayoutTab::Components,
+    };
+    let now = Instant::now();
+    prefs.observe_layout(None, Some(panels), now);
+    prefs.synchronize(&mut ui);
+    assert!(!path.exists());
+    prefs.flush_layout();
+    prefs.synchronize(&mut ui);
+    let mut restarted = Workspace::default();
+    let mut opened = Preferences::at(Some(path.clone()), &mut restarted);
+    assert_eq!(restarted.layout(), panels);
+    let mut options = restarted.preferences();
+    options.workspace.restore_panels = false;
+    restarted.apply_settings(options);
+    opened.synchronize(&mut restarted);
+    let mut fresh = Workspace::default();
+    Preferences::at(Some(path.clone()), &mut fresh);
+    assert_eq!(fresh.layout(), WorkspaceLayout::default());
+    assert_eq!(
+        schema::decode(&fs::read(path).unwrap()).unwrap().panels,
+        panels
+    );
+}
