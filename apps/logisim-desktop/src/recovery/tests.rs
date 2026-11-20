@@ -397,7 +397,7 @@ fn unreadable_data_can_be_cleared_without_rereading_its_contents() {
     write_checkpoint(&mut owner, &Project::default());
     let mut observer = Autosave::at(Some(dir.clone()));
     let data = dir.join(slot::DATA);
-    fs::set_permissions(&data, fs::Permissions::from_mode(0)).unwrap();
+    fs::set_permissions(&data, fs::Permissions::from_mode(0o000)).unwrap();
     if fs::read(&data).is_ok() {
         // A privileged test process bypasses Unix read permissions.
         return;
@@ -419,4 +419,27 @@ fn unreadable_data_can_be_cleared_without_rereading_its_contents() {
     assert_eq!(Pair::read(&dir).unwrap(), saved);
     observer.clear_from_settings().unwrap();
     assert!(Pair::read(&dir).unwrap().empty());
+}
+
+#[test]
+fn owner_lock_io_error_preserves_storage_and_the_observed_checkpoint() {
+    let tmp = Temp::new();
+    let dir = tmp.path("recovery");
+    let mut writer = Autosave::at(Some(dir.clone()));
+    write_checkpoint(&mut writer, &Project::default());
+    drop(writer);
+    let mut reader = Autosave::at(Some(dir.clone()));
+    fs::remove_file(tmp.path(slot::OWNER)).unwrap();
+    fs::create_dir(tmp.path(slot::OWNER)).unwrap();
+    let before = Pair::read(&dir).unwrap();
+    reader.changed = false;
+    let mut storage = Storage::default();
+    let e = reader.recover(&mut storage).unwrap_err();
+    assert_ne!(e, logisim_ui::RecoveryView::FOREIGN_OWNER);
+    assert_eq!(reader.error.as_deref(), Some(e.as_str()));
+    assert!(!reader.view().owned && reader.changed && reader.written.is_none());
+    assert!(reader.metadata.is_some() && !storage.dirty(&Project::default()));
+    assert_eq!(reader.observed, before);
+    fs::remove_dir(tmp.path(slot::OWNER)).unwrap();
+    assert_eq!(reader.recover(&mut storage).unwrap(), Project::default());
 }

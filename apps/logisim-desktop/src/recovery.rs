@@ -3,6 +3,7 @@ mod slot;
 use crate::{plugins, storage::Storage};
 use logisim_core::Project;
 use logisim_ui::FileSettings;
+use slot::CHANGED;
 pub(crate) use slot::checksum;
 use slot::{Metadata, Pair};
 use std::{
@@ -67,15 +68,8 @@ impl Autosave {
                     self.metadata = None;
                     self.error = None;
                     if !pair.empty() {
-                        let inspected = pair.metadata().and_then(|meta| {
-                            if meta.source.as_ref().is_some_and(|p| self.reserved(p)) {
-                                return Err("Invalid recovery metadata.".into());
-                            }
-                            pair.project(self.dir()?)?;
-                            Ok(meta)
-                        });
-                        match inspected {
-                            Ok(meta) => self.metadata = Some(meta),
+                        match self.inspect(&pair) {
+                            Ok((meta, _)) => self.metadata = Some(meta),
                             Err(e) => self.error = Some(e),
                         }
                     }
@@ -124,16 +118,33 @@ impl Autosave {
             .inspect_err(|error| self.report(error.clone()))
     }
 
+    fn inspect(&self, pair: &Pair) -> Result<(Metadata, Project), String> {
+        let meta = pair.metadata()?;
+        if meta.source.as_ref().is_some_and(|p| self.reserved(p)) {
+            return Err("Invalid recovery metadata.".into());
+        }
+        Ok((meta, pair.project(self.dir()?)?))
+    }
+
     fn recover_with_lease(&mut self, storage: &mut Storage) -> Result<Project, String> {
         let dir = self.dir()?;
         let lease = slot::owner(dir)?;
-        self.observed.verify(dir)?;
-        let meta = self
-            .metadata
-            .as_ref()
-            .ok_or("The recovery files are damaged or incomplete.")?;
-        let project = self.observed.project(dir)?;
+        // Only a new click after the changed-snapshot warning can accept a
+        // replacement. Stage it locally until parsing and source checks succeed.
+        let replacement = if self.error.as_deref() == Some(CHANGED) {
+            Some(Pair::read(dir)?)
+        } else {
+            None
+        };
+        let pair = replacement.as_ref().unwrap_or(&self.observed);
+        pair.verify(dir)?;
+        let (meta, project) = self.inspect(pair)?;
         *storage = Storage::recovered(meta.source.as_deref(), meta.source_fnv1a64)?;
+        if let Some(pair) = replacement {
+            self.observed = pair;
+        }
+        self.metadata = Some(meta);
+        self.access = Access::Readable;
         self.owned = Some(lease);
         self.error = None;
         self.changed = true;
@@ -254,7 +265,7 @@ impl Autosave {
 
     pub fn clear_owned(&mut self) -> Result<(), String> {
         if self.owned.is_none() {
-            return Err("Recovery copy is owned by another window.".into());
+            return Err(logisim_ui::RecoveryView::FOREIGN_OWNER.into());
         }
         self.remove_observed()
     }
@@ -266,7 +277,7 @@ impl Autosave {
             return self.clear_owned();
         }
         if !self.pending() || (matches!(self.access, Access::Readable) && self.metadata.is_some()) {
-            return Err("Recovery copy is owned by another window.".into());
+            return Err(logisim_ui::RecoveryView::FOREIGN_OWNER.into());
         }
         // Hold OWNER across verification and both removals. A writer cannot
         // acquire the slot between our ownership check and the operation lock.

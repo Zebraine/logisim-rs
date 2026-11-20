@@ -445,3 +445,39 @@ fn foreign_recover_keeps_the_same_dialog_document_and_paused_simulator() {
     assert_eq!(w.project(), source.project());
     assert!(files.autosave.view().owned && files.present(&w).dirty && !files.busy());
 }
+
+#[test]
+fn retry_after_a_changed_snapshot_recovers_the_latest_confirmed_project() {
+    let tmp = Temp::new();
+    let dir = tmp.path("recovery");
+    let mut owner = Files::with_recovery(Some(dir.clone()));
+    let mut source = Workspace::default();
+    source.replace_project(dirty_project());
+    checkpoint(&mut owner, &source);
+    let mut files = Files::with_recovery(Some(dir));
+    let mut w = Workspace::default();
+    let mut sim = Simulator::default();
+    let ctx = egui::Context::default();
+    files.startup(None, &mut w, &mut sim);
+    let mut edited = source.project().clone();
+    edited.main_circuit_mut().name = "next checkpoint".into();
+    owner.autosave.update(
+        Instant::now() + Duration::from_secs(900),
+        source.preferences().files,
+        true,
+        &owner.storage,
+        &edited,
+    );
+    drop(owner);
+    let before = w.project().clone();
+    let prompt = files.dialog.take().unwrap();
+    files.respond(prompt, Response::Recover, &ctx, &mut w, &mut sim);
+    let prompt = files.dialog.take().unwrap();
+    assert!(
+        matches!(&prompt, Dialog::Recovery { view, .. } if view.error.as_deref() == Some("The recovery snapshot changed in another window."))
+    );
+    assert_eq!(w.project(), &before);
+    files.respond(prompt, Response::Recover, &ctx, &mut w, &mut sim);
+    assert_eq!(w.project(), &edited);
+    assert!(!files.busy() && files.autosave.view().owned);
+}

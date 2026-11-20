@@ -488,6 +488,7 @@ fn clearing_discloses_an_autosave_change_only_when_required() {
             app.editor
                 .set_tool(crate::editor::Tool::Place(logisim_core::Kind::Pin));
             app.editor.place(logisim_core::Point::new(20, 20));
+            let selection = app.editor.session.selection.clone();
             app.document.dirty = dirty;
             app.preferences.files.autosave = autosave;
             app.set_recovery_view(RecoveryView {
@@ -537,6 +538,7 @@ fn clearing_discloses_an_autosave_change_only_when_required() {
             }
             assert_eq!(app.project(), &project);
             assert_eq!(app.document.dirty, dirty);
+            assert_eq!(app.editor.session.selection, selection);
             assert!(app.editor.can_undo() && !app.editor.can_redo());
             assert!(app.simulation_mut().enabled);
             assert_eq!(app.simulation_mut().ticks, 29);
@@ -546,6 +548,80 @@ fn clearing_discloses_an_autosave_change_only_when_required() {
             assert!(!app.editor.can_undo());
             app.editor.redo();
             assert_eq!(app.project(), &project);
+        }
+    }
+}
+
+#[test]
+fn ownership_error_and_retry_fit_the_recovery_card_in_both_languages() {
+    use crate::tests::support::widgets::{click, has};
+    for language in Language::ALL {
+        let label = |key: &'static str| crate::i18n::with_language(language, || tr(key));
+        for size in [vec2(720., 480.), vec2(1200., 820.)] {
+            let ctx = Context::default();
+            crate::configure(&ctx);
+            let mut app = Workspace {
+                settings_open: true,
+                ..Default::default()
+            };
+            app.set_language(language);
+            app.settings_page.select(Category::Files);
+            for state in [
+                SnapshotState::Available {
+                    source: None,
+                    saved_at: 0,
+                },
+                SnapshotState::Damaged,
+                SnapshotState::Unavailable {
+                    snapshot_present: true,
+                },
+            ] {
+                app.set_recovery_view(RecoveryView {
+                    state: state.clone(),
+                    owned: false,
+                    error: Some(RecoveryView::FOREIGN_OWNER.into()),
+                    directory: Some("/test/recovery".into()),
+                });
+                let mut labels = vec![];
+                for _ in 0..3 {
+                    labels = frame_at_size(&ctx, &mut app, vec![], size);
+                }
+                let foreign = label(RecoveryView::FOREIGN_OWNER);
+                assert_eq!(labels.iter().filter(|(t, _)| t == foreign).count(), 1);
+                assert!(has(&labels, "/test/recovery"));
+                assert!(!has(&labels, label("Clear recovery")));
+                let retry = !matches!(state, SnapshotState::Available { .. });
+                assert_eq!(has(&labels, label("Retry")), retry);
+                let bottom = labels
+                    .iter()
+                    .find(|(t, _)| t == label("Close"))
+                    .unwrap()
+                    .1
+                    .top();
+                for (_, r) in labels
+                    .iter()
+                    .filter(|(t, _)| t == foreign || t == "/test/recovery" || t == label("Retry"))
+                {
+                    assert!(
+                        r.left() >= 0.
+                            && r.right() <= size.x
+                            && r.top() > 0.
+                            && r.bottom() < bottom,
+                        "{language:?} {size:?} {r:?}"
+                    );
+                }
+                if retry {
+                    click(&ctx, &mut app, label("Retry"));
+                    assert!(app.take_file_actions().is_empty());
+                    click(&ctx, &mut app, label("Confirm clear"));
+                    assert_eq!(
+                        app.take_file_actions(),
+                        [crate::FileAction::ClearRecovery {
+                            disabled_autosave: false
+                        }]
+                    );
+                }
+            }
         }
     }
 }

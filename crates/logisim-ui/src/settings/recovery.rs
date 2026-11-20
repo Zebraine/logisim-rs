@@ -24,6 +24,8 @@ pub struct RecoveryView {
     pub error: Option<String>,
 }
 impl RecoveryView {
+    pub const FOREIGN_OWNER: &'static str = "Recovery copy is owned by another window.";
+
     pub(crate) fn can_clear(&self) -> bool {
         match self.state {
             SnapshotState::Available { .. } => self.owned,

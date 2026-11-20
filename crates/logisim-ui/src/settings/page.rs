@@ -273,6 +273,8 @@ impl Page {
         if self.showing_files() {
             theme::card(ui, tr("Recovery snapshot"), |ui| {
                 self.recovery.details(ui);
+                let owner_error =
+                    self.recovery.error.as_deref() == Some(RecoveryView::FOREIGN_OWNER);
                 if self.recovery.can_clear() {
                     if self.confirm_clear {
                         let disabled_autosave = document_dirty && values.files.autosave;
@@ -292,11 +294,20 @@ impl Page {
                                 self.confirm_clear = false;
                             }
                         });
-                    } else if ui.button(tr("Clear recovery")).clicked() {
+                    } else if ui
+                        .button(tr(if owner_error {
+                            "Retry"
+                        } else {
+                            "Clear recovery"
+                        }))
+                        .clicked()
+                    {
                         self.confirm_clear = true;
                     }
-                } else if matches!(self.recovery.state, SnapshotState::Available { .. }) {
-                    ui.label(tr("Recovery copy is owned by another window."));
+                } else if matches!(self.recovery.state, SnapshotState::Available { .. })
+                    && !owner_error
+                {
+                    ui.label(tr(RecoveryView::FOREIGN_OWNER));
                 }
             });
         }

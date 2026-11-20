@@ -8,6 +8,8 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+pub(crate) const CHANGED: &str = "The recovery snapshot changed in another window.";
+
 pub(super) const DATA: &str = "current.circ";
 pub(super) const META: &str = "current.json";
 pub(super) const LOCK: &str = ".recovery.lock";
@@ -15,7 +17,7 @@ pub(super) const OWNER: &str = ".recovery.owner";
 
 /// The OS releases the exclusive writer lease on process exit, including after a crash.
 pub(super) fn owner(dir: &Path) -> Result<fs::File> {
-    try_lock(dir, OWNER)?.ok_or_else(|| "Recovery copy is owned by another window.".into())
+    try_lock(dir, OWNER)?.ok_or_else(|| logisim_ui::RecoveryView::FOREIGN_OWNER.into())
 }
 
 pub(super) fn try_lock(dir: &Path, name: &str) -> Result<Option<fs::File>> {
@@ -165,7 +167,7 @@ impl Pair {
     }
     pub fn verify(&self, dir: &Path) -> Result<()> {
         if &Self::read(dir)? != self {
-            return Err("The recovery snapshot changed in another window.".into());
+            return Err(CHANGED.into());
         }
         Ok(())
     }
@@ -206,7 +208,7 @@ impl Pair {
         let current = Self::read(dir)?;
         // Startup Discard may have emptied our slot since the previous checkpoint.
         if !current.empty() && current != *self {
-            return Err("The recovery snapshot changed in another window.".into());
+            return Err(CHANGED.into());
         }
         let data = dir.join(DATA);
         let old_data = current.data.bytes()?;
@@ -234,7 +236,7 @@ impl Pair {
             return Ok(());
         }
         if *self != current && partial != Some(&current) {
-            return Err("The recovery snapshot changed in another window.".into());
+            return Err(CHANGED.into());
         }
         let meta = dir.join(META);
         let data = dir.join(DATA);
