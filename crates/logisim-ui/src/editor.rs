@@ -62,6 +62,7 @@ pub(crate) struct Editor {
     context_instance: Option<Id>,
     pub project_error: Option<String>,
     pub tool: Tool,
+    pub display: crate::settings::EditorDisplay,
     pub template: Component,
     pub memory_target: Option<(bool, Id)>,
     pub pla_target: Option<(bool, Id)>,
@@ -77,13 +78,14 @@ pub(crate) struct Editor {
 }
 impl Default for Editor {
     fn default() -> Self {
-        Self::new(Project::default())
+        Self::new(Project::default(), crate::Settings::default())
     }
 }
 impl Editor {
-    pub fn new(project: Project) -> Self {
+    pub fn new(project: Project, settings: crate::Settings) -> Self {
         Self {
             session: EditSession::new(project),
+            display: settings.editor_display(),
             history: History::default(),
             open_instance: None,
             analyze_circuit: None,
@@ -899,6 +901,7 @@ impl Editor {
             &self.session.selection,
             &self.simulation.view,
             &mut self.drawing_cache,
+            self.display,
         );
         if let Some(Gesture::Box { start, current, .. }) = &self.gesture {
             let rect = Rect::from_two_pos(

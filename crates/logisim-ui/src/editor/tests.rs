@@ -87,7 +87,7 @@ fn grouped_properties_commit_before_leaving_an_instance_and_restore_the_same_con
         .add_component(Component::new(Kind::Pin, Point::new(100, 100)));
     let instance = project.instance(child, Point::new(300, 200)).unwrap();
     let instance = project.main_circuit_mut().circuit.add_component(instance);
-    let mut e = Editor::new(project);
+    let mut e = Editor::new(project, crate::Settings::default());
     e.enter_instance(instance);
     e.session.context.appearance_mode = true;
     e.session.selection.insert(pin);
@@ -128,4 +128,83 @@ fn grouped_properties_commit_before_leaving_an_instance_and_restore_the_same_con
     // Navigation turns off appearance mode before it commits pending properties.
     assert!(!e.session.context.appearance_mode);
     assert_eq!(e.simulation.view.ticks, 41);
+}
+
+#[test]
+fn display_switches_change_wire_paint_only() {
+    use crate::{Settings, Workspace};
+    use egui::{Context, RawInput, Shape, vec2};
+    let mut project = Project::default();
+    let circuit = &mut project.main_circuit_mut().circuit;
+    let join = Point::new(140, 40);
+    let end = Point::new(140, 150);
+    let selected = circuit.add_wire(Point::new(40, 40), join).unwrap();
+    circuit.add_wire(join, end);
+    circuit.add_wire(join, Point::new(240, 40));
+    let connected = circuit.connected_wires(selected);
+    let dangling = circuit.dangling_ends();
+    let ctx = Context::default();
+    let mut app = Workspace::default();
+    app.replace_project(project.clone());
+    app.editor.session.selection.insert(selected);
+    app.simulation_mut().ticks = 91;
+    for (highlight_net, show_connection_markers) in
+        [(true, true), (false, true), (true, false), (false, false)]
+    {
+        app.apply_settings(Settings {
+            highlight_net,
+            show_connection_markers,
+            ..app.preferences()
+        });
+        let mut output = ctx.run_ui(
+            RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1200., 820.))),
+                ..Default::default()
+            },
+            |ui| app.show(ui),
+        );
+        output.textures_delta.clear();
+        let branch = [app.canvas.screen(join), app.canvas.screen(end)];
+        let trunk = [
+            app.canvas.screen(Point::new(40, 40)),
+            app.canvas.screen(join),
+        ];
+        let widths = |segment| {
+            output
+                .shapes
+                .iter()
+                .filter_map(|s| match &s.shape {
+                    Shape::LineSegment { points, stroke } if *points == segment => {
+                        Some(stroke.width)
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(widths(trunk), [7., 1.8]);
+        assert_eq!(
+            widths(branch),
+            if highlight_net {
+                vec![5., 1.8]
+            } else {
+                vec![1.8]
+            }
+        );
+        for center in branch {
+            assert_eq!(
+                output.shapes.iter().any(
+                    |s| matches!(&s.shape, Shape::Circle(c) if c.center == center && c.radius == 3.)
+                ),
+                show_connection_markers
+            );
+        }
+        assert_eq!(app.editor.hit(vec2(90., 40.), 2.), Some(selected));
+        assert_eq!(app.circuit().connected_wires(selected), connected);
+        assert_eq!(app.circuit().dangling_ends(), dangling);
+        assert_eq!(app.editor.session.selection, BTreeSet::from([selected]));
+        assert_eq!(app.project(), &project);
+        assert_eq!(app.simulation_mut().ticks, 91);
+        assert!(!app.editor.can_undo());
+        assert!(app.take_simulation_actions().is_empty());
+    }
 }

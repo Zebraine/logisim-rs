@@ -82,7 +82,12 @@ impl Canvas {
         self.camera.zoom_at(zoom, anchor);
     }
 
-    pub fn show(&mut self, ui: &mut Ui, show_grid: bool) -> egui::Response {
+    pub fn show(
+        &mut self,
+        ui: &mut Ui,
+        show_grid: bool,
+        invert_wheel_zoom: bool,
+    ) -> egui::Response {
         let (rect, response) = ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
         self.rect = rect;
         if response.clicked() || response.is_pointer_button_down_on() {
@@ -118,6 +123,7 @@ impl Canvas {
                                 MouseWheelUnit::Point => delta.y / 40.0,
                                 MouseWheelUnit::Page => delta.y * 5.0,
                             };
+                            let steps = if invert_wheel_zoom { -steps } else { steps };
                             self.camera.zoom_at(
                                 self.camera.zoom * 1.1_f32.powf(steps.clamp(-8.0, 8.0)),
                                 anchor,

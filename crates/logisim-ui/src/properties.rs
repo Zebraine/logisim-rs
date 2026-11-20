@@ -151,9 +151,11 @@ fn selection_info(ui: &mut Ui, editor: &mut Editor) {
                 ui.colored_label(signal.tone.text_color(), tf!("Signal: {}", signal.text));
                 ui.monospace(&signal.binary);
             }
-            ui.weak(tr(
-                "The highlight follows the connected net, including matching tunnel labels.",
-            ));
+            if editor.display.highlight_net {
+                ui.weak(tr(
+                    "The highlight follows the connected net, including matching tunnel labels.",
+                ));
+            }
         }
         return;
     }

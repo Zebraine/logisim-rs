@@ -349,3 +349,40 @@ fn restored_sidebar_projects_onto_narrow_canvas_without_losing_preferred_width()
     assert_eq!(app.canvas.camera.zoom, camera.zoom);
     assert_eq!(app.canvas.camera.offset, camera.offset);
 }
+
+#[test]
+fn inverted_wheel_keeps_anchor_limits_and_pinch_direction() {
+    let size = vec2(1200., 820.);
+    let pointer = pos2(650., 355.);
+    for inverted in [false, true] {
+        let ctx = Context::default();
+        configure(&ctx);
+        let mut app = Workspace::default();
+        app.apply_settings(Settings {
+            invert_wheel_zoom: inverted,
+            ..app.preferences()
+        });
+        for _ in 0..2 {
+            frame(&ctx, &mut app, size, vec![Event::PointerMoved(pointer)]);
+        }
+        let anchor = pointer - app.canvas.rect.min;
+        let world = app.canvas.camera.world_at(anchor);
+        frame(&ctx, &mut app, size, vec![wheel()]);
+        let expected = if inverted { 1. / 1.1 } else { 1.1 };
+        assert!((app.canvas.camera.zoom - expected).abs() < 0.0001);
+        frame(&ctx, &mut app, size, vec![Event::Zoom(1.5)]);
+        assert!((app.canvas.camera.zoom - expected * 1.5).abs() < 0.0001);
+        for _ in 0..6 {
+            frame(&ctx, &mut app, size, vec![wheel(); 8]);
+        }
+        assert_eq!(
+            app.canvas.camera.zoom,
+            if inverted {
+                canvas::MIN_ZOOM
+            } else {
+                canvas::MAX_ZOOM
+            }
+        );
+        assert!((app.canvas.camera.world_at(anchor) - world).length() < 0.002);
+    }
+}

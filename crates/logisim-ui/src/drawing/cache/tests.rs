@@ -85,7 +85,15 @@ fn frame(
         },
         |ui| {
             canvas.rect = ui.max_rect();
-            super::super::circuit(ui.painter(), canvas, c, selected, view, cache);
+            super::super::circuit(
+                ui.painter(),
+                canvas,
+                c,
+                selected,
+                view,
+                cache,
+                crate::Settings::default().editor_display(),
+            );
         },
     );
     result.textures_delta.clear();
@@ -322,7 +330,15 @@ fn an_invisible_pass_does_not_hide_labels_when_the_canvas_reappears() {
             canvas.rect = ui.max_rect();
             let mut painter = ui.painter().clone();
             painter.set_opacity(0.0);
-            super::super::circuit(&painter, &canvas, &c, &selected, &view, &mut cache);
+            super::super::circuit(
+                &painter,
+                &canvas,
+                &c,
+                &selected,
+                &view,
+                &mut cache,
+                crate::Settings::default().editor_display(),
+            );
         },
     );
     output.textures_delta.clear();

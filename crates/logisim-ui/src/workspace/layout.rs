@@ -184,7 +184,11 @@ impl Workspace {
                 }
                 self.canvas.typing =
                     self.editor.simulation.typing() && self.editor.tool == Tool::Poke;
-                let response = self.canvas.show(ui, self.preferences.show_grid);
+                let response = self.canvas.show(
+                    ui,
+                    self.preferences.show_grid,
+                    self.preferences.invert_wheel_zoom,
+                );
                 if self.editor.session.context.appearance_mode {
                     self.appearance
                         .show(ui, &mut self.editor, &mut self.canvas, &response);

@@ -123,6 +123,7 @@ fn unselected_open_ends_have_signal_colored_dots_without_marking_elbows() {
             &BTreeSet::new(),
             &view,
             &mut CircuitCache::default(),
+            crate::Settings::default().editor_display(),
         );
     });
     output.textures_delta.clear();

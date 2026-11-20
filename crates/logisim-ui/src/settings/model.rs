@@ -116,7 +116,20 @@ impl Default for Settings {
     }
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct EditorDisplay {
+    pub highlight_net: bool,
+    pub show_connection_markers: bool,
+}
+
 impl Settings {
+    pub(crate) fn editor_display(self) -> EditorDisplay {
+        EditorDisplay {
+            highlight_net: self.highlight_net,
+            show_connection_markers: self.show_connection_markers,
+        }
+    }
+
     /// Apply interface density and motion without touching the canvas camera.
     pub fn apply_appearance(&self, ctx: &egui::Context) {
         ctx.set_zoom_factor(f32::from(self.ui_scale.percent()) / 100.0);

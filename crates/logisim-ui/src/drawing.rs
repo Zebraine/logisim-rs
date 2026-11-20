@@ -243,6 +243,7 @@ pub(crate) fn circuit(
     selection: &BTreeSet<Id>,
     simulation: &SimulationView,
     cache: &mut CircuitCache,
+    display: crate::settings::EditorDisplay,
 ) {
     cache.synchronize(circuit, selection);
     cache.prepare_view(p, canvas);
@@ -256,7 +257,8 @@ pub(crate) fn circuit(
         {
             continue;
         }
-        if selected || cache.selected_net.contains(&w.id) {
+        let highlighted = selected || (display.highlight_net && cache.selected_net.contains(&w.id));
+        if highlighted {
             p.line_segment(
                 segment,
                 Stroke::new(
@@ -270,8 +272,7 @@ pub(crate) fn circuit(
         let bus = signal.is_some_and(|s| s.binary.len() > 1);
         let width = if bus { 3.0 } else { 1.8 };
         let ink = tone.map_or(INK, crate::SignalTone::color);
-        if tone == Some(crate::SignalTone::High) && !selected && !cache.selected_net.contains(&w.id)
-        {
+        if tone == Some(crate::SignalTone::High) && !highlighted {
             p.line_segment(segment, Stroke::new(width + 2.5, ink.gamma_multiply(0.13)));
         }
         let stroke = Stroke::new(width, ink);
@@ -284,8 +285,7 @@ pub(crate) fn circuit(
         }
         if let Some(value) = signal
             && bus
-            && (selected
-                || cache.selected_net.contains(&w.id)
+            && (highlighted
                 || (canvas.camera.zoom >= 0.8 && segment[0].distance(segment[1]) >= 96.0))
         {
             let midpoint = segment[0].lerp(segment[1], 0.5);
@@ -322,15 +322,17 @@ pub(crate) fn circuit(
             }
         }
     }
-    for &(point, wire) in &cache.markers {
-        let screen = canvas.screen(point);
-        if !p.clip_rect().expand(3.0).contains(screen) {
-            continue;
+    if display.show_connection_markers {
+        for &(point, wire) in &cache.markers {
+            let screen = canvas.screen(point);
+            if !p.clip_rect().expand(3.0).contains(screen) {
+                continue;
+            }
+            let color = wire
+                .and_then(|id| simulation.wires.get(&id))
+                .map_or(INK, |s| s.tone.color());
+            p.circle_filled(screen, 3.0, color);
         }
-        let color = wire
-            .and_then(|id| simulation.wires.get(&id))
-            .map_or(INK, |s| s.tone.color());
-        p.circle_filled(screen, 3.0, color);
     }
     for (index, c) in circuit.components.iter().enumerate() {
         cache.component(index, p, canvas, c, selection.contains(&c.id), simulation);
