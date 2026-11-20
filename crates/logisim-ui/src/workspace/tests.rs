@@ -654,3 +654,35 @@ fn text_focus_popup_and_ime_block_custom_workspace_commands() {
     frame(&ctx, &mut app, size, attempt());
     assert!(app.take_file_actions().is_empty() && app.take_simulation_actions().is_empty());
 }
+
+#[test]
+fn entering_appearance_mode_blocks_a_later_tool_key_in_the_same_frame() {
+    let ctx = Context::default();
+    configure(&ctx);
+    let mut app = Workspace::default();
+    let size = vec2(1200., 820.);
+    frame(
+        &ctx,
+        &mut app,
+        size,
+        vec![Event::PointerMoved(pos2(800., 400.))],
+    );
+    let key = |key, modifiers| Event::Key {
+        key,
+        modifiers,
+        pressed: true,
+        repeat: false,
+        physical_key: None,
+    };
+    frame(
+        &ctx,
+        &mut app,
+        size,
+        vec![
+            key(egui::Key::E, Modifiers::COMMAND.plus(Modifiers::SHIFT)),
+            key(egui::Key::W, Modifiers::NONE),
+        ],
+    );
+    assert!(app.editor.session.context.appearance_mode);
+    assert_eq!(app.editor.tool, crate::editor::Tool::Select);
+}

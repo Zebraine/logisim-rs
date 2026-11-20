@@ -1,4 +1,5 @@
 use crate::editor::{Editor, Tool, supported_gate_size};
+use crate::shortcuts::{Command, Shortcuts};
 use crate::{i18n::tr, tf, theme};
 use egui::{Frame, RichText, ScrollArea, Ui};
 use logisim_core::{
@@ -12,6 +13,7 @@ pub(crate) fn show(
     circuit_name: &str,
     plugins: &[logisim_core::plugin::api::presentation::Library],
     files: &mut Vec<crate::FileAction>,
+    shortcuts: &Shortcuts,
 ) {
     let placing = matches!(editor.tool, Tool::Place(_));
     let target = if placing {
@@ -87,7 +89,7 @@ pub(crate) fn show(
                     } else if !placing && editor.simulation.has_component_controls(&c) {
                         theme::card(ui, tr("Simulation"), |ui| editor.simulation.component(ui, &c));
                     }
-                    component_editor(ui, editor, c, placing, plugins);
+                    component_editor(ui, editor, c, placing, plugins, shortcuts);
                 } else {
                     selection_info(ui, editor);
                 }
@@ -207,6 +209,7 @@ fn component_editor(
     mut c: Component,
     placing: bool,
     plugins: &[logisim_core::plugin::api::presentation::Library],
+    shortcuts: &Shortcuts,
 ) {
     if matches!(c.kind, Kind::Subcircuit(_)) {
         ui.strong(tf!("Circuit: {}", c.interface.name));
@@ -288,7 +291,11 @@ fn component_editor(
         c.position = Point::snapped(c.position.x as f32, c.position.y as f32);
     }
     ui.add_space(12.0);
-    if c.kind.rotatable() && ui.button(tr("Rotate clockwise · R")).clicked() {
+    if c.kind.rotatable()
+        && ui
+            .button(shortcuts.caption_with(Command::ToolRotate, "Rotate clockwise", ui))
+            .clicked()
+    {
         c.facing = c.facing.next();
     }
     if c != original {

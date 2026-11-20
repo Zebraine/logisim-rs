@@ -92,13 +92,16 @@ impl BindingEditor {
         }
     }
     pub(super) fn show(&mut self, ui: &mut Ui, bindings: &mut Shortcuts, query: &str) -> bool {
-        let category = tr("Shortcuts").to_lowercase();
+        let matches_label = |label| {
+            crate::Language::ALL
+                .into_iter()
+                .any(|language| language.translate(label).to_lowercase().contains(query))
+        };
+        let all = query.is_empty() || matches_label("Shortcuts");
         let matches = |c: Command| {
-            query.is_empty()
-                || category.contains(query)
-                || [c.id(), tr(c.label()), tr(c.group().label())]
-                    .iter()
-                    .any(|s| s.to_lowercase().contains(query))
+            all || c.id().contains(query)
+                || matches_label(c.label())
+                || matches_label(c.group().label())
         };
         if query.is_empty() {
             if self.confirm_reset {
@@ -159,14 +162,9 @@ impl BindingEditor {
                 },
             );
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if icons::button(
-                    ui,
-                    Icon::Restore,
-                    false,
-                    chord != c.default_chord(),
-                    "Restore default",
-                )
-                .clicked()
+                if icons::button(ui, Icon::Restore, false, chord != c.default_chord())
+                    .on_hover_text(tr("Restore default"))
+                    .clicked()
                 {
                     self.capture = None;
                     self.assign(bindings, c, c.default_chord());

@@ -787,6 +787,160 @@ fn menu_and_toolbar_follow_the_effective_binding() {
 }
 
 #[test]
+fn tool_search_matches_both_languages_and_restores_an_individual_binding() {
+    use crate::shortcuts::Command;
+    use crate::tests::support::widgets::has;
+    for language in Language::ALL {
+        for size in [vec2(720., 480.), vec2(1200., 820.)] {
+            let ctx = Context::default();
+            crate::configure(&ctx);
+            let mut app = Workspace {
+                settings_open: true,
+                ..Default::default()
+            };
+            app.set_language(language);
+            app.preferences
+                .shortcuts
+                .bind(Command::ToolPoke, "f6".parse().unwrap())
+                .unwrap();
+            app.preferences
+                .shortcuts
+                .bind(Command::ToolRotate, "f10".parse().unwrap())
+                .unwrap();
+            for query in ["tools", "工具", "tool.", "rotate", "旋转", "tool.rotate"] {
+                app.settings_page.query = query.into();
+                let mut labels = vec![];
+                for _ in 0..4 {
+                    labels = frame_at_size(&ctx, &mut app, vec![], size);
+                }
+                let group = crate::i18n::with_language(language, || tr("Tools").to_uppercase());
+                assert!(has(&labels, &group), "{language:?} {size:?} {query}");
+                let chord = if ["tools", "工具", "tool."].contains(&query) {
+                    "F6"
+                } else {
+                    "F10"
+                };
+                let bounds = ctx
+                    .memory(|m| m.area_rect(Id::unique("settings-window")))
+                    .unwrap();
+                let rect = labels
+                    .iter()
+                    .find(|(s, r)| s == chord && bounds.contains_rect(*r))
+                    .unwrap()
+                    .1;
+                if query == "tool.rotate" {
+                    let pos = egui::pos2(bounds.right() - 36., rect.center().y);
+                    for pressed in [true, false] {
+                        frame_at_size(
+                            &ctx,
+                            &mut app,
+                            vec![
+                                egui::Event::PointerMoved(pos),
+                                egui::Event::PointerButton {
+                                    pos,
+                                    button: egui::PointerButton::Primary,
+                                    pressed,
+                                    modifiers: Modifiers::NONE,
+                                },
+                            ],
+                            size,
+                        );
+                    }
+                }
+            }
+            assert_eq!(
+                app.preferences.shortcuts.get(Command::ToolRotate),
+                Command::ToolRotate.default_chord()
+            );
+            assert_eq!(
+                app.preferences.shortcuts.get(Command::ToolPoke).to_string(),
+                "f6"
+            );
+        }
+    }
+}
+
+#[test]
+fn all_tool_hints_and_the_canvas_rotate_menu_show_the_remapped_chord() {
+    use crate::{
+        editor::Tool,
+        shortcuts::Command::*,
+        tests::support::widgets::{frame_at_size, has},
+    };
+    let ctx = Context::default();
+    crate::configure(&ctx);
+    ctx.global_style_mut(|style| {
+        style.interaction.tooltip_delay = 0.;
+        style.interaction.show_tooltips_only_when_still = false;
+    });
+    let size = vec2(1200., 820.);
+    let mut app = Workspace::default();
+    app.editor.set_tool(Tool::Place(logisim_core::Kind::Tunnel));
+    for (command, chord, label, x) in [
+        (ToolSelect, "f5", "Select · F5", 53.),
+        (
+            ToolPoke,
+            "f6",
+            "Poke · toggle inputs / inspect signals · F6",
+            22.,
+        ),
+        (ToolWire, "f7", "Wire · drag or click two points · F7", 86.),
+        (ToolText, "f8", "Text · F8", 116.),
+        (ToolTunnel, "f9", "Tunnel · F9", 192.),
+        (ToolRotate, "f10", "Rotate clockwise · F10", 351.),
+    ] {
+        app.preferences
+            .shortcuts
+            .bind(command, chord.parse().unwrap())
+            .unwrap();
+        frame_at_size(
+            &ctx,
+            &mut app,
+            vec![egui::Event::PointerMoved(egui::pos2(x, 55.))],
+            size,
+        );
+        let mut labels = vec![];
+        for _ in 0..4 {
+            labels = frame_at_size(&ctx, &mut app, vec![], size);
+        }
+        assert!(has(&labels, label), "{label}");
+    }
+    let pos = app.canvas.rect.center();
+    for pressed in [true, false] {
+        frame_at_size(
+            &ctx,
+            &mut app,
+            vec![
+                egui::Event::PointerMoved(pos),
+                egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Secondary,
+                    pressed,
+                    modifiers: Modifiers::NONE,
+                },
+            ],
+            size,
+        );
+    }
+    assert!(has(
+        &frame_at_size(&ctx, &mut app, vec![], size),
+        "Rotate · F10"
+    ));
+    // Give the Inspector enough vertical space to display its rotate action.
+    let large = vec2(1200., 1600.);
+    frame_at_size(
+        &ctx,
+        &mut app,
+        vec![egui::Event::PointerMoved(egui::pos2(650., 350.))],
+        large,
+    );
+    assert!(has(
+        &frame_at_size(&ctx, &mut app, vec![], large),
+        "Rotate clockwise · F10"
+    ));
+}
+
+#[test]
 fn shortcut_search_and_conflict_fit_the_viewport_in_both_languages() {
     use crate::{shortcuts::Command, tests::support::widgets::click};
     for language in Language::ALL {

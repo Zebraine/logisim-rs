@@ -26,13 +26,7 @@ pub(crate) enum Icon {
     Home,
 }
 
-pub(crate) fn button(
-    ui: &mut Ui,
-    icon: Icon,
-    selected: bool,
-    enabled: bool,
-    hint: &str,
-) -> Response {
+pub(crate) fn button(ui: &mut Ui, icon: Icon, selected: bool, enabled: bool) -> Response {
     ui.add_enabled_ui(enabled, |ui| {
         let (rect, response) = ui.allocate_exact_size(
             egui::Vec2::splat(crate::theme::metrics(ui.ctx()).icon_button),
@@ -52,7 +46,7 @@ pub(crate) fn button(
             crate::theme::MUTED
         };
         paint(ui.painter(), rect.shrink(rect.width() * 0.25), icon, color);
-        response.on_hover_text(crate::i18n::tr(hint))
+        response
     })
     .inner
 }

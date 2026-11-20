@@ -400,7 +400,8 @@ impl Page {
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let defaults = Settings::default();
                 if e.changed(*values, defaults) {
-                    if icons::button(ui, Icon::Restore, false, enabled, "Reset to default")
+                    if icons::button(ui, Icon::Restore, false, enabled)
+                        .on_hover_text(tr("Reset to default"))
                         .clicked()
                     {
                         e.copy(values, defaults);

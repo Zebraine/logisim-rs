@@ -18,6 +18,10 @@ impl Language {
     pub fn name(self) -> &'static str {
         self.catalog().name
     }
+    pub(crate) fn translate(self, english: &str) -> &str {
+        KEYS.binary_search(&english)
+            .map_or(english, |i| self.catalog().messages[i])
+    }
     fn catalog(self) -> &'static Catalog {
         match self {
             Self::English => &ENGLISH,
@@ -46,8 +50,7 @@ pub fn with_language<R>(language: Language, render: impl FnOnce() -> R) -> R {
 }
 /// Translate an application-owned label. Never use this on user-supplied names or text.
 pub fn tr(english: &str) -> &str {
-    KEYS.binary_search(&english)
-        .map_or(english, |i| LANGUAGE.get().catalog().messages[i])
+    current_language().translate(english)
 }
 /// Positional placeholders keep inserted user data opaque, including braces and translation keys.
 pub fn format(english: &str, arguments: &[&dyn std::fmt::Display]) -> String {

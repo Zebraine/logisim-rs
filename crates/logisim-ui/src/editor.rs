@@ -901,7 +901,14 @@ impl Editor {
             }
 
             if ui
-                .add_enabled(self.can_rotate(), egui::Button::new(tr("Rotate · R")))
+                .add_enabled(
+                    self.can_rotate(),
+                    egui::Button::new(
+                        preferences
+                            .shortcuts
+                            .caption(crate::shortcuts::Command::ToolRotate, ui),
+                    ),
+                )
                 .clicked()
             {
                 self.rotate();

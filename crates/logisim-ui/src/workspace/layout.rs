@@ -169,7 +169,10 @@ impl Workspace {
                 ui.spacing_mut().item_spacing.x = 1.;
                 ui.spacing_mut().button_padding.x = 2.;
             }
-            if icons::button(ui, Icon::Minus, false, true, "Zoom out").clicked() {
+            if icons::button(ui, Icon::Minus, false, true)
+                .on_hover_text(tr("Zoom out"))
+                .clicked()
+            {
                 self.canvas.set_zoom(self.canvas.camera.zoom / 1.1);
             }
             let mut percent = self.canvas.camera.zoom * 100.0;
@@ -185,13 +188,19 @@ impl Workspace {
             {
                 self.canvas.set_zoom(percent / 100.0);
             }
-            if icons::button(ui, Icon::Plus, false, true, "Zoom in").clicked() {
+            if icons::button(ui, Icon::Plus, false, true)
+                .on_hover_text(tr("Zoom in"))
+                .clicked()
+            {
                 self.canvas.set_zoom(self.canvas.camera.zoom * 1.1);
             }
             if !tight {
                 ui.separator();
             }
-            if icons::button(ui, Icon::Home, false, true, "Reset canvas · Ctrl+0").clicked() {
+            if icons::button(ui, Icon::Home, false, true)
+                .on_hover_text(tr("Reset canvas · Ctrl+0"))
+                .clicked()
+            {
                 self.canvas.reset();
             }
             ui.checkbox(&mut self.preferences.show_grid, tr("Grid"));

@@ -70,6 +70,10 @@ impl Workspace {
             if self.dialog_open() {
                 break;
             }
+            // A preceding command in the same input batch can open the appearance editor.
+            if command.group() == Group::Tools && self.editor.session.context.appearance_mode {
+                continue;
+            }
             if self.command_enabled(command) {
                 self.run_command(command);
             }

@@ -84,6 +84,7 @@ impl Workspace {
                         &name,
                         &self.plugins,
                         &mut self.file_actions,
+                        &self.preferences.shortcuts,
                     );
                 }
             });
@@ -188,7 +189,8 @@ impl Workspace {
                         .on_hover_text(&title);
                 },
             );
-            let button = icons::button(ui, Icon::More, false, true, "Project actions");
+            let button =
+                icons::button(ui, Icon::More, false, true).on_hover_text(tr("Project actions"));
             egui::Popup::menu(&button).show(|ui| {
                 for (name, command) in [
                     ("Add circuit", CircuitCommand::Add),

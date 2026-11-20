@@ -4,6 +4,7 @@ use crate::{
     editor::Tool,
     i18n::tr,
     icons::{self, Icon},
+    shortcuts::Command,
 };
 use egui::{Align, Layout, Ui};
 use logisim_core::{Gate, Kind};
@@ -95,36 +96,50 @@ impl Workspace {
     }
 
     fn edit_tools(&mut self, ui: &mut Ui) {
-        for (icon, tool, hint) in [
-            (
-                Icon::Poke,
-                Tool::Poke,
-                "Poke · P · toggle inputs / inspect signals",
-            ),
-            (Icon::Select, Tool::Select, "Select · V"),
-            (
-                Icon::Wire,
-                Tool::Wire,
-                "Wire · W · drag or click two points",
-            ),
-            (Icon::Text, Tool::Place(Kind::Text), "Text · T"),
-            (Icon::Pin, Tool::Place(Kind::Pin), "Pin"),
-            (Icon::Tunnel, Tool::Place(Kind::Tunnel), "Tunnel · U"),
-            (Icon::Not, Tool::Place(Kind::Gate(Gate::Not)), "NOT Gate"),
-            (Icon::And, Tool::Place(Kind::Gate(Gate::And)), "AND Gate"),
-            (Icon::Or, Tool::Place(Kind::Gate(Gate::Or)), "OR Gate"),
+        let shortcuts = &self.preferences.shortcuts;
+        for (icon, tool) in [
+            (Icon::Poke, Tool::Poke),
+            (Icon::Select, Tool::Select),
+            (Icon::Wire, Tool::Wire),
+            (Icon::Text, Tool::Place(Kind::Text)),
+            (Icon::Pin, Tool::Place(Kind::Pin)),
+            (Icon::Tunnel, Tool::Place(Kind::Tunnel)),
+            (Icon::Not, Tool::Place(Kind::Gate(Gate::Not))),
+            (Icon::And, Tool::Place(Kind::Gate(Gate::And))),
+            (Icon::Or, Tool::Place(Kind::Gate(Gate::Or))),
         ] {
             if matches!(icon, Icon::Pin | Icon::Not) {
                 ui.separator();
             }
-            if icons::button(ui, icon, self.editor.tool == tool, true, hint).clicked() {
+            if icons::button(ui, icon, self.editor.tool == tool, true)
+                .on_hover_ui(|ui| {
+                    let hint = match tool {
+                        Tool::Poke => shortcuts.caption_with(
+                            Command::ToolPoke,
+                            "Poke · toggle inputs / inspect signals",
+                            ui,
+                        ),
+                        Tool::Wire => shortcuts.caption_with(
+                            Command::ToolWire,
+                            "Wire · drag or click two points",
+                            ui,
+                        ),
+                        Tool::Select => shortcuts.caption(Command::ToolSelect, ui),
+                        Tool::Place(Kind::Text) => shortcuts.caption(Command::ToolText, ui),
+                        Tool::Place(Kind::Tunnel) => shortcuts.caption(Command::ToolTunnel, ui),
+                        Tool::Place(kind) => tr(kind.name()).to_owned(),
+                    };
+                    ui.label(hint);
+                })
+                .clicked()
+            {
                 self.editor.set_tool(tool);
             }
         }
         ui.separator();
         if ui
             .add_enabled(self.editor.can_rotate(), egui::Button::new(tr("Rotate")))
-            .on_hover_text(tr("Rotate clockwise · R"))
+            .on_hover_text(shortcuts.caption_with(Command::ToolRotate, "Rotate clockwise", ui))
             .clicked()
         {
             self.editor.rotate();
