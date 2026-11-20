@@ -394,13 +394,158 @@ fn recovery_status_and_explicit_clear_leave_document_and_simulation_intact() {
                 assert!(app.take_file_actions().is_empty());
                 click(&ctx, &mut app, label("Clear recovery"));
                 click(&ctx, &mut app, label("Confirm clear"));
-                assert_eq!(app.take_file_actions(), [crate::FileAction::ClearRecovery]);
+                assert_eq!(
+                    app.take_file_actions(),
+                    [crate::FileAction::ClearRecovery {
+                        disabled_autosave: false
+                    }]
+                );
             }
             frame(&ctx, &mut app, vec![]);
             assert_eq!(app.project(), &project);
             assert!(!app.editor.can_undo());
             assert_eq!(app.simulation_mut().ticks, 31);
             assert!(app.take_simulation_actions().is_empty());
+        }
+    }
+}
+
+#[test]
+fn clearing_discloses_an_autosave_change_only_when_required() {
+    use crate::tests::support::widgets::{click, frame, has};
+    for lang in Language::ALL {
+        let label = |key: &'static str| crate::i18n::with_language(lang, || tr(key));
+        for (state, owned, dirty, autosave, clearable) in [
+            (
+                SnapshotState::Available {
+                    source: None,
+                    saved_at: 0,
+                },
+                false,
+                true,
+                true,
+                false,
+            ),
+            (
+                SnapshotState::Available {
+                    source: None,
+                    saved_at: 0,
+                },
+                true,
+                true,
+                true,
+                true,
+            ),
+            (
+                SnapshotState::Available {
+                    source: None,
+                    saved_at: 0,
+                },
+                true,
+                false,
+                true,
+                true,
+            ),
+            (
+                SnapshotState::Available {
+                    source: None,
+                    saved_at: 0,
+                },
+                true,
+                true,
+                false,
+                true,
+            ),
+            (SnapshotState::Damaged, false, true, true, true),
+            (
+                SnapshotState::Unavailable {
+                    snapshot_present: true,
+                },
+                false,
+                true,
+                true,
+                true,
+            ),
+            (
+                SnapshotState::Unavailable {
+                    snapshot_present: false,
+                },
+                false,
+                true,
+                true,
+                false,
+            ),
+        ] {
+            let ctx = Context::default();
+            crate::configure(&ctx);
+            let mut app = Workspace {
+                settings_open: true,
+                ..Default::default()
+            };
+            app.set_language(lang);
+            app.settings_page.select(Category::Files);
+            let before_edit = app.project().clone();
+            app.editor
+                .set_tool(crate::editor::Tool::Place(logisim_core::Kind::Pin));
+            app.editor.place(logisim_core::Point::new(20, 20));
+            app.document.dirty = dirty;
+            app.preferences.files.autosave = autosave;
+            app.set_recovery_view(RecoveryView {
+                state: state.clone(),
+                owned,
+                ..Default::default()
+            });
+            let project = app.project().clone();
+            app.simulation_mut().enabled = true;
+            app.simulation_mut().ticks = 29;
+            for size in [vec2(720., 480.), vec2(1200., 820.)] {
+                let mut labels = vec![];
+                for _ in 0..3 {
+                    labels = frame_at_size(&ctx, &mut app, vec![], size);
+                }
+                assert_eq!(has(&labels, label("Clear recovery")), clearable);
+                assert_eq!(
+                    has(&labels, label("Recovery copy is owned by another window.")),
+                    matches!(state, SnapshotState::Available { .. }) && !owned
+                );
+            }
+            if clearable {
+                let disable = dirty && autosave;
+                click(&ctx, &mut app, label("Clear recovery"));
+                let labels = frame(&ctx, &mut app, vec![]);
+                assert_eq!(
+                    has(
+                        &labels,
+                        label(
+                            "Autosave is on. Clearing will also turn Autosave off so this copy stays removed."
+                        )
+                    ),
+                    disable
+                );
+                click(&ctx, &mut app, label("Cancel"));
+                assert_eq!(app.preferences().files.autosave, autosave);
+                assert!(app.take_file_actions().is_empty());
+                click(&ctx, &mut app, label("Clear recovery"));
+                click(&ctx, &mut app, label("Confirm clear"));
+                assert_eq!(app.preferences().files.autosave, autosave && !disable);
+                assert_eq!(
+                    app.take_file_actions(),
+                    [crate::FileAction::ClearRecovery {
+                        disabled_autosave: disable
+                    }]
+                );
+            }
+            assert_eq!(app.project(), &project);
+            assert_eq!(app.document.dirty, dirty);
+            assert!(app.editor.can_undo() && !app.editor.can_redo());
+            assert!(app.simulation_mut().enabled);
+            assert_eq!(app.simulation_mut().ticks, 29);
+            assert!(app.take_simulation_actions().is_empty());
+            app.editor.undo();
+            assert_eq!(app.project(), &before_edit);
+            assert!(!app.editor.can_undo());
+            app.editor.redo();
+            assert_eq!(app.project(), &project);
         }
     }
 }

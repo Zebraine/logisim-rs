@@ -103,6 +103,7 @@ impl Workspace {
             &mut self.settings_open,
             &mut values,
             page::PageInfo {
+                document_dirty: self.document.dirty,
                 path: self.config_path.as_deref(),
                 error: self.settings_error.as_deref(),
                 recent: &self.recent,
@@ -115,9 +116,9 @@ impl Workspace {
                     self.settings_open = false;
                     self.file_actions.push(crate::FileAction::OpenRecent(index));
                 }
-                page::PageAction::ClearRecovery => {
-                    self.file_actions.push(crate::FileAction::ClearRecovery)
-                }
+                page::PageAction::ClearRecovery { disabled_autosave } => self
+                    .file_actions
+                    .push(crate::FileAction::ClearRecovery { disabled_autosave }),
                 page::PageAction::ClearRecent => {
                     self.file_actions.push(crate::FileAction::ClearRecent)
                 }

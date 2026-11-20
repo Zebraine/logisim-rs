@@ -326,8 +326,13 @@ fn clear_only_removes_snapshot_files_and_preserves_the_working_document() {
     w.replace_project(dirty_project());
     w.simulation_mut().ticks = 37;
     checkpoint(&mut files, &w);
+    let mut settings = w.preferences();
+    settings.files.autosave = false;
+    w.apply_settings(settings);
     files.request(
-        FileAction::ClearRecovery,
+        FileAction::ClearRecovery {
+            disabled_autosave: true,
+        },
         &egui::Context::default(),
         &mut w,
         &mut sim,
@@ -336,6 +341,8 @@ fn clear_only_removes_snapshot_files_and_preserves_the_working_document() {
     assert_eq!(w.project(), &dirty_project());
     assert_eq!(w.simulation_mut().ticks, 37);
     assert_eq!(fs::read(path).unwrap(), disk);
+    checkpoint(&mut files, &w);
+    assert!(!w.preferences().files.autosave);
     assert!(fs::read_dir(dir).unwrap().next().is_none());
 }
 
@@ -359,4 +366,42 @@ fn closing_after_returning_to_the_clean_baseline_removes_the_old_checkpoint() {
     );
     assert!(files.allow_close && !files.busy());
     assert!(fs::read_dir(dir).unwrap().next().is_none());
+}
+
+#[test]
+fn clear_failure_rolls_back_only_the_disclosed_setting_and_allows_retry() {
+    for previously_on in [true, false] {
+        let tmp = Temp::new();
+        let dir = tmp.path("recovery");
+        let mut files = Files::with_recovery(Some(dir.clone()));
+        let mut w = Workspace::default();
+        w.replace_project(dirty_project());
+        checkpoint(&mut files, &w);
+        let mut values = w.preferences();
+        values.files.autosave = false;
+        w.apply_settings(values);
+        let lock = fs::File::open(tmp.path(".recovery.lock")).unwrap();
+        lock.try_lock().unwrap();
+        let ctx = egui::Context::default();
+        let mut sim = Simulator::default();
+        let action = FileAction::ClearRecovery {
+            disabled_autosave: previously_on,
+        };
+        files.request(action, &ctx, &mut w, &mut sim);
+        let view = files.autosave.view();
+        assert!(view.owned && view.error.as_deref() == Some("Recovery storage is busy."));
+        assert_eq!(view.directory.unwrap(), dir.to_str().unwrap());
+        assert!(dir.join("current.circ").is_file() && dir.join("current.json").is_file());
+        assert_eq!(w.preferences().files.autosave, previously_on);
+        assert!(!files.busy() && files.present(&w).dirty);
+        drop(lock);
+        w.apply_settings(values);
+        files.request(action, &ctx, &mut w, &mut sim);
+        assert_eq!(
+            files.autosave.view().state,
+            logisim_ui::SnapshotState::Empty
+        );
+        assert!(!w.preferences().files.autosave);
+        assert_eq!(w.project(), &dirty_project());
+    }
 }

@@ -10,6 +10,7 @@ use crate::{
 use egui::{Align, Context, Id, Key, Layout, Modifiers, RichText, Ui, vec2};
 
 pub(super) struct PageInfo<'a> {
+    pub document_dirty: bool,
     pub path: Option<&'a str>,
     pub error: Option<&'a str>,
     pub recent: &'a [String],
@@ -18,7 +19,7 @@ pub(super) enum PageAction {
     Retry,
     OpenRecent(usize),
     ClearRecent,
-    ClearRecovery,
+    ClearRecovery { disabled_autosave: bool },
     ResetLayout,
 }
 
@@ -54,11 +55,7 @@ impl Page {
         values: &mut Settings,
         info: PageInfo<'_>,
     ) -> Option<PageAction> {
-        let PageInfo {
-            path,
-            error,
-            recent,
-        } = info;
+        let PageInfo { path, error, .. } = info;
         let mut action = None;
         let screen = ctx.content_rect();
         let search_id = Id::unique("preference-search");
@@ -163,7 +160,7 @@ impl Page {
                                                 });
                                             ui.add_space(f32::from(theme::metrics(ui.ctx()).gap));
                                         }
-                                        self.content(ui, values, path, recent, &mut action);
+                                        self.content(ui, values, &info, &mut action);
                                     });
                             },
                         );
@@ -216,10 +213,15 @@ impl Page {
         &mut self,
         ui: &mut Ui,
         values: &mut Settings,
-        path: Option<&str>,
-        recent: &[String],
+        info: &PageInfo<'_>,
         action: &mut Option<PageAction>,
     ) {
+        let PageInfo {
+            path,
+            recent,
+            document_dirty,
+            ..
+        } = *info;
         let q = self.query.trim().to_lowercase();
         if q.is_empty() && self.category == Category::Advanced {
             theme::card(ui, tr("Configuration"), |ui| {
@@ -273,11 +275,18 @@ impl Page {
                 self.recovery.details(ui);
                 if self.recovery.can_clear() {
                     if self.confirm_clear {
+                        let disabled_autosave = document_dirty && values.files.autosave;
                         ui.label(tr("Delete this recovery copy?"));
+                        if disabled_autosave {
+                            ui.label(tr("Autosave is on. Clearing will also turn Autosave off so this copy stays removed."));
+                        }
                         ui.horizontal_wrapped(|ui| {
                             if ui.button(tr("Confirm clear")).clicked() {
                                 self.confirm_clear = false;
-                                *action = Some(PageAction::ClearRecovery);
+                                if disabled_autosave {
+                                    values.files.autosave = false;
+                                }
+                                *action = Some(PageAction::ClearRecovery { disabled_autosave });
                             }
                             if ui.button(tr("Cancel")).clicked() {
                                 self.confirm_clear = false;
@@ -286,6 +295,8 @@ impl Page {
                     } else if ui.button(tr("Clear recovery")).clicked() {
                         self.confirm_clear = true;
                     }
+                } else if matches!(self.recovery.state, SnapshotState::Available { .. }) {
+                    ui.label(tr("Recovery copy is owned by another window."));
                 }
             });
         }

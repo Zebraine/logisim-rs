@@ -191,10 +191,11 @@ impl Files {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             return;
         }
-        if self.busy() {
+        let clear_recovery = matches!(action, FileAction::ClearRecovery { .. });
+        if self.busy() && !clear_recovery {
             return;
         }
-        if !matches!(action, FileAction::ClearRecent | FileAction::ClearRecovery) {
+        if !clear_recovery && action != FileAction::ClearRecent {
             workspace.finish_edit();
         }
         match action {
@@ -225,10 +226,22 @@ impl Files {
                 }
             }
             FileAction::SaveAs => self.picker(Mode::Save),
-            FileAction::ClearRecovery => {
-                if let Err(error) = self.autosave.clear_from_settings() {
+            FileAction::ClearRecovery { disabled_autosave } => {
+                let result = if self.busy() {
+                    Err("Recovery storage is busy.".into())
+                } else {
+                    self.autosave.clear_from_settings()
+                };
+                if let Err(error) = result {
+                    if disabled_autosave {
+                        let mut settings = workspace.preferences();
+                        settings.files.autosave = true;
+                        workspace.apply_settings(settings);
+                    }
                     self.autosave.report(error);
                 }
+                self.autosave.publish(workspace);
+                ctx.request_repaint();
             }
             FileAction::ClearRecent => workspace.set_recent(Vec::new()),
             FileAction::Save => {

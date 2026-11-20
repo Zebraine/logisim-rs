@@ -61,6 +61,7 @@
     "Automatic ticks · Ctrl+K": "自动时钟步进 · Ctrl+K",
     "Autosave": "自动保存",
     "Autosave interval must be between 1 and 30 minutes.": "自动保存间隔必须在 1 到 30 分钟之间。",
+    "Autosave is on. Clearing will also turn Autosave off so this copy stays removed.": "自动保存已开启。清除这份恢复副本时也会关闭自动保存，避免副本再次生成。",
     "Back": "返回",
     "Background": "背景",
     "Base": "基础",

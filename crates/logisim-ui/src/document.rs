@@ -5,7 +5,9 @@ pub enum FileAction {
     Open,
     OpenRecent(usize),
     ClearRecent,
-    ClearRecovery,
+    ClearRecovery {
+        disabled_autosave: bool,
+    },
     Save,
     SaveAs,
     ImportMemory,

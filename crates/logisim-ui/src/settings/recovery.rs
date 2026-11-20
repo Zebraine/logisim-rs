@@ -25,14 +25,12 @@ pub struct RecoveryView {
 }
 impl RecoveryView {
     pub(crate) fn can_clear(&self) -> bool {
-        matches!(
-            self.state,
-            SnapshotState::Available { .. }
-                | SnapshotState::Damaged
-                | SnapshotState::Unavailable {
-                    snapshot_present: true
-                }
-        )
+        match self.state {
+            SnapshotState::Available { .. } => self.owned,
+            SnapshotState::Damaged => true,
+            SnapshotState::Unavailable { snapshot_present } => snapshot_present,
+            SnapshotState::Empty => false,
+        }
     }
     pub fn details(&self, ui: &mut Ui) {
         match &self.state {
