@@ -159,3 +159,46 @@ fn import_cancel_invalid_and_changed_sources_do_not_mutate_the_document() {
     assert_eq!(h.files.present(&h.ws).dirty, dirty);
     assert_eq!(h.ws.simulation_mut().ticks, 142);
 }
+
+#[test]
+fn directory_picker_lists_only_directories_and_applies_only_on_accept() {
+    let mut h = Harness::default();
+    let temp = crate::tests::support::Temp::new();
+    fs::create_dir(temp.path("modules")).unwrap();
+    fs::write(temp.path("file.wasm"), []).unwrap();
+    h.files.directory = temp.0.clone();
+    for button in ["Cancel", "Use this folder"] {
+        h.files.request(
+            FileAction::ChoosePluginFallback,
+            &h.ctx,
+            &mut h.ws,
+            &mut h.sim,
+        );
+        assert!(!h.files.suspends_simulation());
+        h.frame(vec![]);
+        let labels = h.frame(vec![]);
+        assert!(labels.iter().any(|(s, _)| s == "modules/"));
+        assert!(!labels.iter().any(|(s, _)| s == "file.wasm"));
+        h.click("modules/");
+        h.click(button);
+        assert!(!h.files.busy());
+        if button == "Cancel" {
+            assert!(h.ws.plugin_fallback_directory.is_none());
+        }
+    }
+    assert_eq!(
+        h.ws.plugin_fallback_directory,
+        Some(temp.path("modules").canonicalize().unwrap())
+    );
+    h.preferences.synchronize(&mut h.ws);
+    let mut restarted = Workspace::default();
+    let _ = crate::preferences::Preferences::at(
+        Some(h.config_dir.path("preferences.json")),
+        &mut restarted,
+    );
+    assert_eq!(
+        h.ws.plugin_fallback_directory,
+        restarted.plugin_fallback_directory
+    );
+    assert!(!h.files.present(&h.ws).dirty);
+}

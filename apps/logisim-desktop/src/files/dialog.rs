@@ -83,7 +83,7 @@ impl Dialog {
         matches!(
             self,
             Self::Picker(Picker {
-                mode: super::Mode::Settings(_),
+                mode: super::Mode::Settings(_) | super::Mode::Directory,
                 ..
             }) | Self::ReplaceSettings { .. }
                 | Self::ImportSettings { .. }

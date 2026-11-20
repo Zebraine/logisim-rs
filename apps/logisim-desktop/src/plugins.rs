@@ -111,6 +111,43 @@ pub(crate) fn rebase(project: &mut Project, from: &Path, to: &Path) {
         }
     }
 }
+impl Row {
+    fn candidates(&self, base: &Path, directory: Option<&Path>) -> Vec<(PathBuf, bool)> {
+        // Never mask a bad location explicitly entered in the repair dialog.
+        if !self.location.is_empty() {
+            return vec![(absolute(Path::new(&self.location), base), false)];
+        }
+        let mut recorded = [
+            Path::new(&self.source.path),
+            Path::new(&self.source.fallback),
+        ];
+        recorded.sort_by_key(|p| p.is_absolute());
+        let mut paths: Vec<_> = recorded
+            .into_iter()
+            .filter(|p| !p.as_os_str().is_empty())
+            .map(|p| (absolute(p, base), false))
+            .collect();
+        paths.dedup();
+        if let Some(dir) = directory {
+            let name = [&self.source.path, &self.source.fallback]
+                .into_iter()
+                .filter_map(|p| Path::new(p).file_name())
+                .find(|name| {
+                    Path::new(name)
+                        .extension()
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("wasm"))
+                });
+            if let Some(name) = name {
+                let path = dir.join(name);
+                if !paths.iter().any(|(recorded, _)| *recorded == path) {
+                    paths.push((path, true));
+                }
+            }
+        }
+        paths
+    }
+}
+
 impl Resolution {
     pub fn new(
         project: &Project,
@@ -176,32 +213,9 @@ impl Resolution {
         row.loaded = None;
         row.found = None;
         row.from_directory = false;
-        let mut candidates = if row.location.is_empty() {
-            vec![row.source.path.as_str(), row.source.fallback.as_str()]
-        } else {
-            vec![row.location.as_str()]
-        };
-        candidates.retain(|s| !s.is_empty());
-        candidates.sort_by_key(|p| Path::new(p).is_absolute());
-        let recorded = candidates
-            .into_iter()
-            .map(|p| (absolute(Path::new(p), &self.base), false));
-        // A manually entered location is authoritative, including when its validation fails.
-        let directory_candidate = self
-            .fallback_directory
-            .as_ref()
-            .filter(|_| row.location.is_empty())
-            .and_then(|dir| {
-                let name = [&row.source.path, &row.source.fallback]
-                    .into_iter()
-                    .find_map(|p| Path::new(p).file_name())?;
-                Path::new(name)
-                    .extension()
-                    .is_some_and(|ext| ext.eq_ignore_ascii_case("wasm"))
-                    .then(|| (dir.join(name), true))
-            });
+        let candidates = row.candidates(&self.base, self.fallback_directory.as_deref());
         let mut errors = Vec::new();
-        for (path, from_directory) in recorded.chain(directory_candidate) {
+        for (path, from_directory) in candidates {
             match load(
                 &path,
                 &row.source.plugin,

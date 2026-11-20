@@ -1694,3 +1694,56 @@ fn compact_help_covers_disabled_and_custom_actions_without_activating_them() {
         assert_eq!(w.preferences(), values);
     }
 }
+
+#[test]
+fn fallback_directory_search_choose_and_clear_fit_both_languages_and_themes() {
+    let long_path =
+        std::path::PathBuf::from(format!("/plugins/{}/modules", "long-folder/".repeat(30)));
+    for language in Language::ALL {
+        let t = |label| crate::i18n::with_language(language, || tr(label));
+        for theme in [crate::ThemeMode::Light, crate::ThemeMode::Dark] {
+            for size in [vec2(720., 480.), vec2(1200., 820.)] {
+                let ctx = Context::default();
+                crate::configure(&ctx);
+                let mut w = Workspace {
+                    settings_open: true,
+                    ..Default::default()
+                };
+                w.apply_settings(Settings {
+                    language,
+                    theme,
+                    ..Default::default()
+                });
+                for query in [t(FALLBACK_LABEL), "plugins.fallback_directory"] {
+                    w.settings_page.query = query.into();
+                    w.plugin_fallback_directory = Some(long_path.clone());
+                    for _ in 0..3 {
+                        frame_at_size(&ctx, &mut w, vec![], size);
+                    }
+                    let labels = frame_at_size(&ctx, &mut w, vec![], size);
+                    let rect = |name: &str| labels.iter().rfind(|(s, _)| s == name).unwrap().1;
+                    let body = ctx
+                        .memory(|m| m.area_rect(Id::unique("settings-window")))
+                        .unwrap();
+                    assert!(body.contains_rect(rect(long_path.to_str().unwrap())));
+                    for label in ["Choose…", "Clear"] {
+                        let button = rect(t(label));
+                        assert!(body.contains_rect(button));
+                        tap(&ctx, size, &mut w, button.center());
+                    }
+                    assert_eq!(
+                        w.take_file_actions(),
+                        [crate::FileAction::ChoosePluginFallback]
+                    );
+                    assert!(w.plugin_fallback_directory.is_none());
+                    assert!(
+                        frame_at_size(&ctx, &mut w, vec![], size)
+                            .iter()
+                            .any(|(s, _)| s == t("Not set"))
+                    );
+                    assert!(!w.document.dirty && !w.editor.can_undo());
+                }
+            }
+        }
+    }
+}

@@ -244,7 +244,10 @@ fn host_directory_loads_without_an_edit_and_only_confirmation_relocates() {
     }
     assert_eq!(fs::read_to_string(&path).unwrap(), original);
     assert!(h.files.present(&h.ws).dirty && !h.ws.needs_plugin_resolution());
-    assert_eq!(Path::new(&h.ws.project().plugin_sources[0].path), candidate);
+    assert_eq!(
+        Path::new(&h.ws.project().plugin_sources[0].path),
+        candidate.canonicalize().unwrap()
+    );
     h.files
         .request(FileAction::Save, &h.ctx, &mut h.ws, &mut h.sim);
     h.ws.plugin_fallback_directory = None;

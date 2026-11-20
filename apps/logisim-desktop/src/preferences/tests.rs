@@ -861,3 +861,36 @@ fn fallback_directory_is_validated_local_state_and_survives_portable_transfers()
             .is_none()
     );
 }
+
+#[test]
+fn failed_local_directory_write_preserves_the_previous_path_on_disk() {
+    let temp = Temp::new();
+    let previous = temp.0.join("previous");
+    fs::create_dir(&previous).unwrap();
+    let path = temp.0.join("preferences.json");
+    let mut ws = Workspace::default();
+    let mut prefs = Preferences::at(Some(path.clone()), &mut ws);
+    let previous = previous.canonicalize().unwrap();
+    ws.plugin_fallback_directory = Some(previous.clone());
+    prefs.synchronize(&mut ws);
+    let mut external = fs::read(&path).unwrap();
+    external.push(b' ');
+    fs::write(&path, &external).unwrap();
+    ws.plugin_fallback_directory = None;
+    prefs.synchronize(&mut ws);
+    assert!(prefs.blocked);
+    assert_eq!(fs::read(&path).unwrap(), external);
+    assert_eq!(
+        schema::decode(&external).unwrap().plugins.directory(),
+        Some(previous.as_path())
+    );
+    prefs.retry(&mut ws);
+    prefs.synchronize(&mut ws);
+    assert!(
+        schema::decode(&fs::read(path).unwrap())
+            .unwrap()
+            .plugins
+            .directory()
+            .is_none()
+    );
+}

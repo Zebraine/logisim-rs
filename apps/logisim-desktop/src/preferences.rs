@@ -21,7 +21,13 @@ pub(crate) fn canonical_plugin_directory(path: &Path) -> std::io::Result<PathBuf
         ));
     }
     let dir = path.canonicalize()?;
-    if !dir.metadata()?.is_dir() || dir.to_str().is_none() {
+    if !dir.metadata()?.is_dir() {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            "Choose an existing directory.",
+        ));
+    }
+    if dir.to_str().is_none() {
         return Err(Error::new(
             ErrorKind::InvalidInput,
             "Choose a directory with a UTF-8 path.",

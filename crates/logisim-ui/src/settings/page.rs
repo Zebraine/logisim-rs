@@ -12,6 +12,7 @@ use egui::{Align, Context, Id, Key, Layout, Modifiers, RichText, Ui, vec2};
 
 pub(super) struct PageInfo<'a> {
     pub document_dirty: bool,
+    pub plugin_fallback_directory: Option<&'a std::path::Path>,
     pub path: Option<&'a str>,
     pub error: Option<&'a str>,
     pub recent: &'a [String],
@@ -22,6 +23,8 @@ pub(super) enum PageAction {
     ClearRecent,
     ClearRecovery { disabled_autosave: bool },
     ResetLayout,
+    ChoosePluginFallback,
+    ClearPluginFallback,
     SettingsFile(crate::SettingsFileAction),
 }
 
@@ -279,9 +282,22 @@ impl Page {
                     }
                 });
             });
+            ui.add_space(f32::from(theme::metrics(ui.ctx()).gap));
+            fallback_card(ui, info.plugin_fallback_directory, compact, action);
             return;
         }
-        let mut found = false;
+        let mut found = !q.is_empty()
+            && [
+                "plugins.fallback_directory",
+                FALLBACK_LABEL,
+                tr(FALLBACK_LABEL),
+            ]
+            .iter()
+            .any(|s| s.to_lowercase().contains(&q));
+        if found {
+            fallback_card(ui, info.plugin_fallback_directory, compact, action);
+            ui.add_space(f32::from(theme::metrics(ui.ctx()).gap));
+        }
         let active = self.category;
         let files_page = self.showing_files();
         let recovery_first = files_page
@@ -486,6 +502,45 @@ impl Page {
         }
     }
 }
+const FALLBACK_LABEL: &str = "Plugin fallback directory";
+const FALLBACK_HELP: &str = "When both project paths fail, try the same .wasm file name in this folder. Subfolders are skipped. Confirm in Project Options to update the project path.";
+
+fn fallback_card(
+    ui: &mut Ui,
+    directory: Option<&std::path::Path>,
+    compact: bool,
+    action: &mut Option<PageAction>,
+) {
+    ui.push_id("plugins.fallback_directory", |ui| {
+        theme::card(ui, tr(FALLBACK_LABEL), |ui| {
+            if let Some(dir) = directory {
+                let path = dir.to_string_lossy();
+                ui.add(egui::Label::new(path.as_ref()).truncate())
+                    .on_hover_text(path);
+            } else {
+                ui.weak(tr("Not set"));
+            }
+            if !compact {
+                ui.label(tr(FALLBACK_HELP));
+            }
+            ui.horizontal_wrapped(|ui| {
+                if ui.button(tr("Choose…")).clicked() {
+                    *action = Some(PageAction::ChoosePluginFallback);
+                }
+                if ui
+                    .add_enabled(directory.is_some(), egui::Button::new(tr("Clear")))
+                    .clicked()
+                {
+                    *action = Some(PageAction::ClearPluginFallback);
+                }
+                if compact {
+                    help_button(ui, FALLBACK_LABEL, FALLBACK_HELP);
+                }
+            });
+        })
+    });
+}
+
 // The button is active even when the setting it describes is disabled.
 fn help_button(ui: &mut Ui, label: &str, help: &str) {
     let side = theme::metrics(ui.ctx()).icon_button;

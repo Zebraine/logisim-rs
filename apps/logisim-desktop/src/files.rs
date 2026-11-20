@@ -246,7 +246,10 @@ impl Files {
         if !clear_recovery
             && !matches!(
                 action,
-                FileAction::ClearRecent | FileAction::Settings(_) | FileAction::ExportImage
+                FileAction::ClearRecent
+                    | FileAction::Settings(_)
+                    | FileAction::ChoosePluginFallback
+                    | FileAction::ExportImage
             )
         {
             workspace.finish_edit();
@@ -282,6 +285,17 @@ impl Files {
                         target: Box::new(target),
                     });
                 }
+            }
+            FileAction::ChoosePluginFallback => {
+                let dir = workspace
+                    .plugin_fallback_directory
+                    .as_ref()
+                    .unwrap_or(&self.directory);
+                self.dialog = Some(Dialog::Picker(Picker::new(
+                    Mode::Directory,
+                    dir.clone(),
+                    "",
+                )));
             }
             FileAction::Settings(action) => self.picker(Mode::Settings(action)),
             FileAction::ExportImage => self.picker(Mode::ExportImage),

@@ -18,6 +18,10 @@ impl Files {
                 return;
             }
             (_, Response::Cancel) => return,
+            (Dialog::Picker(picker), Response::Pick(path)) if picker.mode == Mode::Directory => {
+                workspace.plugin_fallback_directory = Some(path);
+                return;
+            }
             (Dialog::Picker(picker), Response::Pick(path)) => {
                 let result = match picker.mode {
                     Mode::Settings(SettingsFileAction::Import) => {

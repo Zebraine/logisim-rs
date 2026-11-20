@@ -109,6 +109,7 @@ impl Workspace {
             &mut values,
             page::PageInfo {
                 document_dirty: self.document.dirty,
+                plugin_fallback_directory: self.plugin_fallback_directory.as_deref(),
                 path: self.config_path.as_deref(),
                 error: self.settings_error.as_deref(),
                 recent: &self.recent,
@@ -119,6 +120,10 @@ impl Workspace {
                 page::PageAction::SettingsFile(action) => {
                     self.file_actions.push(crate::FileAction::Settings(action))
                 }
+                page::PageAction::ChoosePluginFallback => self
+                    .file_actions
+                    .push(crate::FileAction::ChoosePluginFallback),
+                page::PageAction::ClearPluginFallback => self.plugin_fallback_directory = None,
                 page::PageAction::Retry => self.retry_settings = true,
                 page::PageAction::OpenRecent(index) => {
                     self.settings_open = false;

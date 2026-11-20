@@ -18,6 +18,7 @@ pub enum FileAction {
     SaveAs,
     ExportImage,
     Settings(SettingsFileAction),
+    ChoosePluginFallback,
     ImportMemory,
     ImportPlugin {
         component: logisim_core::Id,

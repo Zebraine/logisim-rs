@@ -14,16 +14,18 @@ pub(super) enum Mode {
     Library,
     Plugin,
     ExportImage,
+    Directory,
     Settings(logisim_ui::SettingsFileAction),
 }
 impl Mode {
-    fn extension(self) -> &'static str {
+    fn extension(self) -> Option<&'static str> {
         match self {
-            Self::Settings(_) => "json",
-            Self::Plugin => "wasm",
-            Self::ExportImage => "png",
-            Self::Memory => "hex",
-            Self::Open | Self::Save | Self::Library => "circ",
+            Self::Directory => None,
+            Self::Settings(_) => Some("json"),
+            Self::Plugin => Some("wasm"),
+            Self::ExportImage => Some("png"),
+            Self::Memory => Some("hex"),
+            Self::Open | Self::Save | Self::Library => Some("circ"),
         }
     }
     fn saving(self) -> bool {
@@ -66,7 +68,8 @@ impl Picker {
                     if dir
                         || path
                             .extension()
-                            .is_some_and(|s| s.eq_ignore_ascii_case(self.mode.extension()))
+                            .zip(self.mode.extension())
+                            .is_some_and(|(s, ext)| s.eq_ignore_ascii_case(ext))
                     {
                         self.entries.push((path, dir));
                     }
@@ -93,6 +96,7 @@ impl Picker {
                 ("import-settings", "Import settings…")
             }
             Mode::ExportImage => ("export-image", "Export Image…"),
+            Mode::Directory => ("choose-plugin-directory", "Plugin fallback directory"),
             Mode::Open => ("open-circuit", "Open circuit"),
             Mode::Save => ("save-circuit", "Save circuit as"),
             Mode::Memory => ("import-memory", "Import memory image"),
@@ -106,6 +110,8 @@ impl Picker {
             dialog.body(|ui| {
                 ui.label(tr(if matches!(self.mode, Mode::Settings(_)) {
                     "Settings files (.json)"
+                } else if self.mode == Mode::Directory {
+                    "Choose the folder containing the plugin files."
                 } else if self.mode == Mode::ExportImage {
                     "Current canvas viewport (.png)"
                 } else if self.mode == Mode::Plugin {
@@ -171,7 +177,11 @@ impl Picker {
                     self.enter(&path);
                 }
                 ui.separator();
-                ui.label(tr("File name or full path"));
+                ui.label(tr(if self.mode == Mode::Directory {
+                    "Folder path"
+                } else {
+                    "File name or full path"
+                }));
                 let edit = ui.add(
                     egui::TextEdit::singleline(&mut self.path)
                         .desired_width(f32::INFINITY)
@@ -188,7 +198,13 @@ impl Picker {
             });
             dialog.footer("Cancel", |ui| {
                 submit |= ui
-                    .button(tr(if self.mode.saving() { "Save" } else { "Open" }))
+                    .button(tr(if self.mode == Mode::Directory {
+                        "Use this folder"
+                    } else if self.mode.saving() {
+                        "Save"
+                    } else {
+                        "Open"
+                    }))
                     .clicked();
             });
         });
@@ -196,7 +212,7 @@ impl Picker {
             return Response::Cancel;
         }
         if submit {
-            if self.path.trim().is_empty() {
+            if self.mode != Mode::Directory && self.path.trim().is_empty() {
                 self.error = Some(tr("Enter a file name.").into());
                 return Response::Wait;
             }
@@ -208,6 +224,15 @@ impl Picker {
             });
         }
         if let Some(mut path) = picked {
+            if self.mode == Mode::Directory {
+                return match crate::preferences::canonical_plugin_directory(&path) {
+                    Ok(dir) => Response::Pick(dir),
+                    Err(error) => {
+                        self.error = Some(tr(&error.to_string()).into());
+                        Response::Wait
+                    }
+                };
+            }
             if path.is_dir() {
                 if self.mode == Mode::ExportImage
                     && path
@@ -221,7 +246,7 @@ impl Picker {
                 return Response::Wait;
             }
             if matches!(self.mode, Mode::Settings(_) | Mode::ExportImage) {
-                let extension = self.mode.extension();
+                let extension = self.mode.extension().expect("file export/import extension");
                 if self.mode.saving() && path.extension().is_none() {
                     path.set_extension(extension);
                 }

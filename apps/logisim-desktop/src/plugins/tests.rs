@@ -168,13 +168,22 @@ fn host_directory_is_last_single_basename_and_checks_the_module() {
     fs::write(&fallback, &zero).unwrap();
     let resolved = resolve(&project);
     assert!(!resolved.rows[0].from_directory);
-    assert_eq!(resolved.rows[0].found.as_ref(), Some(&fallback));
+    assert_eq!(
+        resolved.rows[0].found,
+        Some(fallback.canonicalize().unwrap())
+    );
     fs::write(&path, &good).unwrap();
-    assert_eq!(resolve(&project).rows[0].found.as_ref(), Some(&path));
+    assert_eq!(
+        resolve(&project).rows[0].found,
+        Some(path.canonicalize().unwrap())
+    );
     fs::remove_file(fallback).unwrap();
     project.plugin_sources[0].path.clear();
     project.plugin_sources[0].fallback = "absent/mod.wasm".into();
     assert!(resolve(&project).rows[0].from_directory);
+    project.plugin_sources[0].path = "unusable-name".into();
+    assert!(resolve(&project).rows[0].from_directory);
+    project.plugin_sources[0].path.clear();
     project.plugin_sources[0].fallback.clear();
     assert!(resolve(&project).missing());
     project.plugin_sources[0].fallback = "missing/not-a-module.txt".into();
@@ -202,6 +211,35 @@ fn inaccessible_directory_candidate_does_not_block_other_sources() {
                 .as_ref()
                 .unwrap()
                 .contains(dir.to_str().unwrap())
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn unreadable_same_name_module_reports_its_path() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = Temp::new();
+    let (project, wasm) = fixture("test.permissions", 1);
+    let dir = temp.path("modules");
+    fs::create_dir(&dir).unwrap();
+    let candidate = dir.join("missing.wasm");
+    fs::write(&candidate, wasm).unwrap();
+    fs::set_permissions(&candidate, fs::Permissions::from_mode(0o000)).unwrap();
+    // Privileged test runners can still read files with mode 000.
+    if fs::File::open(&candidate).is_err_and(|e| e.kind() == std::io::ErrorKind::PermissionDenied) {
+        let result = Resolution::new(&project, temp.0.clone(), Some(&dir), vec![]);
+        assert!(result.missing());
+        assert!(
+            result.rows[0]
+                .error
+                .as_ref()
+                .unwrap()
+                .contains(candidate.to_str().unwrap())
+        );
+        assert_eq!(
+            result.sources(&project.plugin_sources),
+            project.plugin_sources
         );
     }
 }
