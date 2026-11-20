@@ -1,6 +1,7 @@
-//! Read-only projection of the imported document. IDs belong to this parsed project.
+//! Project sessions and projections of their circuit-scoped item identities.
+mod properties;
 use crate::{Error, Result, digest, io};
-use logisim_core::{Component, Kind, Point, Project};
+use logisim_core::{Component, Point, Project};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 
@@ -73,15 +74,59 @@ fn component(c: &Component) -> Value {
     let mut data = json!({"id":c.id,"kind":c.kind.name(),"position":point(c.position),"facing":c.facing.name(),"bits":c.bits,
         "label":c.label,"font":{"family":c.font.family,"size":c.font.size,"bold":c.font.bold,"italic":c.font.italic},
         "color":[c.color[0],c.color[1],c.color[2],c.color_alpha]});
-    match c.kind {
-        Kind::Pin => data["output"] = c.output.into(),
-        Kind::Constant => data["constant"] = c.constant.into(),
-        Kind::Gate(_) | Kind::Parity(_) => data["inputs"] = c.input_count().into(),
-        Kind::Subcircuit(id) => data["circuit_id"] = id.into(),
-        _ => {}
-    }
+    let ports: Vec<_> = c
+        .ports()
+        .into_iter()
+        .enumerate()
+        .map(|(index, position)| {
+            json!({
+                "index": index, "position": point(position), "bits": c.port_width(index)
+            })
+        })
+        .collect();
+    data["ports"] = ports.into();
+    properties::describe(c, &mut data);
     if let Some(plugin) = &c.plugin {
         data["plugin"] = json!({"id":plugin.plugin,"version":plugin.version,"tool":plugin.tool.id,"name":plugin.tool.name,"properties":plugin.properties});
     }
     data
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use logisim_core::{Gate, Kind, Parity, ParityOutput, PinPull, Radix};
+
+    #[test]
+    fn snapshot_reads_the_component_model_and_identifies_writable_fields() {
+        let mut pin = Component::new(Kind::Pin, Point::new(30, 70));
+        pin.pin.three_state = true;
+        pin.pin.pull = PinPull::Down;
+        pin.bits = 8;
+        let p = component(&pin);
+        assert_eq!(p["three_state"], true);
+        assert_eq!(p["pull"], "down");
+        assert_eq!(
+            p["ports"][0],
+            json!({"index":0,"bits":8,"position":[30,70]})
+        );
+        let mut gate = Component::new(Kind::Gate(Gate::Xor), Point::ZERO);
+        gate.gate_options.negated = 2;
+        gate.gate_options.xor_odd = true;
+        assert_eq!(component(&gate)["xor_odd"], true);
+        assert_eq!(component(&gate)["negation_mask"], 2);
+        let mut parity = Component::new(Kind::Parity(Parity::Odd), Point::ZERO);
+        parity.parity.output = ParityOutput::FloatingOne;
+        assert_eq!(component(&parity)["output"], "floating/1");
+        let mut probe = Component::new(Kind::Probe, Point::ZERO);
+        probe.radix = Radix::Hex;
+        assert_eq!(component(&probe)["radix"], "hex");
+        assert!(component(&probe)["ports"][0]["bits"].is_null());
+        let splitter = Component::new(Kind::Splitter, Point::ZERO);
+        assert_eq!(component(&splitter)["mapping"], json!([0, 1, 2, 3]));
+        assert_eq!(
+            component(&Component::new(Kind::Ram, Point::ZERO))["patchable_properties"],
+            json!([])
+        );
+    }
 }
