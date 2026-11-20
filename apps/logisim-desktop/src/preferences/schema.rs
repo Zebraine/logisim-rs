@@ -1,7 +1,8 @@
 //! Versioned disk representation. The UI owns the validated preference types.
 use logisim_core::Radix;
 use logisim_ui::{
-    DefaultZoom, Language, Settings, SimulationMode, TickHz, UiScale, WorkspaceSettings,
+    DefaultZoom, Language, Settings, SignalPalette, SimulationMode, TickHz, UiScale,
+    WorkspaceSettings,
 };
 use serde::{Deserialize, Serialize};
 
@@ -53,13 +54,28 @@ struct Appearance {
     ui_scale: f64,
     reduce_motion: bool,
     show_telemetry: bool,
+    #[serde(with = "SignalPaletteCode")]
+    signal_palette: SignalPalette,
+    show_wire_values: bool,
+    show_origin_marker: bool,
 }
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "SignalPalette", rename_all = "kebab-case")]
+enum SignalPaletteCode {
+    Default,
+    HighContrast,
+    ColorblindSafe,
+}
+
 impl Default for Appearance {
     fn default() -> Self {
         Self {
             ui_scale: 1.0,
             reduce_motion: false,
             show_telemetry: true,
+            signal_palette: SignalPalette::default(),
+            show_wire_values: true,
+            show_origin_marker: true,
         }
     }
 }
@@ -155,7 +171,7 @@ pub(super) struct Config {
 
 pub(super) fn decode(bytes: &[u8]) -> Result<Config, &'static str> {
     let file: File = serde_json::from_slice(bytes).map_err(|_| "Unknown or invalid settings.")?;
-    if !matches!(file.version, 1 | 2 | CONFIG_VERSION) {
+    if !matches!(file.version, 1..=CONFIG_VERSION) {
         return Err("Unsupported configuration version.");
     }
     if file.version == 1
@@ -198,6 +214,9 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Config, &'static str> {
             ui_scale,
             reduce_motion: file.appearance.reduce_motion,
             show_telemetry: file.appearance.show_telemetry,
+            signal_palette: file.appearance.signal_palette,
+            show_wire_values: file.appearance.show_wire_values,
+            show_origin_marker: file.appearance.show_origin_marker,
             show_grid: file.editor.show_grid,
             default_zoom: file.editor.default_zoom,
             highlight_net: file.editor.highlight_net,
@@ -226,6 +245,9 @@ pub(super) fn encode(config: &Config) -> Vec<u8> {
             ui_scale: f64::from(s.ui_scale.percent()) / 100.0,
             reduce_motion: s.reduce_motion,
             show_telemetry: s.show_telemetry,
+            signal_palette: s.signal_palette,
+            show_wire_values: s.show_wire_values,
+            show_origin_marker: s.show_origin_marker,
         },
         editor: Editor {
             show_grid: s.show_grid,

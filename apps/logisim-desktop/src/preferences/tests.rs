@@ -125,7 +125,8 @@ fn missing_fields_default_and_invalid_json_stays_intact_after_edits() {
     for json in [
         "{",
         "{}",
-        r#"{"version":4}"#,
+        r#"{"version":5}"#,
+        r#"{"version":4,"appearance":{"signal_palette":"neon"}}"#,
         r#"{"version":3,"editor":{"default_probe_radix":"decimal"}}"#,
         r#"{"version":3,"editor":{"default_pin_bits":0}}"#,
         r#"{"version":3,"editor":{"default_pin_bits":33}}"#,
@@ -155,6 +156,9 @@ fn all_fields_restart_reset_and_atomic_conflict_protection() {
         ui_scale: UiScale::P125,
         reduce_motion: true,
         show_telemetry: false,
+        signal_palette: logisim_ui::SignalPalette::ColorblindSafe,
+        show_wire_values: false,
+        show_origin_marker: false,
         show_grid: false,
         default_zoom: DefaultZoom::Actual,
         highlight_net: false,
@@ -288,7 +292,7 @@ fn layout_waits_for_idle_or_close_and_restores_only_when_enabled() {
 }
 
 #[test]
-fn earlier_editor_preferences_migrate_to_v3_and_all_radix_codes_round_trip() {
+fn earlier_preferences_migrate_to_v4_and_all_radix_codes_round_trip() {
     for version in [1, 2, 3] {
         let json = serde_json::json!({"version":version,"editor":{"show_grid":false}});
         let config = schema::decode(json.to_string().as_bytes()).unwrap();
@@ -300,7 +304,10 @@ fn earlier_editor_preferences_migrate_to_v3_and_all_radix_codes_round_trip() {
             }
         );
         let encoded: serde_json::Value = serde_json::from_slice(&schema::encode(&config)).unwrap();
-        assert_eq!(encoded["version"], 3);
+        assert_eq!(encoded["version"], 4);
+        assert_eq!(encoded["appearance"]["signal_palette"], "default");
+        assert_eq!(encoded["appearance"]["show_wire_values"], true);
+        assert_eq!(encoded["appearance"]["show_origin_marker"], true);
         assert_eq!(encoded["editor"]["default_probe_radix"], "binary");
         assert_eq!(encoded["editor"]["default_pin_bits"], 1);
     }
@@ -314,5 +321,30 @@ fn earlier_editor_preferences_migrate_to_v3_and_all_radix_codes_round_trip() {
         let encoded: serde_json::Value = serde_json::from_slice(&schema::encode(&config)).unwrap();
         assert_eq!(encoded["editor"]["default_probe_radix"], code);
         assert_eq!(encoded["editor"]["default_pin_bits"], 32);
+    }
+}
+
+#[test]
+fn appearance_codes_round_trip_without_changing_other_preferences() {
+    for (code, palette) in ["default", "high-contrast", "colorblind-safe"]
+        .into_iter()
+        .zip(logisim_ui::SignalPalette::ALL)
+    {
+        let appearance = serde_json::json!({"signal_palette":code,"show_wire_values":false,"show_origin_marker":false});
+        let json = serde_json::json!({"version":4,"appearance":appearance});
+        let config = schema::decode(json.to_string().as_bytes()).unwrap();
+        assert_eq!(
+            config.settings,
+            Settings {
+                signal_palette: palette,
+                show_wire_values: false,
+                show_origin_marker: false,
+                ..Settings::default()
+            }
+        );
+        let encoded: serde_json::Value = serde_json::from_slice(&schema::encode(&config)).unwrap();
+        for (key, value) in appearance.as_object().unwrap() {
+            assert_eq!(&encoded["appearance"][key], value);
+        }
     }
 }

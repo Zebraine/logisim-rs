@@ -1,4 +1,5 @@
 //! Application preferences, independent of documents, cameras and runtime snapshots.
+use super::SignalPalette;
 use crate::{DEFAULT_TICK_HZ, Language, MAX_TICK_HZ, SimulationMode};
 use logisim_core::Radix;
 
@@ -83,6 +84,9 @@ pub struct Settings {
     pub ui_scale: UiScale,
     pub reduce_motion: bool,
     pub show_telemetry: bool,
+    pub signal_palette: SignalPalette,
+    pub show_wire_values: bool,
+    pub show_origin_marker: bool,
     pub show_grid: bool,
     pub default_zoom: DefaultZoom,
     pub highlight_net: bool,
@@ -102,6 +106,9 @@ impl Default for Settings {
             ui_scale: UiScale::default(),
             reduce_motion: false,
             show_telemetry: true,
+            signal_palette: SignalPalette::default(),
+            show_wire_values: true,
+            show_origin_marker: true,
             show_grid: true,
             default_zoom: DefaultZoom::default(),
             highlight_net: true,

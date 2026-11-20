@@ -38,6 +38,7 @@ impl Category {
 pub(super) enum Control {
     Language,
     Scale,
+    SignalPalette,
     Toggle(fn(&mut Settings) -> &mut bool),
     Zoom,
     Mode,
@@ -114,6 +115,27 @@ registry![
         "Show telemetry",
         "Show FPS and clock rates in the toolbar.",
         Control::Toggle(|s| &mut s.show_telemetry)
+    ),
+    (
+        "appearance.signal_palette",
+        Appearance,
+        "Signal palette",
+        "Choose colors for simulation signals.",
+        Control::SignalPalette
+    ),
+    (
+        "appearance.show_wire_values",
+        Appearance,
+        "Show wire values",
+        "Display value badges on buses.",
+        Control::Toggle(|s| &mut s.show_wire_values)
+    ),
+    (
+        "appearance.show_origin_marker",
+        Appearance,
+        "Show origin marker",
+        "Mark the canvas origin with a cross.",
+        Control::Toggle(|s| &mut s.show_origin_marker)
     ),
     (
         "editor.show_grid",
@@ -202,6 +224,7 @@ impl Entry {
     pub fn copy(&self, target: &mut Settings, mut source: Settings) {
         match self.control {
             Control::Language => target.language = source.language,
+            Control::SignalPalette => target.signal_palette = source.signal_palette,
             Control::Scale => target.ui_scale = source.ui_scale,
             Control::Toggle(field) => *field(target) = *field(&mut source),
             Control::ProbeRadix => target.default_probe_radix = source.default_probe_radix,
@@ -222,6 +245,11 @@ impl Entry {
             Control::Language => choice(ui, &mut values.language, Language::ALL, |v| {
                 v.name().to_owned()
             }),
+            Control::SignalPalette => {
+                choice(ui, &mut values.signal_palette, SignalPalette::ALL, |v| {
+                    v.name().to_owned()
+                })
+            }
             Control::Scale => choice(ui, &mut values.ui_scale, UiScale::ALL, |v| {
                 format!("{}%", v.percent())
             }),

@@ -1,6 +1,26 @@
 //! Shared desktop chrome. Document artwork supplies its own colors and fonts.
 use egui::{Color32, Context, FontId, Response, Stroke, StrokeKind, TextStyle, Ui, vec2};
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SignalPalette {
+    #[default]
+    Default,
+    HighContrast,
+    ColorblindSafe,
+}
+
+impl SignalPalette {
+    pub const ALL: [Self; 3] = [Self::Default, Self::HighContrast, Self::ColorblindSafe];
+
+    pub(crate) fn name(self) -> &'static str {
+        crate::i18n::tr(match self {
+            Self::Default => "Default",
+            Self::HighContrast => "High contrast",
+            Self::ColorblindSafe => "Colorblind-safe",
+        })
+    }
+}
+
 pub(crate) const CANVAS: Color32 = Color32::WHITE;
 pub(crate) const SURFACE: Color32 = Color32::WHITE;
 pub(crate) const CHROME: Color32 = Color32::from_rgb(246, 248, 251);

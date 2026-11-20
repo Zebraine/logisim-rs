@@ -1,8 +1,9 @@
 mod registry;
-pub const CONFIG_VERSION: u32 = 3;
+pub const CONFIG_VERSION: u32 = 4;
 mod page;
 pub(crate) use page::Page;
 mod model;
+pub use crate::theme::SignalPalette;
 use crate::{Language, Workspace, i18n::tr, theme};
 pub use model::{DefaultZoom, Settings, TickHz, UiScale, WorkspaceSettings};
 pub(crate) use model::{EditorDisplay, PlacementDefaults};
