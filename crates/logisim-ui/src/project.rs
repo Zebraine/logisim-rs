@@ -1,4 +1,6 @@
 //! Project editing shares the same undo timeline as geometry edits.
+mod options;
+
 use crate::{
     Workspace,
     editor::{Editor, Tool},
@@ -192,6 +194,9 @@ impl Workspace {
         }
     }
     pub(crate) fn project_dialogs(&mut self, ctx: &egui::Context) {
+        if self.project_options_open {
+            self.project_options(ctx);
+        }
         if let Some(mut dialog) = self.name_dialog.take() {
             let mut apply = false;
             let title = tr(if dialog.rename {

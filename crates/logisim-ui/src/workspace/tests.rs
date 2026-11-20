@@ -183,6 +183,10 @@ fn file_shortcuts_emit_one_command_and_modal_disabling_blocks_them() {
         frame(&ctx, &mut app, size, vec![event.clone()]);
         assert!(app.about_open && app.take_file_actions().is_empty());
         app.about_open = false;
+        app.project_options_open = true;
+        frame(&ctx, &mut app, size, vec![event.clone()]);
+        assert!(app.project_options_open && app.take_file_actions().is_empty());
+        app.project_options_open = false;
         let mut output = ctx.run_ui(
             RawInput {
                 screen_rect: Some(Rect::from_min_size(Pos2::ZERO, size)),

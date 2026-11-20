@@ -78,93 +78,17 @@ impl Workspace {
                 self.command_button(ui, Command::SelectAll);
             });
             ui.menu_button(tr("Project"), |ui| {
-                if ui.button(tr("Analyze Circuit…")).clicked() {
-                    self.request_analysis();
-                    ui.close();
+                let max_height =
+                    ui.ctx().content_rect().height() - crate::theme::metrics(ui.ctx()).menu - 12.;
+                if max_height < 500. {
+                    ui.spacing_mut().item_spacing.y = 1.;
+                    egui::ScrollArea::vertical()
+                        .min_scrolled_height(max_height)
+                        .max_height(max_height)
+                        .show(ui, |ui| self.project_menu(ui));
+                } else {
+                    self.project_menu(ui);
                 }
-                ui.separator();
-                if ui.button(tr("Load Wasm Plugin…")).clicked() {
-                    self.file_actions.push(FileAction::LoadPlugin);
-                    ui.close();
-                }
-                if ui.button(tr("Load .circ Library…")).clicked() {
-                    self.file_actions.push(FileAction::ImportLibrary);
-                    ui.close();
-                }
-                ui.separator();
-                self.command_button(ui, Command::AddCircuit);
-                if ui.button(tr("Rename Circuit…")).clicked() {
-                    self.circuit_command(CircuitCommand::Rename);
-                    ui.close();
-                }
-                if ui
-                    .add_enabled(
-                        self.active_circuit() != self.project().main,
-                        egui::Button::new(tr("Set as Main Circuit")),
-                    )
-                    .clicked()
-                {
-                    self.set_main_circuit(self.active_circuit());
-                    ui.close();
-                }
-                for (label, command, enabled) in [
-                    ("Move Circuit Up", CircuitCommand::Up, true),
-                    ("Move Circuit Down", CircuitCommand::Down, true),
-                    (
-                        "Remove Circuit…",
-                        CircuitCommand::Remove,
-                        self.editor
-                            .session
-                            .project
-                            .can_remove(self.editor.session.context.active),
-                    ),
-                ] {
-                    if ui
-                        .add_enabled(enabled, egui::Button::new(tr(label)))
-                        .clicked()
-                    {
-                        self.circuit_command(command);
-                        ui.close();
-                    }
-                }
-                ui.separator();
-                self.command_button(ui, Command::ReturnParent);
-                ui.separator();
-                if ui
-                    .selectable_label(
-                        !self.editor.session.context.appearance_mode,
-                        tr("Edit Circuit Layout"),
-                    )
-                    .clicked()
-                {
-                    self.finish_edit();
-                    self.editor.session.context.appearance_mode = false;
-                    ui.close();
-                }
-                if ui
-                    .selectable_label(
-                        self.editor.session.context.appearance_mode,
-                        self.preferences
-                            .shortcuts
-                            .caption(Command::ToggleAppearance, ui),
-                    )
-                    .clicked()
-                {
-                    self.finish_edit();
-                    self.editor.session.context.appearance_mode = true;
-                    ui.close();
-                }
-                if ui
-                    .add_enabled(
-                        self.editor.session.circuit.appearance.is_some(),
-                        egui::Button::new(tr("Revert to Default Appearance")),
-                    )
-                    .clicked()
-                {
-                    self.appearance.revert(&mut self.editor);
-                    ui.close();
-                }
-                disabled_actions(ui, &["Project Options…"]);
             });
             ui.menu_button(tr("Simulate"), |ui| {
                 self.editor.simulation.menu(
@@ -202,6 +126,99 @@ impl Workspace {
                 }
             });
         });
+    }
+    fn project_menu(&mut self, ui: &mut Ui) {
+        if ui.button(tr("Analyze Circuit…")).clicked() {
+            self.request_analysis();
+            ui.close();
+        }
+        ui.separator();
+        if ui.button(tr("Load Wasm Plugin…")).clicked() {
+            self.file_actions.push(FileAction::LoadPlugin);
+            ui.close();
+        }
+        if ui.button(tr("Load .circ Library…")).clicked() {
+            self.file_actions.push(FileAction::ImportLibrary);
+            ui.close();
+        }
+        ui.separator();
+        self.command_button(ui, Command::AddCircuit);
+        if ui.button(tr("Rename Circuit…")).clicked() {
+            self.circuit_command(CircuitCommand::Rename);
+            ui.close();
+        }
+        if ui
+            .add_enabled(
+                self.active_circuit() != self.project().main,
+                egui::Button::new(tr("Set as Main Circuit")),
+            )
+            .clicked()
+        {
+            self.set_main_circuit(self.active_circuit());
+            ui.close();
+        }
+        for (label, command, enabled) in [
+            ("Move Circuit Up", CircuitCommand::Up, true),
+            ("Move Circuit Down", CircuitCommand::Down, true),
+            (
+                "Remove Circuit…",
+                CircuitCommand::Remove,
+                self.editor
+                    .session
+                    .project
+                    .can_remove(self.editor.session.context.active),
+            ),
+        ] {
+            if ui
+                .add_enabled(enabled, egui::Button::new(tr(label)))
+                .clicked()
+            {
+                self.circuit_command(command);
+                ui.close();
+            }
+        }
+        ui.separator();
+        self.command_button(ui, Command::ReturnParent);
+        ui.separator();
+        if ui
+            .selectable_label(
+                !self.editor.session.context.appearance_mode,
+                tr("Edit Circuit Layout"),
+            )
+            .clicked()
+        {
+            self.finish_edit();
+            self.editor.session.context.appearance_mode = false;
+            ui.close();
+        }
+        if ui
+            .selectable_label(
+                self.editor.session.context.appearance_mode,
+                self.preferences
+                    .shortcuts
+                    .caption(Command::ToggleAppearance, ui),
+            )
+            .clicked()
+        {
+            self.finish_edit();
+            self.editor.session.context.appearance_mode = true;
+            ui.close();
+        }
+        if ui
+            .add_enabled(
+                self.editor.session.circuit.appearance.is_some(),
+                egui::Button::new(tr("Revert to Default Appearance")),
+            )
+            .clicked()
+        {
+            self.appearance.revert(&mut self.editor);
+            ui.close();
+        }
+        if ui.button(tr("Project Options…")).clicked() {
+            self.finish_edit();
+            self.project_options_open = true;
+            ui.close();
+        }
     }
 }
 

@@ -3,6 +3,82 @@ use logisim_core::{Circuit, Component, Kind, Point, Project};
 use logisim_sim::ProjectSimulator as Simulator;
 
 #[test]
+fn project_options_navigates_and_records_main_against_the_file_baseline() {
+    let mut h = super::Harness::default();
+    let temp = crate::tests::support::Temp::new();
+    let path = temp.path("overview.circ");
+    let mut project = Project::default();
+    let child = project.add("second".into()).unwrap();
+    let original = project.main;
+    h.files
+        .storage
+        .save(&project, &path, SaveMode::Current)
+        .unwrap();
+    h.ws.replace_project(project);
+    let document = h.files.present(&h.ws);
+    assert_eq!(document.path.as_deref(), Some(path.as_path()));
+    assert!(!document.dirty);
+    h.ws.set_document(document);
+
+    let open_overview = |h: &mut super::Harness| {
+        h.click("Project");
+        h.click("Project Options…");
+        assert!(h.frame(vec![]).iter().any(|(s, _)| s == "Project Options"));
+    };
+    let last_action = |h: &mut super::Harness, label| {
+        let rows = h.frame(vec![]);
+        let position = rows.iter().rev().find(|(s, _)| s == label).unwrap().1;
+        h.click_at(position);
+    };
+    open_overview(&mut h);
+    last_action(&mut h, "Open");
+    assert!(!h.frame(vec![]).iter().any(|(s, _)| s == "Project Options"));
+    assert_eq!(h.ws.active_circuit(), child);
+    assert_eq!(h.ws.project().main, original);
+    assert!(!h.files.present(&h.ws).dirty);
+    open_overview(&mut h);
+    // The first row is already main; its disabled action has no effect.
+    h.click("Set as Main");
+    assert!(!h.files.present(&h.ws).dirty);
+    // Open the original again, then promote the other row without navigating to it.
+    h.click("Open");
+    open_overview(&mut h);
+    last_action(&mut h, "Set as Main");
+    assert_eq!(h.ws.active_circuit(), original);
+    assert_eq!(h.ws.project().main, child);
+    assert!(h.files.present(&h.ws).dirty);
+    h.ws.set_document(h.files.present(&h.ws));
+    assert!(h.frame(vec![]).iter().any(|(s, _)| s == "Unsaved changes"));
+    h.click("Close");
+    h.click_at(egui::pos2(1050., 730.));
+    for (modifiers, main, dirty) in [
+        (egui::Modifiers::COMMAND, original, false),
+        (
+            egui::Modifiers::COMMAND | egui::Modifiers::SHIFT,
+            child,
+            true,
+        ),
+    ] {
+        h.frame(vec![egui::Event::Key {
+            key: egui::Key::Z,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers,
+        }]);
+        assert_eq!(h.ws.project().main, main);
+        assert_eq!(h.ws.active_circuit(), original);
+        assert_eq!(h.files.present(&h.ws).dirty, dirty);
+    }
+    open_overview(&mut h);
+    h.click("Load Plugin…");
+    assert!(
+        matches!(h.files.dialog, Some(Dialog::Picker(ref picker)) if picker.mode == Mode::Plugin)
+    );
+    assert!(!h.frame(vec![]).iter().any(|(s, _)| s == "Project Options"));
+}
+
+#[test]
 fn placing_and_reopening_unary_gates_preserves_their_sizes() {
     use egui::pos2;
     use logisim_core::{Gate, GateSize};
