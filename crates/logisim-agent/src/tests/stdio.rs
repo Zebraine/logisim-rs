@@ -7,6 +7,8 @@ use std::{
 };
 const BIN: &str = env!("CARGO_BIN_EXE_logisim-agent");
 
+#[path = "stdio/identity.rs"]
+mod identity;
 #[path = "stdio/rooted.rs"]
 mod rooted;
 
@@ -395,9 +397,9 @@ fn project_edits_have_the_same_outcome_over_cli_flags_and_mcp() {
     ]));
     let circuits = &cli.read()["data"]["circuits"];
     let snapshot = m.tool("project_snapshot", json!({"session":mb["session_id"]}));
-    assert_eq!(
-        *circuits,
-        snapshot["result"]["structuredContent"]["data"]["circuits"]
+    identity::assert_equivalent_circuits(
+        circuits,
+        &snapshot["result"]["structuredContent"]["data"]["circuits"],
     );
     assert_eq!(circuits[0]["components"][0]["value"], 42);
     assert_eq!(
@@ -425,11 +427,12 @@ fn project_edits_have_the_same_outcome_over_cli_flags_and_mcp() {
         json!({"session":mb["session_id"],"expected_sha256":mb["source_sha256"],"backup":false}),
     );
     assert_eq!(x["data"]["saved"], true);
+    assert_eq!(x["data"]["source_sha256"], identity::disk_hash(&a));
     assert_eq!(
-        x["data"]["source_sha256"],
-        y["result"]["structuredContent"]["data"]["source_sha256"]
+        y["result"]["structuredContent"]["data"]["source_sha256"],
+        identity::disk_hash(&b)
     );
-    assert_eq!(fs::read(&a).unwrap(), fs::read(&b).unwrap());
+    identity::assert_equivalent_files(&a, &b);
     assert!(!a.with_extension("circ.bak").exists());
     assert!(!b.with_extension("circ.bak").exists());
     cli.finish();

@@ -1,3 +1,4 @@
+use super::identity::{assert_equivalent_circuits, assert_equivalent_files, disk_hash};
 use super::{Client, tool_error};
 use serde_json::{Value, json};
 use std::{fs, path::Path};
@@ -58,9 +59,10 @@ fn plugin_instance_lifecycle_matches_between_cli_flags_and_mcp() {
         cli.send(json!(["project", "open", "--path", "cli.circ"]));
         let a = cli.read();
         let b = mcp.tool("project_open", json!({"path":"mcp.circ"}));
+        assert_eq!(a["data"]["source_sha256"], disk_hash(&dir.join("cli.circ")));
         assert_eq!(
-            a["data"]["source_sha256"],
-            b["result"]["structuredContent"]["data"]["source_sha256"]
+            b["result"]["structuredContent"]["data"]["source_sha256"],
+            disk_hash(&dir.join("mcp.circ"))
         );
         (
             a["data"]["session_id"].clone(),
@@ -101,12 +103,15 @@ fn plugin_instance_lifecycle_matches_between_cli_flags_and_mcp() {
         cli.send(json!(["project", "snapshot", "--session", ca]));
         let a = cli.read();
         let b = mcp.tool("project_snapshot", json!({"session":mb}));
-        for k in ["circuits", "plugin_sources", "source_sha256"] {
-            assert_eq!(a["data"][k], b["result"]["structuredContent"]["data"][k]);
-        }
+        let mcp_data = &b["result"]["structuredContent"]["data"];
+        assert_equivalent_circuits(&a["data"]["circuits"], &mcp_data["circuits"]);
+        assert_eq!(a["data"]["plugin_sources"], mcp_data["plugin_sources"]);
+        assert_eq!(a["data"]["source_sha256"], disk_hash(&dir.join("cli.circ")));
+        assert_eq!(mcp_data["source_sha256"], disk_hash(&dir.join("mcp.circ")));
         a["data"].clone()
     };
     let save = |cli: &mut Client, mcp: &mut Client, ca: &Value, mb: &Value, sha: &Value| {
+        let mcp_sha = disk_hash(&dir.join("mcp.circ"));
         cli.send(json!([
             "project",
             "save",
@@ -116,17 +121,18 @@ fn plugin_instance_lifecycle_matches_between_cli_flags_and_mcp() {
             sha
         ]));
         let a = cli.read();
-        let b = mcp.tool("project_save", json!({"session":mb,"expected_sha256":sha}));
+        let b = mcp.tool(
+            "project_save",
+            json!({"session":mb,"expected_sha256":mcp_sha}),
+        );
         assert_eq!(a["data"]["saved"], true);
         assert_eq!(b["result"]["isError"], false);
+        assert_eq!(a["data"]["source_sha256"], disk_hash(&dir.join("cli.circ")));
         assert_eq!(
-            a["data"]["source_sha256"],
-            b["result"]["structuredContent"]["data"]["source_sha256"]
+            b["result"]["structuredContent"]["data"]["source_sha256"],
+            disk_hash(&dir.join("mcp.circ"))
         );
-        assert_eq!(
-            fs::read(dir.join("cli.circ")).unwrap(),
-            fs::read(dir.join("mcp.circ")).unwrap()
-        );
+        assert_equivalent_files(&dir.join("cli.circ"), &dir.join("mcp.circ"));
         a["data"]["source_sha256"].clone()
     };
     let added = patch(
@@ -176,7 +182,7 @@ fn plugin_instance_lifecycle_matches_between_cli_flags_and_mcp() {
     assert_eq!(c["label"], "Keyboard A");
     assert_eq!(c["plugin"]["properties"]["capacity"], "8");
     assert_eq!(c["tool"]["id"], "keyboard");
-    let saved_bytes = fs::read(dir.join("cli.circ")).unwrap();
+    let saved_bytes = ["cli.circ", "mcp.circ"].map(|name| fs::read(dir.join(name)).unwrap());
     patch(
         &mut cli,
         &mut mcp,
@@ -189,8 +195,11 @@ fn plugin_instance_lifecycle_matches_between_cli_flags_and_mcp() {
     let removed = snapshot(&mut cli, &mut mcp, &ca, &mb);
     assert_eq!(removed["circuits"][0]["components"], json!([]));
     assert_eq!(removed["plugin_sources"], json!([setup]));
-    for name in ["cli.circ.bak", "mcp.circ.bak"] {
-        assert_eq!(fs::read(dir.join(name)).unwrap(), saved_bytes);
+    for (name, expected) in ["cli.circ.bak", "mcp.circ.bak"]
+        .into_iter()
+        .zip(saved_bytes)
+    {
+        assert_eq!(fs::read(dir.join(name)).unwrap(), expected);
     }
     cli.finish();
     mcp.finish();

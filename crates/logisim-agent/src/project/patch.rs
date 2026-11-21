@@ -8,8 +8,7 @@ use crate::{Error, Result};
 use logisim_core::{Circuit, Component, Id, Kind, Point, Project};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
-use std::collections::BTreeSet;
-use std::path::Path;
+use std::collections::{BTreeSet, HashSet};
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
@@ -279,16 +278,18 @@ impl ProjectOp {
     }
 }
 
+struct Preview {
+    project: Project,
+    changes: Vec<Value>,
+    allocated: HashSet<u128>,
+}
+
 /// Normalize after the complete edit, as in the desktop editor. For a wire split at
 /// terminals, return every surviving segment; for a merge, return the retained ID.
-fn preview(
-    original: &Project,
-    ops: &[ProjectOp],
-    path: &Path,
-    root: Option<&Root>,
-) -> Result<(Project, Vec<Value>)> {
+fn preview(session: &Session, ops: &[ProjectOp], root: Option<&Root>) -> Result<Preview> {
+    let original = &session.project;
     let mut candidate = original.clone();
-    let mut manifests = Manifests::new(path);
+    let mut manifests = Manifests::new(&session.path);
     let mut changes = Vec::with_capacity(ops.len());
     for (index, op) in ops.iter().enumerate() {
         changes.push(
@@ -314,8 +315,13 @@ fn preview(
             }
         }
     }
+    let allocated = session.issued.fill_missing(&mut candidate)?;
     super::saveable(&candidate)?;
-    Ok((candidate, changes))
+    Ok(Preview {
+        project: candidate,
+        changes,
+        allocated,
+    })
 }
 impl Session {
     pub fn patch(
@@ -327,7 +333,7 @@ impl Session {
         root: Option<&Root>,
     ) -> Result<Value> {
         self.check_editable(expected)?;
-        let (candidate, changes) = match preview(&self.project, ops, &self.path, root) {
+        let previewed = match preview(self, ops, root) {
             Ok(result) => result,
             Err(mut failure) if !ops.is_empty() && failure.details.get("op_index").is_none() => {
                 // Aggregate codec or topology limits can surface only after normalization.
@@ -335,7 +341,7 @@ impl Session {
                 let (mut good, mut bad) = (0, ops.len());
                 while bad - good > 1 {
                     let mid = good + (bad - good) / 2;
-                    match preview(&self.project, &ops[..mid], &self.path, root) {
+                    match preview(self, &ops[..mid], root) {
                         Ok(_) => good = mid,
                         Err(e) => {
                             bad = mid;
@@ -347,15 +353,16 @@ impl Session {
             }
             Err(e) => return Err(e),
         };
-        let changed = candidate != self.project;
+        let changed = previewed.project != self.project;
         if !dry_run {
-            self.project = candidate;
+            self.issued.commit(previewed.allocated);
+            self.project = previewed.project;
             if changed {
                 self.simulation = None;
             }
         }
         Ok(
-            json!({"session_id":id,"source_sha256":self.sha256,"dry_run":dry_run,"changed":changed,"changes":changes}),
+            json!({"session_id":id,"source_sha256":self.sha256,"dry_run":dry_run,"changed":changed,"changes":previewed.changes}),
         )
     }
 }

@@ -456,6 +456,7 @@ fn concurrent_sessions_cannot_overwrite_a_new_source_or_its_backup() {
     );
 }
 
+mod agent_ids;
 mod builtins;
 mod catalog;
 mod instances;

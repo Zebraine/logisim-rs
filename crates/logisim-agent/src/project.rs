@@ -2,6 +2,7 @@
 mod builtins;
 pub(crate) mod catalog;
 mod edit;
+mod ids;
 mod instances;
 mod memory;
 pub(crate) mod patch;
@@ -10,7 +11,7 @@ mod properties;
 mod save;
 mod schema;
 use crate::{Error, Result, digest, io};
-use logisim_core::{Component, Interface, Kind, Point, Project};
+use logisim_core::{AgentIdKind, Component, Interface, Kind, Point, Project};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 
@@ -19,6 +20,8 @@ pub(crate) struct Session {
     pub path: PathBuf,
     sha256: String,
     warnings: Vec<String>,
+    partial: bool,
+    issued: ids::Issued,
     pub simulation: Option<crate::simulation::Runtime>,
 }
 
@@ -27,8 +30,12 @@ impl Session {
         let path = path.canonicalize().map_err(io::file_error)?;
         let bytes = io::read(&path)?;
         let xml = std::str::from_utf8(&bytes).map_err(|e| Error::new("invalid_project", e))?;
-        let imported = logisim_file::parse(xml).map_err(|e| Error::new("invalid_project", e))?;
+        let mut imported =
+            logisim_file::parse(xml).map_err(|e| Error::new("invalid_project", e))?;
+        let issued = ids::Issued::open(&mut imported.document)?;
         Ok(Self {
+            issued,
+            partial: imported.partial,
             project: imported.document,
             path,
             sha256: digest::sha256(&bytes),
@@ -37,7 +44,7 @@ impl Session {
         })
     }
     fn check_editable(&self, expected: Option<&str>) -> Result<()> {
-        if !self.warnings.is_empty() {
+        if self.partial {
             let mut e = Error::new(
                 "partial_project",
                 "This import reported omissions. Patching and saving are disabled.",
@@ -59,19 +66,21 @@ impl Session {
         Ok(())
     }
     pub fn summary(&self, id: &str) -> Value {
-        json!({"session_id":id,"path":self.path,"source_sha256":self.sha256,"schema":1,"main":self.project.main,"partial":!self.warnings.is_empty(),"warnings":self.warnings})
+        json!({"session_id":id,"path":self.path,"source_sha256":self.sha256,"schema":1,"main":self.project.main,"partial":self.partial,"warnings":self.warnings})
     }
     pub fn snapshot(&self, id: &str) -> Result<Value> {
         let mut result = self.summary(id);
         let mut circuits = Vec::with_capacity(self.project.circuits.len());
         let mut manifests = instances::Manifests::new(&self.path);
         for def in &self.project.circuits {
+            let ids = &def.circuit.agent_ids;
             let components: Vec<_> = def
                 .circuit
                 .components
                 .iter()
                 .map(|c| {
                     let mut data = component(c)?;
+                    data["agent_id"] = AgentIdKind::Component.encode(ids.items[&c.id]).into();
                     if let Some(plugin) = &c.plugin {
                         manifests.describe(&self.project, plugin, &mut data);
                     }
@@ -84,12 +93,12 @@ impl Session {
                 .iter()
                 .map(|wire| {
                     json!({
-                        "id": wire.id, "from": point(wire.a), "to": point(wire.b)
+                        "id": wire.id, "agent_id":AgentIdKind::Wire.encode(ids.items[&wire.id]), "from": point(wire.a), "to": point(wire.b)
                     })
                 })
                 .collect();
             circuits.push(json!({
-                "id": def.id, "name": def.name, "main": def.id == self.project.main,
+                "id": def.id, "agent_id":AgentIdKind::Circuit.encode(ids.circuit.expect("assigned by the session")), "name": def.name, "main": def.id == self.project.main,
                 "components": components, "wires": wires, "interface_ports": interface_ports(&def.interface())
             }));
         }
