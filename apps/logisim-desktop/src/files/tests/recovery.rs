@@ -165,6 +165,11 @@ fn missing_and_untitled_sources_recover_without_a_destination_or_history_entry()
         }
         w.replace_project(dirty_project());
         checkpoint(&mut files, &w);
+        assert!(
+            files.autosave.view().owned,
+            "checkpoint was not committed: {:?}",
+            files.autosave.view()
+        );
         if named {
             fs::remove_file(&source).unwrap();
         }
@@ -175,7 +180,23 @@ fn missing_and_untitled_sources_recover_without_a_destination_or_history_entry()
         let mut sim = Simulator::default();
         files.startup(None, &mut w, &mut sim);
         let prompt = files.dialog.take().unwrap();
+        assert!(matches!(prompt, Dialog::Recovery { .. }));
         files.respond(prompt, Response::Recover, &ctx, &mut w, &mut sim);
+        assert!(
+            files.autosave.view().owned,
+            "handoff failed for named={named}, path={:?}, binding={:?}, recovery={:?}",
+            files.storage.path,
+            files.storage.bound_format(),
+            files.autosave.view()
+        );
+        assert_eq!(
+            files.storage.bound_format(),
+            if named {
+                ProjectFormat::Circ
+            } else {
+                ProjectFormat::Lrs
+            }
+        );
         assert!(
             files.present(&w).dirty && files.present(&w).untitled,
             "source previously named: {named}, recovery: {:?}",

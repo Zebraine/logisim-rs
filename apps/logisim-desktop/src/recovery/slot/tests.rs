@@ -56,3 +56,30 @@ fn failed_clear_of_two_invalid_entries_keeps_the_unbuffered_record() {
     assert_eq!(fs::read(dir.join(META)).unwrap(), record);
     assert_eq!(fs::read_dir(&dir).unwrap().count(), 2);
 }
+
+fn check_lock_handoff(name: &str) {
+    let tmp = Temp::new();
+    let dir = tmp.path("recovery");
+    let writer = try_lock(&dir, name).unwrap().unwrap();
+    // dup and fork both retain a reference to the same open file description on Unix.
+    let surviving_descriptor = writer.try_clone().unwrap();
+    assert!(try_lock(&dir, name).unwrap().is_none());
+    drop(writer);
+    let next_writer = try_lock(&dir, name)
+        .unwrap()
+        .expect("the owner released its lock while another descriptor remained open");
+    drop(surviving_descriptor);
+    assert!(try_lock(&dir, name).unwrap().is_none());
+    drop(next_writer);
+    assert!(try_lock(&dir, name).unwrap().is_some());
+}
+
+#[test]
+fn owner_handoff_with_a_surviving_descriptor() {
+    check_lock_handoff(OWNER);
+}
+
+#[test]
+fn transaction_handoff_with_a_surviving_descriptor() {
+    check_lock_handoff(LOCK);
+}
