@@ -71,6 +71,11 @@ fn plugin_document_properties_defaults_identity_and_source_round_trip() {
     let reopened = f.snapshot();
     assert_eq!(reopened["source_sha256"], saved["source_sha256"]);
     let loaded = &reopened["circuits"][0]["components"][2];
+    assert_eq!(loaded["agent_id"], first["agent_id"]);
+    assert_eq!(
+        reopened["circuits"][0]["agent_id"],
+        snapshot["circuits"][0]["agent_id"]
+    );
     for k in [
         "plugin",
         "tool",

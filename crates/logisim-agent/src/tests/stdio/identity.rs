@@ -51,3 +51,93 @@ pub(super) fn assert_equivalent_files(left: &Path, right: &Path) {
     };
     assert_eq!(design(left), design(right));
 }
+
+#[test]
+fn cli_save_and_mcp_open_copy_share_persistent_ids_even_after_numeric_reassignment() {
+    use super::Client;
+    use serde_json::json;
+    let tmp =
+        std::env::temp_dir().join(format!("agent-persist-{:016x}", getrandom::u64().unwrap()));
+    fs::create_dir(&tmp).unwrap();
+    let small = tmp.join("small.circ");
+    let copy = tmp.join("copy.circ");
+    let xml = r##"<project source="2.16.2.2.jar" version="1.0"><lib name="w" desc="#Wiring"/><main name="top"/><circuit name="top">
+    <comp lib="w" name="Pin" loc="(10,10)"/><comp name="child" loc="(90,90)"/><wire from="(10,10)" to="(40,10)"/></circuit>
+    <circuit name="child"><comp lib="w" name="Pin" loc="(0,0)"/></circuit></project>"##;
+    fs::write(&small, xml).unwrap();
+    let root = tmp.to_str().unwrap();
+    let mut first = Client::start(&["--root", root, "project", "open", "--path", "small.circ"]);
+    let opened = first.read()["data"].clone();
+    let id = &opened["session_id"];
+    let snapshot = |cli: &mut Client| {
+        cli.send(json!(["project", "snapshot", "--session", id]));
+        cli.read()["data"]["circuits"].clone()
+    };
+    let before = snapshot(&mut first);
+    assert_eq!(fs::read(&small).unwrap(), xml.as_bytes());
+    first.send(json!([
+        "project",
+        "save",
+        "--session",
+        id,
+        "--expected-sha256",
+        opened["source_sha256"]
+    ]));
+    let saved = first.read()["data"].clone();
+    assert_eq!(saved["saved"], true);
+    assert_eq!(snapshot(&mut first), before);
+    first.finish();
+    assert_eq!(
+        fs::read(small.with_extension("circ.bak")).unwrap(),
+        xml.as_bytes()
+    );
+    fs::copy(&small, &copy).unwrap();
+
+    let mut mcp = Client::start(&["--root", root, "mcp"]);
+    mcp.initialize("2025-11-25");
+    for file in ["small.circ", "copy.circ"] {
+        let opened = mcp.tool("project_open", json!({"path":file}));
+        let data = &opened["result"]["structuredContent"]["data"];
+        let args = json!({"session":data["session_id"]});
+        assert_eq!(data["source_sha256"], saved["source_sha256"]);
+        let response = mcp.tool("project_snapshot", args.clone());
+        assert_eq!(response["result"]["isError"], false);
+        let after = &response["result"]["structuredContent"]["data"]["circuits"];
+        for (a, b) in before
+            .as_array()
+            .unwrap()
+            .iter()
+            .zip(after.as_array().unwrap())
+        {
+            assert_eq!(a["agent_id"], b["agent_id"]);
+            for group in ["components", "wires"] {
+                let ids = |v: &Value| {
+                    v[group]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|obj| obj["agent_id"].clone())
+                        .collect::<Vec<_>>()
+                };
+                assert_eq!(ids(a), ids(b));
+            }
+        }
+        // The writer emits wires first. The original Pin was the first item on disk.
+        assert_ne!(
+            before[0]["components"][0]["id"],
+            after[0]["components"][0]["id"]
+        );
+        let again = mcp.tool("project_save", args);
+        assert_eq!(
+            again["result"]["structuredContent"]["data"]["source_sha256"],
+            saved["source_sha256"]
+        );
+    }
+    mcp.finish();
+    assert_eq!(fs::read(&copy).unwrap(), fs::read(&small).unwrap());
+    assert_eq!(
+        fs::read(copy.with_extension("circ.bak")).unwrap(),
+        fs::read(&small).unwrap()
+    );
+    fs::remove_dir_all(tmp).unwrap();
+}

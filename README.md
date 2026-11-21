@@ -228,7 +228,15 @@ For CLI flags, put `{"ops":[...],"expected_sha256":"..."}` in an edits file (the
 ["project","save","--session","ID_FROM_OPEN","--expected-sha256","SHA_FROM_OPEN_OR_LAST_SAVE"]
 ```
 
-Only explicit save writes the original path. It checks the current file against the session's last disk SHA even when the caller omits the hash. By default it atomically rotates the original bytes to `<file>.bak`. Use `--no-backup` or `backup:false` to skip rotation. A backup failure stops the save. A later target-write failure may leave a complete backup. Agent writers coordinate on a persistent empty `<file>.lock` sidecar. Partial imports are read-only. Saving preserves session IDs, while reopening parses a fresh set.
+Only explicit save writes the original path. It checks the current file against the session's last disk SHA even when the caller omits the hash. By default it atomically rotates the original bytes to `<file>.bak`. Use `--no-backup` or `backup:false` to skip rotation. A backup failure stops the save. A later target-write failure may leave a complete backup. Agent writers coordinate on a persistent empty `<file>.lock` sidecar. Partial imports are read-only. Saving preserves the current numeric IDs. Reopening allocates numeric IDs for the new session.
+
+#### Persistent object IDs
+
+Each circuit, component and wire in `project_snapshot` has a persistent `agent_id` alongside its numeric `id`. For example, a Pin snapshot includes `{"id":3,"agent_id":"c-0123456789abcdef0123456789abcdef","kind":"Pin"}`. After reopening, find the object by `agent_id` in a fresh snapshot and pass its current numeric `id` and owning circuit to patch operations.
+
+The optional XML attribute `agent-id` is a logisim-rs extension. Its value has a type prefix (`k-` circuit, `c-` component, `w-` wire) and 32 lowercase hex digits from 128 random bits. Opening an older file allocates missing IDs in memory. The next explicit save writes them to the project, and a copy of that file carries the same IDs. The backup contains the original bytes. New split segments get fresh IDs, and a merged wire retains one surviving identity.
+
+An invalid ID or a repeated occurrence produces a warning. The first valid occurrence is retained, and the agent assigns fresh IDs to the affected objects. These repairs can be saved when the import has no omissions. External tools may ignore or discard the attribute, including on resave. Its handling by Logisim-ITA has not been verified.
 
 #### Wasm plugin instances
 
