@@ -1,4 +1,5 @@
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum PinPull {
     #[default]
     None,
@@ -17,7 +18,8 @@ impl PinPull {
 }
 
 /// Editable input-pin behavior. Interactive runtime values are not document state.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub struct PinOptions {
     pub three_state: bool,
     pub pull: PinPull,

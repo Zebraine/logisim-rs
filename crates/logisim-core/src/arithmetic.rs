@@ -3,7 +3,8 @@ use crate::{Component, Kind, Point};
 mod logic;
 pub use logic::ArithmeticLogic;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum Arithmetic {
     Adder,
     Subtractor,
@@ -49,7 +50,8 @@ impl Arithmetic {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum BitSearch {
     #[default]
     LowestOne,
@@ -80,7 +82,8 @@ impl BitSearch {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum Shift {
     #[default]
     LogicalLeft,
@@ -108,7 +111,8 @@ impl Shift {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub struct ArithmeticOptions {
     pub signed: bool,
     pub shift: Shift,

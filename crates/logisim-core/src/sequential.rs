@@ -1,7 +1,8 @@
 //! Observed terminal layouts and editable timing attributes; no runtime state.
 use crate::{Component, Kind, Point};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum FlipFlop {
     D,
     T,
@@ -22,7 +23,8 @@ impl FlipFlop {
         matches!(self, Self::Jk | Self::Sr)
     }
 }
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum Trigger {
     #[default]
     Rising,
@@ -41,14 +43,16 @@ impl Trigger {
         }
     }
 }
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum ControlPosition {
     #[default]
     AboveBelow,
     BelowAbove,
     Legacy,
 }
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum CounterOverflow {
     #[default]
     Wrap,
@@ -77,7 +81,8 @@ impl ControlPosition {
         }
     }
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub struct Sequential {
     pub trigger: Trigger,
     pub random_seed: i32,

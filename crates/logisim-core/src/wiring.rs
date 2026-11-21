@@ -1,7 +1,8 @@
 //! Wiring attributes and terminal geometry, independent of simulation.
 use crate::{Component, Kind, Point};
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum Radix {
     #[default]
     Binary,
@@ -28,7 +29,8 @@ impl Radix {
         }
     }
 }
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum Extension {
     #[default]
     Zero,
@@ -47,7 +49,8 @@ impl Extension {
         }
     }
 }
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum SplitAppearance {
     #[default]
     Left,
@@ -66,7 +69,8 @@ impl SplitAppearance {
         }
     }
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub struct Splitter {
     pub fanout: u8,
     pub appearance: SplitAppearance,

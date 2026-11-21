@@ -9,6 +9,8 @@ publish.workspace = true
 
 [dependencies]
 logisim-core.workspace = true
+serde.workspace = true
+getrandom = "=0.4.3"
 serde_json.workspace = true
 roxmltree = "=0.20.0"
 

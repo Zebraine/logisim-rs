@@ -1,6 +1,7 @@
 //! Character terminal settings only; text buffers and cursor belong to simulator instances.
 use crate::{Kind, Trigger};
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub struct TerminalOptions {
     pub buffer_len: u16,
     pub rows: u8,

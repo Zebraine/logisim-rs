@@ -1,5 +1,6 @@
 //! Editable PLA connection planes. Columns run from most to least significant bit.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum PlaInput {
     #[default]
     Disconnected,

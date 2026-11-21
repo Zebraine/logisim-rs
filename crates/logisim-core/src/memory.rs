@@ -6,7 +6,8 @@ use crate::{Kind, Point};
 pub use contents::MemoryContents;
 pub use logic::{MemoryKind, MemoryLogic, MemoryPort};
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum MemoryInterface {
     #[default]
     SharedSync,

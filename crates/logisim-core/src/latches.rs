@@ -1,7 +1,8 @@
 //! Latch attributes and terminal layouts measured from the running reference.
 use crate::{Component, ControlPosition, Kind, Point};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum Latch {
     D,
     Sr,
@@ -16,7 +17,8 @@ impl Latch {
         }
     }
 }
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum LatchEnable {
     #[default]
     High,

@@ -5,7 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 pub const MAX_SHAPES: usize = 2048;
 pub type Rgb = [u8; 3];
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub struct Paint {
     pub stroke: Option<Rgb>,
     pub fill: Option<Rgb>,
@@ -20,7 +21,8 @@ impl Default for Paint {
         }
     }
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub struct ArtworkFont {
     pub family: String,
     pub size: u8,
@@ -37,14 +39,16 @@ impl Default for ArtworkFont {
         }
     }
 }
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum TextAnchor {
     Start,
     #[default]
     Middle,
     End,
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum Geometry {
     Rect {
         a: Point,

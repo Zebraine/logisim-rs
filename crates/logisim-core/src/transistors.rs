@@ -1,7 +1,8 @@
 //! Attributes and terminal geometry observed through the reference UI.
 use crate::{Component, Facing, Kind, Point};
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum TransistorType {
     #[default]
     P,
@@ -17,7 +18,8 @@ impl TransistorType {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub struct TransistorOptions {
     pub transistor_type: TransistorType,
     pub gate_bottom_right: bool,

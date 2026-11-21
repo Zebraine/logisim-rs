@@ -1,6 +1,7 @@
 //! Input/output geometry and persistent attributes. Switch states belong to each simulator instance.
 use crate::{Component, Facing, Kind, Point};
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum MatrixInput {
     #[default]
     Columns,
@@ -17,7 +18,8 @@ impl MatrixInput {
         }
     }
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub struct Io {
     pub on_color: [u8; 4],
     pub off_color: [u8; 4],

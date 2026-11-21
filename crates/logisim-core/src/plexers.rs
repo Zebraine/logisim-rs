@@ -4,7 +4,8 @@ mod geometry;
 mod logic;
 pub use logic::{PlexerLogic, PlexerPort};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum Plexer {
     Multiplexer,
     Demultiplexer,
@@ -46,7 +47,8 @@ impl Plexer {
         }
     }
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub struct Plexing {
     pub select_bits: u8,
     pub top_right: bool,

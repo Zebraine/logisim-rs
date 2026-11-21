@@ -4,7 +4,19 @@ use std::ops::{Add, Sub};
 
 pub const GRID: i32 = 10;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub struct Point {
     pub x: i32,
     pub y: i32,
@@ -33,7 +45,8 @@ impl Sub for Point {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum Facing {
     #[default]
     East,

@@ -1,7 +1,8 @@
 //! Parity gate attributes and geometry, independent of signal evaluation.
 use crate::{Component, GateSize, Kind, Point};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum Parity {
     Odd,
     Even,
@@ -15,7 +16,8 @@ impl Parity {
         }
     }
 }
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum ParityOutput {
     #[default]
     Normal,
@@ -32,7 +34,8 @@ impl ParityOutput {
         }
     }
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub struct ParityOptions {
     pub inputs: u8,
     pub size: GateSize,

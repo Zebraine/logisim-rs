@@ -15,6 +15,8 @@ mod latches;
 #[cfg(test)]
 mod tests;
 
+pub mod native;
+pub use native::{parse_native, serialize_native};
 mod memory;
 mod parity;
 mod pla;

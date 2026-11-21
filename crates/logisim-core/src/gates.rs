@@ -1,6 +1,7 @@
 use crate::{Component, Facing, GRID, Kind};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum Gate {
     Not,
     Buffer,
@@ -44,7 +45,8 @@ impl Gate {
         matches!(self, Self::Not | Self::Nand | Self::Nor | Self::Xnor)
     }
 }
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum GateSize {
     #[default]
     Narrow,
@@ -91,7 +93,8 @@ impl GateSize {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub struct GateOptions {
     pub inputs: u8,
     pub size: GateSize,

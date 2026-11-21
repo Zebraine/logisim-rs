@@ -5,7 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 pub const MAX_CIRCUITS: usize = 128;
 
 /// Text displayed inside every instance, independent of the instance label.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub struct CircuitLabel {
     pub text: String,
     pub font: crate::ArtworkFont,

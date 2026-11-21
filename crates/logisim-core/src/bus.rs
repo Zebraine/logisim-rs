@@ -1,7 +1,8 @@
 //! Bus control attributes and terminal geometry, independent of signal evaluation.
 use crate::{Component, GateSize, Kind, Point};
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum Pull {
     #[default]
     Zero,
@@ -19,7 +20,8 @@ impl Pull {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub struct BusControl {
     pub size: GateSize,
     pub control_left: bool,
