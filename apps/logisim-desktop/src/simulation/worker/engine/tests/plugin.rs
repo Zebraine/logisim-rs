@@ -2,7 +2,7 @@ use super::super::*;
 use logisim_core::{Component, Point, plugin::api};
 use logisim_plugin::Plugin;
 
-fn module(fail: bool) -> Plugin {
+fn module(fail: bool, sample_code: &str) -> Plugin {
     let manifest = api::Manifest {
         abi: 3,
         id: "test.worker".into(),
@@ -77,7 +77,7 @@ fn module(fail: bool) -> Plugin {
                 else i32.const 16 i32.load8_u i32.const 99 i32.eq
                     if (result i64) i64.const {contract}
                     else i32.const 16 i32.load8_u i32.const 111 i32.eq
-                        if (result i64) i64.const {outputs} else i64.const {sample} end
+                        if (result i64) i64.const {outputs} else {sample_code} i64.const {sample} end
                     end
                 end
             end))"#
@@ -88,7 +88,16 @@ fn module(fail: bool) -> Plugin {
 
 #[test]
 fn runtime_fault_stays_visible_without_event_fallback_and_module_replacement_recovers() {
-    let plugin = module(true);
+    assert_worker_recovery("", "sample failed");
+}
+
+#[test]
+fn exhausted_transition_pauses_the_worker_without_publishing_state() {
+    assert_worker_recovery("(loop $work br $work)", "fuel");
+}
+
+fn assert_worker_recovery(sample_code: &str, expected_error: &str) {
+    let plugin = module(true, sample_code);
     let mut project = Project::default();
     let id = project
         .main_circuit_mut()
@@ -121,14 +130,14 @@ fn runtime_fault_stays_visible_without_event_fallback_and_module_replacement_rec
     assert!(!engine.sim.enabled());
     assert!(engine.dirty);
     let view = engine.snapshot().unwrap().view;
-    assert!(view.plugin_errors[&id].contains("sample failed"));
+    assert!(view.plugin_errors[&id].contains(expected_error));
     assert_eq!(view.ports[&(id, 0)].binary, "E");
     engine.command(Command::Action(1, SimulationAction::ToggleEnabled));
     engine.advance();
     assert!(!engine.sim.enabled());
     assert_eq!(engine.propagation, Propagation::Compiled);
     let mut plugins = Registry::default();
-    plugins.insert(module(false)).unwrap();
+    plugins.insert(module(false, "")).unwrap();
     context.plugins = plugins;
     engine.command(Command::Configure(context));
     engine.command(Command::Action(1, SimulationAction::ToggleEnabled));

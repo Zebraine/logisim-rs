@@ -3,8 +3,9 @@
 use super::*;
 use crate::{metrics, study};
 use serde_json::json;
+use sha2::{Digest, Sha256};
 
-fn fixture(iterations: Option<u32>) -> Plugin {
+fn fixture(iterations: Option<u32>) -> Vec<u8> {
     let mut out = Vec::new();
     let mut next = Vec::new();
     frame::write_output(&mut out, &frame::Output::Outputs(outputs())).unwrap();
@@ -21,7 +22,7 @@ fn fixture(iterations: Option<u32>) -> Plugin {
         None => "(loop $work br $work)".into(),
     };
     let exports = frame_exports(&out, &next, "call $burn");
-    frame_module(&format!("{exports} (func $burn {burn})"))
+    frame_module_bytes(&format!("{exports} (func $burn {burn})"))
 }
 
 #[test]
@@ -32,9 +33,12 @@ fn phase_fuel_contract_matrix() {
         Some(100_000),
         Some(1_000_000),
         Some(2_000_000),
+        Some(3_600_000),
         None,
     ] {
-        let plugin = fixture(count);
+        let bytes = fixture(count);
+        let sha256 = format!("{:x}", Sha256::digest(&bytes));
+        let plugin = Plugin::load(&bytes).unwrap();
         let component = &plugin.manifest().components()[0];
         for multiple in [1, 2, 4, 8] {
             study::with_multiplier(multiple, || {
@@ -69,18 +73,30 @@ fn phase_fuel_contract_matrix() {
                     if let Err(error) = &result {
                         assert!(error.contains("fuel"), "{error}");
                     }
-                    if count.is_none() {
-                        assert!(result.is_err());
-                    }
-                    if count.is_some_and(|n| n <= 100_000) {
-                        assert!(result.is_ok());
+                    // This particular two-million-iteration trace is the ABI decision boundary.
+                    let completes = count.is_some_and(|n| {
+                        multiple > 1
+                            || if cfg!(feature = "compare-wasmtime") {
+                                n < 2_000_000
+                            } else {
+                                n < 3_600_000
+                            }
+                    });
+                    assert_eq!(result.is_ok(), completes, "{count:?} {multiple} {phase}");
+                    if completes {
+                        let expected = if phase == "outputs" {
+                            json!([signal()])
+                        } else {
+                            json!([42])
+                        };
+                        assert_eq!(result.as_ref().unwrap(), &expected);
                     }
                     let budget = multiple * 10_000_000;
                     println!(
                         "FUEL {}",
-                        json!({"iterations":count,"phase":phase,"budget":budget,
+                        json!({"sha256":sha256,"iterations":count,"phase":phase,"budget":budget,
                         "remaining":fuel.remaining_fuel[0],"consumed":budget-fuel.remaining_fuel[0],
-                        "published_phase_result":result.as_ref().ok(),"error":result.as_ref().err(),
+                        "phase_return":result.as_ref().ok(),"error":result.as_ref().err(),
                         "dispatches_including_retry":fuel.remaining_fuel.len(),
                         "retry_matches":retry==result,"reset_replay_matches":true})
                     );

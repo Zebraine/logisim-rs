@@ -87,6 +87,8 @@ fn module(id: &str, abi: u32, contract: Option<api::StableContract>, fault: &str
     };
     let output_code = if fault == "second-output" {
         "global.get $outputs if unreachable end i32.const 1 global.set $outputs"
+    } else if fault == "fuel-output" {
+        "(loop $burn br $burn)"
     } else {
         ""
     };
@@ -94,6 +96,8 @@ fn module(id: &str, abi: u32, contract: Option<api::StableContract>, fault: &str
         format!(
             "local.get $n i32.const 4 i32.sub i32.load8_u i32.const 49 i32.eq if (result i64) i64.const {zero} else i64.const {sample} end"
         )
+    } else if fault == "fuel-transition" {
+        format!("(loop $burn br $burn) i64.const {sample}")
     } else {
         format!("i64.const {sample}")
     };
@@ -532,4 +536,44 @@ fn raster_fault_after_state_commit_publishes_error_and_stops_stable_execution() 
         sim.settle_compiled().unwrap_err().reason,
         Failure::Plugin { .. }
     ));
+}
+
+#[test]
+fn exhausted_phase_returns_before_state_commit_and_retries_the_same_fault() {
+    for phase in ["fuel-output", "fuel-transition"] {
+        let mut p = Project::default();
+        let mut registry = Registry::default();
+        let circuit = &mut p.main_circuit_mut().circuit;
+        let good = library(
+            circuit,
+            &mut registry,
+            module("good", 3, contract(false, true), ""),
+        );
+        let bad = library(
+            circuit,
+            &mut registry,
+            module("limited", 3, contract(false, true), phase),
+        );
+        let mut sim = ProjectSimulator::default();
+        sim.set_plugins(registry);
+        sim.synchronize(&p, p.main);
+        for attempt in 0..3 {
+            if attempt == 2 {
+                sim.reset();
+            }
+            sim.set_enabled(true);
+            let failure = sim.settle_compiled().unwrap_err();
+            assert!(
+                matches!(failure.reason, Failure::Plugin{component, ref message} if component == bad && message.contains("fuel")),
+                "{failure:?}"
+            );
+            // The caller receives the fault; the worker and Agent own the pause control.
+            assert_eq!(sim.ticks(), 0);
+            let view = sim.view(&[]).unwrap();
+            assert_eq!(view.port_value(bad, 0), Some(Value::filled(1, Bit::Error)));
+            for id in [good, bad] {
+                assert!(view.plugin_states[&id].state.is_empty());
+            }
+        }
+    }
 }

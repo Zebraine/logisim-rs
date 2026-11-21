@@ -17,6 +17,7 @@ serde_json.workspace = true
 wasmi = { version = "=1.1.0", default-features = false, features = ["std"] }
 wasmtime = { version = "=36.0.20", default-features = false, features = ["std", "runtime", "cranelift", "cache"], optional = true }
 [dev-dependencies]
+sha2 = "=0.10.9"
 wat = "=1.245.1"
 [lints]
 workspace = true

@@ -1640,6 +1640,7 @@ dependencies = [
  "logisim-plugin-api",
  "serde",
  "serde_json",
+ "sha2",
  "wasmi",
  "wasmtime",
  "wat",

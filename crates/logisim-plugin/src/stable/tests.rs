@@ -367,15 +367,17 @@ fn frame_exports(output: &[u8], sample: &[u8], before: &str) -> String {
     )
 }
 fn frame_module(exports: &str) -> Plugin {
-    Plugin::load(&module_with_exports(
+    Plugin::load(&frame_module_bytes(exports)).unwrap()
+}
+fn frame_module_bytes(exports: &str) -> Vec<u8> {
+    module_with_exports(
         ABI_VERSION,
         Response::StableContract(Some(contract())),
         Response::StableOutputs(outputs()),
         Response::StableTransition(StateTransition::conservative(vec![])),
         "unreachable", // Hot calls MUST NOT take the JSON path when negotiated.
         exports,
-    ))
-    .unwrap()
+    )
 }
 #[test]
 fn linear_memory_negotiation_binding_state_and_reset_are_independent_of_json() {

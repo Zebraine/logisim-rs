@@ -256,3 +256,6 @@ fn instance_enforces_memory_table_and_response_limits() {
         Some("Plugin response exceeds message limit.")
     );
 }
+
+#[cfg(feature = "engine-study")]
+mod engine_contract;
