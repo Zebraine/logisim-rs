@@ -36,7 +36,7 @@ fn engine_admission_and_fault_messages() {
 }
 
 fn check_faults(engine: WasmEngine) {
-    let m = Response::Manifest(experimental(AllowedEngines::Both));
+    let m = Response::Manifest(execution_manifest(AllowedEngines::Both));
     let cases = [
         ("guest_trap", wasm(&m, 4, "unreachable")),
         ("memory_grow", wasm(&m, 4, "i32.const 256 memory.grow drop")),
@@ -114,7 +114,7 @@ fn trusted_cache_recovers_from_misses_changed_compiler_and_unavailable_storage()
     fs::DirBuilder::new().mode(0o700).create(&path).unwrap();
     let _owned = Directory(path.clone());
     let bytes = wasm(
-        &Response::Manifest(experimental(AllowedEngines::Both)),
+        &Response::Manifest(execution_manifest(AllowedEngines::Both)),
         4,
         "",
     );

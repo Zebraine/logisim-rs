@@ -46,7 +46,7 @@ fn manifest() -> Manifest {
         }],
     }
 }
-fn experimental(engines: AllowedEngines) -> Manifest {
+fn execution_manifest(engines: AllowedEngines) -> Manifest {
     Manifest {
         abi: EXECUTION_ABI_VERSION,
         execution: Some(Execution::new(engines)),
@@ -70,7 +70,7 @@ fn both_runtime_choices_require_a_matching_static_and_manifest_contract() {
         AllowedEngines::Wasmtime,
         AllowedEngines::Both,
     ] {
-        let m = experimental(allowed);
+        let m = execution_manifest(allowed);
         let bytes = wasm(&Response::Manifest(m.clone()), 4, "");
         for engine in [WasmEngine::Wasmi, WasmEngine::Wasmtime] {
             let loaded = Plugin::load_with_engine(&bytes, engine);
@@ -90,7 +90,7 @@ fn both_runtime_choices_require_a_matching_static_and_manifest_contract() {
             }
         }
     }
-    let m = Response::Manifest(experimental(AllowedEngines::Wasmi));
+    let m = Response::Manifest(execution_manifest(AllowedEngines::Wasmi));
     for (name, abi, expected) in [
         ("logisim_abi4_both", 4, "declaration differ"),
         ("logisim_abi4_both", 3, "Unsupported plugin ABI"),
@@ -310,7 +310,7 @@ fn evaluation_validates_actions_outputs_graphics_state_and_fuel() {
 fn instance_enforces_memory_table_and_response_limits() {
     // A successful manifest proves rejection in the variants below is due to the
     // resource boundary rather than a missing export or bad handshake.
-    let response = Response::Manifest(experimental(AllowedEngines::Both));
+    let response = Response::Manifest(execution_manifest(AllowedEngines::Both));
     let json = serde_json::to_string(&response).unwrap();
     let data: String = json.bytes().map(|b| format!("\\{b:02x}")).collect();
     let module = |pages: u32, entries: u32, response_len: usize| {
@@ -345,7 +345,7 @@ mod engine_contract;
 
 #[test]
 fn loading_pins_the_engine_per_module_and_implicit_load_stays_wasmi() {
-    let manifest = experimental(AllowedEngines::Both);
+    let manifest = execution_manifest(AllowedEngines::Both);
     let bytes = wasm(&Response::Manifest(manifest.clone()), 4, "");
     let default = Plugin::load(&bytes).unwrap();
     assert_eq!(default.engine(), WasmEngine::Wasmi);
@@ -395,7 +395,7 @@ fn execution_metadata_is_strict_and_old_manifest_bytes_omit_it() {
     json["execution"] = serde_json::to_value(Execution::new(AllowedEngines::Both)).unwrap();
     assert_eq!(
         serde_json::from_value::<Manifest>(json.clone()).unwrap(),
-        experimental(AllowedEngines::Both)
+        execution_manifest(AllowedEngines::Both)
     );
     for abi in 1..=3 {
         json["abi"] = abi.into();

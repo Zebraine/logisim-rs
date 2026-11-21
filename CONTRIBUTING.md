@@ -62,17 +62,17 @@ Linux 上先用 `cargo build --release --locked --offline -p logisim-agent` 构�
 
 ### 复现 Wasm 引擎对照
 
-默认桌面、Agent 与基准使用 wasmi。历史和当前实验的[引擎契约记录](apps/logisim-bench/comparisons/engine-contract.md)给出两个 release 构建、固定核心、fuel 矩阵和冷启动复测命令。桌面与基准的双引擎构建使用 `wasmtime-abi4`。单独构建 Agent 始终只依赖 wasmi。基准可在负载前加 `--wasm-engine wasmi` 或 `--wasm-engine wasmtime`。当前分支按模块导出和 manifest 选择运行时；旧 ABI 在所有入口都使用 wasmi。历史阶段 2/3 的旧 ABI 双引擎数据应在对应历史提交复测。阶段 1 的[原始对照补丁](apps/logisim-bench/comparisons/wasmtime-36.patch)对应历史提交 `cc5cee9`。
+默认桌面、Agent 与基准使用 wasmi。历次测量的[引擎契约记录](apps/logisim-bench/comparisons/engine-contract.md)给出两个 release 构建、固定核心、fuel 矩阵和冷启动复测命令。桌面与基准的双引擎构建使用 `wasmtime-abi4`。单独构建 Agent 始终只依赖 wasmi。基准可在负载前加 `--wasm-engine wasmi` 或 `--wasm-engine wasmtime`。当前分支按模块导出和 manifest 选择运行时；旧 ABI 在所有入口都使用 wasmi。历史阶段 2/3 的旧 ABI 双引擎数据应在对应历史提交复测。阶段 1 的[原始对照补丁](apps/logisim-bench/comparisons/wasmtime-36.patch)对应历史提交 `cc5cee9`。
 
 ### ABI 4 插件与私有模块缓存
 
 SDK 使用 `export_plugin!(execution = Both, …)` 声明双引擎，单引擎使用 `Wasmi` 或 `Wasmtime`。`Describe` 与静态入口须一致，fuel 使用 `engine-specific`。普通 SDK 出口生成 ABI 3。更新随附模块时运行各库的专用检查，并用双引擎 `logisim-plugin-check --compare-abi3 OLD NEW` 核对打包模块。保留 `plugins/abi3/` 中的原始字节。
 
-`wasmtime-cache` 单独为桌面或基准启用 Wasmtime 36.0.20 的缓存 API。Linux 上只信任当前用户和系统管理员控制的本地目录。逐级校验祖先，缓存根目录须为 0700，记录须为当前用户的 0600 普通文件。标准系统 /tmp 的粘滞位允许在其下创建私有实验目录。共享账号、可被其他主体更改的挂载及已失陷的当前账号均超出信任范围。
+`wasmtime-cache` 单独为桌面或基准启用 Wasmtime 36.0.20 的缓存 API。Linux 上只信任当前用户和系统管理员控制的本地目录。逐级校验祖先，缓存根目录须为 0700，记录须为当前用户的 0600 普通文件。标准系统 /tmp 的粘滞位允许在其下创建私有测量目录。共享账号、可被其他主体更改的挂载及已失陷的当前账号均超出信任范围。
 
 持久记录绑定缓存格式版本、源 Wasm 的 SHA-256、引擎版本、目标/CPU 特性、编译配置和 fuel 预算。校验整条记录后才复制到 Wasmtime 专用的一次性私有目录。机器码装载发生在 Wasmtime 内部，自有代码使用安全 API。校验和用于发现损坏，目录所有权负责来源信任。manifest、ABI、工程保存的身份和工具定义在加载路径上照常验证。
 
-32 个槽位，每条上限 16 MiB。并发发布使用同文件系统的唯一临时目录和原子 rename。不同键落在同一槽时下次重新编译。运行中创建的临时目录随本次打开结束而清理，异常终止留下的临时目录可在关闭所有实验实例后随整个缓存删除。损坏、权限和写入异常保留原 Wasmtime 运行方式并报告诊断。空缓存首开仍有编译和写入成本，10M fuel 的跨引擎差异仍适用。
+32 个槽位，每条上限 16 MiB。并发发布使用同文件系统的唯一临时目录和原子 rename。不同键落在同一槽时下次重新编译。运行中创建的临时目录随本次打开结束而清理，异常终止留下的临时目录可在退出所有使用该缓存的应用后随整个缓存删除。损坏、权限和写入异常保留原 Wasmtime 运行方式并报告诊断。空缓存首开仍有编译和写入成本，10M fuel 的跨引擎差异仍适用。
 
 在 Linux 上选两个可用逻辑核运行下列命令。计时器按工程读取至首次 settle 统计，随后校验完整四态轨迹。脚本只把缓存写入私有临时目录，stdout 的 JSON 保存每次打开的分相、诊断、进程峰值 RSS 和缓存大小。
 
@@ -120,5 +120,5 @@ git diff --cached --stat
 3. 标签构建通过后自动创建 Release；说明保持简短，附平台包与 SHA-256 校验文件。
 
 发布流程见 [release.yml](.github/workflows/release.yml)。提供 Linux/Windows x86-64 和 macOS Apple Silicon；
-v0.1.0 额外保留 Intel macOS；v0.2.0 起不再提供 Intel macOS。各包包含桌面程序、无界面 Agent、电路示例、同次构建并校验的 Wasm、中英文 README、README 截图和 LICENSE。
+v0.1.0 额外保留 Intel macOS；v0.2.0 起不再提供 Intel macOS。各平台桌面均以 `--features wasmtime-abi4,wasmtime-cache` 构建，Agent 使用独立的默认构建命令。打包器在启动 GUI 前通过 `--print-plugin-engines` 核对目标程序，并将实测构建能力保存为包内 `desktop-engines.json`。Linux 支持私有磁盘缓存，Windows/macOS 从源 Wasm 编译。每个平台用双引擎检查器验证包内六对 ABI 3/4 模块，并由包内 Agent 回放示例。
 普通分支构建不发布 Release；既有标签与资产不强制覆盖，修复先提交到版本分支。

@@ -97,6 +97,10 @@ def check_archive(archive, engine_check=None):
                 rebuilt = examples / f"{name}.reopened.lrs"
                 with session(process, native) as sid:
                     summary = verify(process, sid, name)
+                    if name == "register-file":
+                        state = call(process, "simulation_state", session=sid)
+                        if state["wasm_engine"] != "wasmi" or state["plugins"][0]["status"] != "loaded":
+                            raise ValueError("Packaged Agent failed to run the bundled ABI 4 module with wasmi")
                     call(process, "project_convert", session=sid, output=str(returned))
                 for legacy in (legacy_source, returned):
                     with session(process, legacy) as sid:

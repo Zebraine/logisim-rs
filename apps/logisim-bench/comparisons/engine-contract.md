@@ -1,14 +1,18 @@
 # Wasm 引擎契约与启动成本
 
-## Stage 12 决策
+## 桌面与 Agent 的引擎契约
 
 ABI 4 是受支持的显式插件契约。SDK 的普通出口继续生成 ABI 3，只有声明引擎集合的模块使用 ABI 4。计量单位属于所选引擎，宿主为每次请求补充 10M fuel，保留既有批次提交、暂停、Reset 和资源上限。
 
 六个随附模块使用 ABI 4 / both，并保留插件身份、组件版本、工具定义和主模块相对路径。工程绑定的是路径、插件身份、版本和工具定义；实际加载的 Wasm 决定 ABI。包中另存六份原版 ABI 3 模块，供固定旧计量或旧宿主使用。选择 Wasmtime 时，加载旧模块的桌面会显示实际使用 wasmi 及原因。ABI 4 引擎不匹配时拒绝加载。
 
-Linux x86-64 发布配方显式编入 Wasmtime 和私有缓存，运行时选择仍须确认并重启。普通 Cargo 构建、Windows/macOS 发布配方及独立 Agent 使用 wasmi；Agent 的状态报告实际引擎。接受显式选择时约半秒的首次编译成本。缓存仅用于符合信任检查的 Linux 应用私有目录；不可写或失效时从源 Wasm 编译。Windows/macOS 的 Wasmtime 与缓存产品化另行验收。
+Linux、Windows 和 macOS 的桌面打包配方均编入双引擎，默认使用 wasmi。启用 Wasmtime 需确认并重启。普通 Cargo 构建与独立 Agent 使用 wasmi。磁盘缓存目前只信任符合权限校验的 Linux 本地目录，其他平台从源 Wasm 编译。
 
-## 实验 B 的 ABI 4 契约
+Stage 13 在 Linux x86-64 上做了三轮独立进程复测。Register File 空缓存与命中缓存的首开中位数分别为 453.62 ms 和 9.68 ms，课程 CPU 分别为 467.37 ms 和 23.23 ms。两条轨迹的 digest 均与 wasmi 一致，诊断数均为零。X11 实窗在重启后显示 ABI 4 使用 Wasmtime，换回同一工程路径上的原版 ABI 3 模块后显示回退 wasmi 及原因。
+
+此次 Linux 本地压缩包为 20,070,975 字节，比 Stage 12 双引擎包增加 12,524 字节。解包验证覆盖六对新旧模块和包内 Agent。Windows 和 macOS 已更新打包配方，本轮只在 Linux 实机验收。
+
+## ABI 4 声明与执行
 
 SDK 的 `export_plugin!(execution = Both, …)` 生成版本化入口和 Describe 响应。也可选 `Wasmi` 或 `Wasmtime`。wire manifest 使用 `"abi":4,"execution":{"fuel":"engine-specific","engines":"both"}`，引擎集合允许 `wasmi`、`wasmtime`、`both` 三个值。预算由宿主决定。未知字段、枚举、缺少声明和静态入口冲突均拒绝。已有 ABI 1–3 的 Wasm 和 manifest 保持原样；用新版 Rust API 构造旧 manifest 时填写 `execution: None`，序列化时省略此字段。
 
@@ -33,15 +37,15 @@ i5-12600KF，逻辑核 15，Rust 1.99.0 release。每个负载五轮，每轮分
 
 两条成功轨迹均为零诊断。Register File 的 digest 为 `a2689cffb70ff825`（512 tick / 1536 step）；CPU 为 `73171884c0465aad`（128 / 771）。10M fuel 下，100 万次循环在两种引擎均完成；200 万次在 wasmi 两相均完成，Wasmtime 两相均耗尽。无限循环在两种引擎均耗尽。测试核对失败批次未提交、错误可见、暂停和 Reset 后的行为。缓存损坏、不可写和两个并发进程的恢复均在 ABI 4 模块复测。
 
-建议进入显式 ABI 4 的产品化评审，保留旧插件和 Agent 的 wasmi 路径。Linux 热态收益足以支持长时间运行；空缓存仍有近半秒编译成本，CPU 跨进程首开的 p95 超过 25 ms 目标。Windows/macOS、更多第三方插件及长尾首开仍待验证。
+这组测量使用 ABI 4，旧插件与 Agent 仍走 wasmi。Linux 热态收益足以支持长时间运行；空缓存仍有近半秒编译成本，CPU 跨进程首开的 p95 超过 25 ms 目标。Windows/macOS、更多第三方插件及长尾首开仍待验证。
 
 ## 历史实验
 
-下文记录阶段 2/3 在当时提交上的规则与实测数字。当前实验使用上面的 ABI 4 入口，复测命令见 CONTRIBUTING.md。
+下文记录阶段 2/3 在当时提交上的规则与实测数字。当前版本使用上面的 ABI 4 入口，复测命令见 CONTRIBUTING.md。
 
 **阶段 2 决定：旧 ABI 继续使用 wasmi 1.1.0。** Wasmtime 36.0.20 可以在显式对照构建中执行同一插件。对旧插件开放运行时切换会改变部分有限计算的完成、暂停和状态提交结果。Stage 3 保留生产引擎。若产品选择为长时间仿真引入另一种计量契约，再考虑新 ABI。
 
-阶段 3 在显式构建的桌面应用中增加了需确认、重启后生效的实验选项。旧插件使用 Wasmtime 时接受下表的计量差异。阶段 3 的磁盘缓存仅用于基准实验。后续 Linux 桌面缓存对照使用独立的 `wasmtime-cache-experiment` 构建选项，复测见 [CONTRIBUTING.md](../../../CONTRIBUTING.md)。默认桌面与 Agent 继续使用 wasmi。
+阶段 3 在显式构建的桌面应用中增加了需确认、重启后生效的选项。旧插件使用 Wasmtime 时接受下表的计量差异。阶段 3 的磁盘缓存仅用于基准实验。当前 Linux 桌面可用 `wasmtime-cache` 启用私有缓存，复测见 [CONTRIBUTING.md](../../../CONTRIBUTING.md)。默认桌面与 Agent 继续使用 wasmi。
 
 ## 可观察的资源契约
 
@@ -154,4 +158,4 @@ Linux x86-64，i5-12600KF，Rust 1.99.0，Wasmtime 36.0.20。用同一 release �
 | register-file | 447.17 / 459.25 | 455.28 / 468.05 | 7.41 / 8.28 | 9.51 / 9.78 |
 | single-cycle | 462.57 / 473.11 | 463.27 / 473.36 | 20.77 / 22.09 | 24.35 / 24.84 |
 
-两个工程共用 course.wasm 的 687,281 字节缓存记录。截断、只读及并发首次发布均通过完整四态轨迹检查。跨进程命中 p95 在该组样本中达到 25 ms 目标；并发写入后的独立 CPU 重开 p95 为 25.34 ms。寄存器空缓存首开中位数比关闭缓存增加 8.11 ms。保留显式实验，长会话值得单独评估新 ABI 的 fuel 契约。两种引擎的预算计量仍有差异，默认引擎保持 wasmi。Linux 私有目录、手动清理及复测命令见 [CONTRIBUTING.md](../../../CONTRIBUTING.md)。
+两个工程共用 course.wasm 的 687,281 字节缓存记录。截断、只读及并发首次发布均通过完整四态轨迹检查。跨进程命中 p95 在该组样本中达到 25 ms 目标；并发写入后的独立 CPU 重开 p95 为 25.34 ms。寄存器空缓存首开中位数比关闭缓存增加 8.11 ms。以上数据记录了 ABI 4 定案前的缓存成本。两种引擎的预算计量仍有差异，默认引擎保持 wasmi。Linux 私有目录、手动清理及复测命令见 [CONTRIBUTING.md](../../../CONTRIBUTING.md)。

@@ -289,3 +289,41 @@ fn desktop_engine_is_pinned_before_loading_and_falls_back_only_if_unavailable() 
         assert!(!temp.path("wasmtime-cache-v1").exists());
     }
 }
+
+#[cfg(feature = "wasmtime-abi4")]
+#[test]
+fn reopening_a_legacy_project_uses_the_module_abi_at_its_recorded_path() {
+    use logisim_ui::{Settings, WasmEnginePreference::Wasmtime};
+    let temp = Temp::new();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let project = temp.path("examples/agent/register-file.circ");
+    let source = temp.path("plugins/course/course.wasm");
+    fs::create_dir_all(project.parent().unwrap()).unwrap();
+    fs::create_dir_all(source.parent().unwrap()).unwrap();
+    let original = fs::read(root.join("examples/agent/register-file.circ")).unwrap();
+    fs::write(&project, &original).unwrap();
+
+    let mut h = super::Harness::default();
+    h.ws.apply_settings(Settings {
+        wasm_engine: Wasmtime,
+        ..h.ws.preferences()
+    });
+    h.files = Files::for_desktop(Some(h.config_dir.path("recovery")), &mut h.ws);
+    for (module, abi, active) in [
+        ("plugins/abi3/course.wasm", 3, "wasmi"),
+        ("plugins/course/course.wasm", 4, "wasmtime"),
+        ("plugins/abi3/course.wasm", 3, "wasmi"),
+    ] {
+        fs::copy(root.join(module), &source).unwrap();
+        assert!(h.files.load(&project, &mut h.ws, &mut h.sim));
+        assert!(!h.files.busy());
+        let library = h.files.plugins.libraries().next().unwrap();
+        assert_eq!(
+            (library.manifest.abi, library.active_engine),
+            (abi, Some(active))
+        );
+        assert_eq!(h.ws.preferences().wasm_engine, Wasmtime);
+        assert!(!h.files.present(&h.ws).dirty);
+        assert_eq!(fs::read(&project).unwrap(), original);
+    }
+}

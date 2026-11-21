@@ -37,7 +37,7 @@ fn validated_module_is_reused_and_corruption_is_rebuilt_from_wasm() {
     let tmp = Private::new("restore");
     let root = tmp.0.join("cache");
     let bytes = wasm(
-        &Response::Manifest(experimental(AllowedEngines::Both)),
+        &Response::Manifest(execution_manifest(AllowedEngines::Both)),
         4,
         "",
     );
@@ -70,7 +70,7 @@ fn validated_module_is_reused_and_corruption_is_rebuilt_from_wasm() {
 fn untrusted_paths_use_uncached_wasmtime_and_preserve_the_target() {
     let tmp = Private::new("paths");
     let bytes = wasm(
-        &Response::Manifest(experimental(AllowedEngines::Both)),
+        &Response::Manifest(execution_manifest(AllowedEngines::Both)),
         4,
         "",
     );
@@ -118,7 +118,7 @@ fn stale_record_key_misses_and_concurrent_writers_publish_complete_records() {
     use std::sync::Barrier;
     let tmp = Private::new("publication");
     let bytes = wasm(
-        &Response::Manifest(experimental(AllowedEngines::Both)),
+        &Response::Manifest(execution_manifest(AllowedEngines::Both)),
         4,
         "",
     );
@@ -128,7 +128,7 @@ fn stale_record_key_misses_and_concurrent_writers_publish_complete_records() {
         let open = || {
             barrier.wait();
             let (p, result) = load(&bytes, &root).unwrap();
-            assert_eq!(p.manifest(), &experimental(AllowedEngines::Both));
+            assert_eq!(p.manifest(), &execution_manifest(AllowedEngines::Both));
             assert!(matches!(result, Outcome::Miss | Outcome::Hit));
         };
         let first = scope.spawn(open);
@@ -152,7 +152,7 @@ fn obsolete_upstream_namespace_rebuilds_once() {
     use sha2::{Digest, Sha256};
     let tmp = Private::new("obsolete");
     let bytes = wasm(
-        &Response::Manifest(experimental(AllowedEngines::Both)),
+        &Response::Manifest(execution_manifest(AllowedEngines::Both)),
         4,
         "",
     );
@@ -177,7 +177,7 @@ fn obsolete_upstream_namespace_rebuilds_once() {
 fn scratch_cleanup_is_independent_of_background_cache_statistics() {
     let tmp = Private::new("cleanup");
     let bytes = wasm(
-        &Response::Manifest(experimental(AllowedEngines::Both)),
+        &Response::Manifest(execution_manifest(AllowedEngines::Both)),
         4,
         "",
     );
@@ -208,7 +208,7 @@ fn legacy_and_disallowed_modules_never_open_the_native_cache() {
         assert!(!root.exists());
     }
     let bytes = wasm(
-        &Response::Manifest(experimental(AllowedEngines::Wasmi)),
+        &Response::Manifest(execution_manifest(AllowedEngines::Wasmi)),
         4,
         "",
     );
