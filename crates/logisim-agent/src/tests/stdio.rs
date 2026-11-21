@@ -42,9 +42,63 @@ impl Client {
     fn tool(&mut self, name: &str, args: Value) -> Value {
         self.call("tools/call", json!({"name":name,"arguments":args}))
     }
+    fn initialize(&mut self, version: &str) -> Value {
+        let result = self.call("initialize", json!({"protocolVersion":version,"clientInfo":{"name":"test","version":"1"},"capabilities":{}}));
+        self.send(json!({"jsonrpc":"2.0","method":"notifications/initialized"}));
+        result["result"].clone()
+    }
     fn finish(mut self) {
         drop(self.process.stdin.take());
         assert!(self.process.wait().unwrap().success());
+    }
+}
+
+// Both MCP representations must carry the same CLI envelope.
+fn tool_error(reply: &Value) -> Value {
+    assert!(reply.get("error").is_none(), "{reply}");
+    let result = &reply["result"];
+    assert_eq!(result["isError"], true);
+    let structured = &result["structuredContent"];
+    assert_eq!(structured["ok"], false);
+    assert_eq!(structured["protocol"], 1);
+    assert_eq!(result["content"][0]["text"], structured.to_string());
+    structured["error"].clone()
+}
+
+#[test]
+fn mcp_negotiates_known_versions_and_reports_request_level_errors() {
+    for (requested, expected) in [
+        ("2024-11-05", "2024-11-05"),
+        ("2025-03-26", "2025-03-26"),
+        ("2025-06-18", "2025-06-18"),
+        ("2025-11-25", "2025-11-25"),
+        ("unknown", "2025-11-25"),
+    ] {
+        let mut c = Client::start(&["mcp"]);
+        assert_eq!(
+            c.tool("project_catalog", json!({}))["error"]["data"]["code"],
+            "not_initialized"
+        );
+        let init = c.initialize(requested);
+        assert_eq!(init["protocolVersion"], expected);
+        assert!(
+            init["capabilities"]["tools"].is_object() && init["serverInfo"]["name"].is_string()
+        );
+        assert_eq!(
+            c.call("initialize", json!({}))["error"]["data"]["code"],
+            "already_initialized"
+        );
+        assert_eq!(c.call("absent", json!({}))["error"]["code"], -32601);
+        for params in [
+            json!([]),
+            json!({}),
+            json!({"name":"project_catalog","arguments":[]}),
+        ] {
+            assert_eq!(c.call("tools/call", params)["error"]["code"], -32602);
+        }
+        c.send(json!({"jsonrpc":"1.0","id":12,"method":"tools/list"}));
+        assert_eq!(c.read()["error"]["code"], -32600);
+        c.finish();
     }
 }
 
@@ -95,25 +149,28 @@ fn mcp_handshake_tools_errors_and_session_lifetime_match_cli() {
     let tools = m.call("tools/list", json!({}));
     assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 17);
     assert_eq!(
-        m.tool("settings_patch", json!({"config":"whatever","ops":[]}))["error"]["code"],
-        -32602
+        tool_error(&m.tool("settings_patch", json!({"config":"whatever","ops":[]})))["code"],
+        "invalid_arguments"
     );
     assert_eq!(
         m.tool("simulation_run_forever", json!({}))["error"]["data"]["code"],
         "unknown_tool"
     );
-    for invalid in [
-        json!(["path", false, null, []]),
-        json!({"config":"path","dry_run":false,"ops":[["files.autosave",false]]}),
-    ] {
-        assert_eq!(m.tool("settings_patch", invalid)["error"]["code"], -32602);
-    }
+    assert_eq!(m.tool("settings_patch", json!([]))["error"]["code"], -32602);
+    assert_eq!(
+        tool_error(&m.tool(
+            "settings_patch",
+            json!({"config":"path","dry_run":false,"ops":[["files.autosave",false]]})
+        ))["code"],
+        "invalid_arguments"
+    );
     let catalog = m.tool("settings_catalog", json!({}));
     let cli = Command::new(BIN)
         .args(["settings", "catalog"])
         .output()
         .unwrap();
     let cli: Value = serde_json::from_slice(&cli.stdout).unwrap();
+    assert_eq!(catalog["result"]["isError"], false);
     assert_eq!(catalog["result"]["structuredContent"], cli);
     assert_eq!(
         serde_json::from_str::<Value>(catalog["result"]["content"][0]["text"].as_str().unwrap())
@@ -143,7 +200,7 @@ fn mcp_handshake_tools_errors_and_session_lifetime_match_cli() {
         true
     );
     assert_eq!(
-        m.tool("simulation_state", args)["error"]["data"]["code"],
+        tool_error(&m.tool("simulation_state", args))["code"],
         "unknown_session"
     );
     m.finish();
@@ -192,8 +249,8 @@ fn project_catalog_is_sessionless_and_byte_identical_over_cli_and_mcp() {
         let error: Value = serde_json::from_slice(&cli.stdout).unwrap();
         assert_eq!(error["error"]["code"], "invalid_arguments");
         assert_eq!(
-            m.tool("project_catalog", json!({arg:"unused"}))["error"]["code"],
-            -32602
+            tool_error(&m.tool("project_catalog", json!({arg:"unused"})))["code"],
+            "invalid_arguments"
         );
     }
     m.finish();
@@ -279,10 +336,10 @@ fn project_edits_have_the_same_outcome_over_cli_flags_and_mcp() {
     ]));
     assert_eq!(cli.read()["error"]["code"], "invalid_arguments");
     assert_eq!(
-        m.tool(
+        tool_error(&m.tool(
             "project_patch",
             json!({"session":mb["session_id"],"ops":ops})
-        )["error"]["data"]["code"],
+        ))["code"],
         "invalid_arguments"
     );
     for (mode, dry) in [("--dry-run", true), ("--apply", false)] {
@@ -322,10 +379,10 @@ fn project_edits_have_the_same_outcome_over_cli_flags_and_mcp() {
     assert_eq!(error["details"]["op_index"], 1);
     assert_eq!(
         *error,
-        m.tool(
+        tool_error(&m.tool(
             "project_patch",
             json!({"session":mb["session_id"],"dry_run":false,"ops":bad})
-        )["error"]["data"]
+        ))
     );
     cli.send(json!([
         "project",
@@ -459,7 +516,7 @@ fn simulation_controls_match_on_both_transports_and_invalid_requests_leave_state
                 .is_some_and(|n| n > 0)
         {
             assert_eq!(left["error"]["code"], "not_settled");
-            assert_eq!(left["error"], right["error"]["data"]);
+            assert_eq!(left["error"], tool_error(&right));
         } else {
             assert_eq!(left["ok"], true, "{tool}: {left}");
             assert_eq!(
@@ -484,7 +541,7 @@ fn simulation_controls_match_on_both_transports_and_invalid_requests_leave_state
         let mut args = args;
         args["session"] = b.clone();
         assert_eq!(
-            mcp.tool("simulation_set_input", args)["error"]["data"]["code"],
+            tool_error(&mcp.tool("simulation_set_input", args))["code"],
             "invalid_arguments"
         );
     }
@@ -533,4 +590,38 @@ fn simulation_controls_match_on_both_transports_and_invalid_requests_leave_state
     mcp.finish();
     assert_eq!(std::fs::read_to_string(&path).unwrap(), xml);
     std::fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn annotations_describe_all_tools_including_in_memory_side_effects() {
+    let mut c = Client::start(&["mcp"]);
+    c.initialize("2025-11-25");
+    let result = c.call("tools/list", json!({}));
+    let tools = result["result"]["tools"].as_array().unwrap();
+    for tool in tools {
+        let name = tool["name"].as_str().unwrap();
+        let (read, destructive, idempotent) = match name {
+            "project_catalog" | "project_snapshot" | "settings_catalog" | "settings_get"
+            | "simulation_state" => (true, false, true),
+            "project_open" => (false, false, false),
+            "simulation_open" => (false, false, true),
+            "settings_patch" | "project_close" | "simulation_set_input" | "simulation_settle" => {
+                (false, true, true)
+            }
+            "project_patch"
+            | "project_save"
+            | "simulation_step"
+            | "simulation_tick"
+            | "simulation_reset"
+            | "simulation_set_enabled" => (false, true, false),
+            _ => panic!("Missing annotations contract for {name}"),
+        };
+        assert_eq!(
+            tool["annotations"],
+            json!({"readOnlyHint":read,"destructiveHint":destructive,
+            "idempotentHint":idempotent,"openWorldHint":false}),
+            "{name}"
+        );
+    }
+    c.finish();
 }

@@ -4,74 +4,112 @@ use serde_json::{Value, json};
 use std::io::{BufRead, Write};
 
 const REVISION: &str = "2025-11-25";
-const TOOLS: [(&str, &str); 17] = [
+const SUPPORTED: [&str; 4] = ["2024-11-05", "2025-03-26", "2025-06-18", REVISION];
+
+#[derive(Clone, Copy)]
+enum Effect {
+    ReadOnly,
+    Additive { idempotent: bool },
+    Modifies { idempotent: bool },
+}
+
+impl Effect {
+    fn annotations(self) -> Value {
+        let idempotent = match self {
+            Self::ReadOnly => true,
+            Self::Additive { idempotent } | Self::Modifies { idempotent } => idempotent,
+        };
+        json!({"readOnlyHint":matches!(self,Self::ReadOnly),
+               "destructiveHint":matches!(self,Self::Modifies {..}),
+               "idempotentHint":idempotent,"openWorldHint":false})
+    }
+}
+
+const TOOLS: [(&str, &str, Effect); 17] = [
     (
         "settings_catalog",
         "List portable v16 preference keys, defaults and allowed values.",
+        Effect::ReadOnly,
     ),
     (
         "settings_get",
         "Read preferences and the SHA-256 of an explicit configuration file.",
+        Effect::ReadOnly,
     ),
     (
         "settings_patch",
         "Validate a batch of portable preference edits. Set dry_run to false to commit.",
+        Effect::Modifies { idempotent: true },
     ),
     (
         "project_catalog",
         "List component kinds, accepted aliases and writable property schemas. No session is required.",
+        Effect::ReadOnly,
     ),
     (
         "project_open",
         "Read a circuit file into a session owned by this connection.",
+        Effect::Additive { idempotent: false },
     ),
     (
         "project_snapshot",
         "Read the circuit definitions, components, wires and interfaces in a session.",
+        Effect::ReadOnly,
     ),
     (
         "project_patch",
         "Preview or apply an ordered batch to the in-memory project. Use project_save to write it.",
+        Effect::Modifies { idempotent: false },
     ),
     (
         "project_save",
         "Atomically save the session to its source file. Checks the source SHA-256 and makes a one-generation backup by default.",
+        Effect::Modifies { idempotent: false },
     ),
     (
         "project_close",
         "Release the project and its simulation snapshot.",
+        Effect::Modifies { idempotent: true },
     ),
     (
         "simulation_open",
         "Open the root simulation and return current state. Reopening retains the first engine selection and current runtime.",
+        Effect::Additive { idempotent: true },
     ),
     (
         "simulation_state",
         "Read current four-state signals, counters, plugin status and diagnostics.",
+        Effect::ReadOnly,
     ),
     (
         "simulation_set_input",
         "Set a root Pin, Switch or DipSwitch input. Enabled propagation settles immediately.",
+        Effect::Modifies { idempotent: true },
     ),
     (
         "simulation_settle",
         "Finish pending propagation without advancing the clock.",
+        Effect::Modifies { idempotent: true },
     ),
     (
         "simulation_step",
         "Execute one event propagation batch, including when paused.",
+        Effect::Modifies { idempotent: false },
     ),
     (
         "simulation_tick",
         "Advance one tick in a settled hierarchy containing a clock, then settle.",
+        Effect::Modifies { idempotent: false },
     ),
     (
         "simulation_reset",
         "Reset the session simulation and settle its initial signals.",
+        Effect::Modifies { idempotent: false },
     ),
     (
         "simulation_set_enabled",
         "Pause automatic propagation or resume and drain pending work.",
+        Effect::Modifies { idempotent: false },
     ),
 ];
 
@@ -126,7 +164,7 @@ fn project_operations() -> Value {
 fn tool_list() -> Value {
     let string = json!({"type":"string","minLength":1});
     let mut tools = Vec::with_capacity(TOOLS.len());
-    for (name, description) in TOOLS {
+    for (name, description, effect) in TOOLS {
         let (properties, required) = match name {
             "settings_catalog" | "project_catalog" => (json!({}), json!([])),
             "settings_get" => (json!({"config": string}), json!(["config"])),
@@ -169,7 +207,7 @@ fn tool_list() -> Value {
         if name == "simulation_set_input" {
             schema["oneOf"] = json!([{"required":["value"]},{"required":["unknown"]}]);
         }
-        tools.push(json!({"name":name, "description":description, "inputSchema":schema}));
+        tools.push(json!({"name":name, "description":description, "inputSchema":schema, "annotations":effect.annotations()}));
     }
     json!({"tools":tools})
 }
@@ -220,9 +258,10 @@ impl Connection {
                 ));
             }
             self.phase = Phase::Negotiated;
-            let version = match requested {
-                "2025-06-18" => requested,
-                _ => REVISION,
+            let version = if SUPPORTED.contains(&requested) {
+                requested
+            } else {
+                REVISION
             };
             return Ok(
                 json!({"protocolVersion":version,"capabilities":{"tools":{}},"serverInfo":{"name":"logisim-agent","version":env!("CARGO_PKG_VERSION")}}),
@@ -243,7 +282,7 @@ impl Connection {
                 let name = params["name"]
                     .as_str()
                     .ok_or_else(|| Failure::invalid_params("Expected a tool name."))?;
-                if !TOOLS.iter().any(|(n, _)| *n == name) {
+                if !TOOLS.iter().any(|(n, ..)| *n == name) {
                     return Err(Failure(
                         -32602,
                         Error::new("unknown_tool", format!("Unknown tool: {name}")),
@@ -253,21 +292,16 @@ impl Connection {
                     .get("arguments")
                     .cloned()
                     .unwrap_or_else(|| json!({}));
-                let request = Request::from_json(json!({"tool":name,"arguments":arguments}))
-                    .map_err(|e| Failure(-32602, e))?;
-                let data = self.service.call(request).map_err(|e| {
-                    Failure(
-                        if e.code == "invalid_arguments" {
-                            -32602
-                        } else {
-                            -32000
-                        },
-                        e,
-                    )
-                })?;
-                let result = envelope(Ok(data));
+                if !arguments.is_object() {
+                    return Err(Failure::invalid_params("Expected a tool arguments object."));
+                }
+                let outcome = Request::from_json(json!({"tool":name,"arguments":arguments}))
+                    .and_then(|request| self.service.call(request));
+                let is_error = outcome.is_err();
+                let result = envelope(outcome);
                 Ok(
-                    json!({"content":[{"type":"text","text":result.to_string()}],"structuredContent":result}),
+                    json!({"content":[{"type":"text","text":result.to_string()}],
+                    "structuredContent":result,"isError":is_error}),
                 )
             }
             _ => Err(Failure(
