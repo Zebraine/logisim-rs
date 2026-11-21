@@ -169,3 +169,76 @@ fn invalid_common_properties_roll_back_the_entire_batch_at_the_failing_index() {
     }
     assert_eq!(fs::read_to_string(&f.path).unwrap(), SOURCE);
 }
+
+#[test]
+fn add_and_update_reject_wrong_json_types_for_every_advertised_builtin_key() {
+    let mut f = Fixture::new(SOURCE);
+    let cases = cases();
+    let adds: Vec<_> = cases.iter().enumerate().map(|(i, (kind, props))|
+        json!({"op":"add_component","circuit":1,"kind":kind,"position":[100*i,200],"properties":props})).collect();
+    f.patch(json!(adds), false).unwrap();
+    let before = f.snapshot();
+    for c in &before["circuits"][0]["components"].as_array().unwrap()[2..] {
+        let keys = c["patchable_properties"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap())
+            .chain(["unknown_field"]);
+        for key in keys {
+            let invalid = json!({(key):null});
+            for op in [
+                json!({"op":"add_component","circuit":1,"kind":c["kind"],"position":[40,40],"properties":invalid}),
+                json!({"op":"update_component","circuit":1,"id":c["id"],"properties":invalid}),
+            ] {
+                let batch = json!([{"op":"rename_circuit","id":1,"name":"temporary"},op]);
+                let error = f.patch(batch, false).unwrap_err();
+                assert_eq!(error.code, "invalid_property", "{}.{}", c["kind"], key);
+                assert_eq!(error.details["op_index"], 1);
+            }
+        }
+    }
+    assert_eq!(f.snapshot(), before);
+}
+
+#[test]
+fn increasing_mux_inputs_preserves_the_wired_input_role_on_reopen() {
+    use logisim_core::Point;
+    let mut f = Fixture::new(SOURCE);
+    let added = f
+        .patch(
+            json!([
+                {"op":"add_component","kind":"Multiplexer","circuit":1,"position":[200,200]},
+                {"op":"add_wire","circuit":1,"from":[100,190],"to":[170,190]}
+            ]),
+            false,
+        )
+        .unwrap();
+    let id = &added["changes"][0]["id"];
+    f.patch(json!([{"op":"update_component","circuit":1,"id":id,"properties":{"select_bits":3,"bits":7}}]),false).unwrap();
+    f.call("project_save", json!({})).unwrap();
+    let xml = fs::read_to_string(&f.path).unwrap();
+    let loaded = logisim_file::parse(&xml).unwrap();
+    assert!(loaded.warnings.is_empty());
+    let circuit = &loaded.document.main_circuit().circuit;
+    let mux = &circuit.components[2];
+    let input = Point::new(160, 160);
+    let idx = mux.ports().iter().position(|p| *p == input).unwrap();
+    assert_eq!(mux.port_width(idx), Some(7));
+    let start = Point::new(100, 190);
+    let first = circuit
+        .wires
+        .iter()
+        .find(|w| w.a == start || w.b == start)
+        .unwrap();
+    let net = circuit.connected_wires(first.id);
+    assert!(
+        circuit
+            .wires
+            .iter()
+            .any(|w| net.contains(&w.id) && (w.a == input || w.b == input))
+    );
+    assert!(circuit.wires.iter().any(|w| w.contains(Point::new(10, 10))
+        && w.contains(Point::new(70, 10))
+        && !net.contains(&w.id)));
+}

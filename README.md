@@ -179,7 +179,21 @@ Pass `project_patch` a `session`, an explicit `dry_run` boolean, and an ordered 
 {"tool":"project_save","arguments":{"session":"ID_FROM_OPEN","expected_sha256":"SHA_FROM_OPEN_OR_LAST_SAVE","backup":true}}
 ```
 
-Use IDs from your snapshot. After reviewing the preview, repeat the patch with `dry_run:false`, then save. Supported operations are `add_component`, `move_component`, `update_component`, `remove_component`, `add_wire`, `remove_wire`, `add_circuit`, `rename_circuit`, `remove_circuit` and `set_main_circuit`. Editable families are Pin, Gate, Parity, Probe, Tunnel and Splitter. Each component lists its `patchable_properties`. Port positions use canvas coordinates, colors use RGBA and Splitter mappings use zero-based branch indices or null. Include `circuit` when an item ID occurs in multiple circuits. Wire edits use the editor's routing and normalization rules. When normalization splits or merges the added wire, `wire_ids` lists its surviving segments.
+Use IDs from your snapshot. After reviewing the preview, repeat the patch with `dry_run:false`, then save. Supported operations are `add_component`, `move_component`, `update_component`, `remove_component`, `add_wire`, `remove_wire`, `add_circuit`, `rename_circuit`, `remove_circuit` and `set_main_circuit`. Port positions use canvas coordinates, colors use RGBA and Splitter mappings use zero-based branch indices or null. Include `circuit` when an item ID occurs in multiple circuits. Wire edits use the editor's routing and normalization rules. When normalization splits or merges the added wire, `wire_ids` lists its surviving segments.
+
+Each snapshot lists the component’s writable keys in `patchable_properties`, their JSON types in `property_types`, and their current values under those keys. Add and update accept the same properties. A partial `font` object changes only its supplied members.
+
+| Editable family | Properties specific to the family |
+| --- | --- |
+| Pin, Gate, Parity, Probe, Tunnel, Splitter | Width, input configuration, radix or branch mapping, as listed in the snapshot |
+| Constant, Ground, Power, Pull Resistor | `bits` on the sources, unsigned `value` within the Constant’s width, resistor `pull` of `0`, `1` or `X` (strings) |
+| Button, Switch, DipSwitch, Clock | Switch `bits`, DIP `switch_count`, clock `high_ticks` and `low_ticks` (1–65535), label placement |
+| Text, Bit Extender | `text`, `font`, RGBA `color`, `halign` (left/center/right), `valign` (top/center/base/bottom). Extender `in_width`, `out_width`, `type` (zero/one/sign/input) |
+| Shifter, Adder, Comparator | `bits`, shifter `shift` (logical_left/logical_right/arithmetic_right/rotate_left/rotate_right), comparator `signed` |
+| Multiplexer, Demultiplexer, Decoder | `select_bits` (1–5), `enable`, `top_right`, `disabled_zero`, data `bits` on mux/demux, `three_state` on demux/decoder |
+| LED, SevenSegment, HexDisplay, RGBLED, DotMatrix | Applicable RGBA colors and polarity, RGB `multibit`, matrix rows/columns (1–32), `matrix_input` (column/row/select), circular dots and persistence |
+
+For a subcircuit, pass the owning circuit and the existing target definition separately, for example `{"op":"add_component","circuit":1,"kind":"subcircuit","circuit_id":2,"position":[100,100]}`. Its snapshot includes the target name and pin bindings in `circuit_name` and `interface_ports`. Edit its label, font, facing or position. Editing the target Pins updates instance interfaces. Recursive references and removal of a referenced definition are rejected. Memory, plugin instances, sequential storage and other components with an empty writable list are read-only.
 
 For CLI flags, put `{"ops":[...],"expected_sha256":"..."}` in an edits file (the hash is optional). A running `logisim-agent cli` or `project open` process also accepts argument arrays on stdin:
 

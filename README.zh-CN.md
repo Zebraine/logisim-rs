@@ -179,7 +179,21 @@ logisim-agent settings patch --config /path/to/preferences.json --ops edits.json
 {"tool":"project_save","arguments":{"session":"ID_FROM_OPEN","expected_sha256":"SHA_FROM_OPEN_OR_LAST_SAVE","backup":true}}
 ```
 
-请使用快照中的真实 ID。核对预演结果后，将同一补丁的 `dry_run` 改为 `false`，应用后再保存。支持元件添加、移动、更新、删除，导线添加、删除，以及电路添加、重命名、删除和设置主电路。可编辑种类为 Pin、Gate、Parity、Probe、Tunnel 和 Splitter。每个元件的 `patchable_properties` 列出可写属性。端口坐标使用画布坐标，颜色使用 RGBA，Splitter 映射使用从零开始的分支索引，断开位用 null。多个电路内有相同元件或导线 ID 时须传 `circuit`。导线遵循编辑器的重布线和合并、分段规则，`add_wire` 的 `wire_ids` 列出保留下来的线段。
+请使用快照中的真实 ID。核对预演结果后，将同一补丁的 `dry_run` 改为 `false`，应用后再保存。支持元件添加、移动、更新、删除，导线添加、删除，以及电路添加、重命名、删除和设置主电路。端口坐标使用画布坐标，颜色使用 RGBA，Splitter 映射使用从零开始的分支索引，断开位用 null。多个电路内有相同元件或导线 ID 时须传 `circuit`。导线遵循编辑器的重布线和合并、分段规则，`add_wire` 的 `wire_ids` 列出保留下来的线段。
+
+元件快照的 `patchable_properties` 列出可写字段，`property_types` 给出 JSON 类型，同名字段给出当前值。添加和更新使用同一套属性。传入部分 `font` 字段只修改对应的字体属性。
+
+| 可编辑元件 | 主要属性 |
+| --- | --- |
+| Pin、Gate、Parity、Probe、Tunnel、Splitter | 位宽、输入、进制或分支映射，以快照为准 |
+| Constant、Ground、Power、Pull Resistor | 信号源位宽 `bits`、位宽内的无符号常量 `value`、电阻 `pull`（字符串 `0`、`1`、`X`） |
+| Button、Switch、DipSwitch、Clock | 开关位宽、拨码数 `switch_count`、时钟高低电平持续 tick 数 `high_ticks` 和 `low_ticks`（1–65535）、标签位置 |
+| Text、Bit Extender | 文本 `text`、字体、RGBA 颜色、`halign`（left/center/right）、`valign`（top/center/base/bottom）。扩展器 `in_width`、`out_width`、`type`（zero/one/sign/input） |
+| Shifter、Adder、Comparator | `bits`、移位模式 `shift`（logical_left/logical_right/arithmetic_right/rotate_left/rotate_right）、有符号比较 `signed` |
+| Multiplexer、Demultiplexer、Decoder | 选择位宽 `select_bits`（1–5）、`enable`、`top_right`、`disabled_zero`。复用器和解复用器支持数据位宽，解复用器和译码器支持 `three_state` |
+| LED、SevenSegment、HexDisplay、RGBLED、DotMatrix | 适用的 RGBA 颜色和极性、RGB 多位输入、点阵行列数（1–32）、`matrix_input`（column/row/select）、圆点和余辉时间 |
+
+添加子电路实例时分别指定父电路和已有的目标定义，例如 `{"op":"add_component","circuit":1,"kind":"subcircuit","circuit_id":2,"position":[100,100]}`。快照中 `circuit_name` 和 `interface_ports` 给出目标名称与 Pin 绑定。实例可更新标签、字体、朝向和位置。修改目标 Pin 会同步刷新实例接口。递归引用和删除仍被引用的电路会被拒绝。存储器、插件实例、时序存储元件及其他可写字段列表为空的元件保持只读。
 
 使用 CLI 参数时，可将 `{"ops":[...],"expected_sha256":"..."}` 放入编辑文件，哈希可省略。已启动的 `logisim-agent cli` 或 `project open` 进程也接受逐行输入的参数数组。
 

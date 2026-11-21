@@ -158,7 +158,13 @@ fn project_edits_have_the_same_outcome_over_cli_flags_and_mcp() {
     ));
     fs::create_dir(&dir).unwrap();
     let source = r##"<project source="logisim-rs-plugin-v1" version="1.0"><main name="top"/><circuit name="top"/></project>"##;
-    let ops = json!([{"op":"add_component","circuit":1,"kind":"Pin","position":[20,30],"properties":{"label":"port","bits":8}},{"op":"add_circuit","name":"child"}]);
+    let ops = json!([
+        {"op":"add_circuit","name":"child"},
+        {"op":"add_component","circuit":2,"kind":"Pin","position":[20,30],"properties":{"label":"port","bits":8}},
+        {"op":"add_component","circuit":1,"kind":"Constant","position":[20,30],"properties":{"bits":8,"value":200}},
+        {"op":"add_component","circuit":1,"kind":"subcircuit","circuit_id":2,"position":[100,30],"properties":{"label":"A"}},
+        {"op":"update_component","circuit":1,"id":1,"properties":{"value":42}}
+    ]);
     let edits = dir.join("ops.json");
     fs::write(&edits, json!({"ops":ops}).to_string()).unwrap();
     let a = dir.join("cli.circ");
@@ -186,6 +192,11 @@ fn project_edits_have_the_same_outcome_over_cli_flags_and_mcp() {
             .len(),
         10
     );
+    let add = &patch["inputSchema"]["properties"]["ops"]["items"]["oneOf"][0];
+    assert_eq!(add["properties"]["circuit_id"]["type"], "integer");
+    assert!(add["if"]["properties"]["kind"]["pattern"].is_string());
+    assert_eq!(add["then"]["required"], json!(["circuit_id"]));
+    assert_eq!(add["else"]["not"]["required"], json!(["circuit_id"]));
     assert!(
         patch["inputSchema"]["required"]
             .as_array()
@@ -230,6 +241,44 @@ fn project_edits_have_the_same_outcome_over_cli_flags_and_mcp() {
             assert_eq!(a["data"][field], data[field]);
         }
     }
+    let bad = json!([{"op":"add_circuit","name":"discard"},
+        {"op":"add_component","circuit":2,"kind":"subcircuit","circuit_id":1,"position":[0,0]}]);
+    fs::write(&edits, json!({"ops":bad}).to_string()).unwrap();
+    cli.send(json!([
+        "project",
+        "patch",
+        "--session",
+        ca["session_id"],
+        "--ops",
+        edits,
+        "--apply"
+    ]));
+    let error = &cli.read()["error"];
+    assert_eq!(error["details"]["op_index"], 1);
+    assert_eq!(
+        *error,
+        m.tool(
+            "project_patch",
+            json!({"session":mb["session_id"],"dry_run":false,"ops":bad})
+        )["error"]["data"]
+    );
+    cli.send(json!([
+        "project",
+        "snapshot",
+        "--session",
+        ca["session_id"]
+    ]));
+    let circuits = &cli.read()["data"]["circuits"];
+    let snapshot = m.tool("project_snapshot", json!({"session":mb["session_id"]}));
+    assert_eq!(
+        *circuits,
+        snapshot["result"]["structuredContent"]["data"]["circuits"]
+    );
+    assert_eq!(circuits[0]["components"][0]["value"], 42);
+    assert_eq!(
+        circuits[0]["components"][1]["interface_ports"][0]["bits"],
+        8
+    );
     assert_eq!(fs::read_to_string(&a).unwrap(), source);
     assert_eq!(fs::read_to_string(&b).unwrap(), source);
     cli.send(json!([

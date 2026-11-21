@@ -74,13 +74,13 @@ const TOOLS: [(&str, &str); 16] = [
 fn project_operations() -> Value {
     let id = json!({"type":"integer","minimum":1});
     let point = json!({"type":"array","minItems":2,"maxItems":2,"items":{"type":"integer","minimum":-1000000,"maximum":1000000}});
-    let properties = json!({"type":"object","description":"Fields listed in the component snapshot's patchable_properties."});
+    let properties = json!({"type":"object","description":"Use the component snapshot's patchable_properties and property_types."});
     let mut variants = Vec::new();
     for (op, required, optional) in [
         (
             "add_component",
             &["circuit", "kind", "position"][..],
-            &["properties"][..],
+            &["properties", "circuit_id"][..],
         ),
         ("move_component", &["id", "position"], &["circuit"]),
         ("update_component", &["id", "properties"], &["circuit"]),
@@ -95,7 +95,7 @@ fn project_operations() -> Value {
         let mut fields = json!({"op":{"const":op}});
         for &key in required.iter().chain(optional) {
             fields[key] = match key {
-                "id" | "circuit" => id.clone(),
+                "id" | "circuit" | "circuit_id" => id.clone(),
                 "position" | "from" | "to" => point.clone(),
                 "properties" => properties.clone(),
                 "kind" | "name" => json!({"type":"string","minLength":1}),
@@ -105,7 +105,13 @@ fn project_operations() -> Value {
         let required: Vec<_> = std::iter::once("op")
             .chain(required.iter().copied())
             .collect();
-        variants.push(json!({"type":"object","required":required,"additionalProperties":false,"properties":fields}));
+        let mut variant = json!({"type":"object","required":required,"additionalProperties":false,"properties":fields});
+        if op == "add_component" {
+            variant["if"] = json!({"properties":{"kind":{"pattern":"^[Ss][Uu][Bb][Cc][Ii][Rr][Cc][Uu][Ii][Tt]$"}}});
+            variant["then"] = json!({"required":["circuit_id"]});
+            variant["else"] = json!({"not":{"required":["circuit_id"]}});
+        }
+        variants.push(variant);
     }
     json!({"type":"array","items":{"oneOf":variants}})
 }
