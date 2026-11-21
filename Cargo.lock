@@ -1243,6 +1243,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "logisim-bench"
+version = "0.4.0"
+dependencies = [
+ "logisim-core",
+ "logisim-file",
+ "logisim-plugin",
+ "logisim-sim",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "logisim-core"
 version = "0.4.0"
 dependencies = [

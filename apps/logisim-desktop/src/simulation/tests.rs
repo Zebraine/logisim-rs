@@ -1,3 +1,4 @@
+mod benchmark;
 use super::values::probe_text;
 use super::*;
 use logisim_core::{Circuit, Project, Radix};

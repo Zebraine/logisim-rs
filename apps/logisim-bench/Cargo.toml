@@ -1,0 +1,18 @@
+[package]
+name = "logisim-bench"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+logisim-core.workspace = true
+logisim-file.workspace = true
+logisim-plugin.workspace = true
+logisim-sim.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true
