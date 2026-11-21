@@ -90,9 +90,9 @@ fn plugin_instance_lifecycle_matches_between_cli_flags_and_mcp() {
             assert_eq!(a["ok"], ok, "{a}");
             assert_eq!(b["result"]["isError"], !ok, "{b}");
             if ok {
-                assert_eq!(
-                    a["data"]["changes"],
-                    b["result"]["structuredContent"]["data"]["changes"]
+                super::identity::assert_equivalent_changes(
+                    &a["data"]["changes"],
+                    &b["result"]["structuredContent"]["data"]["changes"],
                 );
             } else {
                 assert_eq!(a["error"], tool_error(&b));

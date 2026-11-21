@@ -322,8 +322,51 @@ fn project_edits_have_the_same_outcome_over_cli_flags_and_mcp() {
     assert!(add["properties"]["kind"].get("enum").is_none());
     assert_eq!(add["properties"]["circuit_id"]["type"], "integer");
     assert!(add["if"]["properties"]["kind"]["pattern"].is_string());
-    assert_eq!(add["then"]["required"], json!(["circuit_id"]));
-    assert_eq!(add["else"]["not"]["required"], json!(["circuit_id"]));
+    let target_choices = json!([{"required":["circuit_id"]},{"required":["circuit_agent_id"]}]);
+    assert_eq!(add["then"]["oneOf"], target_choices);
+    assert_eq!(add["else"]["not"]["anyOf"], target_choices);
+    assert_eq!(
+        add["properties"]["circuit_agent_id"]["pattern"],
+        "^k-[0-9a-f]{32}$"
+    );
+    for variant in patch["inputSchema"]["properties"]["ops"]["items"]["oneOf"]
+        .as_array()
+        .unwrap()
+    {
+        let name = variant["properties"]["op"]["const"].as_str().unwrap();
+        if name.starts_with("add_") {
+            assert!(variant["properties"].get("agent_id").is_none(), "{name}");
+        } else {
+            let prefix = if name.ends_with("_circuit") {
+                "k"
+            } else if name.ends_with("_wire") {
+                "w"
+            } else {
+                "c"
+            };
+            assert_eq!(
+                variant["properties"]["agent_id"]["pattern"],
+                format!("^{prefix}-[0-9a-f]{{32}}$"),
+                "{name}"
+            );
+            assert_eq!(
+                variant["oneOf"],
+                json!([{"required":["id"]},{"required":["agent_id"]}]),
+                "{name}"
+            );
+            assert!(
+                !variant["required"]
+                    .as_array()
+                    .unwrap()
+                    .contains(&json!("id")),
+                "{name}"
+            );
+            assert_eq!(
+                variant["properties"]["circuit"]["type"], "integer",
+                "{name}"
+            );
+        }
+    }
     assert!(
         patch["inputSchema"]["required"]
             .as_array()
@@ -364,7 +407,8 @@ fn project_edits_have_the_same_outcome_over_cli_flags_and_mcp() {
         );
         assert_eq!(a["ok"], true);
         let data = &b["result"]["structuredContent"]["data"];
-        for field in ["source_sha256", "changes", "changed", "dry_run"] {
+        identity::assert_equivalent_changes(&a["data"]["changes"], &data["changes"]);
+        for field in ["source_sha256", "changed", "dry_run"] {
             assert_eq!(a["data"][field], data[field]);
         }
     }

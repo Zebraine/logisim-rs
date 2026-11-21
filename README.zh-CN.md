@@ -187,7 +187,7 @@ MCP 支持 `2024-11-05`、`2025-03-26`、`2025-06-18` 和 `2025-11-25`。握手�
 {"tool":"project_save","arguments":{"session":"ID_FROM_OPEN","expected_sha256":"SHA_FROM_OPEN_OR_LAST_SAVE","backup":true}}
 ```
 
-请使用快照中的真实 ID。核对预演结果后，将同一补丁的 `dry_run` 改为 `false`，应用后再保存。支持元件添加、移动、更新、删除，导线添加、删除，以及电路添加、重命名、删除和设置主电路。端口坐标使用画布坐标，颜色使用 RGBA，Splitter 映射使用从零开始的分支索引，断开位用 null。多个电路内有相同元件或导线 ID 时须传 `circuit`。导线遵循编辑器的重布线和合并、分段规则，`add_wire` 的 `wire_ids` 列出保留下来的线段。
+请使用快照中的真实 ID。核对预演结果后，将同一补丁的 `dry_run` 改为 `false`，应用后再保存。支持元件添加、移动、更新、删除，导线添加、删除，以及电路添加、重命名、删除和设置主电路。端口坐标使用画布坐标，颜色使用 RGBA，Splitter 映射使用从零开始的分支索引，断开位用 null。多个电路内有相同的元件或导线数字 ID 时须传 `circuit`。导线遵循编辑器的重布线和合并、分段规则。
 
 打开工程前即可运行 `logisim-agent project catalog`，或无参数调用 MCP 工具 `project_catalog`。`data.kinds` 列出 Core 规范名、可用别名，以及 `addable`、`editable` 和 `requires_circuit_id` 标志。仅子电路实例需要目标电路 ID。插件条目标有 `requires_plugin_source:true`，其属性由选定模块和工具决定。
 
@@ -216,7 +216,7 @@ ROM 的 `contents` 整体替换镜像，最多接受 65,536 个地址严格递�
 
 PLA 的两个平面均以项为行。输入单元取 `disconnected`、`direct` 或 `inverted`，输出单元取布尔值。提交的平面须符合最终尺寸。调整尺寸会保留重叠单元，并在 patch 结果中返回两个完整平面。
 
-添加子电路实例时分别指定父电路和已有的目标定义，例如 `{"op":"add_component","circuit":1,"kind":"subcircuit","circuit_id":2,"position":[100,100]}`。快照中 `circuit_name` 和 `interface_ports` 给出目标名称与 Pin 绑定。实例可更新标签、字体、朝向和位置。修改目标 Pin 会同步刷新实例接口。递归引用和删除仍被引用的电路会被拒绝。原有 66 个种类各有静态属性定义，插件实例通过 `add_plugin` 添加。
+添加子电路实例时分别指定父电路和已有的目标定义，例如 `{"op":"add_component","circuit":1,"kind":"subcircuit","circuit_id":2,"position":[100,100]}`。目标定义可用 `circuit_id` 或 `circuit_agent_id` 指定，两者只传一个。父电路 `circuit` 使用数字 ID。快照中 `circuit_name` 和 `interface_ports` 给出目标名称与 Pin 绑定。实例可更新标签、字体、朝向和位置。修改目标 Pin 会同步刷新实例接口。递归引用和删除仍被引用的电路会被拒绝。原有 66 个种类各有静态属性定义，插件实例通过 `add_plugin` 添加。
 
 时序元件补丁编辑文档属性，运行状态通过仿真工具查看。若缩小计数器位宽后原上限超出范围，请在同一操作中指定新的 `counter_max`。
 
@@ -232,7 +232,9 @@ PLA 的两个平面均以项为行。输入单元取 `disconnected`、`direct` �
 
 #### 持久对象标识
 
-`project_snapshot` 为每个电路、组件和导线同时返回 numeric `id` 和持久 `agent_id`。例如，Pin 快照包含 `{"id":3,"agent_id":"c-0123456789abcdef0123456789abcdef","kind":"Pin"}`。重开后，请在新快照中用 `agent_id` 找到原对象，再将当前 numeric `id` 和所属电路传给补丁操作。
+`project_snapshot` 为每个电路、组件和导线同时返回 numeric `id` 和持久 `agent_id`。例如，Pin 快照包含 `{"id":3,"agent_id":"c-0123456789abcdef0123456789abcdef","kind":"Pin"}`。移动、更新或删除组件，删除导线，更新插件实例，以及重命名、删除电路或设置主电路时，`id` 和 `agent_id` 必须且只能传一个。跨会话编辑推荐直接传入已保存的 `agent_id`。若同时传入 `circuit`，它必须与对象所属电路一致。新快照可用于查询每个持久 ID 对应的当前数字 ID。
+
+例如，即使重开后 Pin 的数字 ID 已变化，`{"op":"update_component","agent_id":"c-0123456789abcdef0123456789abcdef","properties":{"label":"DATA"}}` 仍会更新该 Pin。每次添加对象都会在对应的 change 中返回两种 ID。导线归一化后，`wire_ids` 与 `wire_agent_ids` 按相同顺序列出存活线段，首对即为主线段的 `id` 和 `agent_id`。在相同会话状态下重复预演或应用同一批操作，得到的 ID 一致。
 
 可选 XML 属性 `agent-id` 是 logisim-rs 文档扩展。电路、组件和导线分别用 `k-`、`c-` 和 `w-` 前缀，后接 128 位随机数的 32 个小写十六进制字符。打开旧文件时在内存中分配缺失标识，下次显式保存时写入工程，复制已保存的文件会保留标识。备份仍是保存前的原始字节。导线分段时新增线段取得新标识，合并时保留一个存续标识。
 
@@ -242,7 +244,7 @@ PLA 的两个平面均以项为行。输入单元取 `disconnected`、`direct` �
 
 运行 `logisim-agent plugin catalog --wasm plugins/input/input.wasm`，或向 `plugin_catalog` 传入 `{"path":"plugins/input/input.wasm"}`，即可查看模块清单、端口、动作和属性默认值。每个工具的 `properties` 描述布尔、整数和选项控件，`property_schema` 描述补丁接受的字符串。例如队列容量 8 写作 `"8"`。已加载实例的快照返回同一份属性 schema。
 
-下列补丁在电路 1 中放置键盘。模块路径相对于工程文件，成功后用 `changes[0].id` 取得实例 ID。
+下列补丁在电路 1 中放置键盘。模块路径相对于工程文件，成功后可从 `changes[0]` 取得新实例的 `id` 和 `agent_id`。
 
 ```json
 {"ops":[{"op":"add_plugin","circuit":1,"position":[100,100],"tool":"keyboard","source":{"plugin":"org.logisim-rs.input","version":"1.0.0","path":"plugins/input/input.wasm"},"properties":{"capacity":"8"}}]}

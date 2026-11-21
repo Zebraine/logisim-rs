@@ -27,6 +27,40 @@ pub(super) fn assert_equivalent_circuits(left: &Value, right: &Value) {
     assert_eq!(design(left.clone()), design(right.clone()));
 }
 
+/// Independent sessions propose independent tags. Compare both transports' complete
+/// change lists after checking and replacing only addition tags with their numeric references.
+pub(super) fn assert_equivalent_changes(left: &Value, right: &Value) {
+    let normalized = |mut changes: Value| {
+        for c in changes.as_array_mut().unwrap() {
+            let kind = match c["op"].as_str().unwrap() {
+                "add_component" | "add_plugin" => AgentIdKind::Component,
+                "add_wire" => AgentIdKind::Wire,
+                "add_circuit" => AgentIdKind::Circuit,
+                _ => continue,
+            };
+            kind.decode(c["agent_id"].as_str().unwrap()).unwrap();
+            if kind == AgentIdKind::Wire {
+                let tags = c["wire_agent_ids"].as_array().unwrap();
+                let ids = c["wire_ids"].as_array().unwrap();
+                assert_eq!(tags.len(), ids.len());
+                assert!(
+                    tags.iter()
+                        .all(|tag| kind.decode(tag.as_str().unwrap()).is_some())
+                );
+                assert_eq!(tags.iter().collect::<HashSet<_>>().len(), ids.len());
+                if !ids.is_empty() {
+                    assert_eq!(tags[0], c["agent_id"]);
+                    assert_eq!(ids[0], c["id"]);
+                }
+                c.as_object_mut().unwrap().remove("wire_agent_ids");
+            }
+            c.as_object_mut().unwrap().remove("agent_id");
+        }
+        changes
+    };
+    assert_eq!(normalized(left.clone()), normalized(right.clone()));
+}
+
 pub(super) fn disk_hash(path: &Path) -> Value {
     logisim_agent::Service::default()
         .call(logisim_agent::Request::ProjectOpen {

@@ -118,35 +118,45 @@ const TOOLS: [(&str, &str, Effect); 18] = [
     ),
 ];
 
+fn persistent_id(prefix: char) -> Value {
+    json!({"type":"string","pattern":format!("^{prefix}-[0-9a-f]{{32}}$")})
+}
+
+fn alternatives(numeric: &str, persistent: &str) -> Value {
+    json!([{"required":[numeric]},{"required":[persistent]}])
+}
+
 fn project_operations() -> Value {
     let id = json!({"type":"integer","minimum":1});
     let point = json!({"type":"array","minItems":2,"maxItems":2,"items":{"type":"integer","minimum":-1000000,"maximum":1000000}});
     let properties = json!({"type":"object","description":"Use project_catalog or the component snapshot's property_schema for allowed fields and values."});
     let mut variants = Vec::new();
-    for (op, required, optional) in [
+    for (op, required, optional, reference) in [
         (
             "add_component",
             &["circuit", "kind", "position"][..],
-            &["properties", "circuit_id"][..],
+            &["properties", "circuit_id", "circuit_agent_id"][..],
+            None,
         ),
-        ("move_component", &["id", "position"], &["circuit"]),
-        ("update_component", &["id", "properties"], &["circuit"]),
-        ("remove_component", &["id"], &["circuit"]),
-        ("add_wire", &["circuit", "from", "to"], &[]),
-        ("remove_wire", &["id"], &["circuit"]),
-        ("add_circuit", &["name"], &[]),
-        ("rename_circuit", &["id", "name"], &[]),
-        ("remove_circuit", &["id"], &[]),
-        ("set_main_circuit", &["id"], &[]),
+        ("move_component", &["position"], &["circuit"], Some('c')),
+        ("update_component", &["properties"], &["circuit"], Some('c')),
+        ("remove_component", &[], &["circuit"], Some('c')),
+        ("add_wire", &["circuit", "from", "to"], &[], None),
+        ("remove_wire", &[], &["circuit"], Some('w')),
+        ("add_circuit", &["name"], &[], None),
+        ("rename_circuit", &["name"], &["circuit"], Some('k')),
+        ("remove_circuit", &[], &["circuit"], Some('k')),
+        ("set_main_circuit", &[], &["circuit"], Some('k')),
     ] {
         let mut fields = json!({"op":{"const":op}});
         for &key in required.iter().chain(optional) {
             fields[key] = match key {
-                "id" | "circuit" | "circuit_id" => id.clone(),
+                "circuit" | "circuit_id" => id.clone(),
+                "circuit_agent_id" => persistent_id('k'),
                 "position" | "from" | "to" => point.clone(),
                 "properties" => properties.clone(),
                 "kind" => {
-                    json!({"type":"string","minLength":1,"description":"Use an addable name or alias from project_catalog. Only a subcircuit instance requires a target circuit_id."})
+                    json!({"type":"string","minLength":1,"description":"Use an addable name or alias from project_catalog. Subcircuit instances require one target circuit reference."})
                 }
                 "name" => json!({"type":"string","minLength":1}),
                 _ => unreachable!(),
@@ -156,10 +166,16 @@ fn project_operations() -> Value {
             .chain(required.iter().copied())
             .collect();
         let mut variant = json!({"type":"object","required":required,"additionalProperties":false,"properties":fields});
+        if let Some(prefix) = reference {
+            variant["properties"]["id"] = id.clone();
+            variant["properties"]["agent_id"] = persistent_id(prefix);
+            variant["oneOf"] = alternatives("id", "agent_id");
+        }
         if op == "add_component" {
             variant["if"] = json!({"properties":{"kind":{"pattern":"^[Ss][Uu][Bb][Cc][Ii][Rr][Cc][Uu][Ii][Tt]$"}}});
-            variant["then"] = json!({"required":["circuit_id"]});
-            variant["else"] = json!({"not":{"required":["circuit_id"]}});
+            let targets = alternatives("circuit_id", "circuit_agent_id");
+            variant["then"] = json!({"oneOf":targets});
+            variant["else"] = json!({"not":{"anyOf":targets}});
         }
         variants.push(variant);
     }
@@ -183,7 +199,8 @@ fn project_operations() -> Value {
         "required":["op","circuit","position","tool"],"anyOf":[{"required":["source"]},{"required":["plugin","version"]}]}));
     plugin_fields["op"] = json!({"const":"update_plugin"});
     plugin_fields["id"] = id;
-    variants.push(json!({"type":"object","additionalProperties":false,"properties":plugin_fields,"required":["op","id"]}));
+    plugin_fields["agent_id"] = persistent_id('c');
+    variants.push(json!({"type":"object","additionalProperties":false,"properties":plugin_fields,"required":["op"],"oneOf":alternatives("id","agent_id")}));
     json!({"type":"array","items":{"oneOf":variants}})
 }
 

@@ -187,7 +187,7 @@ Pass `project_patch` a `session`, an explicit `dry_run` boolean, and an ordered 
 {"tool":"project_save","arguments":{"session":"ID_FROM_OPEN","expected_sha256":"SHA_FROM_OPEN_OR_LAST_SAVE","backup":true}}
 ```
 
-Use IDs from your snapshot. After reviewing the preview, repeat the patch with `dry_run:false`, then save. Supported operations are `add_component`, `move_component`, `update_component`, `remove_component`, `add_wire`, `remove_wire`, `add_circuit`, `rename_circuit`, `remove_circuit` and `set_main_circuit`. Port positions use canvas coordinates, colors use RGBA and Splitter mappings use zero-based branch indices or null. Include `circuit` when an item ID occurs in multiple circuits. Wire edits use the editor's routing and normalization rules. When normalization splits or merges the added wire, `wire_ids` lists its surviving segments.
+Use IDs from your snapshot. After reviewing the preview, repeat the patch with `dry_run:false`, then save. Supported operations are `add_component`, `move_component`, `update_component`, `remove_component`, `add_wire`, `remove_wire`, `add_circuit`, `rename_circuit`, `remove_circuit` and `set_main_circuit`. Port positions use canvas coordinates, colors use RGBA and Splitter mappings use zero-based branch indices or null. Include `circuit` when a numeric item ID occurs in multiple circuits. Wire edits use the editor's routing and normalization rules.
 
 Run `logisim-agent project catalog` or call the MCP tool `project_catalog` with no arguments to discover component kinds before opening a file. The response’s `data.kinds` lists core names, accepted aliases, and the `addable`, `editable` and `requires_circuit_id` flags. Only subcircuit instances need a target circuit ID. The plugin entry has `requires_plugin_source:true` and takes its properties from the selected module and tool.
 
@@ -216,7 +216,7 @@ ROM `contents` replaces the complete image with at most 65,536 strictly increasi
 
 PLA planes have one row per term. Input cells are `disconnected`, `direct` or `inverted`. Output cells are booleans. Supplied planes must match the final dimensions. Resizing preserves overlapping cells and returns both complete planes in the patch result.
 
-For a subcircuit, pass the owning circuit and the existing target definition separately, for example `{"op":"add_component","circuit":1,"kind":"subcircuit","circuit_id":2,"position":[100,100]}`. Its snapshot includes the target name and pin bindings in `circuit_name` and `interface_ports`. Edit its label, font, facing or position. Editing the target Pins updates instance interfaces. Recursive references and removal of a referenced definition are rejected.
+For a subcircuit, pass the owning circuit and the existing target definition separately, for example `{"op":"add_component","circuit":1,"kind":"subcircuit","circuit_id":2,"position":[100,100]}`. You can substitute the target definition’s `circuit_agent_id` for `circuit_id`. The owning `circuit` stays numeric. Its snapshot includes the target name and pin bindings in `circuit_name` and `interface_ports`. Edit its label, font, facing or position. Editing the target Pins updates instance interfaces. Recursive references and removal of a referenced definition are rejected.
 
 Storage patches edit the document attributes. Use the simulation tools for live state. When narrowing a Counter below its current maximum, supply a fitting `counter_max` in the same operation.
 
@@ -232,7 +232,9 @@ Only explicit save writes the original path. It checks the current file against 
 
 #### Persistent object IDs
 
-Each circuit, component and wire in `project_snapshot` has a persistent `agent_id` alongside its numeric `id`. For example, a Pin snapshot includes `{"id":3,"agent_id":"c-0123456789abcdef0123456789abcdef","kind":"Pin"}`. After reopening, find the object by `agent_id` in a fresh snapshot and pass its current numeric `id` and owning circuit to patch operations.
+Each circuit, component and wire in `project_snapshot` has a persistent `agent_id` alongside its numeric `id`. For example, a Pin snapshot includes `{"id":3,"agent_id":"c-0123456789abcdef0123456789abcdef","kind":"Pin"}`. Pass exactly one of `id` and `agent_id` when moving, updating or removing a component, removing a wire, updating a plugin instance, or renaming, removing or setting the main circuit. Across sessions, use the saved `agent_id` directly. If you also supply `circuit`, it must match the owner. A new snapshot maps each persistent ID to its current numeric ID.
+
+For example, `{"op":"update_component","agent_id":"c-0123456789abcdef0123456789abcdef","properties":{"label":"DATA"}}` updates that Pin even if its numeric ID changed on reopen. Each addition returns both IDs in its change. After wire normalization, `wire_ids` and `wire_agent_ids` list surviving segments in matching order. The first pair is the primary `id` and `agent_id`. Repeating a dry-run or applying the same batch to the same session state gives the same IDs.
 
 The optional XML attribute `agent-id` is a logisim-rs extension. Its value has a type prefix (`k-` circuit, `c-` component, `w-` wire) and 32 lowercase hex digits from 128 random bits. Opening an older file allocates missing IDs in memory. The next explicit save writes them to the project, and a copy of that file carries the same IDs. The backup contains the original bytes. New split segments get fresh IDs, and a merged wire retains one surviving identity.
 
@@ -242,7 +244,7 @@ An invalid ID or a repeated occurrence produces a warning. The first valid occur
 
 Run `logisim-agent plugin catalog --wasm plugins/input/input.wasm` or call `plugin_catalog` with `{"path":"plugins/input/input.wasm"}` to inspect the manifest, ports, actions and property defaults. For each tool, `properties` describes the Boolean, Integer and Choice controls. Its `property_schema` describes the strings accepted in a patch. For example, a queue capacity of eight is `"8"`. The same schema appears in a loaded instance's snapshot.
 
-This batch places a keyboard in circuit 1, using a module path relative to the project file. A successful patch returns the new component ID in `changes[0].id`.
+This batch places a keyboard in circuit 1, using a module path relative to the project file. A successful patch returns the new instance’s `id` and `agent_id` in `changes[0]`.
 
 ```json
 {"ops":[{"op":"add_plugin","circuit":1,"position":[100,100],"tool":"keyboard","source":{"plugin":"org.logisim-rs.input","version":"1.0.0","path":"plugins/input/input.wasm"},"properties":{"capacity":"8"}}]}
