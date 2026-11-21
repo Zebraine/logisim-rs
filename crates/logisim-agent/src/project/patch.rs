@@ -12,6 +12,12 @@ pub enum ProjectOp {
     AddComponent {
         circuit: Id,
         kind: String,
+        #[serde(
+            default,
+            deserialize_with = "crate::supplied",
+            skip_serializing_if = "Option::is_none"
+        )]
+        circuit_id: Option<Id>,
         position: [i32; 2],
         #[serde(default)]
         properties: Map<String, Value>,
@@ -61,7 +67,7 @@ pub(crate) fn indexed(mut error: Error, index: usize) -> Error {
     error.details["op_index"] = index.into();
     error
 }
-fn point([x, y]: [i32; 2]) -> Result<Point> {
+pub(super) fn point([x, y]: [i32; 2]) -> Result<Point> {
     if [x, y]
         .into_iter()
         .any(|n| !(-1_000_000..=1_000_000).contains(&n))
@@ -78,6 +84,29 @@ fn kind(name: &str) -> Result<Kind> {
         .find(|k| k.name().eq_ignore_ascii_case(name))
         .or_else(|| super::builtins::kind(name))
         .ok_or_else(|| edit::unsupported(name))
+}
+fn new_component(
+    project: &Project,
+    owner: Id,
+    name: &str,
+    target: Option<Id>,
+    at: Point,
+) -> Result<Component> {
+    if name.eq_ignore_ascii_case("subcircuit") {
+        let target = target.ok_or_else(|| invalid("A subcircuit instance requires circuit_id."))?;
+        if !project.can_instantiate(owner, target) {
+            return Err(invalid(format!(
+                "Cannot instantiate circuit {target} in {owner}: missing circuit or recursive reference."
+            )));
+        }
+        return Ok(project
+            .instance(target, at)
+            .expect("validated target circuit"));
+    }
+    if target.is_some() {
+        return Err(invalid("Only a subcircuit instance accepts circuit_id."));
+    }
+    Ok(Component::new(kind(name)?, at))
 }
 fn circuit(project: &mut Project, id: Id) -> Result<&mut Circuit> {
     project
@@ -121,11 +150,16 @@ impl ProjectOp {
             AddComponent {
                 circuit: cid,
                 kind: name,
+                circuit_id,
                 position,
                 properties,
             } => {
-                let mut c = Component::new(kind(name)?, point(*position)?);
+                let at = point(*position)?;
+                let mut c = new_component(project, *cid, name, *circuit_id, at)?;
                 edit::apply(&mut c, properties)?;
+                if c.position != at {
+                    return Err(invalid("Conflicting component positions in add_component."));
+                }
                 logisim_file::validate_component(&c, project).map_err(invalid)?;
                 pin_edit = c.kind == Kind::Pin;
                 change["id"] = circuit(project, *cid)?.add_component(c).into();
@@ -156,7 +190,12 @@ impl ProjectOp {
                         let mut c = old.clone();
                         edit::apply(&mut c, properties)?;
                         logisim_file::validate_component(&c, project).map_err(invalid)?;
-                        circuit(project, cid)?.replace_component(c);
+                        let delta = c.position - old.position;
+                        let circuit = circuit(project, cid)?;
+                        if delta != Point::ZERO {
+                            circuit.move_selection(&BTreeSet::from([*id]), delta);
+                        }
+                        circuit.replace_component(c);
                     }
                     RemoveComponent { .. } => circuit(project, cid)?.remove(&BTreeSet::from([*id])),
                     _ => unreachable!(),

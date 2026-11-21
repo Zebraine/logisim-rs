@@ -5,7 +5,7 @@ pub(crate) mod patch;
 mod properties;
 mod save;
 use crate::{Error, Result, digest, io};
-use logisim_core::{Component, Point, Project};
+use logisim_core::{Component, Interface, Point, Project};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 
@@ -71,20 +71,9 @@ impl Session {
                     })
                 })
                 .collect();
-            let ports: Vec<_> = def
-                .interface()
-                .ports
-                .iter()
-                .map(|port| {
-                    json!({
-                        "pin": port.pin, "label": port.label, "bits": port.bits,
-                        "output": port.output, "offset": point(port.offset)
-                    })
-                })
-                .collect();
             circuits.push(json!({
                 "id": def.id, "name": def.name, "main": def.id == self.project.main,
-                "components": components, "wires": wires, "interface_ports": ports
+                "components": components, "wires": wires, "interface_ports": interface_ports(&def.interface())
             }));
         }
         result["circuits"] = circuits.into();
@@ -111,6 +100,11 @@ fn saveable(project: &Project) -> Result<String> {
 
 fn point(p: Point) -> [i32; 2] {
     [p.x, p.y]
+}
+fn interface_ports(interface: &Interface) -> Value {
+    interface.ports.iter().map(|port| {
+        json!({"pin":port.pin, "label":port.label, "bits":port.bits, "output":port.output, "offset":point(port.offset)})
+    }).collect()
 }
 fn component(c: &Component) -> Value {
     let mut data = json!({"id":c.id,"kind":c.kind.name(),"position":point(c.position),"facing":c.facing.name(),"bits":c.bits,

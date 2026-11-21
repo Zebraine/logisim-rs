@@ -242,8 +242,8 @@ fn referenced_circuits_and_custom_port_bindings_survive_failed_transactions() {
     for (op, code) in [
         (json!({"op":"remove_circuit","id":2}), "invalid_edit"),
         (
-            json!({"op":"remove_component","circuit":1,"id":1}),
-            "unsupported_component",
+            json!({"op":"update_component","circuit":1,"id":1,"properties":{"interface_ports":[]}}),
+            "invalid_property",
         ),
         (
             json!({"op":"move_component","circuit":2,"id":2,"position":[10,10]}),
@@ -436,3 +436,4 @@ fn concurrent_sessions_cannot_overwrite_a_new_source_or_its_backup() {
 }
 
 mod builtins;
+mod instances;

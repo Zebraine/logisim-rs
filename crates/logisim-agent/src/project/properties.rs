@@ -3,6 +3,9 @@ use logisim_core::{Component, Gate, Kind, PinPull, Radix};
 use serde_json::{Value, json};
 
 pub(super) fn fields(kind: Kind) -> Vec<&'static str> {
+    if matches!(kind, Kind::Subcircuit(_)) {
+        return vec!["label", "facing", "font", "position"];
+    }
     let mut keys = Vec::new();
     if kind.rotatable() {
         keys.push("facing");
@@ -98,7 +101,11 @@ pub(super) fn describe(c: &Component, data: &mut Value) {
             data["mapping"] = json!(c.splitter.mapping[..usize::from(c.bits)]);
         }
         Kind::Constant => data["constant"] = c.constant.into(),
-        Kind::Subcircuit(id) => data["circuit_id"] = id.into(),
+        Kind::Subcircuit(id) => {
+            data["circuit_id"] = id.into();
+            data["circuit_name"] = json!(c.interface.name);
+            data["interface_ports"] = super::interface_ports(&c.interface);
+        }
         _ => {}
     }
     let writable = fields(c.kind);

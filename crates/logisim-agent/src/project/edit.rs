@@ -69,6 +69,7 @@ pub(super) fn apply(c: &mut Component, properties: &Map<String, Value>) -> Resul
             continue;
         }
         match key {
+            "position" => c.position = super::patch::point(decode(key, v)?)?,
             "facing" => c.facing = facing(key, v)?,
             "bits" | "input_bits" => c.bits = count(key, v, 1, 32)?,
             "label" => c.label = decode(key, v)?,
