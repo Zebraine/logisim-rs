@@ -12,6 +12,10 @@ pub(super) struct Part {
     pub position: Point,
     pub properties: Properties,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        feature = "codec-study",
+        serde(default, with = "super::binary::plugin_field")
+    )]
     pub plugin: Option<plugin::api::Component>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub memory: Option<MemoryData>,
@@ -55,6 +59,18 @@ macro_rules! properties {
         #[serde(deny_unknown_fields)]
         pub(super) struct Properties {
             $(#[serde(skip_serializing_if="Option::is_none")] $field: Option<$ty>,)+
+        }
+        // Positional records must emit an Option discriminant for every slot.
+        #[cfg(feature = "codec-study")]
+        #[derive(Serialize, Deserialize)]
+        pub(super) struct PositionalProperties { $($field: Option<$ty>,)+ }
+        #[cfg(feature = "codec-study")]
+        impl From<Properties> for PositionalProperties {
+            fn from(p: Properties) -> Self { Self { $($field: p.$field,)+ } }
+        }
+        #[cfg(feature = "codec-study")]
+        impl From<PositionalProperties> for Properties {
+            fn from(p: PositionalProperties) -> Self { Self { $($field: p.$field,)+ } }
         }
         impl Properties {
             fn encode(c: &Component) -> Self {

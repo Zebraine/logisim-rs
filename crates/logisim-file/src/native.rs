@@ -1,6 +1,10 @@
 //! Versioned native UTF-8 document. Local IDs and derived interfaces never cross this boundary.
+#[cfg(feature = "codec-study")]
+mod binary;
 mod component;
 mod limits;
+#[cfg(feature = "codec-study")]
+pub mod study;
 #[cfg(test)]
 mod tests;
 use self::component::Part;
@@ -16,22 +20,22 @@ const FORMAT: &str = "logisim-rs-project";
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 #[serde(deny_unknown_fields)]
-pub(super) struct Native {
+struct Native<P = Part> {
     format: String,
     version: u32,
     main: String,
-    circuits: Vec<Definition>,
+    circuits: Vec<Definition<P>>,
     plugin_sources: Vec<PluginSource>,
 }
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 #[serde(deny_unknown_fields)]
-struct Definition {
+struct Definition<P = Part> {
     display_order: usize,
     agent_id: String,
     name: String,
     label: CircuitLabel,
     appearance: Option<Package>,
-    components: Vec<Part>,
+    components: Vec<P>,
     wires: Vec<Segment>,
 }
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
