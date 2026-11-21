@@ -3,7 +3,7 @@ use super::schema::{self, Rule, U32, WIDTH};
 use logisim_core::{Component, Facing, Gate, GateSize, Kind, ParityOutput, PinPull, Radix};
 use serde_json::{Value, json};
 
-const DIRECTION: Rule = Rule::Enum(|| Facing::ALL.map(|f| f.name()).to_vec());
+pub(super) const DIRECTION: Rule = Rule::Enum(|| Facing::ALL.map(|f| f.name()).to_vec());
 const SIZES: [GateSize; 3] = [GateSize::Narrow, GateSize::Medium, GateSize::Wide];
 const SIZE: Rule = Rule::Enum(|| SIZES.map(|s| s.name()).to_vec());
 

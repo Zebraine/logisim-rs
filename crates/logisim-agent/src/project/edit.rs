@@ -68,28 +68,9 @@ pub(super) fn apply(c: &mut Component, properties: &Map<String, Value>) -> Resul
         }
         match key {
             "position" => c.position = super::patch::point(decode(key, v)?)?,
-            "facing" => c.facing = facing(key, v)?,
+            "facing" => apply_document_field(c, key, v)?,
             "bits" | "input_bits" => c.bits = decode(key, v)?,
-            "label" => c.label = decode(key, v)?,
-            "font" => {
-                let font = v
-                    .as_object()
-                    .ok_or_else(|| invalid("font must be an object."))?;
-                for (key, v) in font {
-                    match key.as_str() {
-                        "family" => c.font.family = decode(key, v)?,
-                        "size" => c.font.size = decode(key, v)?,
-                        "bold" => c.font.bold = decode(key, v)?,
-                        "italic" => c.font.italic = decode(key, v)?,
-                        _ => return Err(invalid(format!("Unknown font field {key}."))),
-                    }
-                }
-            }
-            "color" => {
-                let [r, g, b, a]: [u8; 4] = decode(key, v)?;
-                c.color = [r, g, b];
-                c.color_alpha = a;
-            }
+            "label" | "font" | "color" => apply_document_field(c, key, v)?,
             "label_facing" => c.label_facing = facing(key, v)?,
             "output" if c.kind == Kind::Pin => c.output = decode(key, v)?,
             "output" => c.parity.output = choice(key, v, ParityOutput::ALL.map(|p| (p, p.name())))?,
@@ -157,6 +138,35 @@ pub(super) fn apply(c: &mut Component, properties: &Map<String, Value>) -> Resul
         } else if old_split != (c.bits, c.splitter.fanout) {
             c.splitter.distribute(c.bits, c.splitter.descending);
         }
+    }
+    Ok(())
+}
+
+/// Apply a document field already checked against its schema.
+pub(super) fn apply_document_field(c: &mut Component, key: &str, v: &Value) -> Result<()> {
+    match key {
+        "facing" => c.facing = facing(key, v)?,
+        "label" => c.label = decode(key, v)?,
+        "font" => {
+            let font = v
+                .as_object()
+                .ok_or_else(|| invalid("font must be an object."))?;
+            for (key, v) in font {
+                match key.as_str() {
+                    "family" => c.font.family = decode(key, v)?,
+                    "size" => c.font.size = decode(key, v)?,
+                    "bold" => c.font.bold = decode(key, v)?,
+                    "italic" => c.font.italic = decode(key, v)?,
+                    _ => return Err(invalid(format!("Unknown font field {key}."))),
+                }
+            }
+        }
+        "color" => {
+            let [r, g, b, a]: [u8; 4] = decode(key, v)?;
+            c.color = [r, g, b];
+            c.color_alpha = a;
+        }
+        _ => unreachable!("unknown document field"),
     }
     Ok(())
 }

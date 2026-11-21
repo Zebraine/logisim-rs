@@ -50,33 +50,41 @@ pub(crate) fn resolve<'a>(
     })
 }
 
-pub(crate) fn tool_metadata(tool: &api::Tool) -> Value {
+pub(crate) fn tool_info(tool: &api::Tool) -> Value {
+    json!({"id":tool.id,"name":tool.name,"ports":tool.ports,"actions":tool.actions})
+}
+
+pub(crate) fn wire_schema(tool: &api::Tool) -> Value {
+    Value::Object(tool.properties.iter().map(|p| {
+        let mut schema = match &p.kind {
+            api::PropertyKind::Boolean => json!({"type":"string","enum":["false","true"]}),
+            api::PropertyKind::Integer {min,max} => json!({"type":"string","pattern":"^[+-]?[0-9]+$","maxLength":1024,"x-minimum":min,"x-maximum":max}),
+            api::PropertyKind::Choice {values} => json!({"type":"string","enum":values}),
+        };
+        schema["default"] = json!(p.default);
+        (p.id.clone(),schema)
+    }).collect())
+}
+
+fn tool_metadata(tool: &api::Tool) -> Value {
+    let mut metadata = tool_info(tool);
     let mut properties = Map::new();
-    let mut schema = Map::new();
     for p in &tool.properties {
-        let (mut descriptor, mut wire) = match &p.kind {
-            api::PropertyKind::Boolean => (
-                json!({"type":"boolean"}),
-                json!({"type":"string","enum":["false","true"]}),
-            ),
-            api::PropertyKind::Integer { min, max } => (
-                json!({"type":"integer","minimum":min,"maximum":max}),
-                json!({"type":"string","pattern":"^[+-]?[0-9]+$","maxLength":1024,"x-minimum":min,"x-maximum":max}),
-            ),
-            api::PropertyKind::Choice { values } => (
-                json!({"type":"choice","values":values}),
-                json!({"type":"string","enum":values}),
-            ),
+        let mut descriptor = match &p.kind {
+            api::PropertyKind::Boolean => json!({"type":"boolean"}),
+            api::PropertyKind::Integer { min, max } => {
+                json!({"type":"integer","minimum":min,"maximum":max})
+            }
+            api::PropertyKind::Choice { values } => json!({"type":"choice","values":values}),
         };
         descriptor["label"] = json!(p.label);
         descriptor["default"] = json!(p.default);
-        wire["default"] = json!(p.default);
         properties.insert(p.id.clone(), descriptor);
-        schema.insert(p.id.clone(), wire);
     }
-    json!({"id":tool.id,"name":tool.name,"ports":tool.ports,"actions":tool.actions,"properties":properties,"property_schema":schema})
+    metadata["properties"] = properties.into();
+    metadata["property_schema"] = wire_schema(tool);
+    metadata
 }
-
 pub(crate) fn catalog(path: &Path) -> Result<Value> {
     let bytes = io::read_limited(path, MAX_MODULE)?;
     let plugin = Plugin::load(&bytes).map_err(unavailable)?;

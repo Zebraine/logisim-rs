@@ -34,6 +34,16 @@ impl Root {
     }
 
     pub fn resolve(&self, input: &Path) -> Result<PathBuf> {
+        self.checked(input, false)
+    }
+
+    /// A recorded fallback can have missing parent directories. Authorize its whole
+    /// path before persisting it, even when a different candidate already exists.
+    pub fn check_candidate(&self, path: &Path) -> Result<()> {
+        self.checked(path, true).map(|_| ())
+    }
+
+    fn checked(&self, input: &Path, allow_missing_parents: bool) -> Result<PathBuf> {
         let relative = if input.is_absolute() {
             input
                 .strip_prefix(&self.canonical)
@@ -73,7 +83,8 @@ impl Root {
                         // Only the parent can be canonicalized for a new sidecar or a
                         // removed source. The save operation handles a missing source as a conflict.
                         Err(e)
-                            if components.peek().is_none() && e.kind() == ErrorKind::NotFound => {}
+                            if (allow_missing_parents || components.peek().is_none())
+                                && e.kind() == ErrorKind::NotFound => {}
                         Err(e) => return Err(io::file_error(e)),
                     }
                 }

@@ -1,10 +1,15 @@
 //! A batch operates on one disposable clone. Existing core edit policies own all ID allocation and routing.
-use super::{Session, edit};
+use super::{
+    Session, edit,
+    instances::{Manifests, NewPlugin, PluginUpdate},
+};
+use crate::paths::Root;
 use crate::{Error, Result};
 use logisim_core::{Circuit, Component, Id, Kind, Point, Project};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use std::collections::BTreeSet;
+use std::path::Path;
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
@@ -22,6 +27,8 @@ pub enum ProjectOp {
         #[serde(default)]
         properties: Map<String, Value>,
     },
+    AddPlugin(Box<NewPlugin>),
+    UpdatePlugin(Box<PluginUpdate>),
     MoveComponent {
         circuit: Option<Id>,
         id: Id,
@@ -148,7 +155,12 @@ fn apply_properties(
 }
 
 impl ProjectOp {
-    fn apply(&self, project: &mut Project) -> Result<Value> {
+    fn apply(
+        &self,
+        project: &mut Project,
+        manifests: &mut Manifests,
+        root: Option<&Root>,
+    ) -> Result<Value> {
         use ProjectOp::*;
         let mut change = serde_json::to_value(self).expect("JSON edit");
         let mut pin_edit = false;
@@ -169,6 +181,24 @@ impl ProjectOp {
                 logisim_file::validate_component(&c, project).map_err(invalid)?;
                 pin_edit = c.kind == Kind::Pin;
                 change["id"] = circuit(project, *cid)?.add_component(c).into();
+            }
+            AddPlugin(add) => {
+                let c = add.build(project, manifests, root)?;
+                logisim_file::validate_component(&c, project).map_err(invalid)?;
+                change["id"] = circuit(project, add.circuit)?.add_component(c).into();
+            }
+            UpdatePlugin(update) => {
+                let cid = owner(project, update.circuit, update.id, false)?;
+                let old = project
+                    .circuit(cid)
+                    .expect("resolved circuit")
+                    .circuit
+                    .component(update.id)
+                    .expect("resolved component");
+                let c = update.build(old, project, manifests)?;
+                logisim_file::validate_component(&c, project).map_err(invalid)?;
+                circuit(project, cid)?.replace_component(c);
+                change["circuit"] = cid.into();
             }
             MoveComponent {
                 circuit: scope, id, ..
@@ -252,11 +282,20 @@ impl ProjectOp {
 
 /// Normalize after the complete edit, as in the desktop editor. For a wire split at
 /// terminals, return every surviving segment; for a merge, return the retained ID.
-fn preview(original: &Project, ops: &[ProjectOp]) -> Result<(Project, Vec<Value>)> {
+fn preview(
+    original: &Project,
+    ops: &[ProjectOp],
+    path: &Path,
+    root: Option<&Root>,
+) -> Result<(Project, Vec<Value>)> {
     let mut candidate = original.clone();
+    let mut manifests = Manifests::new(path);
     let mut changes = Vec::with_capacity(ops.len());
     for (index, op) in ops.iter().enumerate() {
-        changes.push(op.apply(&mut candidate).map_err(|e| indexed(e, index))?);
+        changes.push(
+            op.apply(&mut candidate, &mut manifests, root)
+                .map_err(|e| indexed(e, index))?,
+        );
     }
     for def in &mut candidate.circuits {
         if original
@@ -286,9 +325,10 @@ impl Session {
         expected: Option<&str>,
         dry_run: bool,
         ops: &[ProjectOp],
+        root: Option<&Root>,
     ) -> Result<Value> {
         self.check_editable(expected)?;
-        let (candidate, changes) = match preview(&self.project, ops) {
+        let (candidate, changes) = match preview(&self.project, ops, &self.path, root) {
             Ok(result) => result,
             Err(mut failure) if !ops.is_empty() && failure.details.get("op_index").is_none() => {
                 // Aggregate codec or topology limits can surface only after normalization.
@@ -296,7 +336,7 @@ impl Session {
                 let (mut good, mut bad) = (0, ops.len());
                 while bad - good > 1 {
                     let mid = good + (bad - good) / 2;
-                    match preview(&self.project, &ops[..mid]) {
+                    match preview(&self.project, &ops[..mid], &self.path, root) {
                         Ok(_) => good = mid,
                         Err(e) => {
                             bad = mid;

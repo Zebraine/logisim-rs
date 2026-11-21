@@ -265,7 +265,13 @@ impl Service {
                 .sessions
                 .get_mut(&session)
                 .ok_or_else(unknown_session)?
-                .patch(&session, expected_sha256.as_deref(), dry_run, &ops),
+                .patch(
+                    &session,
+                    expected_sha256.as_deref(),
+                    dry_run,
+                    &ops,
+                    self.root.as_ref(),
+                ),
             Request::ProjectSave {
                 session,
                 expected_sha256,

@@ -2,6 +2,7 @@
 mod builtins;
 pub(crate) mod catalog;
 mod edit;
+mod instances;
 mod memory;
 pub(crate) mod patch;
 mod pla;
@@ -63,12 +64,19 @@ impl Session {
     pub fn snapshot(&self, id: &str) -> Result<Value> {
         let mut result = self.summary(id);
         let mut circuits = Vec::with_capacity(self.project.circuits.len());
+        let mut manifests = instances::Manifests::new(&self.path);
         for def in &self.project.circuits {
             let components: Vec<_> = def
                 .circuit
                 .components
                 .iter()
-                .map(component)
+                .map(|c| {
+                    let mut data = component(c)?;
+                    if let Some(plugin) = &c.plugin {
+                        manifests.describe(&self.project, plugin, &mut data);
+                    }
+                    Ok(data)
+                })
                 .collect::<Result<_>>()?;
             let wires: Vec<_> = def
                 .circuit

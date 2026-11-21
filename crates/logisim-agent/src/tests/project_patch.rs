@@ -458,4 +458,5 @@ mod instances;
 mod io;
 mod memory;
 mod pla;
+mod plugins;
 mod sequential;
