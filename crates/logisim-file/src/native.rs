@@ -1,6 +1,6 @@
-//! Versioned native UTF-8 document. Local IDs and derived interfaces never cross this boundary.
-#[cfg(feature = "codec-study")]
+//! Versioned native document. Local IDs and derived interfaces never cross this boundary.
 mod binary;
+mod cbor;
 mod component;
 mod limits;
 #[cfg(feature = "codec-study")]
@@ -16,6 +16,7 @@ use logisim_core::{
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
+pub(crate) const MAGIC: &[u8; 4] = b"LRS\0";
 const FORMAT: &str = "logisim-rs-project";
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -298,7 +299,8 @@ fn validate_label(l: &CircuitLabel) -> Result<()> {
     }
     Ok(())
 }
-pub fn parse_native(bytes: &[u8]) -> Result<Project> {
+/// Explicit migration only. Desktop and Agent document opens use the binary reader.
+pub fn parse_legacy_json(bytes: &[u8]) -> Result<Project> {
     if bytes.len() > MAX_BYTES {
         return Err(Error("Native project exceeds 8 MiB".into()));
     }
@@ -307,15 +309,7 @@ pub fn parse_native(bytes: &[u8]) -> Result<Project> {
         .map_err(|e| Error(format!("Invalid .lrs JSON: {e}")))?
         .decode()
 }
-pub fn serialize_native(project: &Project) -> Result<Vec<u8>> {
-    use std::io::Write;
-    let mut out = limits::Output(Vec::new());
-    serde_json::to_writer_pretty(&mut out, &Native::encode(project)?)
-        .map_err(|e| Error(e.to_string()))?;
-    out.write_all(b"\n").map_err(|e| Error(e.to_string()))?;
-    limits::check(&out.0)?;
-    Ok(out.0)
-}
+pub use cbor::{parse_native, serialize_native};
 
 mod identities;
 pub use identities::IdentityAssignments;

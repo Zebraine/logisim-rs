@@ -1,4 +1,4 @@
-//! Native v1 JSON projects and the supported legacy .circ subset.
+//! Native v1 CBOR projects and the supported legacy .circ subset.
 //! No filesystem or simulator dependency; unsupported content is never silently saved.
 mod agent_ids;
 mod appearance;

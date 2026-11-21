@@ -46,7 +46,7 @@ fn persistent_targets_survive_reordering_and_reject_bad_references() {
         ["main", "child"]
     );
     assert_eq!(bytes, serialize_native(&reopened).unwrap());
-    let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let value = serde_json::to_value(Native::encode(&p).unwrap()).unwrap();
     for (pointer, bad) in [
         ("/version", "7"),
         ("/format", "other"),
@@ -67,7 +67,7 @@ fn persistent_targets_survive_reordering_and_reject_bad_references() {
         let mut v = value.clone();
         *v.pointer_mut(pointer).unwrap() = serde_json::json!(bad);
         assert!(
-            parse_native(&serde_json::to_vec(&v).unwrap()).is_err(),
+            parse_legacy_json(&serde_json::to_vec(&v).unwrap()).is_err(),
             "{pointer}"
         );
     }
@@ -147,31 +147,33 @@ fn legacy_export_reports_native_only_font() {
 #[test]
 fn v1_envelope_and_json_budgets_reject_unknown_semantics() {
     assert!(
-        parse_native(br#"{"version":42,"v42_data":[]}"#)
+        parse_legacy_json(br#"{"version":42,"v42_data":[]}"#)
             .unwrap_err()
             .0
             .contains("version 42")
     );
     assert!(
-        parse_native(br#"{"format":"other"}"#)
+        parse_legacy_json(br#"{"format":"other"}"#)
             .unwrap_err()
             .0
             .contains("format")
     );
     let mut p = Project::default();
     IdentityAssignments::default().complete(&mut p).unwrap();
-    let json = String::from_utf8(serialize_native(&p).unwrap()).unwrap();
+    let json = serde_json::to_string(&Native::encode(&p).unwrap()).unwrap();
     for extra in [
         r#""version":1"#,
         r#""runtime":null"#,
         r#""extra":{"x":7,"x":8}"#,
     ] {
-        assert!(parse_native(json.replacen('{', &format!("{{{extra},"), 1).as_bytes()).is_err());
+        assert!(
+            parse_legacy_json(json.replacen('{', &format!("{{{extra},"), 1).as_bytes()).is_err()
+        );
     }
     let mut v: serde_json::Value = serde_json::from_str(&json).unwrap();
     for value in [serde_json::json!(-1), serde_json::json!(1)] {
         v["circuits"][0]["display_order"] = value;
-        assert!(parse_native(&serde_json::to_vec(&v).unwrap()).is_err());
+        assert!(parse_legacy_json(&serde_json::to_vec(&v).unwrap()).is_err());
     }
     for (payload, expected) in [
         (
@@ -191,13 +193,13 @@ fn v1_envelope_and_json_budgets_reject_unknown_semantics() {
         ),
     ] {
         assert!(
-            parse_native(payload.as_bytes())
+            parse_legacy_json(payload.as_bytes())
                 .unwrap_err()
                 .0
                 .contains(expected)
         );
     }
-    assert!(parse_native(&vec![0; MAX_BYTES + 1]).is_err());
+    assert!(parse_legacy_json(&vec![0; MAX_BYTES + 1]).is_err());
 }
 
 #[test]
@@ -275,7 +277,7 @@ fn builtin_families_and_programmed_memory_planes_roundtrip() {
     let imported = crate::ProjectFormat::Circ.parse(&xml).unwrap();
     assert!(!imported.partial);
     assert_eq!(serialize_native(&imported.document).unwrap(), bytes);
-    let mut v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let mut v = serde_json::to_value(Native::encode(&loaded).unwrap()).unwrap();
     let parts = v["circuits"][0]["components"].as_array_mut().unwrap();
     let rom = parts.iter().find(|p| p["kind"] == "rom").unwrap();
     assert_eq!(
@@ -285,9 +287,90 @@ fn builtin_families_and_programmed_memory_planes_roundtrip() {
     let ram = parts.iter_mut().find(|p| p["kind"] == "ram").unwrap();
     ram["memory"]["contents"] = serde_json::json!([[0, 1, 1]]);
     assert!(
-        parse_native(&serde_json::to_vec(&v).unwrap())
+        parse_legacy_json(&serde_json::to_vec(&v).unwrap())
             .unwrap_err()
             .0
             .contains("RAM contents")
+    );
+}
+
+#[test]
+fn binary_header_versions_keys_types_and_limits_are_checked_before_open() {
+    use serde_cbor::Value as V;
+    let mut p = Project::default();
+    p.main_circuit_mut().circuit.agent_ids.circuit = Some(9);
+    let good = serialize_native(&p).unwrap();
+    assert_eq!(&good[..6], b"LRS\0\0\x01");
+    let header = &good[..6];
+    let invalid = |payload: &[u8]| parse_native(&[header, payload].concat()).unwrap_err().0;
+    for (payload, reason) in [
+        (&[0xa1, 0, 0x7a, 0, 4, 0, 1][..], "string length"),
+        (
+            &[0xa1, 0, 0x9b, 255, 255, 255, 255, 255, 255, 255, 255],
+            "container length",
+        ),
+        (&[0xa1, 0, 0xbf], "indefinite"),
+        (&[0xa1, 0, 0xa2, 0x61, b'p', 1, 0x61, b'p', 2], "Duplicate"),
+        (&[0xa2, 0, 1, 0x18, 0, 2], "Duplicate"),
+        (&[0xa1, 0, 0xc1, 0], "type"),
+        (&[0xa1, 0, 0xf7], "simple"),
+        (&[0xa1, 0, 0x61], "Truncated"),
+    ] {
+        assert!(invalid(payload).contains(reason), "{reason}");
+    }
+    let mut huge = vec![0xa1, 0, 0x98, 32];
+    for _ in 0..32 {
+        huge.extend([0x99, 0x80, 0]);
+        huge.resize(huge.len() + 32768, 0);
+    }
+    assert!(invalid(&huge).contains("node limit"));
+    let mut nested = vec![0xa1, 0];
+    nested.extend([0x81; 128]);
+    nested.push(0);
+    assert!(invalid(&nested).contains("depth"));
+    assert!(parse_native(&[good.as_slice(), &[0]].concat()).is_err());
+    assert!(parse_native(&vec![0; MAX_BYTES + 1]).is_err());
+    assert!(parse_native(b"LRS\0\0").is_err());
+    assert!(
+        parse_native(b"LRS\0\0\x02")
+            .unwrap_err()
+            .0
+            .contains("version 2")
+    );
+    for (key, value) in [
+        (0, V::Text("other".into())),
+        (1, V::Integer(2)),
+        (2, V::Integer(9)),
+        (2, V::Text("missing main".into())),
+        (5, V::Bool(true)),
+    ] {
+        let V::Map(mut fields) = serde_cbor::from_slice(&good[6..]).unwrap() else {
+            unreachable!()
+        };
+        fields.insert(V::Integer(key), value);
+        let bytes = serde_cbor::to_vec(&V::Map(fields)).unwrap();
+        assert!(
+            parse_native(&[header, &bytes].concat()).is_err(),
+            "field {key}"
+        );
+    }
+    let json = serde_json::to_vec(&Native::encode(&p).unwrap()).unwrap();
+    assert!(
+        parse_native(&json)
+            .unwrap_err()
+            .0
+            .contains("Legacy JSON native")
+    );
+    assert_eq!(
+        serialize_native(&parse_legacy_json(&json).unwrap()).unwrap(),
+        good
+    );
+    assert!(parse_legacy_json(&good).is_err());
+    assert!(
+        crate::ProjectFormat::Circ
+            .parse(&good)
+            .unwrap_err()
+            .0
+            .contains(".lrs")
     );
 }

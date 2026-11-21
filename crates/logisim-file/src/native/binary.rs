@@ -1,6 +1,6 @@
 //! Candidate wire representations for version one. The plugin ABI's JSON tag
 //! is local to that ABI. A binary file uses ordinary externally tagged enums.
-use super::component::{MemoryData, PartKind, PlaData, PositionalProperties};
+
 use super::*;
 use logisim_core::plugin::api;
 use serde::{Deserializer, Serializer};
@@ -116,61 +116,6 @@ pub(super) mod plugin_field {
             Option::deserialize(d)
         } else {
             Ok(Option::<PluginV1>::deserialize(d)?.map(Into::into))
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub(super) struct PositionalPart {
-    agent_id: String,
-    kind: PartKind,
-    position: Point,
-    properties: PositionalProperties,
-    #[serde(with = "plugin_field")]
-    plugin: Option<api::Component>,
-    memory: Option<MemoryData>,
-    pla: Option<PlaData>,
-}
-macro_rules! convert_part {
-    ($from:ty => $to:ty) => {
-        impl From<$from> for $to {
-            fn from(p: $from) -> Self {
-                Self {
-                    agent_id: p.agent_id,
-                    kind: p.kind,
-                    position: p.position,
-                    properties: p.properties.into(),
-                    plugin: p.plugin,
-                    memory: p.memory,
-                    pla: p.pla,
-                }
-            }
-        }
-    };
-}
-convert_part!(Part => PositionalPart);
-convert_part!(PositionalPart => Part);
-
-impl<P> Native<P> {
-    pub(super) fn map_parts<Q: From<P>>(self) -> Native<Q> {
-        Native {
-            format: self.format,
-            version: self.version,
-            main: self.main,
-            plugin_sources: self.plugin_sources,
-            circuits: self
-                .circuits
-                .into_iter()
-                .map(|d| Definition {
-                    display_order: d.display_order,
-                    agent_id: d.agent_id,
-                    name: d.name,
-                    label: d.label,
-                    appearance: d.appearance,
-                    wires: d.wires,
-                    components: d.components.into_iter().map(Into::into).collect(),
-                })
-                .collect(),
         }
     }
 }

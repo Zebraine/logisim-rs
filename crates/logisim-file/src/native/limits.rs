@@ -4,9 +4,9 @@ use super::{Error, FORMAT, Result};
 use serde::de::{self, DeserializeSeed, Deserializer, MapAccess, SeqAccess, Visitor};
 use std::{collections::HashSet, fmt};
 
-const MAX_NODES: usize = 1_000_000;
-const MAX_ENTRIES: usize = 65_536;
-const MAX_STRING: usize = logisim_core::plugin::api::MAX_MESSAGE;
+pub(super) const MAX_NODES: usize = 1_000_000;
+pub(super) const MAX_ENTRIES: usize = 65_536;
+pub(super) const MAX_STRING: usize = logisim_core::plugin::api::MAX_MESSAGE;
 
 pub(super) fn check(bytes: &[u8]) -> Result<()> {
     let mut de = serde_json::Deserializer::from_slice(bytes);
@@ -105,7 +105,7 @@ impl<'de> Visitor<'de> for Node<'_> {
     }
 }
 
-/// Apply the same byte limit while producing pretty JSON.
+/// Bound native output while encoding.
 pub(super) struct Output(pub(super) Vec<u8>);
 impl std::io::Write for Output {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {

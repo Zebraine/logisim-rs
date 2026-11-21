@@ -32,6 +32,9 @@ impl ProjectFormat {
                 partial: false,
                 warnings: vec![],
             }),
+            Self::Circ if bytes.starts_with(native::MAGIC) => Err(Error(
+                "Binary native project requires the .lrs format.".into(),
+            )),
             Self::Circ => crate::parse(
                 std::str::from_utf8(bytes).map_err(|e| Error(format!("Invalid UTF-8: {e}")))?,
             ),

@@ -12,10 +12,7 @@ pub(super) struct Part {
     pub position: Point,
     pub properties: Properties,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(
-        feature = "codec-study",
-        serde(default, with = "super::binary::plugin_field")
-    )]
+    #[serde(default, with = "super::binary::plugin_field")]
     pub plugin: Option<plugin::api::Component>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub memory: Option<MemoryData>,
