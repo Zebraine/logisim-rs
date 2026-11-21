@@ -122,7 +122,8 @@ pub struct NewPlugin {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PluginUpdate {
     pub(super) circuit: Option<Id>,
-    pub(super) id: Id,
+    #[serde(flatten)]
+    pub(super) target: super::reference::Reference,
     #[serde(flatten)]
     fields: InstanceFields,
 }

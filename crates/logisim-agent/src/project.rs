@@ -8,6 +8,7 @@ mod memory;
 pub(crate) mod patch;
 mod pla;
 mod properties;
+mod reference;
 mod save;
 mod schema;
 use crate::{Error, Result, digest, io};

@@ -464,4 +464,5 @@ mod io;
 mod memory;
 mod pla;
 mod plugins;
+mod references;
 mod sequential;

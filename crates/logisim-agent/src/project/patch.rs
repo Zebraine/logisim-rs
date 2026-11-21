@@ -1,11 +1,13 @@
 //! A batch operates on one disposable clone. Existing core edit policies own all ID allocation and routing.
 use super::{
     Session, edit,
+    ids::BatchIds,
     instances::{Manifests, NewPlugin, PluginUpdate},
+    reference::{self, Reference},
 };
 use crate::paths::Root;
 use crate::{Error, Result};
-use logisim_core::{Circuit, Component, Id, Kind, Point, Project};
+use logisim_core::{AgentIdKind, Circuit, Component, Id, Kind, Point, Project};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use std::collections::{BTreeSet, HashSet};
@@ -22,6 +24,12 @@ pub enum ProjectOp {
             skip_serializing_if = "Option::is_none"
         )]
         circuit_id: Option<Id>,
+        #[serde(
+            default,
+            deserialize_with = "crate::supplied",
+            skip_serializing_if = "Option::is_none"
+        )]
+        circuit_agent_id: Option<String>,
         position: [i32; 2],
         #[serde(default)]
         properties: Map<String, Value>,
@@ -30,17 +38,20 @@ pub enum ProjectOp {
     UpdatePlugin(Box<PluginUpdate>),
     MoveComponent {
         circuit: Option<Id>,
-        id: Id,
+        #[serde(flatten)]
+        target: Reference,
         position: [i32; 2],
     },
     UpdateComponent {
         circuit: Option<Id>,
-        id: Id,
+        #[serde(flatten)]
+        target: Reference,
         properties: Map<String, Value>,
     },
     RemoveComponent {
         circuit: Option<Id>,
-        id: Id,
+        #[serde(flatten)]
+        target: Reference,
     },
     AddWire {
         circuit: Id,
@@ -49,20 +60,30 @@ pub enum ProjectOp {
     },
     RemoveWire {
         circuit: Option<Id>,
-        id: Id,
+        #[serde(flatten)]
+        target: Reference,
     },
     AddCircuit {
         name: String,
     },
     RenameCircuit {
-        id: Id,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        circuit: Option<Id>,
+        #[serde(flatten)]
+        target: Reference,
         name: String,
     },
     RemoveCircuit {
-        id: Id,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        circuit: Option<Id>,
+        #[serde(flatten)]
+        target: Reference,
     },
     SetMainCircuit {
-        id: Id,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        circuit: Option<Id>,
+        #[serde(flatten)]
+        target: Reference,
     },
 }
 
@@ -88,11 +109,20 @@ fn new_component(
     owner: Id,
     name: &str,
     target: Option<Id>,
+    persistent_target: Option<&str>,
     at: Point,
 ) -> Result<Component> {
     let entry = super::catalog::placement(name)?;
     if entry.requires_circuit_id() {
-        let target = target.ok_or_else(|| invalid("A subcircuit instance requires circuit_id."))?;
+        let target = match (target, persistent_target) {
+            (Some(id), None) => id,
+            (None, Some(text)) => reference::by_agent_id(project, AgentIdKind::Circuit, text)?.1,
+            _ => {
+                return Err(Error::invalid(
+                    "A subcircuit instance requires exactly one of circuit_id and circuit_agent_id.",
+                ));
+            }
+        };
         if !project.can_instantiate(owner, target) {
             return Err(invalid(format!(
                 "Cannot instantiate circuit {target} in {owner}: missing circuit or recursive reference."
@@ -102,8 +132,10 @@ fn new_component(
             .instance(target, at)
             .expect("validated target circuit"));
     }
-    if target.is_some() {
-        return Err(invalid("Only a subcircuit instance accepts circuit_id."));
+    if target.is_some() || persistent_target.is_some() {
+        return Err(invalid(
+            "Only a subcircuit instance accepts circuit_id or circuit_agent_id.",
+        ));
     }
     Ok(Component::new(entry.kind, at))
 }
@@ -113,33 +145,6 @@ fn circuit(project: &mut Project, id: Id) -> Result<&mut Circuit> {
         .map(|d| &mut d.circuit)
         .ok_or_else(|| invalid(format!("Unknown circuit {id}.")))
 }
-fn owner(project: &Project, scope: Option<Id>, id: Id, wire: bool) -> Result<Id> {
-    let mut matches = project
-        .circuits
-        .iter()
-        .filter(|d| scope.is_none_or(|n| n == d.id))
-        .filter(|d| {
-            if wire {
-                d.circuit.wires.iter().any(|w| w.id == id)
-            } else {
-                d.circuit.component(id).is_some()
-            }
-        });
-    let first = matches.next().ok_or_else(|| {
-        invalid(format!(
-            "No such {} {id} in scope.",
-            if wire { "wire" } else { "component" }
-        ))
-    })?;
-    if matches.next().is_some() {
-        return Err(Error::new(
-            "ambiguous_id",
-            format!("Specify circuit for item {id}."),
-        ));
-    }
-    Ok(first.id)
-}
-
 fn apply_properties(
     c: &mut Component,
     properties: &Map<String, Value>,
@@ -159,6 +164,7 @@ impl ProjectOp {
         project: &mut Project,
         manifests: &mut Manifests,
         root: Option<&Root>,
+        ids: &mut BatchIds,
     ) -> Result<Value> {
         use ProjectOp::*;
         let mut change = serde_json::to_value(self).expect("JSON edit");
@@ -168,31 +174,47 @@ impl ProjectOp {
                 circuit: cid,
                 kind: name,
                 circuit_id,
+                circuit_agent_id,
                 position,
                 properties,
             } => {
                 let at = point(*position)?;
-                let mut c = new_component(project, *cid, name, *circuit_id, at)?;
+                let mut c = new_component(
+                    project,
+                    *cid,
+                    name,
+                    *circuit_id,
+                    circuit_agent_id.as_deref(),
+                    at,
+                )?;
                 apply_properties(&mut c, properties, &mut change)?;
                 if c.position != at {
                     return Err(invalid("Conflicting component positions in add_component."));
                 }
                 logisim_file::validate_component(&c, project).map_err(invalid)?;
                 pin_edit = c.kind == Kind::Pin;
-                change["id"] = circuit(project, *cid)?.add_component(c).into();
+                let circuit = circuit(project, *cid)?;
+                let id = circuit.add_component(c);
+                ids.add_item(circuit, AgentIdKind::Component, id, &mut change);
             }
             AddPlugin(add) => {
                 let c = add.build(project, manifests, root)?;
                 logisim_file::validate_component(&c, project).map_err(invalid)?;
-                change["id"] = circuit(project, add.circuit)?.add_component(c).into();
+                let circuit = circuit(project, add.circuit)?;
+                let id = circuit.add_component(c);
+                ids.add_item(circuit, AgentIdKind::Component, id, &mut change);
             }
             UpdatePlugin(update) => {
-                let cid = owner(project, update.circuit, update.id, false)?;
+                let (cid, id) =
+                    update
+                        .target
+                        .resolve(project, AgentIdKind::Component, update.circuit)?;
+                change["id"] = id.into();
                 let old = project
                     .circuit(cid)
                     .expect("resolved circuit")
                     .circuit
-                    .component(update.id)
+                    .component(id)
                     .expect("resolved component");
                 let c = update.build(old, project, manifests)?;
                 logisim_file::validate_component(&c, project).map_err(invalid)?;
@@ -200,25 +222,31 @@ impl ProjectOp {
                 change["circuit"] = cid.into();
             }
             MoveComponent {
-                circuit: scope, id, ..
+                circuit: scope,
+                target,
+                ..
             }
             | UpdateComponent {
                 circuit: scope,
-                id,
-                properties: _,
+                target,
+                ..
             }
-            | RemoveComponent { circuit: scope, id } => {
-                let cid = owner(project, *scope, *id, false)?;
+            | RemoveComponent {
+                circuit: scope,
+                target,
+            } => {
+                let (cid, id) = target.resolve(project, AgentIdKind::Component, *scope)?;
+                change["id"] = id.into();
                 change["circuit"] = cid.into();
                 let old = project
                     .circuit(cid)
-                    .and_then(|d| d.circuit.component(*id))
+                    .and_then(|d| d.circuit.component(id))
                     .expect("resolved component");
                 pin_edit = old.kind == Kind::Pin;
                 match self {
                     MoveComponent { position, .. } => {
                         let delta = point(*position)? - old.position;
-                        circuit(project, cid)?.move_selection(&BTreeSet::from([*id]), delta);
+                        circuit(project, cid)?.move_selection(&BTreeSet::from([id]), delta);
                     }
                     UpdateComponent { properties, .. } => {
                         let mut c = old.clone();
@@ -227,11 +255,11 @@ impl ProjectOp {
                         let delta = c.position - old.position;
                         let circuit = circuit(project, cid)?;
                         if delta != Point::ZERO {
-                            circuit.move_selection(&BTreeSet::from([*id]), delta);
+                            circuit.move_selection(&BTreeSet::from([id]), delta);
                         }
                         circuit.replace_component(c);
                     }
-                    RemoveComponent { .. } => circuit(project, cid)?.remove(&BTreeSet::from([*id])),
+                    RemoveComponent { .. } => circuit(project, cid)?.remove(&BTreeSet::from([id])),
                     _ => unreachable!(),
                 }
             }
@@ -240,24 +268,43 @@ impl ProjectOp {
                 from,
                 to,
             } => {
-                let id = circuit(project, *cid)?
+                let circuit = circuit(project, *cid)?;
+                let id = circuit
                     .add_wire(point(*from)?, point(*to)?)
                     .ok_or_else(|| invalid("A wire requires distinct orthogonal endpoints."))?;
-                change["id"] = id.into();
+                ids.add_item(circuit, AgentIdKind::Wire, id, &mut change);
             }
-            RemoveWire { circuit: scope, id } => {
-                let cid = owner(project, *scope, *id, true)?;
+            RemoveWire {
+                circuit: scope,
+                target,
+            } => {
+                let (cid, id) = target.resolve(project, AgentIdKind::Wire, *scope)?;
+                change["id"] = id.into();
                 change["circuit"] = cid.into();
-                circuit(project, cid)?.remove(&BTreeSet::from([*id]));
+                circuit(project, cid)?.remove(&BTreeSet::from([id]));
             }
             AddCircuit { name } => {
-                change["id"] = project.add(name.clone()).map_err(invalid)?.into()
+                let id = project.add(name.clone()).map_err(invalid)?;
+                change["id"] = id.into();
+                let tag = ids.allocate(&change);
+                circuit(project, id)?.agent_ids.circuit = Some(tag);
+                change["agent_id"] = AgentIdKind::Circuit.encode(tag).into();
             }
-            RenameCircuit { id, name } => project.rename(*id, name.clone()).map_err(invalid)?,
-            RemoveCircuit { id } => project.remove(*id).map_err(invalid)?,
-            SetMainCircuit { id } => {
-                circuit(project, *id)?;
-                project.main = *id;
+            RenameCircuit {
+                target, circuit, ..
+            }
+            | RemoveCircuit { target, circuit }
+            | SetMainCircuit { target, circuit } => {
+                let (_, id) = target.resolve(project, AgentIdKind::Circuit, *circuit)?;
+                change["id"] = id.into();
+                match self {
+                    RenameCircuit { name, .. } => {
+                        project.rename(id, name.clone()).map_err(invalid)?
+                    }
+                    RemoveCircuit { .. } => project.remove(id).map_err(invalid)?,
+                    SetMainCircuit { .. } => project.main = id,
+                    _ => unreachable!(),
+                }
             }
         }
         if pin_edit {
@@ -286,41 +333,62 @@ struct Preview {
 
 /// Normalize after the complete edit, as in the desktop editor. For a wire split at
 /// terminals, return every surviving segment; for a merge, return the retained ID.
-fn preview(session: &Session, ops: &[ProjectOp], root: Option<&Root>) -> Result<Preview> {
+fn preview(
+    session: &Session,
+    session_id: &str,
+    ops: &[ProjectOp],
+    root: Option<&Root>,
+) -> Result<Preview> {
     let original = &session.project;
     let mut candidate = original.clone();
     let mut manifests = Manifests::new(&session.path);
     let mut changes = Vec::with_capacity(ops.len());
+    let mut ids = BatchIds::new(session_id, &session.issued);
     for (index, op) in ops.iter().enumerate() {
         changes.push(
-            op.apply(&mut candidate, &mut manifests, root)
+            op.apply(&mut candidate, &mut manifests, root, &mut ids)
                 .map_err(|e| indexed(e, index))?,
         );
     }
     for def in &mut candidate.circuits {
-        if original
+        let unchanged = original
             .circuit(def.id)
-            .is_some_and(|old| old.circuit == def.circuit)
-        {
-            continue;
-        }
-        let mapped = def.circuit.normalize_wires();
+            .is_some_and(|old| old.circuit == def.circuit);
+        let mapped = if unchanged {
+            Default::default()
+        } else {
+            ids.normalize_wires(def.id, &mut def.circuit)
+        };
         for (op, change) in ops.iter().zip(&mut changes) {
             if let ProjectOp::AddWire { circuit, .. } = op
                 && *circuit == def.id
-                && let Some(ids) = mapped.get(&change["id"].as_u64().expect("added wire ID"))
             {
-                change["id"] = json!(ids.first());
-                change["wire_ids"] = json!(ids);
+                let id = change["id"].as_u64().expect("added wire ID");
+                let segments = if let Some(survivors) = mapped.get(&id) {
+                    survivors.iter().copied().collect::<Vec<_>>()
+                } else if unchanged && def.circuit.agent_ids.items.contains_key(&id) {
+                    vec![id]
+                } else {
+                    Vec::new()
+                };
+                let tags: Vec<_> = segments
+                    .iter()
+                    .map(|id| AgentIdKind::Wire.encode(def.circuit.agent_ids.items[id]))
+                    .collect();
+                if let (Some(id), Some(tag)) = (segments.first(), tags.first()) {
+                    change["id"] = (*id).into();
+                    change["agent_id"] = tag.as_str().into();
+                }
+                change["wire_ids"] = json!(segments);
+                change["wire_agent_ids"] = json!(tags);
             }
         }
     }
-    let allocated = session.issued.fill_missing(&mut candidate)?;
     super::saveable(&candidate)?;
     Ok(Preview {
         project: candidate,
         changes,
-        allocated,
+        allocated: ids.fresh,
     })
 }
 impl Session {
@@ -333,7 +401,7 @@ impl Session {
         root: Option<&Root>,
     ) -> Result<Value> {
         self.check_editable(expected)?;
-        let previewed = match preview(self, ops, root) {
+        let previewed = match preview(self, id, ops, root) {
             Ok(result) => result,
             Err(mut failure) if !ops.is_empty() && failure.details.get("op_index").is_none() => {
                 // Aggregate codec or topology limits can surface only after normalization.
@@ -341,7 +409,7 @@ impl Session {
                 let (mut good, mut bad) = (0, ops.len());
                 while bad - good > 1 {
                     let mid = good + (bad - good) / 2;
-                    match preview(self, &ops[..mid], root) {
+                    match preview(self, id, &ops[..mid], root) {
                         Ok(_) => good = mid,
                         Err(e) => {
                             bad = mid;

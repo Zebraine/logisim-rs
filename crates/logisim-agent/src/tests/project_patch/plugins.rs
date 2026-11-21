@@ -40,6 +40,7 @@ fn plugin_document_properties_defaults_identity_and_source_round_trip() {
     let first = &snapshot["circuits"][0]["components"][2];
     let second = &snapshot["circuits"][0]["components"][3];
     assert_eq!(first["id"], *id);
+    assert_eq!(first["agent_id"], result["changes"][0]["agent_id"]);
     assert_eq!(first["plugin"]["properties"]["capacity"], "5");
     assert_eq!(second["plugin"]["properties"]["capacity"], "16");
     assert_eq!(
@@ -50,7 +51,7 @@ fn plugin_document_properties_defaults_identity_and_source_round_trip() {
     assert_eq!(first["tool"]["ports"], catalog["tools"][0]["ports"]);
     assert_eq!(first["property_types"]["trigger"], "string");
     assert_eq!(first["facing"], "West");
-    f.patch(json!([{"op":"update_plugin","id":id,"properties":{"trigger":"falling"},"label":"Input board","font":{"italic":true}}]),false).unwrap();
+    f.patch(json!([{"op":"update_plugin","agent_id":first["agent_id"],"properties":{"trigger":"falling"},"label":"Input board","font":{"italic":true}}]),false).unwrap();
     let snapshot = f.snapshot();
     let updated = &snapshot["circuits"][0]["components"][2];
     for k in [
