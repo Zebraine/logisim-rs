@@ -1,0 +1,1167 @@
+diff --git a/Cargo.lock b/Cargo.lock
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -9,6 +9,15 @@
+ checksum = "4e883d1d28c5fd5568c79ed2d2bd48d9f2fd3945c8974ed0f53690ceddb051be"
+ dependencies = [
+  "uuid",
++]
++
++[[package]]
++name = "addr2line"
++version = "0.25.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "1b5d307320b3181d6d7954e663bd7c774a838b8220fe0593c86d9fb09f498b4b"
++dependencies = [
++ "gimli",
+ ]
+
+ [[package]]
+@@ -69,6 +78,18 @@
+ dependencies = [
+  "libc",
+ ]
++
++[[package]]
++name = "anyhow"
++version = "1.0.104"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
++
++[[package]]
++name = "arbitrary"
++version = "1.5.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "3bc62ac97cc33321f50863d514c3bc38a453947a8f9e781137e47c7401020aed"
+
+ [[package]]
+ name = "arboard"
+@@ -174,6 +195,9 @@
+ version = "3.20.3"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
++dependencies = [
++ "allocator-api2",
++]
+
+ [[package]]
+ name = "bytemuck"
+@@ -276,6 +300,15 @@
+ ]
+
+ [[package]]
++name = "cobs"
++version = "0.3.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "0fa961b519f0b462e3a3b4a34b64d119eeaca1d59af726fe450bbba07a9fc0a1"
++dependencies = [
++ "thiserror 2.0.21",
++]
++
++[[package]]
+ name = "codespan-reporting"
+ version = "0.13.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+@@ -353,6 +386,144 @@
+  "core-foundation",
+  "libc",
+ ]
++
++[[package]]
++name = "cranelift-assembler-x64"
++version = "0.123.23"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "f059af2e8458d7d7711d19d69e86f987610818bd46b5647b488a61d49142cdab"
++dependencies = [
++ "cranelift-assembler-x64-meta",
++]
++
++[[package]]
++name = "cranelift-assembler-x64-meta"
++version = "0.123.23"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "02f75f03a4c08abcd1b5a2f175842520125f37c2163b2aa1c4b1220a96e20a3b"
++dependencies = [
++ "cranelift-srcgen",
++]
++
++[[package]]
++name = "cranelift-bforest"
++version = "0.123.23"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "28aa268fc210c46a030a28a21b6c0b0e218f5b0fad1f13b9e6468a1a98cf3027"
++dependencies = [
++ "cranelift-entity",
++]
++
++[[package]]
++name = "cranelift-bitset"
++version = "0.123.23"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "1606b8fffb6345a18d96e6ad384a0c60ba30c8142979a74aa1fd7e6d2892397b"
++dependencies = [
++ "serde",
++ "serde_derive",
++]
++
++[[package]]
++name = "cranelift-codegen"
++version = "0.123.20"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "397c0a3cc8a67f9f85dbe47fbba2c1e88430293b130f91f3c98411f6ae4e0e80"
++dependencies = [
++ "bumpalo",
++ "cranelift-assembler-x64",
++ "cranelift-bforest",
++ "cranelift-bitset",
++ "cranelift-codegen-meta",
++ "cranelift-codegen-shared",
++ "cranelift-control",
++ "cranelift-entity",
++ "cranelift-isle",
++ "gimli",
++ "hashbrown 0.15.5",
++ "log",
++ "pulley-interpreter",
++ "regalloc2",
++ "rustc-hash 2.1.3",
++ "serde",
++ "smallvec",
++ "target-lexicon",
++ "wasmtime-internal-math",
++]
++
++[[package]]
++name = "cranelift-codegen-meta"
++version = "0.123.20"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "a5bc504c51980615d594a685367584d1fa95d36c32c14a15b0eb4b1d9cc0dc2e"
++dependencies = [
++ "cranelift-assembler-x64-meta",
++ "cranelift-codegen-shared",
++ "cranelift-srcgen",
++ "heck",
++ "pulley-interpreter",
++]
++
++[[package]]
++name = "cranelift-codegen-shared"
++version = "0.123.23"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "0776090a12a07b211fa8f26d274b04a6e8454d7d7df057ebb0ecede53159d6b1"
++
++[[package]]
++name = "cranelift-control"
++version = "0.123.23"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "6fe8b55c020a50fcabc67563395ea8afa27cc862045e486dc947d271e1f7da17"
++dependencies = [
++ "arbitrary",
++]
++
++[[package]]
++name = "cranelift-entity"
++version = "0.123.23"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "da7bf7d00a780909ef584af51080a661fbd568e33b44440725c4672044eeb002"
++dependencies = [
++ "cranelift-bitset",
++ "serde",
++ "serde_derive",
++]
++
++[[package]]
++name = "cranelift-frontend"
++version = "0.123.20"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "5a60aa092dbffc0b8e501845afc3f67a3c987d780d22dd302829aa9f0255738e"
++dependencies = [
++ "cranelift-codegen",
++ "log",
++ "smallvec",
++ "target-lexicon",
++]
++
++[[package]]
++name = "cranelift-isle"
++version = "0.123.20"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e62bea43dd7767887c6b7861021846b0f0a03d9cc72bafddd0827e79b5f5deb5"
++
++[[package]]
++name = "cranelift-native"
++version = "0.123.20"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "f410a5e75d4758d0564106931a1809d50d17681385ea1686518d029593a06b2a"
++dependencies = [
++ "cranelift-codegen",
++ "libc",
++ "target-lexicon",
++]
++
++[[package]]
++name = "cranelift-srcgen"
++version = "0.123.23"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "cb3e5ca8a6d793f5c56aaa3a52a57e4d3da953293724d47f56562e0684136450"
+
+ [[package]]
+ name = "crc32fast"
+@@ -485,7 +656,7 @@
+  "bitflags 2.13.2",
+  "emath",
+  "epaint",
+- "itertools",
++ "itertools 0.15.0",
+  "log",
+  "nohash-hasher",
+  "profiling",
+@@ -579,6 +750,18 @@
+ dependencies = [
+  "bytemuck",
+ ]
++
++[[package]]
++name = "embedded-io"
++version = "0.4.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "ef1a6892d9eef45c8fa6b9e0086428a2cca8491aca8f787c534a3d6d0bcb3ced"
++
++[[package]]
++name = "embedded-io"
++version = "0.6.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
+
+ [[package]]
+ name = "epaint"
+@@ -644,6 +827,12 @@
+ ]
+
+ [[package]]
++name = "fallible-iterator"
++version = "0.3.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "2acce4a10f12dc2fb14a218589d4f1f62ef011b2d0cc4b3cb1bba8e94da14649"
++
++[[package]]
+ name = "fax"
+ version = "0.2.7"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+@@ -812,6 +1001,17 @@
+  "cfg-if",
+  "libc",
+  "r-efi 6.0.0",
++]
++
++[[package]]
++name = "gimli"
++version = "0.32.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e629b9b98ef3dd8afe6ca2bd0f89306cec16d43d907889945bc5d6687f2f13c7"
++dependencies = [
++ "fallible-iterator",
++ "indexmap",
++ "stable_deref_trait",
+ ]
+
+ [[package]]
+@@ -974,6 +1174,7 @@
+ checksum = "9229cfe53dfd69f0609a49f65461bd93001ea1ef889cd5529dd176593f5338a1"
+ dependencies = [
+  "foldhash 0.1.5",
++ "serde",
+ ]
+
+ [[package]]
+@@ -995,6 +1196,12 @@
+ dependencies = [
+  "foldhash 0.2.0",
+ ]
++
++[[package]]
++name = "heck"
++version = "0.5.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
+
+ [[package]]
+ name = "hermit-abi"
+@@ -1024,6 +1231,17 @@
+ dependencies = [
+  "equivalent",
+  "hashbrown 0.17.1",
++ "serde",
++ "serde_core",
++]
++
++[[package]]
++name = "itertools"
++version = "0.14.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
++dependencies = [
++ "either",
+ ]
+
+ [[package]]
+@@ -1337,6 +1555,7 @@
+  "serde",
+  "serde_json",
+  "wasmi",
++ "wasmtime",
+  "wat",
+ ]
+
+@@ -1451,10 +1670,28 @@
+ ]
+
+ [[package]]
++name = "mach2"
++version = "0.4.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "d640282b302c0bb0a2a8e0233ead9035e3bed871f0b7e81fe4a1ec829765db44"
++dependencies = [
++ "libc",
++]
++
++[[package]]
+ name = "memchr"
+ version = "2.8.3"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
++
++[[package]]
++name = "memfd"
++version = "0.6.6"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "57804b2c9b69967f1536a56f86297e367a33b19e98852ed624b84551cdbc0d90"
++dependencies = [
++ "rustix 1.1.6",
++]
+
+ [[package]]
+ name = "memmap2"
+@@ -1932,6 +2169,18 @@
+ ]
+
+ [[package]]
++name = "object"
++version = "0.37.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "ff76201f031d8863c38aa7f905eca4f53abbfa15f609db4277d44cd8938f33fe"
++dependencies = [
++ "crc32fast",
++ "hashbrown 0.15.5",
++ "indexmap",
++ "memchr",
++]
++
++[[package]]
+ name = "once_cell"
+ version = "1.21.4"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+@@ -2131,6 +2380,18 @@
+ ]
+
+ [[package]]
++name = "postcard"
++version = "1.1.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "6764c3b5dd454e283a30e6dfe78e9b31096d9e32036b5d1eaac7a6119ccb9a24"
++dependencies = [
++ "cobs",
++ "embedded-io 0.4.0",
++ "embedded-io 0.6.1",
++ "serde",
++]
++
++[[package]]
+ name = "presser"
+ version = "0.3.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+@@ -2159,6 +2420,29 @@
+ version = "1.0.18"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "3d595e54a326bc53c1c197b32d295e14b169e3cfeaa8dc82b529f947fba6bcf5"
++
++[[package]]
++name = "pulley-interpreter"
++version = "36.0.20"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "4f6a7699ba3c24456c4235f6578a5f182386a1a9230653e8783f165ea1085bbe"
++dependencies = [
++ "cranelift-bitset",
++ "log",
++ "pulley-macros",
++ "wasmtime-internal-math",
++]
++
++[[package]]
++name = "pulley-macros"
++version = "36.0.20"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "1efdd17eb6ed2d844c29350fffb7230c550ddb0cbe93e1fd2b9cfcc345d77450"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn 2.0.119",
++]
+
+ [[package]]
+ name = "pxfm"
+@@ -2262,6 +2546,20 @@
+ checksum = "580c875845b41ecb1564ad1ae4703044cef774145e3d7a94dc2b3fa7c97868fd"
+ dependencies = [
+  "bitflags 2.13.2",
++]
++
++[[package]]
++name = "regalloc2"
++version = "0.12.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "5216b1837de2149f8bc8e6d5f88a9326b63b8c836ed58ce4a0a29ec736a59734"
++dependencies = [
++ "allocator-api2",
++ "bumpalo",
++ "hashbrown 0.15.5",
++ "log",
++ "rustc-hash 2.1.3",
++ "smallvec",
+ ]
+
+ [[package]]
+@@ -2478,6 +2776,9 @@
+ version = "1.16.4"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "d0d5d4b1981b8bbbb7aed204cae5726d683d5d6ac7e74ec54122ea28f315e7c8"
++dependencies = [
++ "serde",
++]
+
+ [[package]]
+ name = "smithay-client-toolkit"
+@@ -2529,6 +2830,12 @@
+ ]
+
+ [[package]]
++name = "stable_deref_trait"
++version = "1.2.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
++
++[[package]]
+ name = "static_assertions"
+ version = "1.1.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+@@ -2574,6 +2881,12 @@
+ dependencies = [
+  "libc",
+ ]
++
++[[package]]
++name = "target-lexicon"
++version = "0.13.6"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "8c447be3a2abfa84b2d91680c56600bd6b2873866de27b36ec911be705e291da"
+
+ [[package]]
+ name = "termcolor"
+@@ -2866,6 +3179,16 @@
+
+ [[package]]
+ name = "wasm-encoder"
++version = "0.236.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "724fccfd4f3c24b7e589d333fc0429c68042897a7e8a5f8694f31792471841e7"
++dependencies = [
++ "leb128fmt",
++ "wasmparser 0.236.1",
++]
++
++[[package]]
++name = "wasm-encoder"
+ version = "0.245.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "3f9dca005e69bf015e45577e415b9af8c67e8ee3c0e38b5b0add5aa92581ed5c"
+@@ -2916,6 +3239,19 @@
+
+ [[package]]
+ name = "wasmparser"
++version = "0.236.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "a9b1e81f3eb254cf7404a82cee6926a4a3ccc5aad80cc3d43608a070c67aa1d7"
++dependencies = [
++ "bitflags 2.13.2",
++ "hashbrown 0.15.5",
++ "indexmap",
++ "semver",
++ "serde",
++]
++
++[[package]]
++name = "wasmparser"
+ version = "0.239.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "8c9d90bb93e764f6beabf1d02028c70a2156a6583e63ac4218dd07ef733368b0"
+@@ -2933,6 +3269,194 @@
+  "bitflags 2.13.2",
+  "indexmap",
+  "semver",
++]
++
++[[package]]
++name = "wasmprinter"
++version = "0.236.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "2df225df06a6df15b46e3f73ca066ff92c2e023670969f7d50ce7d5e695abbb1"
++dependencies = [
++ "anyhow",
++ "termcolor",
++ "wasmparser 0.236.1",
++]
++
++[[package]]
++name = "wasmtime"
++version = "36.0.20"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "a32143e651d97f1b8d749713d242f70a72c9a0d7e16fd498a7e5a3f5574ed10b"
++dependencies = [
++ "addr2line",
++ "anyhow",
++ "bitflags 2.13.2",
++ "bumpalo",
++ "cc",
++ "cfg-if",
++ "hashbrown 0.15.5",
++ "indexmap",
++ "libc",
++ "log",
++ "mach2",
++ "memfd",
++ "object",
++ "once_cell",
++ "postcard",
++ "pulley-interpreter",
++ "rustix 1.1.6",
++ "serde",
++ "serde_derive",
++ "smallvec",
++ "target-lexicon",
++ "wasmparser 0.236.1",
++ "wasmtime-environ",
++ "wasmtime-internal-asm-macros",
++ "wasmtime-internal-cranelift",
++ "wasmtime-internal-fiber",
++ "wasmtime-internal-jit-debug",
++ "wasmtime-internal-jit-icache-coherence",
++ "wasmtime-internal-math",
++ "wasmtime-internal-slab",
++ "wasmtime-internal-unwinder",
++ "wasmtime-internal-versioned-export-macros",
++ "windows-sys 0.60.2",
++]
++
++[[package]]
++name = "wasmtime-environ"
++version = "36.0.20"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "f0501ad47df09ae57fbb76e3bdc6513b1f6d9dd0eadf3a115bb39360798890c7"
++dependencies = [
++ "anyhow",
++ "cranelift-bitset",
++ "cranelift-entity",
++ "gimli",
++ "indexmap",
++ "log",
++ "object",
++ "postcard",
++ "serde",
++ "serde_derive",
++ "smallvec",
++ "target-lexicon",
++ "wasm-encoder 0.236.1",
++ "wasmparser 0.236.1",
++ "wasmprinter",
++]
++
++[[package]]
++name = "wasmtime-internal-asm-macros"
++version = "36.0.20"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "de4c70c3fb098b9b28b73f7fc2b0147c5624621fb017a5354cdedb660f273e07"
++dependencies = [
++ "cfg-if",
++]
++
++[[package]]
++name = "wasmtime-internal-cranelift"
++version = "36.0.20"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "c3840e7bb2d2593f3178b13a6717f215ad63e233ef54b61892f3cee80582f098"
++dependencies = [
++ "anyhow",
++ "cfg-if",
++ "cranelift-codegen",
++ "cranelift-control",
++ "cranelift-entity",
++ "cranelift-frontend",
++ "cranelift-native",
++ "gimli",
++ "itertools 0.14.0",
++ "log",
++ "object",
++ "pulley-interpreter",
++ "smallvec",
++ "target-lexicon",
++ "thiserror 2.0.21",
++ "wasmparser 0.236.1",
++ "wasmtime-environ",
++ "wasmtime-internal-math",
++ "wasmtime-internal-versioned-export-macros",
++]
++
++[[package]]
++name = "wasmtime-internal-fiber"
++version = "36.0.20"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "458d24ab006050e9b5fcf79f2d83ccc236f69846685fb27a7bf4c50a1583f1ea"
++dependencies = [
++ "anyhow",
++ "cc",
++ "cfg-if",
++ "libc",
++ "rustix 1.1.6",
++ "wasmtime-internal-asm-macros",
++ "wasmtime-internal-versioned-export-macros",
++ "windows-sys 0.60.2",
++]
++
++[[package]]
++name = "wasmtime-internal-jit-debug"
++version = "36.0.20"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "eca1ce583227e82e6370939f48395ae902acdcd4c91ca32ea1ae7abbc86232a7"
++dependencies = [
++ "cc",
++ "wasmtime-internal-versioned-export-macros",
++]
++
++[[package]]
++name = "wasmtime-internal-jit-icache-coherence"
++version = "36.0.20"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "5c110f07b222a8eb29d957eabf90dce38f41461f883099ab28dc50861913ba17"
++dependencies = [
++ "anyhow",
++ "cfg-if",
++ "libc",
++ "windows-sys 0.60.2",
++]
++
++[[package]]
++name = "wasmtime-internal-math"
++version = "36.0.20"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "a273dd4ec37457d435538c00b30f3ec9ae99e04a4f6ba89a737048e8de6095df"
++dependencies = [
++ "libm",
++]
++
++[[package]]
++name = "wasmtime-internal-slab"
++version = "36.0.20"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "3d12c7b3ae65639ab90d8d29135348dfd16de6d96eb36ab5b63861f3e12cf8e0"
++
++[[package]]
++name = "wasmtime-internal-unwinder"
++version = "36.0.20"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "6da6131cb87700e06ffb7a83cc933658f521176f04d6d73511f1ee60db58c515"
++dependencies = [
++ "anyhow",
++ "cfg-if",
++ "cranelift-codegen",
++ "log",
++ "object",
++]
++
++[[package]]
++name = "wasmtime-internal-versioned-export-macros"
++version = "36.0.20"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "71efc44d34bb86408d7f620d308dad19457f34543e5c44ace680bdbe2d819917"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn 2.0.119",
+ ]
+
+ [[package]]
+@@ -2945,7 +3469,7 @@
+  "leb128fmt",
+  "memchr",
+  "unicode-width",
+- "wasm-encoder",
++ "wasm-encoder 0.245.1",
+ ]
+
+ [[package]]
+@@ -3391,7 +3915,7 @@
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "282be5f36a8ce781fad8c8ae18fa3f9beff57ec1b52cb3de0789201425d9a33d"
+ dependencies = [
+- "windows-targets",
++ "windows-targets 0.52.6",
+ ]
+
+ [[package]]
+@@ -3400,7 +3924,16 @@
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b"
+ dependencies = [
+- "windows-targets",
++ "windows-targets 0.52.6",
++]
++
++[[package]]
++name = "windows-sys"
++version = "0.60.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "f2f500e4d28234f72040990ec9d39e3a6b950f9f22d3dba18416c35882612bcb"
++dependencies = [
++ "windows-targets 0.53.5",
+ ]
+
+ [[package]]
+@@ -3418,14 +3951,31 @@
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "9b724f72796e036ab90c1021d4780d4d3d648aca59e491e6b98e725b84e99973"
+ dependencies = [
+- "windows_aarch64_gnullvm",
+- "windows_aarch64_msvc",
+- "windows_i686_gnu",
+- "windows_i686_gnullvm",
+- "windows_i686_msvc",
+- "windows_x86_64_gnu",
+- "windows_x86_64_gnullvm",
+- "windows_x86_64_msvc",
++ "windows_aarch64_gnullvm 0.52.6",
++ "windows_aarch64_msvc 0.52.6",
++ "windows_i686_gnu 0.52.6",
++ "windows_i686_gnullvm 0.52.6",
++ "windows_i686_msvc 0.52.6",
++ "windows_x86_64_gnu 0.52.6",
++ "windows_x86_64_gnullvm 0.52.6",
++ "windows_x86_64_msvc 0.52.6",
++]
++
++[[package]]
++name = "windows-targets"
++version = "0.53.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "4945f9f551b88e0d65f3db0bc25c33b8acea4d9e41163edf90dcd0b19f9069f3"
++dependencies = [
++ "windows-link",
++ "windows_aarch64_gnullvm 0.53.1",
++ "windows_aarch64_msvc 0.53.1",
++ "windows_i686_gnu 0.53.1",
++ "windows_i686_gnullvm 0.53.1",
++ "windows_i686_msvc 0.53.1",
++ "windows_x86_64_gnu 0.53.1",
++ "windows_x86_64_gnullvm 0.53.1",
++ "windows_x86_64_msvc 0.53.1",
+ ]
+
+ [[package]]
+@@ -3444,46 +3994,94 @@
+ checksum = "32a4622180e7a0ec044bb555404c800bc9fd9ec262ec147edd5989ccd0c02cd3"
+
+ [[package]]
++name = "windows_aarch64_gnullvm"
++version = "0.53.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "a9d8416fa8b42f5c947f8482c43e7d89e73a173cead56d044f6a56104a6d1b53"
++
++[[package]]
+ name = "windows_aarch64_msvc"
+ version = "0.52.6"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "09ec2a7bb152e2252b53fa7803150007879548bc709c039df7627cabbd05d469"
+
+ [[package]]
++name = "windows_aarch64_msvc"
++version = "0.53.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "b9d782e804c2f632e395708e99a94275910eb9100b2114651e04744e9b125006"
++
++[[package]]
+ name = "windows_i686_gnu"
+ version = "0.52.6"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "8e9b5ad5ab802e97eb8e295ac6720e509ee4c243f69d781394014ebfe8bbfa0b"
+
+ [[package]]
++name = "windows_i686_gnu"
++version = "0.53.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "960e6da069d81e09becb0ca57a65220ddff016ff2d6af6a223cf372a506593a3"
++
++[[package]]
+ name = "windows_i686_gnullvm"
+ version = "0.52.6"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "0eee52d38c090b3caa76c563b86c3a4bd71ef1a819287c19d586d7334ae8ed66"
+
+ [[package]]
++name = "windows_i686_gnullvm"
++version = "0.53.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "fa7359d10048f68ab8b09fa71c3daccfb0e9b559aed648a8f95469c27057180c"
++
++[[package]]
+ name = "windows_i686_msvc"
+ version = "0.52.6"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "240948bc05c5e7c6dabba28bf89d89ffce3e303022809e73deaefe4f6ec56c66"
+
+ [[package]]
++name = "windows_i686_msvc"
++version = "0.53.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "1e7ac75179f18232fe9c285163565a57ef8d3c89254a30685b57d83a38d326c2"
++
++[[package]]
+ name = "windows_x86_64_gnu"
+ version = "0.52.6"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "147a5c80aabfbf0c7d901cb5895d1de30ef2907eb21fbbab29ca94c5b08b1a78"
+
+ [[package]]
++name = "windows_x86_64_gnu"
++version = "0.53.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "9c3842cdd74a865a8066ab39c8a7a473c0778a3f29370b5fd6b4b9aa7df4a499"
++
++[[package]]
+ name = "windows_x86_64_gnullvm"
+ version = "0.52.6"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "24d5b23dc417412679681396f2b49f3de8c1473deb516bd34410872eff51ed0d"
+
+ [[package]]
++name = "windows_x86_64_gnullvm"
++version = "0.53.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "0ffa179e2d07eee8ad8f57493436566c7cc30ac536a3379fdf008f47f6bb7ae1"
++
++[[package]]
+ name = "windows_x86_64_msvc"
+ version = "0.52.6"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
++
++[[package]]
++name = "windows_x86_64_msvc"
++version = "0.53.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "d6bbff5f0aada427a1e5a6da5f1f98158182f26556f345ac9e04d36d0ebed650"
+
+ [[package]]
+ name = "winit"
+diff --git a/apps/logisim-bench/Cargo.toml b/apps/logisim-bench/Cargo.toml
+--- a/apps/logisim-bench/Cargo.toml
++++ b/apps/logisim-bench/Cargo.toml
+@@ -8,6 +8,7 @@
+
+ [features]
+ default = ["plugin-metrics"]
++compare-wasmtime = ["logisim-plugin/compare-wasmtime"]
+ plugin-metrics = ["logisim-plugin/plugin-metrics", "logisim-sim/plugin-metrics"]
+
+ [dependencies]
+diff --git a/apps/logisim-bench/src/main.rs b/apps/logisim-bench/src/main.rs
+--- a/apps/logisim-bench/src/main.rs
++++ b/apps/logisim-bench/src/main.rs
+@@ -159,7 +159,7 @@
+         "plugin_phases": plugin_phases,
+         "schema": 1,
+         "workload": name,
+-        "engine": "stable",
++        "engine": "stable", "wasm_engine": if cfg!(feature = "compare-wasmtime") { "wasmtime-36.0.20" } else { "wasmi-1.1.0" },
+         "threads": 1,
+         "runs": runs,
+         "warmup": WARMUP,
+diff --git a/crates/logisim-plugin/Cargo.toml b/crates/logisim-plugin/Cargo.toml
+--- a/crates/logisim-plugin/Cargo.toml
++++ b/crates/logisim-plugin/Cargo.toml
+@@ -6,6 +6,7 @@
+ license.workspace = true
+ publish.workspace = true
+ [features]
++compare-wasmtime = ["dep:wasmtime"]
+ plugin-metrics = ["logisim-plugin-api/plugin-metrics"]
+
+ [dependencies]
+@@ -13,6 +14,7 @@
+ serde.workspace = true
+ serde_json.workspace = true
+ wasmi = { version = "=1.1.0", default-features = false, features = ["std"] }
++wasmtime = { version = "=36.0.20", default-features = false, features = ["std", "runtime", "cranelift"], optional = true }
+ [dev-dependencies]
+ wat = "=1.245.1"
+ [lints]
+diff --git a/crates/logisim-plugin/src/frame.rs b/crates/logisim-plugin/src/frame.rs
+--- a/crates/logisim-plugin/src/frame.rs
++++ b/crates/logisim-plugin/src/frame.rs
+@@ -8,29 +8,29 @@
+ }
+ impl FrameApi {
+     pub(super) fn load(
+-        instance: &wasmi::Instance,
++        instance: &backend::Instance,
+         store: &mut Store<StoreLimits>,
+         abi: u32,
+     ) -> Result<Option<Self>> {
+         if abi < ABI_VERSION
+             || instance
+-                .get_export(&*store, "logisim_frame_version")
++                .get_export(&mut *store, "logisim_frame_version")
+                 .is_none()
+         {
+             return Ok(None);
+         }
+         let version = instance
+-            .get_typed_func::<(), u32>(&*store, "logisim_frame_version")
++            .get_typed_func::<(), u32>(&mut *store, "logisim_frame_version")
+             .map_err(error)?;
+         if version.call(&mut *store, ()).map_err(error)? != frame::VERSION {
+             return Ok(None); // Unsupported optional transport: retain the JSON interface.
+         }
+         Ok(Some(Self {
+             configure: instance
+-                .get_typed_func(&*store, "logisim_frame_config")
++                .get_typed_func(&mut *store, "logisim_frame_config")
+                 .map_err(error)?,
+             call: instance
+-                .get_typed_func(&*store, "logisim_frame_call")
++                .get_typed_func(&mut *store, "logisim_frame_call")
+                 .map_err(error)?,
+         }))
+     }
+diff --git a/crates/logisim-plugin/src/lib.rs b/crates/logisim-plugin/src/lib.rs
+--- a/crates/logisim-plugin/src/lib.rs
++++ b/crates/logisim-plugin/src/lib.rs
+@@ -18,19 +18,23 @@
+ mod stable;
+ #[cfg(test)]
+ mod tests;
++use backend::{
++    Config, Engine, Linker, Memory, Module, Store, StoreLimits, StoreLimitsBuilder, TypedFunc,
++};
+ use logisim_plugin_api::{
+     Component, Evaluation, MAX_MESSAGE, Manifest, Request, Response, Update, supports_abi,
+ };
+ pub use stable::StableInstance;
+ use std::{collections::BTreeMap, sync::Arc};
+-use wasmi::{
+-    Config, Engine, Linker, Memory, Module, Store, StoreLimits, StoreLimitsBuilder, TypedFunc,
+-};
++#[cfg(not(feature = "compare-wasmtime"))]
++use wasmi as backend;
++#[cfg(feature = "compare-wasmtime")]
++use wasmtime as backend;
+ pub const MAX_MODULE: usize = 4 * 1024 * 1024;
+ const FUEL: u64 = 10_000_000;
+ type Result<T> = std::result::Result<T, String>;
+ fn error(e: impl std::fmt::Display) -> String {
+-    e.to_string()
++    format!("{e:#}")
+ }
+
+ #[derive(Clone)]
+@@ -48,7 +52,14 @@
+         }
+         let mut config = Config::default();
+         config.consume_fuel(true);
++        #[cfg(not(feature = "compare-wasmtime"))]
+         let engine = Engine::new(&config);
++        #[cfg(feature = "compare-wasmtime")]
++        let engine = {
++            // Retain the production parser and proposal policy before compiling untrusted bytes.
++            wasmi::Module::validate(&wasmi::Engine::default(), bytes).map_err(error)?;
++            Engine::new(&config).map_err(error)?
++        };
+         let module = timed!("module_compile", Module::new(&engine, bytes)).map_err(error)?;
+         if module.imports().next().is_some() {
+             return Err("Plugin imports are not supported (including WASI).".into());
+@@ -64,10 +75,10 @@
+         let presentation = instance.presentation()?;
+         presentation.validate(&manifest)?;
+         let reconfiguration: logisim_plugin_api::reconfiguration::Policy =
+-            instance.metadata(instance.reconfiguration)?;
++            instance.metadata(instance.reconfiguration.clone())?;
+         reconfiguration.validate(&manifest)?;
+         let interaction: logisim_plugin_api::interaction::Interaction =
+-            instance.metadata(instance.interaction)?;
++            instance.metadata(instance.interaction.clone())?;
+         interaction.validate(&manifest)?;
+         Ok(Self {
+             module,
+@@ -151,11 +162,16 @@
+         let mut store = Store::new(module.engine(), limits);
+         store.limiter(|s| s);
+         store.set_fuel(FUEL).map_err(error)?;
++        #[cfg(feature = "compare-wasmtime")]
++        let instance = Linker::<StoreLimits>::new(module.engine())
++            .instantiate(&mut store, module)
++            .map_err(error)?;
++        #[cfg(not(feature = "compare-wasmtime"))]
+         let instance = Linker::<StoreLimits>::new(module.engine())
+             .instantiate_and_start(&mut store, module)
+             .map_err(error)?;
+         let abi = instance
+-            .get_typed_func::<(), u32>(&store, "logisim_abi")
++            .get_typed_func::<(), u32>(&mut store, "logisim_abi")
+             .map_err(error)?;
+         let abi = abi.call(&mut store, ()).map_err(error)?;
+         if !supports_abi(abi) {
+@@ -182,13 +198,13 @@
+             frame,
+             abi,
+             memory: instance
+-                .get_memory(&store, "memory")
++                .get_memory(&mut store, "memory")
+                 .ok_or("Plugin has no exported memory.")?,
+             buffer: instance
+-                .get_typed_func(&store, "logisim_buffer")
++                .get_typed_func(&mut store, "logisim_buffer")
+                 .map_err(error)?,
+             call: instance
+-                .get_typed_func(&store, "logisim_call")
++                .get_typed_func(&mut store, "logisim_call")
+                 .map_err(error)?,
+             store,
+         })
+diff --git a/crates/logisim-plugin/src/metadata.rs b/crates/logisim-plugin/src/metadata.rs
+--- a/crates/logisim-plugin/src/metadata.rs
++++ b/crates/logisim-plugin/src/metadata.rs
+@@ -1,23 +1,23 @@
+ //! Common bounded transport for independently versioned optional metadata.
+ use super::*;
+ pub(super) fn load(
+-    instance: &wasmi::Instance,
++    instance: &backend::Instance,
+     store: &mut Store<StoreLimits>,
+     version_export: &str,
+     data_export: &str,
+     supported: u32,
+ ) -> Result<Option<TypedFunc<(), u64>>> {
+-    if instance.get_export(&*store, version_export).is_none() {
++    if instance.get_export(&mut *store, version_export).is_none() {
+         return Ok(None);
+     }
+     let version = instance
+-        .get_typed_func::<(), u32>(&*store, version_export)
++        .get_typed_func::<(), u32>(&mut *store, version_export)
+         .map_err(error)?;
+     if version.call(&mut *store, ()).map_err(error)? != supported {
+         return Ok(None);
+     }
+     instance
+-        .get_typed_func(&*store, data_export)
++        .get_typed_func(&mut *store, data_export)
+         .map(Some)
+         .map_err(error)
+ }
+diff --git a/crates/logisim-plugin/src/presentation.rs b/crates/logisim-plugin/src/presentation.rs
+--- a/crates/logisim-plugin/src/presentation.rs
++++ b/crates/logisim-plugin/src/presentation.rs
+@@ -1,7 +1,7 @@
+ use super::*;
+ use logisim_plugin_api::presentation::{self, Presentation};
+ pub(super) fn load(
+-    instance: &wasmi::Instance,
++    instance: &backend::Instance,
+     store: &mut Store<StoreLimits>,
+ ) -> Result<Option<TypedFunc<(), u64>>> {
+     metadata::load(
+@@ -14,7 +14,7 @@
+ }
+ impl Instance {
+     pub(super) fn presentation(&mut self) -> Result<Presentation> {
+-        self.metadata(self.ui)
++        self.metadata(self.ui.clone())
+     }
+ }
+ #[cfg(test)]
+diff --git a/crates/logisim-plugin/src/raster.rs b/crates/logisim-plugin/src/raster.rs
+--- a/crates/logisim-plugin/src/raster.rs
++++ b/crates/logisim-plugin/src/raster.rs
+@@ -9,27 +9,27 @@
+ }
+ impl RasterApi {
+     pub(super) fn load(
+-        instance: &wasmi::Instance,
++        instance: &backend::Instance,
+         store: &mut Store<StoreLimits>,
+     ) -> Result<Option<Self>> {
+         if instance
+-            .get_export(&*store, "logisim_raster_version")
++            .get_export(&mut *store, "logisim_raster_version")
+             .is_none()
+         {
+             return Ok(None);
+         }
+         let version = instance
+-            .get_typed_func::<(), u32>(&*store, "logisim_raster_version")
++            .get_typed_func::<(), u32>(&mut *store, "logisim_raster_version")
+             .map_err(error)?;
+         if version.call(&mut *store, ()).map_err(error)? != raster::VERSION {
+             return Ok(None);
+         }
+         Ok(Some(Self {
+             configure: instance
+-                .get_typed_func(&*store, "logisim_raster_config")
++                .get_typed_func(&mut *store, "logisim_raster_config")
+                 .map_err(error)?,
+             call: instance
+-                .get_typed_func(&*store, "logisim_raster_call")
++                .get_typed_func(&mut *store, "logisim_raster_call")
+                 .map_err(error)?,
+         }))
+     }
+diff --git a/crates/logisim-plugin/src/tests.rs b/crates/logisim-plugin/src/tests.rs
+--- a/crates/logisim-plugin/src/tests.rs
++++ b/crates/logisim-plugin/src/tests.rs
+@@ -256,3 +256,29 @@
+         Some("Plugin response exceeds message limit.")
+     );
+ }
++
++// Finite arithmetic job at the production fuel cap. This checks an observable
++// pause boundary, separate from either engine rejecting an infinite job.
++#[test]
++fn finite_calibration_job_at_production_fuel_budget() {
++    for iterations in [100_000, 1_000_000, 2_000_000, 3_000_000, 4_000_000] {
++        let work = format!(
++            "(local $n i32) i32.const {iterations} local.set $n \
++             (loop $work local.get $n i32.const 1 i32.sub local.tee $n br_if $work)"
++        );
++        let result = Plugin::load(&wasm(&Response::Manifest(manifest()), 1, &work));
++        let expected = if cfg!(feature = "compare-wasmtime") {
++            iterations < 2_000_000
++        } else {
++            iterations < 4_000_000
++        };
++        println!(
++            "iterations={iterations} accepted={} expected={expected}",
++            result.is_ok()
++        );
++        assert_eq!(result.is_ok(), expected);
++        if let Err(message) = result {
++            assert!(message.contains("fuel"), "{message}");
++        }
++    }
++}
