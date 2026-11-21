@@ -154,7 +154,7 @@ fn mcp_handshake_tools_errors_and_session_lifetime_match_cli() {
     assert_eq!(init["result"]["protocolVersion"], "2025-11-25");
     m.send(json!({"jsonrpc":"2.0","method":"notifications/initialized"}));
     let tools = m.call("tools/list", json!({}));
-    assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 19);
+    assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 20);
     assert_eq!(
         tool_error(&m.tool("settings_patch", json!({"config":"whatever","ops":[]})))["code"],
         "invalid_arguments"
@@ -662,6 +662,7 @@ fn annotations_describe_all_tools_including_in_memory_side_effects() {
             }
             "project_patch"
             | "project_save"
+            | "project_convert"
             | "simulation_step"
             | "simulation_tick"
             | "simulation_reset"

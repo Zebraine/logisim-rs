@@ -30,9 +30,9 @@ impl Session {
     pub fn open(path: &Path) -> Result<Self> {
         let path = path.canonicalize().map_err(io::file_error)?;
         let bytes = io::read(&path)?;
-        let xml = std::str::from_utf8(&bytes).map_err(|e| Error::new("invalid_project", e))?;
-        let mut imported =
-            logisim_file::parse(xml).map_err(|e| Error::new("invalid_project", e))?;
+        let mut imported = logisim_file::ProjectFormat::binding(&path)
+            .parse(&bytes)
+            .map_err(|e| Error::new("invalid_project", format!("{}: {e}", path.display())))?;
         let issued = ids::Issued::open(&mut imported.document)?;
         Ok(Self {
             issued,
@@ -111,7 +111,11 @@ impl Session {
 
 // Custom appearance ports, for example, bind pins by coordinates in .circ, even though
 // they have independent IDs in memory. Never commit a result that the reader would omit.
-fn saveable(project: &Project) -> Result<String> {
+fn saveable(project: &Project, path: &Path) -> Result<Vec<u8>> {
+    if logisim_file::ProjectFormat::binding(path) == logisim_file::ProjectFormat::Lrs {
+        return logisim_file::serialize_native(project)
+            .map_err(|e| Error::new("invalid_project", e));
+    }
     let xml = logisim_file::serialize(project).map_err(|e| Error::new("invalid_project", e))?;
     let reopened = logisim_file::parse(&xml).map_err(|e| Error::new("invalid_project", e))?;
     if !reopened.warnings.is_empty() {
@@ -122,7 +126,7 @@ fn saveable(project: &Project) -> Result<String> {
         error.details["warnings"] = json!(reopened.warnings);
         return Err(error);
     }
-    Ok(xml)
+    Ok(xml.into_bytes())
 }
 
 fn point(p: Point) -> [i32; 2] {

@@ -33,7 +33,7 @@ fn backup(path: &Path, original: &[u8]) -> Result<PathBuf> {
 impl Session {
     pub fn save(&mut self, id: &str, expected: Option<&str>, with_backup: bool) -> Result<Value> {
         self.check_editable(expected)?;
-        let xml = super::saveable(&self.project)?;
+        let bytes = super::saveable(&self.project, &self.path)?;
         let _guard = lock_target(&self.path).map_err(write_error)?;
         let meta = fs::symlink_metadata(&self.path).map_err(|e| {
             if e.kind() == ErrorKind::NotFound {
@@ -64,10 +64,72 @@ impl Session {
         } else {
             None
         };
-        replace_checked(&self.path, xml.as_bytes(), Some(&original), None).map_err(write_error)?;
-        self.sha256 = digest::sha256(xml.as_bytes());
+        replace_checked(&self.path, &bytes, Some(&original), None).map_err(write_error)?;
+        self.sha256 = digest::sha256(&bytes);
         Ok(
             json!({"session_id":id,"saved":true,"path":self.path,"source_sha256":self.sha256,"backup_path":backup_path}),
+        )
+    }
+}
+
+impl Session {
+    pub fn convert(
+        &self,
+        id: &str,
+        target: &Path,
+        format: logisim_file::ProjectFormat,
+        expected: Option<&str>,
+        backup: bool,
+    ) -> Result<Value> {
+        self.check_editable(None)?;
+        let path = std::path::absolute(target).map_err(io::file_error)?;
+        let parent = path
+            .parent()
+            .ok_or_else(|| Error::invalid("Missing destination directory."))?
+            .canonicalize()
+            .map_err(io::file_error)?;
+        let path = parent.join(
+            path.file_name()
+                .ok_or_else(|| Error::invalid("Missing destination name."))?,
+        );
+        if path == self.path || logisim_file::ProjectFormat::from_extension(&path) != Some(format) {
+            return Err(Error::invalid(
+                "Choose a separate destination with the requested extension.",
+            ));
+        }
+        if self.sha256 != digest::sha256(&io::read(&self.path)?) {
+            return Err(Error::new("conflict", "Source bytes changed on disk."));
+        }
+        let old = if let Some(hash) = expected {
+            if hash.len() != 64 || !hash.bytes().all(|b| b.is_ascii_hexdigit()) {
+                return Err(Error::invalid("Invalid destination SHA-256."));
+            }
+            let old = io::read(&path)?;
+            if !hash.eq_ignore_ascii_case(&digest::sha256(&old)) {
+                return Err(Error::new("conflict", "Destination SHA-256 differs."));
+            }
+            Some(old)
+        } else {
+            None
+        };
+        let mut portable = self.project.clone();
+        let from = self.path.parent().expect("absolute source file");
+        if from != parent {
+            logisim_file::rebase_plugin_sources(&mut portable, from, &parent);
+        }
+        let bytes = format
+            .export(&portable)
+            .map_err(|e| Error::new("invalid_project", format!("{}: {e}", path.display())))?;
+        logisim_preferences::storage::write_project_copy(
+            &path,
+            &bytes,
+            old.as_deref(),
+            backup,
+            logisim_file::MAX_BYTES,
+        )
+        .map_err(write_error)?;
+        Ok(
+            json!({"session_id":id,"path":path,"format":format.extension(),"sha256":digest::sha256(&bytes)}),
         )
     }
 }

@@ -46,6 +46,16 @@ impl Workspace {
                     }
                 });
                 ui.separator();
+                for (label, action) in [
+                    ("Open .lrs…", FileAction::OpenNative),
+                    ("Convert to .lrs…", FileAction::ConvertNative),
+                    ("Export .circ…", FileAction::ExportCirc),
+                ] {
+                    if ui.button(tr(label)).clicked() {
+                        self.file_actions.push(action);
+                        ui.close();
+                    }
+                }
                 if ui.button(tr("Export Image…")).clicked() {
                     self.file_actions.push(FileAction::ExportImage);
                     ui.close();

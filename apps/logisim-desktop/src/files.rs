@@ -23,6 +23,7 @@ use std::path::{Path, PathBuf};
 pub(super) enum NextDocument {
     New,
     Browse,
+    BrowseNative,
     Recent(PathBuf),
     Close,
 }
@@ -288,6 +289,11 @@ impl Files {
         }
         match action {
             FileAction::New => self.navigate(NextDocument::New, ctx, workspace, sim),
+            FileAction::OpenNative => {
+                self.navigate(NextDocument::BrowseNative, ctx, workspace, sim)
+            }
+            FileAction::ConvertNative => self.picker(Mode::Copy(logisim_file::ProjectFormat::Lrs)),
+            FileAction::ExportCirc => self.picker(Mode::Copy(logisim_file::ProjectFormat::Circ)),
             FileAction::Open => self.navigate(NextDocument::Browse, ctx, workspace, sim),
             FileAction::Close => self.navigate(NextDocument::Close, ctx, workspace, sim),
             FileAction::OpenRecent(i) => {
@@ -396,6 +402,7 @@ impl Files {
                 workspace.replace_project(Default::default());
                 sim.new_document();
             }
+            NextDocument::BrowseNative => self.picker(Mode::OpenNative),
             NextDocument::Browse => self.picker(Mode::Open),
             NextDocument::Recent(path) => {
                 self.load(&path, workspace, sim);
@@ -408,13 +415,18 @@ impl Files {
         }
     }
     fn picker(&mut self, mode: Mode) {
-        let suggested = if mode == Mode::Save {
-            self.storage
+        let suggested = if mode == Mode::Save || matches!(mode, Mode::Copy(_)) {
+            let stem = self
+                .storage
                 .path
-                .as_ref()
-                .and_then(|p| p.file_name())
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_else(|| "Untitled.circ".into())
+                .as_deref()
+                .and_then(Path::file_stem)
+                .unwrap_or(std::ffi::OsStr::new("Untitled"));
+            let ext = match mode {
+                Mode::Copy(format) => format.extension(),
+                _ => "circ",
+            };
+            format!("{}.{ext}", stem.to_string_lossy())
         } else if mode == Mode::ExportImage {
             let stem = self.storage.path.as_deref().and_then(Path::file_stem);
             format!(
@@ -431,6 +443,29 @@ impl Files {
             self.directory.clone(),
             &suggested,
         )));
+    }
+    fn export_copy(
+        &mut self,
+        path: &Path,
+        format: logisim_file::ProjectFormat,
+        expected: Option<&[u8]>,
+        workspace: &Workspace,
+    ) {
+        match self.storage.export(
+            workspace.project(),
+            path,
+            format,
+            expected,
+            workspace.preferences().files.backup_before_save,
+        ) {
+            Ok(()) => {
+                self.dialog = Some(Dialog::Message {
+                    title: "Project copy saved".into(),
+                    body: path.display().to_string(),
+                })
+            }
+            Err(e) => self.error(format!("{}\n\n{}", path.display(), tr(&e))),
+        }
     }
     fn save(
         &mut self,
@@ -616,6 +651,14 @@ impl Files {
             (Dialog::Unsaved(action), Response::Discard) => {
                 self.proceed(action, ctx, workspace, sim)
             }
+            (
+                Dialog::ReplaceCopy {
+                    path,
+                    bytes,
+                    format,
+                },
+                Response::Replace,
+            ) => self.export_copy(&path, format, Some(&bytes), workspace),
             (Dialog::Replace { path, bytes }, Response::Replace) => {
                 self.save(&path, SaveMode::Selected(Some(&bytes)), ctx, workspace, sim)
             }
@@ -700,7 +743,32 @@ impl Files {
                         }
                         Err(error) => self.error(format!("{}\n\n{error}", path.display())),
                     }
-                } else if picker.mode == Mode::Open {
+                } else if let Mode::Copy(format) = picker.mode {
+                    match storage::destination(&path) {
+                        Ok(path)
+                            if self.autosave.reserved(&path)
+                                || self.storage.path.as_ref() == Some(&path)
+                                || logisim_file::ProjectFormat::from_extension(&path)
+                                    != Some(format) =>
+                        {
+                            self.error(
+                                tr("Choose a separate file with the requested extension.").into(),
+                            )
+                        }
+                        Ok(path) if path.exists() => match storage::read(&path) {
+                            Ok(bytes) => {
+                                self.dialog = Some(Dialog::ReplaceCopy {
+                                    path,
+                                    format,
+                                    bytes,
+                                })
+                            }
+                            Err(e) => self.error(e),
+                        },
+                        Ok(path) => self.export_copy(&path, format, None, workspace),
+                        Err(e) => self.error(e),
+                    }
+                } else if matches!(picker.mode, Mode::Open | Mode::OpenNative) {
                     self.load(&path, workspace, sim);
                 } else {
                     match storage::destination(&path) {

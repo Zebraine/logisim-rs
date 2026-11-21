@@ -121,8 +121,15 @@ impl Pair {
     }
     pub fn project(&self, dir: &Path) -> Result<logisim_core::Project> {
         let bytes = self.data.bytes()?.ok_or("Recovery circuit is missing.")?;
-        let text = std::str::from_utf8(bytes).map_err(|_| "Invalid recovery circuit.")?;
-        let mut import = logisim_file::parse(text).map_err(|_| "Invalid recovery circuit.")?;
+        let meta = self.metadata()?;
+        let format = meta
+            .source
+            .as_deref()
+            .map(logisim_file::ProjectFormat::binding)
+            .unwrap_or(logisim_file::ProjectFormat::Circ);
+        let mut import = format
+            .parse(bytes)
+            .map_err(|e| format!("Invalid recovery circuit: {e}"))?;
         if !import.warnings.is_empty() {
             return Err("The recovery circuit contains unsupported content.".into());
         }

@@ -1,6 +1,16 @@
 {
   "name": "English",
   "messages": {
+    "Open .lrs…": "Open .lrs…",
+    "Convert to .lrs…": "Convert to .lrs…",
+    "Export .circ…": "Export .circ…",
+    "Project files (.circ, .lrs)": "Project files (.circ, .lrs)",
+    "Native project (.lrs)": "Native project (.lrs)",
+    "Choose a project file with the indicated extension.": "Choose a project file with the indicated extension.",
+    "Project copy saved": "Project copy saved",
+    "Cannot convert a partial project.": "Cannot convert a partial project.",
+    "Choose a separate file with the requested extension.": "Choose a separate file with the requested extension.",
+    "Choose a regular project file.": "Choose a regular project file.",
     "  (main)": "  (main)",
     " (partial)": " (partial)",
     "(unnamed)": "(unnamed)",

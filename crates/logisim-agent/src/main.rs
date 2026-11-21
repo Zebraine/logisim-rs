@@ -62,8 +62,14 @@ fn parse(args: &[OsString], service: &Service) -> Result<Request> {
             Some(s @ ("--dry-run" | "--apply")) if mode.is_none() => mode = Some(s == "--dry-run"),
             Some("--no-backup") if !no_backup => no_backup = true,
             Some(
-                s
-                @ ("--config" | "--wasm" | "--path" | "--ops" | "--session" | "--expected-sha256"),
+                s @ ("--output"
+                | "--expected-output-sha256"
+                | "--config"
+                | "--wasm"
+                | "--path"
+                | "--ops"
+                | "--session"
+                | "--expected-sha256"),
             ) if !flags.contains_key(s) => {
                 let value = iter
                     .next()
@@ -122,6 +128,23 @@ fn parse(args: &[OsString], service: &Service) -> Result<Request> {
                         dry_run,
                         expected_sha256: edits.expected_sha256,
                         ops: edits.ops,
+                    }
+                }
+                ("project", "convert") => {
+                    let output = take("--output")?.into();
+                    let expected_output_sha256 = flags
+                        .remove("--expected-output-sha256")
+                        .map(|s| {
+                            s.to_str()
+                                .map(str::to_owned)
+                                .ok_or_else(|| Error::invalid("Invalid output SHA-256."))
+                        })
+                        .transpose()?;
+                    Request::ProjectConvert {
+                        session,
+                        output,
+                        expected_output_sha256,
+                        backup: !std::mem::take(&mut no_backup),
                     }
                 }
                 ("project", "save") => {

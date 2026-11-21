@@ -387,7 +387,7 @@ fn preview(
             }
         }
     }
-    super::saveable(&candidate)?;
+    super::saveable(&candidate, &session.path)?;
     Ok(Preview {
         project: candidate,
         changes,

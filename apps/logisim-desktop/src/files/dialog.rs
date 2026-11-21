@@ -29,6 +29,11 @@ pub(super) enum Dialog {
         target: Box<logisim_ui::PluginImportTarget>,
     },
     Unsaved(super::NextDocument),
+    ReplaceCopy {
+        path: PathBuf,
+        bytes: Vec<u8>,
+        format: logisim_file::ProjectFormat,
+    },
     Replace {
         path: PathBuf,
         bytes: Vec<u8>,
@@ -171,6 +176,7 @@ impl Dialog {
             }
             Dialog::ReplaceImage(super::image::ImageTarget { path, .. })
             | Dialog::ReplaceSettings { path, .. }
+            | Dialog::ReplaceCopy { path, .. }
             | Dialog::Replace { path, .. } => Window::prompt("replace-file").confirm(
                 ctx,
                 tr("Replace existing file?"),

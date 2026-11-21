@@ -104,6 +104,13 @@ pub enum Request {
         #[serde(default = "backup_enabled")]
         backup: bool,
     },
+    ProjectConvert {
+        session: String,
+        output: PathBuf,
+        expected_output_sha256: Option<String>,
+        #[serde(default = "backup_enabled")]
+        backup: bool,
+    },
     ProjectClose {
         session: String,
     },
@@ -198,6 +205,7 @@ impl Request {
         match self {
             Self::ProjectSnapshot { session }
             | Self::ProjectPatch { session, .. }
+            | Self::ProjectConvert { session, .. }
             | Self::ProjectSave { session, .. }
             | Self::ProjectClose { session }
             | Self::SimulationOpen { session, .. }
@@ -303,6 +311,28 @@ impl Service {
                     &ops,
                     self.root.as_ref(),
                 ),
+            Request::ProjectConvert {
+                session,
+                output,
+                expected_output_sha256,
+                backup,
+            } => {
+                let format = logisim_file::ProjectFormat::from_extension(&output)
+                    .ok_or_else(|| Error::invalid("Choose a .lrs or .circ destination."))?;
+                let path = self.resolve_path(&output)?;
+                let doc = self.sessions.get(&session).ok_or_else(unknown_session)?;
+                if let Some(root) = &self.root {
+                    root.resolve(&doc.path)?;
+                    root.check_sidecars(&path, backup)?;
+                }
+                doc.convert(
+                    &session,
+                    &path,
+                    format,
+                    expected_output_sha256.as_deref(),
+                    backup,
+                )
+            }
             Request::ProjectSave {
                 session,
                 expected_sha256,

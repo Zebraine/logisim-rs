@@ -240,13 +240,10 @@ impl Autosave {
         };
         let mut portable = project.clone();
         plugins::rebase(&mut portable, &plugins::base(storage.path.as_deref()), &dir);
-        let xml = logisim_file::serialize(&portable).map_err(|e| e.to_string())?;
-        let meta = self.observed.write(
-            &dir,
-            xml.into_bytes(),
-            storage.path.clone(),
-            storage.source_checksum(),
-        )?;
+        let bytes = storage.encode(storage.bound_format(), &mut portable)?;
+        let meta =
+            self.observed
+                .write(&dir, bytes, storage.path.clone(), storage.source_checksum())?;
         if let Some(lease) = lease {
             self.owned = Some(lease);
         }

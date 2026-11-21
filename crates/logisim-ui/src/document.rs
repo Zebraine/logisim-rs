@@ -9,6 +9,9 @@ pub enum SettingsFileAction {
 pub enum FileAction {
     New,
     Open,
+    OpenNative,
+    ConvertNative,
+    ExportCirc,
     OpenRecent(usize),
     ClearRecent,
     ClearRecovery {

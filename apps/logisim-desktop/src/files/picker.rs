@@ -9,6 +9,8 @@ use std::path::{Path, PathBuf};
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum Mode {
     Open,
+    OpenNative,
+    Copy(logisim_file::ProjectFormat),
     Save,
     Memory,
     Library,
@@ -25,13 +27,18 @@ impl Mode {
             Self::Plugin => Some("wasm"),
             Self::ExportImage => Some("png"),
             Self::Memory => Some("hex"),
+            Self::OpenNative => Some("lrs"),
+            Self::Copy(format) => Some(format.extension()),
             Self::Open | Self::Save | Self::Library => Some("circ"),
         }
     }
     fn saving(self) -> bool {
         matches!(
             self,
-            Self::Save | Self::ExportImage | Self::Settings(logisim_ui::SettingsFileAction::Export)
+            Self::Copy(_)
+                | Self::Save
+                | Self::ExportImage
+                | Self::Settings(logisim_ui::SettingsFileAction::Export)
         )
     }
 }
@@ -66,6 +73,8 @@ impl Picker {
                     let path = entry.path();
                     let dir = path.is_dir();
                     if dir
+                        || (self.mode == Mode::Open
+                            && logisim_file::ProjectFormat::from_extension(&path).is_some())
                         || path
                             .extension()
                             .zip(self.mode.extension())
@@ -98,6 +107,9 @@ impl Picker {
             Mode::ExportImage => ("export-image", "Export Image…"),
             Mode::Directory => ("choose-plugin-directory", "Plugin fallback directory"),
             Mode::Open => ("open-circuit", "Open circuit"),
+            Mode::OpenNative => ("open-native", "Open .lrs…"),
+            Mode::Copy(logisim_file::ProjectFormat::Lrs) => ("copy-native", "Convert to .lrs…"),
+            Mode::Copy(logisim_file::ProjectFormat::Circ) => ("copy-legacy", "Export .circ…"),
             Mode::Save => ("save-circuit", "Save circuit as"),
             Mode::Memory => ("import-memory", "Import memory image"),
             Mode::Library => ("load-library", "Load .circ Library…"),
@@ -110,6 +122,12 @@ impl Picker {
             dialog.body(|ui| {
                 ui.label(tr(if matches!(self.mode, Mode::Settings(_)) {
                     "Settings files (.json)"
+                } else if self.mode == Mode::Open {
+                    "Project files (.circ, .lrs)"
+                } else if self.mode == Mode::OpenNative
+                    || self.mode == Mode::Copy(logisim_file::ProjectFormat::Lrs)
+                {
+                    "Native project (.lrs)"
                 } else if self.mode == Mode::Directory {
                     "Choose the folder containing the plugin files."
                 } else if self.mode == Mode::ExportImage {
@@ -245,7 +263,25 @@ impl Picker {
                 self.enter(&path);
                 return Response::Wait;
             }
-            if matches!(self.mode, Mode::Settings(_) | Mode::ExportImage) {
+            if matches!(self.mode, Mode::Copy(_) | Mode::Open | Mode::OpenNative) {
+                if let Mode::Copy(format) = self.mode
+                    && path.extension().is_none()
+                {
+                    path.set_extension(format.extension());
+                }
+                let format = logisim_file::ProjectFormat::from_extension(&path);
+                let valid = match self.mode {
+                    Mode::Open => format.is_some(),
+                    Mode::OpenNative => format == Some(logisim_file::ProjectFormat::Lrs),
+                    Mode::Copy(target) => format == Some(target),
+                    _ => unreachable!(),
+                };
+                if !valid {
+                    self.error =
+                        Some(tr("Choose a project file with the indicated extension.").into());
+                    return Response::Wait;
+                }
+            } else if matches!(self.mode, Mode::Settings(_) | Mode::ExportImage) {
                 let extension = self.mode.extension().expect("file export/import extension");
                 if self.mode.saving() && path.extension().is_none() {
                     path.set_extension(extension);

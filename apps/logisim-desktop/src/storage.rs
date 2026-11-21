@@ -1,6 +1,6 @@
 //! Disk transactions. A failed load or save never advances the document baseline.
 use logisim_core::Project;
-use logisim_file::MAX_BYTES;
+use logisim_file::{MAX_BYTES, ProjectFormat, native::IdentityAssignments};
 use std::{
     fs,
     io::Read,
@@ -18,6 +18,8 @@ pub(crate) struct Storage {
     pub path: Option<PathBuf>,
     pub protected: Option<PathBuf>,
     baseline: Project,
+    partial: bool,
+    identities: std::cell::RefCell<IdentityAssignments>,
     disk: Vec<u8>,
     recovered: bool,
     // The source changed between the last normal load/save and crash recovery.
@@ -59,8 +61,11 @@ impl Storage {
     pub fn load(&mut self, path: &Path) -> Result<(Project, Vec<String>)> {
         let path = destination(path)?;
         let bytes = read(&path)?;
-        let text = std::str::from_utf8(&bytes).map_err(|e| format!("File is not UTF-8: {e}"))?;
-        let mut import = logisim_file::parse(text).map_err(|e| e.to_string())?;
+        let mut import = ProjectFormat::binding(&path)
+            .parse(&bytes)
+            .map_err(|e| e.to_string())?;
+        self.identities = Default::default();
+        self.partial = import.partial;
         crate::plugins::absolutize(&mut import.document, &crate::plugins::base(Some(&path)));
         self.recovered = false;
         self.conflicting_source = None;
@@ -69,6 +74,51 @@ impl Storage {
         self.path = Some(path);
         self.disk = bytes;
         Ok((import.document, import.warnings))
+    }
+    pub fn bound_format(&self) -> ProjectFormat {
+        self.path
+            .as_deref()
+            .map(ProjectFormat::binding)
+            .unwrap_or(ProjectFormat::Circ)
+    }
+    pub fn encode(&self, format: ProjectFormat, p: &mut Project) -> Result<Vec<u8>> {
+        if format == ProjectFormat::Lrs {
+            self.identities
+                .borrow_mut()
+                .complete(p)
+                .map_err(|e| e.to_string())?;
+        }
+        format.serialize(p).map_err(|e| e.to_string())
+    }
+    pub fn export(
+        &self,
+        project: &Project,
+        path: &Path,
+        format: ProjectFormat,
+        expected: Option<&[u8]>,
+        backup: bool,
+    ) -> Result<()> {
+        if self.partial {
+            return Err("Cannot convert a partial project.".into());
+        }
+        let path = destination(path)?;
+        if self.path.as_ref() == Some(&path) || ProjectFormat::from_extension(&path) != Some(format)
+        {
+            return Err("Choose a separate file with the requested extension.".into());
+        }
+        let mut portable = project.clone();
+        crate::plugins::rebase(
+            &mut portable,
+            &crate::plugins::base(self.path.as_deref()),
+            &crate::plugins::base(Some(&path)),
+        );
+        self.identities
+            .borrow_mut()
+            .complete(&mut portable)
+            .map_err(|e| e.to_string())?;
+        let bytes = format.export(&portable).map_err(|e| e.to_string())?;
+        logisim_preferences::storage::write_project_copy(&path, &bytes, expected, backup, MAX_BYTES)
+            .map_err(|e| e.to_string())
     }
     pub fn save(
         &mut self,
@@ -93,7 +143,16 @@ impl Storage {
             &crate::plugins::base(self.path.as_deref()),
             &crate::plugins::base(Some(&path)),
         );
-        let text = logisim_file::serialize(&portable).map_err(|e| e.to_string())?;
+        let format = ProjectFormat::binding(&path);
+        let bytes = if self.bound_format() == ProjectFormat::Lrs && format == ProjectFormat::Circ {
+            self.identities
+                .borrow_mut()
+                .complete(&mut portable)
+                .map_err(|e| e.to_string())?;
+            format.export(&portable).map_err(|e| e.to_string())?
+        } else {
+            self.encode(format, &mut portable)?
+        };
         if backup_before_save && let Some(original) = expected {
             // These are the exact bytes observed at load or Replace confirmation.
             // Verify them before rotating the backup; atomic_write checks the target again.
@@ -117,9 +176,10 @@ impl Storage {
                     )
                 })?;
         }
-        atomic_write(&path, text.as_bytes(), expected)?;
+        atomic_write(&path, &bytes, expected)?;
+        self.partial = false;
         self.path = Some(path);
-        self.disk = text.into_bytes();
+        self.disk = bytes;
         self.recovered = false;
         self.conflicting_source = None;
         self.baseline = project.clone();
@@ -128,7 +188,7 @@ impl Storage {
     }
 }
 pub(crate) fn read(path: &Path) -> Result<Vec<u8>> {
-    read_file(path, "Choose a regular .circ file.")
+    read_file(path, "Choose a regular project file.")
 }
 pub(crate) fn read_file(path: &Path, regular_file_message: &str) -> Result<Vec<u8>> {
     if !fs::metadata(path).map_err(|e| e.to_string())?.is_file() {

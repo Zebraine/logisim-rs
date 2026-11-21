@@ -27,7 +27,7 @@ impl Effect {
     }
 }
 
-const TOOLS: [(&str, &str, Effect); 19] = [
+const TOOLS: [(&str, &str, Effect); 20] = [
     (
         "plugin_catalog",
         "Inspect a Wasm manifest, tool ports, actions and document property schemas.",
@@ -71,6 +71,11 @@ const TOOLS: [(&str, &str, Effect); 19] = [
     (
         "project_save",
         "Atomically save the session to its source file. Checks the source SHA-256 and makes a one-generation backup by default.",
+        Effect::Modifies { idempotent: false },
+    ),
+    (
+        "project_convert",
+        "Write a verified project copy as .lrs or .circ. Replacing a target requires its SHA-256. The session remains bound to its source.",
         Effect::Modifies { idempotent: false },
     ),
     (
@@ -232,6 +237,10 @@ fn tool_list() -> Value {
             "project_patch" => (
                 json!({"session":string,"dry_run":{"type":"boolean"},"expected_sha256":{"type":"string","pattern":"^[0-9a-fA-F]{64}$"},"ops":project_operations()}),
                 json!(["session", "dry_run", "ops"]),
+            ),
+            "project_convert" => (
+                json!({"session":string,"output":string,"expected_output_sha256":{"type":"string","pattern":"^[0-9a-fA-F]{64}$"},"backup":{"type":"boolean","default":true}}),
+                json!(["session", "output"]),
             ),
             "project_save" => (
                 json!({"session":string,"expected_sha256":{"type":"string","pattern":"^[0-9a-fA-F]{64}$"},"backup":{"type":"boolean","default":true}}),
