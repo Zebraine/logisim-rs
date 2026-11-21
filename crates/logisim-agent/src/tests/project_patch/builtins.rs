@@ -61,6 +61,46 @@ fn cases() -> Vec<(&'static str, Value)> {
             "Transmission Gate",
             json!({"bits":12,"gate_bottom_right":true}),
         ),
+        (
+            "D Flip-Flop",
+            json!({"trigger":"falling","controls":"below_above","negate_controls":true}),
+        ),
+        (
+            "T Flip-Flop",
+            json!({"new_layout":false,"controls":"legacy"}),
+        ),
+        (
+            "JK Flip-Flop",
+            json!({"trigger":"falling","label":"Q","controls":"legacy"}),
+        ),
+        (
+            "SR Flip-Flop",
+            json!({"controls":"below_above","negate_controls":true}),
+        ),
+        (
+            "D Latch",
+            json!({"trigger":"low","new_layout":false,"controls":"above_below"}),
+        ),
+        (
+            "SR Latch",
+            json!({"trigger":"latch","new_layout":false,"controls":"below_above","negate_controls":true}),
+        ),
+        (
+            "Register",
+            json!({"bits":17,"select_high":true,"trigger":"low"}),
+        ),
+        (
+            "Counter",
+            json!({"bits":32,"counter_max":4294967295u32,"counter_overflow":"load","counter_old":true,"trigger":"falling"}),
+        ),
+        (
+            "ShiftRegister",
+            json!({"bits":31,"trigger":"falling","font":{"family":"Serif","size":19,"italic":true,"bold":false}}),
+        ),
+        (
+            "Random",
+            json!({"bits":12,"random_seed":-2147483648i32,"trigger":"falling","color":[0,120,241,255]}),
+        ),
         ("Adder", json!({"bits":23})),
         ("Comparator", json!({"bits":31,"signed":false})),
         (
@@ -185,6 +225,22 @@ fn invalid_common_properties_roll_back_the_entire_batch_at_the_failing_index() {
     let mut f = Fixture::new(SOURCE);
     let before = f.snapshot();
     for (kind, props) in [
+        ("D Flip-Flop", json!({"bits":2})),
+        ("D Flip-Flop", json!({"controls":"Above / below"})),
+        (
+            "T Flip-Flop",
+            json!({"new_layout":false,"controls":"below_above"}),
+        ),
+        ("SR Flip-Flop", json!({"trigger":"high"})),
+        ("D Latch", json!({"trigger":"latch"})),
+        ("SR Latch", json!({"trigger":"rising"})),
+        ("Register", json!({"trigger":"level"})),
+        ("Counter", json!({"bits":4,"counter_max":16})),
+        ("Counter", json!({"trigger":"low"})),
+        ("Counter", json!({"counter_overflow":"roll"})),
+        ("ShiftRegister", json!({"bits":33})),
+        ("Random", json!({"random_seed":2147483648i64})),
+        ("Random", json!({"state":4})),
         ("BitAdder", json!({"bit_inputs":0})),
         ("BitFinder", json!({"search":"first"})),
         ("Priority Encoder", json!({"enable":true})),

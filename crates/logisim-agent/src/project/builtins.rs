@@ -3,8 +3,9 @@
 use super::edit::{choice, decode};
 use crate::Result;
 use logisim_core::{
-    Arithmetic, BitSearch, Component, Extension, Facing, GateSize, HorizontalAlign, Kind,
-    MatrixInput, Plexer, Pull, Shift, TransistorType, VerticalAlign,
+    Arithmetic, BitSearch, Component, ControlPosition, CounterOverflow, Extension, Facing,
+    FlipFlop, GateSize, HorizontalAlign, Kind, Latch, LatchEnable, MatrixInput, Plexer, Pull,
+    Shift, TransistorType, Trigger, VerticalAlign,
 };
 use serde_json::{Value, json};
 
@@ -120,6 +121,30 @@ const LABEL_FACING: Field = Field {
     },
 };
 
+field!(
+    NEGATE_CONTROLS,
+    "negate_controls",
+    sequential.negate_controls
+);
+field!(NEW_LAYOUT, "new_layout", sequential.new_layout);
+field!(SELECT_HIGH, "select_high", sequential.select_high);
+field!(COUNTER_MAX, "counter_max", sequential.counter_max);
+field!(COUNTER_OLD, "counter_old", sequential.counter_old);
+field!(RANDOM_SEED, "random_seed", sequential.random_seed);
+
+enum_field!(TRIGGER, "trigger", sequential.trigger, [Trigger::Rising => "rising",
+    Trigger::Falling => "falling", Trigger::High => "high", Trigger::Low => "low"]);
+enum_field!(LATCH_TRIGGER, "trigger", latch_enable, [LatchEnable::High => "high",
+    LatchEnable::Low => "low", LatchEnable::None => "latch"]);
+enum_field!(CONTROLS, "controls", sequential.controls, [ControlPosition::AboveBelow => "above_below",
+    ControlPosition::BelowAbove => "below_above", ControlPosition::Legacy => "legacy"]);
+enum_field!(OVERFLOW, "counter_overflow", sequential.counter_overflow,
+    [CounterOverflow::Wrap => "wrap", CounterOverflow::Stay => "stay",
+     CounterOverflow::Continue => "continue", CounterOverflow::Load => "load"]);
+
+const FLIP_FLOP_FIELDS: &[Field] = &[TRIGGER, CONTROLS, NEGATE_CONTROLS, NEW_LAYOUT];
+const LATCH_FIELDS: &[Field] = &[LATCH_TRIGGER, CONTROLS, NEGATE_CONTROLS, NEW_LAYOUT];
+
 // (Core kind, optional short name, component-specific fields). Core names are always accepted.
 type Entry = (Kind, Option<&'static str>, &'static [Field]);
 const CATALOG: &[Entry] = &[
@@ -211,6 +236,28 @@ const CATALOG: &[Entry] = &[
         &[BITS, GATE_BOTTOM_RIGHT, TRANSISTOR_TYPE],
     ),
     (Kind::TransmissionGate, None, &[BITS, GATE_BOTTOM_RIGHT]),
+    (Kind::FlipFlop(FlipFlop::D), None, FLIP_FLOP_FIELDS),
+    (Kind::FlipFlop(FlipFlop::T), None, FLIP_FLOP_FIELDS),
+    (
+        Kind::FlipFlop(FlipFlop::Jk),
+        Some("JK Flip-Flop"),
+        FLIP_FLOP_FIELDS,
+    ),
+    (
+        Kind::FlipFlop(FlipFlop::Sr),
+        Some("SR Flip-Flop"),
+        FLIP_FLOP_FIELDS,
+    ),
+    (Kind::Latch(Latch::D), None, LATCH_FIELDS),
+    (Kind::Latch(Latch::Sr), Some("SR Latch"), LATCH_FIELDS),
+    (Kind::Register, None, &[BITS, TRIGGER, SELECT_HIGH]),
+    (
+        Kind::Counter,
+        None,
+        &[BITS, TRIGGER, COUNTER_MAX, OVERFLOW, COUNTER_OLD],
+    ),
+    (Kind::ShiftRegister, Some("ShiftRegister"), &[BITS, TRIGGER]),
+    (Kind::Random, Some("Random"), &[BITS, TRIGGER, RANDOM_SEED]),
     (Kind::Led, None, &[ON, OFF, ACTIVE_HIGH, LABEL_FACING]),
     (
         Kind::SevenSegment,
