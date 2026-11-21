@@ -300,7 +300,7 @@ fn replacement_symlinks_are_preserved_on_save_conflict() {
 fn only_unique_item_ids_work_without_an_owner_and_complex_components_are_read_only() {
     let xml = SOURCE.replace(
         "</project>",
-        r#"<circuit name="other"><comp lib="w" name="Constant" loc="(0,0)"/></circuit></project>"#,
+        r#"<circuit name="other"><comp lib="w" name="Transistor" loc="(0,0)"/></circuit></project>"#,
     );
     let mut f = Fixture::new(&xml);
     let orig = f.snapshot();
@@ -434,3 +434,5 @@ fn concurrent_sessions_cannot_overwrite_a_new_source_or_its_backup() {
         2
     );
 }
+
+mod builtins;

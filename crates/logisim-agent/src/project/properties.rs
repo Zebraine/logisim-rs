@@ -3,7 +3,10 @@ use logisim_core::{Component, Gate, Kind, PinPull, Radix};
 use serde_json::{Value, json};
 
 pub(super) fn fields(kind: Kind) -> Vec<&'static str> {
-    let mut keys = vec!["facing"];
+    let mut keys = Vec::new();
+    if kind.rotatable() {
+        keys.push("facing");
+    }
     match kind {
         Kind::Pin => keys.extend(["bits", "output", "three_state", "pull", "label_facing"]),
         Kind::Gate(g) => {
@@ -22,10 +25,19 @@ pub(super) fn fields(kind: Kind) -> Vec<&'static str> {
         Kind::Probe => keys.extend(["radix", "label_facing"]),
         Kind::Tunnel => keys.push("bits"),
         Kind::Splitter => keys.extend(["input_bits", "fanout", "mapping"]),
-        _ => return vec![],
+        _ => {
+            let extra = super::builtins::fields(kind);
+            if extra.is_empty() {
+                return vec![];
+            }
+            keys.extend(extra.iter().map(|f| f.name));
+        }
     }
     if kind.has_label() {
-        keys.extend(["label", "font"]);
+        if kind != Kind::Text {
+            keys.push("label");
+        }
+        keys.push("font");
         if kind != Kind::Tunnel {
             keys.push("color");
         }
@@ -54,7 +66,9 @@ fn code<T: PartialEq>(table: &[(T, &'static str)], value: T) -> &'static str {
 }
 
 pub(super) fn describe(c: &Component, data: &mut Value) {
-    data["patchable_properties"] = json!(fields(c.kind));
+    for field in super::builtins::fields(c.kind) {
+        data[field.name] = (field.read)(c);
+    }
     match c.kind {
         Kind::Pin => {
             data["output"] = c.output.into();
@@ -87,4 +101,19 @@ pub(super) fn describe(c: &Component, data: &mut Value) {
         Kind::Subcircuit(id) => data["circuit_id"] = id.into(),
         _ => {}
     }
+    let writable = fields(c.kind);
+    let mut types = serde_json::Map::new();
+    for &key in &writable {
+        let hint = match &data[key] {
+            Value::Bool(_) => "boolean",
+            Value::Number(_) => "integer",
+            Value::String(_) => "string",
+            Value::Array(_) => "array",
+            Value::Object(_) => "object",
+            Value::Null => unreachable!("missing snapshot value for {key}"),
+        };
+        types.insert(key.into(), hint.into());
+    }
+    data["property_types"] = types.into();
+    data["patchable_properties"] = json!(writable);
 }

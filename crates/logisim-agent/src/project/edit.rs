@@ -14,17 +14,17 @@ pub(super) fn require_supported(kind: Kind) -> Result<()> {
 pub(super) fn unsupported(name: &str) -> Error {
     Error::new(
         "unsupported_component",
-        format!("Project Patch v1 cannot edit {name}."),
+        format!("Project Patch cannot edit {name}."),
     )
 }
 
 fn invalid(message: impl ToString) -> Error {
     Error::new("invalid_property", message)
 }
-fn decode<T: DeserializeOwned>(key: &str, v: &Value) -> Result<T> {
+pub(super) fn decode<T: DeserializeOwned>(key: &str, v: &Value) -> Result<T> {
     T::deserialize(v).map_err(|e| invalid(format!("{key}: {e}")))
 }
-fn choice<T: Copy>(
+pub(super) fn choice<T: Copy>(
     key: &str,
     v: &Value,
     choices: impl IntoIterator<Item = (T, &'static str)>,
@@ -61,6 +61,13 @@ pub(super) fn apply(c: &mut Component, properties: &Map<String, Value>) -> Resul
                 c.kind.name()
             )));
         }
+        if let Some(field) = super::builtins::fields(c.kind)
+            .iter()
+            .find(|f| f.name == key)
+        {
+            (field.write)(c, v)?;
+            continue;
+        }
         match key {
             "facing" => c.facing = facing(key, v)?,
             "bits" | "input_bits" => c.bits = count(key, v, 1, 32)?,
@@ -81,7 +88,7 @@ pub(super) fn apply(c: &mut Component, properties: &Map<String, Value>) -> Resul
             }
             "color" => {
                 let [r, g, b, a]: [u8; 4] = decode(key, v)?;
-                if a != 255 {
+                if c.kind != Kind::Text && a != 255 {
                     return Err(invalid("This component requires opaque RGBA color."));
                 }
                 c.color = [r, g, b];

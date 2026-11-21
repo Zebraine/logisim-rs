@@ -76,6 +76,7 @@ fn kind(name: &str) -> Result<Kind> {
         .chain(Gate::ALL.map(Kind::Gate))
         .chain(Parity::ALL.map(Kind::Parity))
         .find(|k| k.name().eq_ignore_ascii_case(name))
+        .or_else(|| super::builtins::kind(name))
         .ok_or_else(|| edit::unsupported(name))
 }
 fn circuit(project: &mut Project, id: Id) -> Result<&mut Circuit> {
