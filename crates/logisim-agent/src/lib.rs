@@ -238,11 +238,11 @@ impl Service {
                 self.sessions.remove(&session).ok_or_else(unknown_session)?;
                 Ok(json!({"session_id":session,"closed":true}))
             }
-            Request::ProjectSnapshot { session } => Ok(self
+            Request::ProjectSnapshot { session } => self
                 .sessions
                 .get(&session)
                 .ok_or_else(unknown_session)?
-                .snapshot(&session)),
+                .snapshot(&session),
             Request::SimulationOpen { session, mode } => {
                 let doc = self
                     .sessions

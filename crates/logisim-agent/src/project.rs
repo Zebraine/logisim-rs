@@ -2,6 +2,7 @@
 mod builtins;
 pub(crate) mod catalog;
 mod edit;
+mod memory;
 pub(crate) mod patch;
 mod properties;
 mod save;
@@ -58,11 +59,16 @@ impl Session {
     pub fn summary(&self, id: &str) -> Value {
         json!({"session_id":id,"path":self.path,"source_sha256":self.sha256,"schema":1,"main":self.project.main,"partial":!self.warnings.is_empty(),"warnings":self.warnings})
     }
-    pub fn snapshot(&self, id: &str) -> Value {
+    pub fn snapshot(&self, id: &str) -> Result<Value> {
         let mut result = self.summary(id);
         let mut circuits = Vec::with_capacity(self.project.circuits.len());
         for def in &self.project.circuits {
-            let components: Vec<_> = def.circuit.components.iter().map(component).collect();
+            let components: Vec<_> = def
+                .circuit
+                .components
+                .iter()
+                .map(component)
+                .collect::<Result<_>>()?;
             let wires: Vec<_> = def
                 .circuit
                 .wires
@@ -80,7 +86,7 @@ impl Session {
         }
         result["circuits"] = circuits.into();
         result["plugin_sources"] = json!(self.project.plugin_sources);
-        result
+        Ok(result)
     }
 }
 
@@ -108,7 +114,7 @@ fn interface_ports(interface: &Interface) -> Value {
         json!({"pin":port.pin, "label":port.label, "bits":port.bits, "output":port.output, "offset":point(port.offset)})
     }).collect()
 }
-fn component(c: &Component) -> Value {
+fn component(c: &Component) -> Result<Value> {
     let mut data = json!({"id":c.id,"kind":c.kind.name(),"position":point(c.position),"facing":c.facing.name(),"bits":c.bits,
         "label":c.label,"font":{"family":c.font.family,"size":c.font.size,"bold":c.font.bold,"italic":c.font.italic},
         "color":[c.color[0],c.color[1],c.color[2],c.color_alpha]});
@@ -124,10 +130,13 @@ fn component(c: &Component) -> Value {
         .collect();
     data["ports"] = ports.into();
     properties::describe(c, &mut data);
+    if c.kind == logisim_core::Kind::Rom {
+        data["contents"] = memory::snapshot(c)?;
+    }
     if let Some(plugin) = &c.plugin {
         data["plugin"] = json!({"id":plugin.plugin,"version":plugin.version,"tool":plugin.tool.id,"name":plugin.tool.name,"properties":plugin.properties});
     }
-    data
+    Ok(data)
 }
 
 #[cfg(test)]
@@ -135,12 +144,14 @@ mod tests {
     use super::*;
     use logisim_core::{Gate, Kind, Parity, ParityOutput, PinPull, Radix};
 
+    fn component(c: &Component) -> Value {
+        super::component(c).unwrap()
+    }
+
     #[test]
-    fn memory_plugins_and_deferred_io_remain_read_only_in_project_patches() {
+    fn plugins_and_deferred_io_remain_read_only_in_project_patches() {
         let catalog = catalog::catalog();
         for kind in [
-            Kind::Rom,
-            Kind::Ram,
             Kind::PlaRom,
             Kind::Plugin,
             Kind::Slider,
@@ -194,7 +205,7 @@ mod tests {
         let splitter = Component::new(Kind::Splitter, Point::ZERO);
         assert_eq!(component(&splitter)["mapping"], json!([0, 1, 2, 3]));
         assert_eq!(
-            component(&Component::new(Kind::Ram, Point::ZERO))["patchable_properties"],
+            component(&Component::new(Kind::Plugin, Point::ZERO))["patchable_properties"],
             json!([])
         );
     }

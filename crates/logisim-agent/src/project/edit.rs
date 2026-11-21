@@ -45,6 +45,7 @@ fn facing(key: &str, v: &Value) -> Result<Facing> {
 pub(super) fn apply(c: &mut Component, properties: &Map<String, Value>) -> Result<()> {
     require_supported(c.kind)?;
     let writable = fields(c.kind);
+    let old_memory = (c.memory.address_bits, c.bits);
     let old_split = (c.bits, c.splitter.fanout);
     for (k, v) in properties {
         let key = k.as_str();
@@ -109,7 +110,7 @@ pub(super) fn apply(c: &mut Component, properties: &Map<String, Value>) -> Resul
             "xor_odd" => c.gate_options.xor_odd = decode(key, v)?,
             "fanout" => c.splitter.fanout = decode(key, v)?,
             // Both depend on final dimensions, independent of JSON key order.
-            "negation_mask" | "mapping" => {}
+            "negation_mask" | "mapping" | "contents" => {}
             _ => unreachable!("writable property without an editor"),
         }
     }
@@ -131,6 +132,9 @@ pub(super) fn apply(c: &mut Component, properties: &Map<String, Value>) -> Resul
         } else {
             c.gate_options.negated = mask as u8;
         }
+    }
+    if c.kind == Kind::Rom {
+        super::memory::update(c, properties.get("contents"), old_memory)?;
     }
     if c.kind == Kind::Splitter {
         if let Some(v) = properties.get("mapping") {

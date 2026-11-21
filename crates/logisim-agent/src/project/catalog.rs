@@ -4,9 +4,7 @@ use crate::Result;
 use logisim_core::{Gate, Kind, Parity};
 use serde_json::{Value, json};
 
-const READ_ONLY: [Kind; 8] = [
-    Kind::Rom,
-    Kind::Ram,
+const READ_ONLY: [Kind; 6] = [
     Kind::PlaRom,
     Kind::Plugin,
     Kind::Slider,

@@ -80,6 +80,9 @@ pub(super) fn fields(kind: Kind) -> Vec<(&'static str, Rule)> {
             fields.extend(extra.iter().map(|f| (f.name, f.rule)));
         }
     }
+    if kind == Kind::Rom {
+        fields.push(("contents", Rule::RomRuns));
+    }
     if kind.has_label() {
         if kind != Kind::Text {
             fields.push(("label", Rule::Label));

@@ -117,7 +117,7 @@ fn failure_of_each_operation_rolls_back_allocations_and_simulation() {
     f.call("simulation_open", json!({})).unwrap();
     for (op, code) in [
         (
-            json!({"op":"add_component","circuit":1,"kind":"RAM","position":[0,0]}),
+            json!({"op":"add_component","circuit":1,"kind":"Plugin component","position":[0,0]}),
             "unsupported_component",
         ),
         (
@@ -438,4 +438,5 @@ fn concurrent_sessions_cannot_overwrite_a_new_source_or_its_backup() {
 mod builtins;
 mod catalog;
 mod instances;
+mod memory;
 mod sequential;

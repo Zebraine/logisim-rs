@@ -44,8 +44,6 @@ fn catalog_names_are_unique_and_all_editable_kinds_can_be_placed_by_name_or_alia
     assert_eq!(
         read_only,
         BTreeSet::from([
-            "ROM",
-            "RAM",
             "PLA ROM",
             "Plugin component",
             "Slider",

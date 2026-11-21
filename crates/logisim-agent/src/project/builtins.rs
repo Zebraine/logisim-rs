@@ -5,8 +5,8 @@ use super::schema::{Rule, U32, WIDTH};
 use crate::Result;
 use logisim_core::{
     Arithmetic, BitSearch, Component, ControlPosition, CounterOverflow, Extension, Facing,
-    FlipFlop, GateSize, HorizontalAlign, Kind, Latch, LatchEnable, MatrixInput, Plexer, Pull,
-    Shift, TransistorType, Trigger, VerticalAlign,
+    FlipFlop, GateSize, HorizontalAlign, Kind, Latch, LatchEnable, MatrixInput, MemoryInterface,
+    Plexer, Pull, Shift, TransistorType, Trigger, VerticalAlign,
 };
 use serde_json::{Value, json};
 
@@ -47,6 +47,20 @@ macro_rules! enum_field {
 }
 
 field!(BITS, "bits", WIDTH, bits);
+field!(
+    ADDRESS_BITS,
+    "address_bits",
+    Rule::Integer(2, 24),
+    memory.address_bits
+);
+field!(
+    MEMORY_SELECT,
+    "select_high",
+    Rule::Boolean,
+    memory.select_high
+);
+field!(SIMPLE, "simple", Rule::Boolean, memory.simple);
+enum_field!(INTERFACE,"interface", memory.interface, [MemoryInterface::SharedSync => "shared_sync", MemoryInterface::SharedAsync => "shared_async", MemoryInterface::Separate => "separate"]);
 field!(VALUE, "value", U32, constant);
 field!(
     HIGH,
@@ -258,6 +272,12 @@ const LATCH_FIELDS: &[Field] = &[LATCH_TRIGGER, CONTROLS, NEGATE_CONTROLS, NEW_L
 // (Core kind, optional short name, component-specific fields). Core names are always accepted.
 type Entry = (Kind, Option<&'static str>, &'static [Field]);
 const CATALOG: &[Entry] = &[
+    (Kind::Rom, None, &[BITS, ADDRESS_BITS, MEMORY_SELECT]),
+    (
+        Kind::Ram,
+        None,
+        &[BITS, ADDRESS_BITS, MEMORY_SELECT, INTERFACE, SIMPLE],
+    ),
     (Kind::Constant, None, &[BITS, VALUE]),
     (Kind::Ground, None, &[BITS]),
     (Kind::Power, None, &[BITS]),

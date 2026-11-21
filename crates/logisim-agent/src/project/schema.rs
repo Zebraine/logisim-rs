@@ -13,6 +13,7 @@ pub(super) enum Rule {
     Rgba { opaque: bool },
     Position,
     Mapping,
+    RomRuns,
 }
 
 pub(super) const WIDTH: Rule = Rule::Integer(1, 32);
@@ -36,7 +37,7 @@ impl Rule {
             Self::Integer(..) => "integer",
             Self::Enum(_) | Self::Label | Self::FontFamily => "string",
             Self::Font => "object",
-            Self::Rgba { .. } | Self::Position | Self::Mapping => "array",
+            Self::Rgba { .. } | Self::Position | Self::Mapping | Self::RomRuns => "array",
         }
     }
 
@@ -61,6 +62,13 @@ impl Rule {
                 schema
             }
             Self::Position => json!({"type":ty,"minItems":2,"maxItems":2,"items":COORD.json()}),
+            Self::RomRuns => json!({
+                "type":ty,"minItems":0,"maxItems":super::memory::MAX_RUNS,
+                "items":{"type":"array","minItems":2,"maxItems":2,"items":U32.json(),
+                    "prefixItems":[Rule::Integer(0,(1<<24)-1).json(),U32.json()]},
+                "x-addressBits":"address_bits","x-wordBits":"bits","x-strictlyIncreasingIndex":0,
+                "description":"Each [address, word] starts a run lasting until the next boundary or capacity. Initial words are zero. Addresses must increase and fit address_bits; words must fit bits."
+            }),
             Self::Mapping => json!({"type":ty,"minItems":1,"maxItems":32,
                 "items":{"type":["integer","null"],"minimum":0,"maximum":31,"nullable":true},
                 "description":"One entry per input_bits. A non-null branch index must be less than fanout."}),
@@ -104,6 +112,10 @@ impl Rule {
             Self::Position => value
                 .as_array()
                 .is_some_and(|a| a.len() == 2 && a.iter().all(|v| COORD.validate(key, v).is_ok())),
+            // Individual pairs are decoded against the final dimensions in memory::update.
+            Self::RomRuns => value
+                .as_array()
+                .is_some_and(|v| v.len() <= super::memory::MAX_RUNS),
             Self::Mapping => value.as_array().is_some_and(|a| {
                 (1..=32).contains(&a.len())
                     && a.iter()
