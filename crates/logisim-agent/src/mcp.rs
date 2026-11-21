@@ -25,7 +25,7 @@ impl Effect {
     }
 }
 
-const TOOLS: [(&str, &str, Effect); 18] = [
+const TOOLS: [(&str, &str, Effect); 19] = [
     (
         "plugin_catalog",
         "Inspect a Wasm manifest, tool ports, actions and document property schemas.",
@@ -90,6 +90,11 @@ const TOOLS: [(&str, &str, Effect); 18] = [
         "simulation_set_input",
         "Set a root Pin, Switch or DipSwitch input. Enabled propagation settles immediately.",
         Effect::Modifies { idempotent: true },
+    ),
+    (
+        "simulation_plugin_action",
+        "Invoke a declared runtime action on a root plugin instance. Supply its numeric id or persistent agent_id. Returns changed and the full simulation state.",
+        Effect::Modifies { idempotent: false },
     ),
     (
         "simulation_settle",
@@ -239,6 +244,14 @@ fn tool_list() -> Value {
                        "value":{"type":"integer","minimum":0,"maximum":u32::MAX}, "unknown":{"const":true}}),
                 json!(["session", "id"]),
             ),
+            "simulation_plugin_action" => (
+                json!({"session":string,
+                    "id":{"type":["integer","null"],"minimum":1},
+                    "agent_id":{"type":["string","null"],"pattern":"^c-[0-9a-f]{32}$"},
+                    "action":{"type":"string","minLength":1},
+                    "argument":{"type":"string","maxLength":1024,"x-maxUtf8Bytes":1024,"default":""}}),
+                json!(["session", "action"]),
+            ),
             "simulation_set_enabled" => (
                 json!({"session":string, "enabled":{"type":"boolean"}}),
                 json!(["session", "enabled"]),
@@ -249,6 +262,12 @@ fn tool_list() -> Value {
         let mut schema = json!({"type":"object", "properties":properties, "required":required, "additionalProperties":false});
         if name == "simulation_set_input" {
             schema["oneOf"] = json!([{"required":["value"]},{"required":["unknown"]}]);
+        }
+        if name == "simulation_plugin_action" {
+            schema["oneOf"] = json!([
+                {"required":["id"],"properties":{"id":{"type":"integer"}}},
+                {"required":["agent_id"],"properties":{"agent_id":{"type":"string"}}}
+            ]);
         }
         tools.push(json!({"name":name, "description":description, "inputSchema":schema, "annotations":effect.annotations()}));
     }

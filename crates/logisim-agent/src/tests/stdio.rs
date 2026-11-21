@@ -152,7 +152,7 @@ fn mcp_handshake_tools_errors_and_session_lifetime_match_cli() {
     assert_eq!(init["result"]["protocolVersion"], "2025-11-25");
     m.send(json!({"jsonrpc":"2.0","method":"notifications/initialized"}));
     let tools = m.call("tools/list", json!({}));
-    assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 18);
+    assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 19);
     assert_eq!(
         tool_error(&m.tool("settings_patch", json!({"config":"whatever","ops":[]})))["code"],
         "invalid_arguments"
@@ -663,6 +663,7 @@ fn annotations_describe_all_tools_including_in_memory_side_effects() {
             | "simulation_step"
             | "simulation_tick"
             | "simulation_reset"
+            | "simulation_plugin_action"
             | "simulation_set_enabled" => (false, true, false),
             _ => panic!("Missing annotations contract for {name}"),
         };
@@ -709,3 +710,8 @@ fn wasm_catalog_cli_and_mcp_return_matching_metadata_inside_root() {
 
 #[path = "stdio/plugins.rs"]
 mod plugins;
+
+#[path = "support/action_project.rs"]
+mod action_project;
+#[path = "stdio/plugin_actions.rs"]
+mod plugin_actions;

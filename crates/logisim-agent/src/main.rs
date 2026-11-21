@@ -7,6 +7,7 @@ fn simulation_request(command: &std::ffi::OsStr, options: &[OsString]) -> Result
         Some("open") => "simulation_open",
         Some("state") => "simulation_state",
         Some("set-input") => "simulation_set_input",
+        Some("plugin-action") => "simulation_plugin_action",
         Some("settle") => "simulation_settle",
         Some("step") => "simulation_step",
         Some("tick") => "simulation_tick",
@@ -21,7 +22,8 @@ fn simulation_request(command: &std::ffi::OsStr, options: &[OsString]) -> Result
             .to_str()
             .and_then(|s| s.strip_prefix("--"))
             .ok_or_else(|| Error::invalid("Expected a named simulation option."))?;
-        if arguments.contains_key(key) {
+        let field = if key == "agent-id" { "agent_id" } else { key };
+        if arguments.contains_key(field) {
             return Err(Error::invalid(format!("Duplicate --{key}.")));
         }
         let value = if key == "unknown" {
@@ -30,16 +32,16 @@ fn simulation_request(command: &std::ffi::OsStr, options: &[OsString]) -> Result
             let word = words
                 .next()
                 .and_then(|w| w.to_str())
-                .filter(|s| !s.is_empty() && !s.starts_with("--"))
+                .filter(|s| key == "argument" || (!s.is_empty() && !s.starts_with("--")))
                 .ok_or_else(|| Error::invalid(format!("Missing value for --{key}.")))?;
             match key {
                 "id" | "value" => word.parse::<u64>().map_err(Error::invalid)?.into(),
                 "enabled" => word.parse::<bool>().map_err(Error::invalid)?.into(),
-                "session" | "mode" => word.into(),
+                "session" | "mode" | "agent-id" | "action" | "argument" => word.into(),
                 _ => return Err(Error::invalid(format!("Unknown --{key}."))),
             }
         };
-        arguments.insert(key.into(), value);
+        arguments.insert(field.into(), value);
     }
     Request::from_json(serde_json::json!({"tool":tool, "arguments":arguments}))
 }
