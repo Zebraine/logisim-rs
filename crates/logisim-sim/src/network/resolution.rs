@@ -29,6 +29,9 @@ impl Resolution {
             dirty_nets: WorkSet::new(network.nets.len()),
         }
     }
+    pub fn drive(&self, driver: usize) -> Option<Value> {
+        self.drivers[driver]
+    }
     pub fn values(&self, network: &Network) -> Vec<Value> {
         (0..network.nets.len())
             .map(|n| self.net_value(network, n))

@@ -102,9 +102,9 @@ impl Evaluator {
     /// Missing or incorrectly sized drives invalidate all result queries.
     pub fn evaluate(
         &mut self,
-        read: impl FnMut(Port) -> Option<Value>,
+        mut read: impl FnMut(Port) -> Option<Value>,
     ) -> Result<(), EvaluationError> {
-        self.run(read, true).map(|_| ())
+        self.run(|_, port, _| read(port), true).map(|_| ())
     }
 
     /// Validate every boundary drive, then evaluate only affected instructions.
@@ -113,14 +113,23 @@ impl Evaluator {
     /// be unchanged. First calls and recovery after errors evaluate all instructions.
     pub fn evaluate_cached(
         &mut self,
-        read: impl FnMut(Port) -> Option<Value>,
+        mut read: impl FnMut(Port) -> Option<Value>,
     ) -> Result<bool, EvaluationError> {
-        self.run(read, false)
+        self.run(|_, port, _| read(port), false)
+    }
+
+    /// Read in CompiledCircuit::input_ports order. Width validation and queue
+    /// scheduling are shared with the public port-based evaluator.
+    pub(crate) fn evaluate_bound(
+        &mut self,
+        mut read: impl FnMut(usize, u8) -> Value,
+    ) -> Result<bool, EvaluationError> {
+        self.run(|index, _, width| Some(read(index, width)), false)
     }
 
     fn run(
         &mut self,
-        mut read: impl FnMut(Port) -> Option<Value>,
+        mut read: impl FnMut(usize, Port, u8) -> Option<Value>,
         force: bool,
     ) -> Result<bool, EvaluationError> {
         let full = force || !self.valid;
@@ -130,9 +139,10 @@ impl Evaluator {
         self.stats = EvaluationStats::default();
         self.queue.clear();
         self.changed.clear();
-        for &(port, slot) in &self.program.inputs {
-            let value = read(port).ok_or(EvaluationError::MissingInput { port })?;
+        for (index, &(port, slot)) in self.program.inputs.iter().enumerate() {
             let expected = self.program.initial[slot].width();
+            let value =
+                read(index, port, expected).ok_or(EvaluationError::MissingInput { port })?;
             if value.width() != expected {
                 return Err(EvaluationError::WidthMismatch {
                     port,

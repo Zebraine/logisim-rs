@@ -302,6 +302,11 @@ impl CompiledCircuit {
         self.0.stats
     }
 
+    /// Boundary order used by the stable runtime's indexed input reader.
+    pub(crate) fn input_ports(&self) -> impl Iterator<Item = Port> + '_ {
+        self.0.inputs.iter().map(|&(port, _)| port)
+    }
+
     pub fn evaluator(&self) -> Evaluator {
         Evaluator::new(Arc::clone(&self.0))
     }

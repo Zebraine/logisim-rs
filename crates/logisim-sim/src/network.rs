@@ -17,7 +17,7 @@ pub(crate) struct Network {
     drivers: Vec<Port>,
     bit_drivers: Vec<Vec<(usize, u8)>>,
     bit_pulls: Vec<crate::Bit>,
-    driver_indices: BTreeMap<Port, usize>,
+    pub driver_indices: BTreeMap<Port, usize>,
     driver_bits: Vec<Vec<usize>>,
     bit_nets: Vec<Vec<usize>>,
 }

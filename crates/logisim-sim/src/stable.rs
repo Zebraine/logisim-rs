@@ -76,7 +76,7 @@ impl Report {
 
 pub(crate) struct Plan {
     evaluator: Evaluator,
-    inputs: BTreeMap<Port, u8>,
+    input_drivers: Vec<usize>,
     stats: CompileStats,
     pub dependencies: BTreeSet<(Port, Port)>,
     pub plugins: BTreeMap<Id, crate::plugins::stable::Plan>,
@@ -148,19 +148,9 @@ impl Plan {
                 });
             }
         }
-        let components: BTreeMap<_, _> = sim.circuit.components.iter().map(|c| (c.id, c)).collect();
-        let inputs = analysis
-            .regions
-            .iter()
-            .flat_map(|r| &r.inputs)
-            .map(|s| {
-                (
-                    s.port,
-                    components[&s.port.0]
-                        .port_width(s.port.1)
-                        .expect("drive width"),
-                )
-            })
+        let input_drivers = compiled
+            .input_ports()
+            .map(|port| sim.network.driver_indices[&port])
             .collect();
         let mut dependencies = analysis
             .regions
@@ -182,7 +172,7 @@ impl Plan {
         check_feedback(&dependencies)?;
         Ok(Self {
             evaluator: compiled.evaluator(),
-            inputs,
+            input_drivers,
             stats: compiled.stats(),
             dependencies,
             plugins,
@@ -251,15 +241,10 @@ impl Simulator {
         let plan = self.stable_plan.as_mut().unwrap().as_mut().unwrap();
         let evaluated = plan
             .evaluator
-            .evaluate_cached(|port| {
-                // Uninitialized drivers are floating. Unlike the public evaluator's
-                // caller, the runtime knows every port's declared width at compile time.
-                Some(
-                    self.drives
-                        .get(&port)
-                        .copied()
-                        .unwrap_or_else(|| Value::filled(plan.inputs[&port], Bit::Unknown)),
-                )
+            .evaluate_bound(|index, width| {
+                self.resolution
+                    .drive(plan.input_drivers[index])
+                    .unwrap_or_else(|| Value::filled(width, Bit::Unknown))
             })
             .expect("runtime drive widths match compiled topology");
         if !evaluated && plan.materialized {
