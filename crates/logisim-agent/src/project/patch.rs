@@ -1,7 +1,7 @@
 //! A batch operates on one disposable clone. Existing core edit policies own all ID allocation and routing.
 use super::{Session, edit};
 use crate::{Error, Result};
-use logisim_core::{Circuit, Component, Gate, Id, Kind, Parity, Point, Project};
+use logisim_core::{Circuit, Component, Id, Kind, Point, Project};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use std::collections::BTreeSet;
@@ -76,15 +76,6 @@ pub(super) fn point([x, y]: [i32; 2]) -> Result<Point> {
     }
     Ok(Point::new(x, y))
 }
-fn kind(name: &str) -> Result<Kind> {
-    [Kind::Pin, Kind::Probe, Kind::Tunnel, Kind::Splitter]
-        .into_iter()
-        .chain(Gate::ALL.map(Kind::Gate))
-        .chain(Parity::ALL.map(Kind::Parity))
-        .find(|k| k.name().eq_ignore_ascii_case(name))
-        .or_else(|| super::builtins::kind(name))
-        .ok_or_else(|| edit::unsupported(name))
-}
 fn new_component(
     project: &Project,
     owner: Id,
@@ -92,7 +83,8 @@ fn new_component(
     target: Option<Id>,
     at: Point,
 ) -> Result<Component> {
-    if name.eq_ignore_ascii_case("subcircuit") {
+    let entry = super::catalog::placement(name)?;
+    if entry.requires_circuit_id() {
         let target = target.ok_or_else(|| invalid("A subcircuit instance requires circuit_id."))?;
         if !project.can_instantiate(owner, target) {
             return Err(invalid(format!(
@@ -106,7 +98,7 @@ fn new_component(
     if target.is_some() {
         return Err(invalid("Only a subcircuit instance accepts circuit_id."));
     }
-    Ok(Component::new(kind(name)?, at))
+    Ok(Component::new(entry.kind, at))
 }
 fn circuit(project: &mut Project, id: Id) -> Result<&mut Circuit> {
     project

@@ -1,5 +1,6 @@
 //! Project sessions and projections of their circuit-scoped item identities.
 mod builtins;
+pub(crate) mod catalog;
 mod edit;
 pub(crate) mod patch;
 mod properties;

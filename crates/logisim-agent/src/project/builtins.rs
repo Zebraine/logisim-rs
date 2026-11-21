@@ -273,14 +273,8 @@ const CATALOG: &[Entry] = &[
     ),
 ];
 
-pub(super) fn kind(name: &str) -> Option<Kind> {
-    CATALOG
-        .iter()
-        .find(|(k, alias, _)| {
-            k.name().eq_ignore_ascii_case(name)
-                || alias.is_some_and(|s| s.eq_ignore_ascii_case(name))
-        })
-        .map(|e| e.0)
+pub(super) fn names() -> impl Iterator<Item = (Kind, Option<&'static str>)> {
+    CATALOG.iter().map(|(kind, alias, _)| (*kind, *alias))
 }
 
 pub(super) fn fields(kind: Kind) -> &'static [Field] {

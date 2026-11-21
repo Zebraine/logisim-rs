@@ -72,6 +72,7 @@ pub enum Request {
         expected_sha256: Option<String>,
         ops: Vec<Operation>,
     },
+    ProjectCatalog {},
     ProjectOpen {
         path: PathBuf,
     },
@@ -196,6 +197,7 @@ impl Service {
     }
     pub fn call(&mut self, request: Request) -> Result<Value> {
         match request {
+            Request::ProjectCatalog {} => Ok(project::catalog::catalog()),
             Request::SettingsCatalog {} => Ok(settings::catalog()),
             Request::SettingsGet { config } => settings::get(&config),
             Request::SettingsPatch {

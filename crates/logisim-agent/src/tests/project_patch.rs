@@ -436,5 +436,6 @@ fn concurrent_sessions_cannot_overwrite_a_new_source_or_its_backup() {
 }
 
 mod builtins;
+mod catalog;
 mod instances;
 mod sequential;
