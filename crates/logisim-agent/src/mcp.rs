@@ -98,7 +98,10 @@ fn project_operations() -> Value {
                 "id" | "circuit" | "circuit_id" => id.clone(),
                 "position" | "from" | "to" => point.clone(),
                 "properties" => properties.clone(),
-                "kind" | "name" => json!({"type":"string","minLength":1}),
+                "kind" => {
+                    json!({"type":"string","minLength":1,"description":"Editable component kind, such as Bit Adder, Register, or subcircuit. A subcircuit requires a target circuit_id."})
+                }
+                "name" => json!({"type":"string","minLength":1}),
                 _ => unreachable!(),
             };
         }

@@ -163,7 +163,13 @@ fn project_edits_have_the_same_outcome_over_cli_flags_and_mcp() {
         {"op":"add_component","circuit":2,"kind":"Pin","position":[20,30],"properties":{"label":"port","bits":8}},
         {"op":"add_component","circuit":1,"kind":"Constant","position":[20,30],"properties":{"bits":8,"value":200}},
         {"op":"add_component","circuit":1,"kind":"subcircuit","circuit_id":2,"position":[100,30],"properties":{"label":"A"}},
-        {"op":"update_component","circuit":1,"id":1,"properties":{"value":42}}
+        {"op":"update_component","circuit":1,"id":1,"properties":{"value":42}},
+        {"op":"add_component","circuit":1,"kind":"BitFinder","position":[100,100],"properties":{"bits":14,"search":"lowest_zero"}},
+        {"op":"add_component","circuit":1,"kind":"Bit Selector","position":[200,100],"properties":{"group_bits":3}},
+        {"op":"add_component","circuit":1,"kind":"Controlled Inverter","position":[300,100],"properties":{"size":"wide"}},
+        {"op":"add_component","circuit":1,"kind":"SR Latch","position":[400,100],"properties":{"trigger":"latch"}},
+        {"op":"add_component","circuit":1,"kind":"Counter","position":[500,100],"properties":{"bits":5,"counter_max":29}},
+        {"op":"update_component","circuit":1,"id":7,"properties":{"trigger":"falling","counter_overflow":"stay"}}
     ]);
     let edits = dir.join("ops.json");
     fs::write(&edits, json!({"ops":ops}).to_string()).unwrap();
@@ -193,6 +199,8 @@ fn project_edits_have_the_same_outcome_over_cli_flags_and_mcp() {
         10
     );
     let add = &patch["inputSchema"]["properties"]["ops"]["items"]["oneOf"][0];
+    assert_eq!(add["properties"]["kind"]["type"], "string");
+    assert!(add["properties"]["kind"].get("enum").is_none());
     assert_eq!(add["properties"]["circuit_id"]["type"], "integer");
     assert!(add["if"]["properties"]["kind"]["pattern"].is_string());
     assert_eq!(add["then"]["required"], json!(["circuit_id"]));
@@ -279,6 +287,10 @@ fn project_edits_have_the_same_outcome_over_cli_flags_and_mcp() {
         circuits[0]["components"][1]["interface_ports"][0]["bits"],
         8
     );
+    let counter = &circuits[0]["components"][6];
+    assert_eq!(counter["trigger"], "falling");
+    assert_eq!(counter["counter_overflow"], "stay");
+    assert_eq!(counter["property_types"]["counter_max"], "integer");
     assert_eq!(fs::read_to_string(&a).unwrap(), source);
     assert_eq!(fs::read_to_string(&b).unwrap(), source);
     cli.send(json!([

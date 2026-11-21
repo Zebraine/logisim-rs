@@ -134,6 +134,28 @@ mod tests {
     use logisim_core::{Gate, Kind, Parity, ParityOutput, PinPull, Radix};
 
     #[test]
+    fn memory_plugins_and_deferred_io_remain_read_only_in_project_patches() {
+        for kind in [
+            Kind::Rom,
+            Kind::Ram,
+            Kind::PlaRom,
+            Kind::Plugin,
+            Kind::Slider,
+            Kind::Joystick,
+            Kind::Keyboard,
+            Kind::Tty,
+        ] {
+            let snapshot = component(&Component::new(kind, Point::ZERO));
+            assert_eq!(snapshot["patchable_properties"], json!([]), "{kind:?}");
+            assert_eq!(snapshot["property_types"], json!({}), "{kind:?}");
+            assert_eq!(
+                edit::require_supported(kind).unwrap_err().code,
+                "unsupported_component"
+            );
+        }
+    }
+
+    #[test]
     fn snapshot_reads_the_component_model_and_identifies_writable_fields() {
         let mut pin = Component::new(Kind::Pin, Point::new(30, 70));
         pin.pin.three_state = true;

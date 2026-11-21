@@ -191,9 +191,16 @@ Each snapshot lists the component’s writable keys in `patchable_properties`, t
 | Text, Bit Extender | `text`, `font`, RGBA `color`, `halign` (left/center/right), `valign` (top/center/base/bottom). Extender `in_width`, `out_width`, `type` (zero/one/sign/input) |
 | Shifter, Adder, Comparator | `bits`, shifter `shift` (logical_left/logical_right/arithmetic_right/rotate_left/rotate_right), comparator `signed` |
 | Multiplexer, Demultiplexer, Decoder | `select_bits` (1–5), `enable`, `top_right`, `disabled_zero`, data `bits` on mux/demux, `three_state` on demux/decoder |
+| Subtractor, Multiplier, Divider, Negator, Bit Adder, Bit Finder | `bits` (1–32), Bit Adder `bit_inputs` (1–32), Bit Finder `search` (lowest_one/highest_one/lowest_zero/highest_zero) |
+| Priority Encoder, Bit Selector, 7-Segment Display Decoder | Encoder `select_bits`, `disabled_zero`, `no_input_zero`. Selector `bits`, `group_bits` (1–32), `top_right`. Display Decoder `multibit` |
+| Controlled Buffer / Inverter, Transistor, Transmission Gate | `bits` and facing. Controlled gates use `control_left` and `negate_control`, with `size` (narrow/wide) on the inverter. Transistors and transmission gates use `gate_bottom_right`, with `transistor_type` (p/n) on the transistor |
+| D, T, J-K, S-R Flip-Flops and D, S-R Latches | `trigger` (flip-flops rising/falling, latches high/low, S-R latch also accepts latch for operation without enable), `controls` (above_below/below_above/legacy), `negate_controls`, `new_layout`. Old flip-flop layouts require legacy controls |
+| Register, Counter, Shift Register, Random Generator | `bits` and `trigger` (rising/falling, register also high/low). Register `select_high`, Counter `counter_max`, `counter_overflow` (wrap/stay/continue/load), `counter_old`, Random Generator signed 32-bit `random_seed` |
 | LED, SevenSegment, HexDisplay, RGBLED, DotMatrix | Applicable RGBA colors and polarity, RGB `multibit`, matrix rows/columns (1–32), `matrix_input` (column/row/select), circular dots and persistence |
 
-For a subcircuit, pass the owning circuit and the existing target definition separately, for example `{"op":"add_component","circuit":1,"kind":"subcircuit","circuit_id":2,"position":[100,100]}`. Its snapshot includes the target name and pin bindings in `circuit_name` and `interface_ports`. Edit its label, font, facing or position. Editing the target Pins updates instance interfaces. Recursive references and removal of a referenced definition are rejected. Memory, plugin instances, sequential storage and other components with an empty writable list are read-only.
+For a subcircuit, pass the owning circuit and the existing target definition separately, for example `{"op":"add_component","circuit":1,"kind":"subcircuit","circuit_id":2,"position":[100,100]}`. Its snapshot includes the target name and pin bindings in `circuit_name` and `interface_ports`. Edit its label, font, facing or position. Editing the target Pins updates instance interfaces. Recursive references and removal of a referenced definition are rejected. ROM, RAM, PLA ROM, plugin instances, Slider, Joystick, Keyboard and TTY remain read-only.
+
+Storage patches edit the document attributes. Use the simulation tools for live state. When narrowing a Counter below its current maximum, supply a fitting `counter_max` in the same operation.
 
 For CLI flags, put `{"ops":[...],"expected_sha256":"..."}` in an edits file (the hash is optional). A running `logisim-agent cli` or `project open` process also accepts argument arrays on stdin:
 

@@ -191,9 +191,16 @@ logisim-agent settings patch --config /path/to/preferences.json --ops edits.json
 | Text、Bit Extender | 文本 `text`、字体、RGBA 颜色、`halign`（left/center/right）、`valign`（top/center/base/bottom）。扩展器 `in_width`、`out_width`、`type`（zero/one/sign/input） |
 | Shifter、Adder、Comparator | `bits`、移位模式 `shift`（logical_left/logical_right/arithmetic_right/rotate_left/rotate_right）、有符号比较 `signed` |
 | Multiplexer、Demultiplexer、Decoder | 选择位宽 `select_bits`（1–5）、`enable`、`top_right`、`disabled_zero`。复用器和解复用器支持数据位宽，解复用器和译码器支持 `three_state` |
+| 减法器、乘法器、除法器、取负器、Bit Adder、Bit Finder | `bits`（1–32）、Bit Adder 输入数 `bit_inputs`（1–32）、Bit Finder 查找模式 `search`（lowest_one/highest_one/lowest_zero/highest_zero） |
+| Priority Encoder、Bit Selector、7-Segment Display Decoder | 优先编码器支持 `select_bits`、`disabled_zero`、`no_input_zero`。位选择器支持 `bits`、`group_bits`（1–32）和 `top_right`。七段译码器支持 `multibit` |
+| 受控缓冲器、受控反相器、晶体管、传输门 | 均支持位宽和朝向。受控门支持 `control_left`、`negate_control`，反相器另支持 `size`（narrow/wide）。晶体管和传输门支持 `gate_bottom_right`，晶体管另支持 `transistor_type`（p/n） |
+| D、T、J-K、S-R 触发器与 D、S-R 锁存器 | `trigger` 对触发器支持 rising/falling，对锁存器支持 high/low。S-R 锁存器还可选 latch 表示无使能。均支持 `controls`（above_below/below_above/legacy）、`negate_controls`、`new_layout`。旧触发器布局要求 legacy 控制位置 |
+| Register、Counter、Shift Register、Random Generator | `bits` 与 `trigger`（rising/falling，Register 另支持 high/low）。寄存器支持 `select_high`，计数器支持 `counter_max`、`counter_overflow`（wrap/stay/continue/load）和 `counter_old`，随机数发生器支持有符号 32 位 `random_seed` |
 | LED、SevenSegment、HexDisplay、RGBLED、DotMatrix | 适用的 RGBA 颜色和极性、RGB 多位输入、点阵行列数（1–32）、`matrix_input`（column/row/select）、圆点和余辉时间 |
 
-添加子电路实例时分别指定父电路和已有的目标定义，例如 `{"op":"add_component","circuit":1,"kind":"subcircuit","circuit_id":2,"position":[100,100]}`。快照中 `circuit_name` 和 `interface_ports` 给出目标名称与 Pin 绑定。实例可更新标签、字体、朝向和位置。修改目标 Pin 会同步刷新实例接口。递归引用和删除仍被引用的电路会被拒绝。存储器、插件实例、时序存储元件及其他可写字段列表为空的元件保持只读。
+添加子电路实例时分别指定父电路和已有的目标定义，例如 `{"op":"add_component","circuit":1,"kind":"subcircuit","circuit_id":2,"position":[100,100]}`。快照中 `circuit_name` 和 `interface_ports` 给出目标名称与 Pin 绑定。实例可更新标签、字体、朝向和位置。修改目标 Pin 会同步刷新实例接口。递归引用和删除仍被引用的电路会被拒绝。ROM、RAM、PLA ROM、插件实例、Slider、Joystick、Keyboard、TTY 保持只读。
+
+时序元件补丁编辑文档属性，运行状态通过仿真工具查看。若缩小计数器位宽后原上限超出范围，请在同一操作中指定新的 `counter_max`。
 
 使用 CLI 参数时，可将 `{"ops":[...],"expected_sha256":"..."}` 放入编辑文件，哈希可省略。已启动的 `logisim-agent cli` 或 `project open` 进程也接受逐行输入的参数数组。
 
