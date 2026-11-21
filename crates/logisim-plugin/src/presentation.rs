@@ -14,7 +14,7 @@ pub(super) fn load(
 }
 impl Instance {
     pub(super) fn presentation(&mut self) -> Result<Presentation> {
-        metadata::read(&mut self.store, &self.memory, self.ui.as_ref())
+        metadata::read(&mut self.store, &self.memory, self.budget, self.ui.as_ref())
     }
 }
 #[cfg(test)]

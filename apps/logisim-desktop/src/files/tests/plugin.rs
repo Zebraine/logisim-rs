@@ -280,25 +280,12 @@ fn desktop_engine_is_pinned_before_loading_and_falls_back_only_if_unavailable() 
         WasmEnginePreference::Wasmtime
     );
     assert_eq!(restarted.engine_warning_pending, !available);
-    for (files, expected) in [
-        (first, WasmEngine::Wasmi),
-        (
-            restarted,
-            if available {
-                WasmEngine::Wasmtime
-            } else {
-                WasmEngine::Wasmi
-            },
-        ),
-    ] {
+    for files in [first, restarted] {
         let mut resolution = Resolution::new(files.loader, &project, temp.0.clone(), None, vec![]);
         resolution.check(0);
         let plugin = resolution.rows[0].loaded.as_ref().unwrap();
-        assert_eq!(plugin.engine(), expected);
+        assert_eq!(plugin.engine(), WasmEngine::Wasmi);
         #[cfg(all(target_os = "linux", feature = "wasmtime-cache-experiment"))]
-        assert_eq!(
-            temp.path("wasmtime-cache-v1").exists(),
-            expected == WasmEngine::Wasmtime
-        );
+        assert!(!temp.path("wasmtime-cache-v1").exists());
     }
 }

@@ -96,17 +96,20 @@ impl Loader {
             self.disk_error = outcome.warning().map(str::to_owned);
             if outcome == crate::module_cache::Outcome::Hit {
                 self.hits += 1;
-            } else {
+            } else if outcome != crate::module_cache::Outcome::LegacyWasmi {
                 self.misses += 1;
             }
             return Ok(plugin);
         }
-        check_binary(bytes)?;
+        let declaration = Declaration::read(bytes)?;
+        if declaration.select(self.choice)? != self.choice {
+            return Plugin::load(bytes);
+        }
         if let Some((key, module)) = &self.entry
             && key == bytes
         {
             self.hits += 1;
-            return Plugin::from_module(module.clone());
+            return Plugin::from_module(module.clone(), declaration);
         }
         #[cfg(feature = "compare-wasmtime")]
         if let Reuse::Disk(path) = &self.reuse {
@@ -129,7 +132,7 @@ impl Loader {
             } else {
                 self.misses += 1;
             }
-            return Plugin::from_module(module);
+            return Plugin::from_module(module, declaration);
         }
         self.misses += 1;
         if self.reuse == Reuse::None {
@@ -143,7 +146,7 @@ impl Loader {
             .as_ref()
             .expect("initialized engine")
             .compile(bytes)?;
-        let plugin = Plugin::from_module(module.clone())?;
+        let plugin = Plugin::from_module(module.clone(), declaration)?;
         if self.reuse == Reuse::Module {
             self.entry = Some((bytes.to_vec(), module));
         }

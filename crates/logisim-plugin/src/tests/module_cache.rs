@@ -36,7 +36,11 @@ fn record(root: &Path) -> PathBuf {
 fn validated_module_is_reused_and_corruption_is_rebuilt_from_wasm() {
     let tmp = Private::new("restore");
     let root = tmp.0.join("cache");
-    let bytes = wasm(&Response::Manifest(manifest()), 1, "");
+    let bytes = wasm(
+        &Response::Manifest(experimental(AllowedEngines::Both)),
+        4,
+        "",
+    );
     assert_eq!(load(&bytes, &root).unwrap().1, Outcome::Miss);
     let (plugin, status) = load(&bytes, &root).unwrap();
     assert_eq!(status, Outcome::Hit);
@@ -56,7 +60,7 @@ fn validated_module_is_reused_and_corruption_is_rebuilt_from_wasm() {
         Outcome::Rebuilt(_)
     ));
     assert_eq!(load(&bytes, &root).unwrap().1, Outcome::Hit);
-    let rejected = wasm(&Response::Manifest(manifest()), 2, "");
+    let rejected = wasm(&Response::Manifest(manifest()), 4, "");
     let other = tmp.0.join("rejected");
     assert!(load(&rejected, &other).is_err());
     assert_eq!(fs::read_dir(other).unwrap().count(), 0);
@@ -65,7 +69,11 @@ fn validated_module_is_reused_and_corruption_is_rebuilt_from_wasm() {
 #[test]
 fn untrusted_paths_use_uncached_wasmtime_and_preserve_the_target() {
     let tmp = Private::new("paths");
-    let bytes = wasm(&Response::Manifest(manifest()), 1, "");
+    let bytes = wasm(
+        &Response::Manifest(experimental(AllowedEngines::Both)),
+        4,
+        "",
+    );
     let outside = tmp.0.join("other");
     fs::create_dir(&outside).unwrap();
     let link = tmp.0.join("link");
@@ -109,14 +117,18 @@ fn stale_record_key_misses_and_concurrent_writers_publish_complete_records() {
     use sha2::{Digest, Sha256};
     use std::sync::Barrier;
     let tmp = Private::new("publication");
-    let bytes = wasm(&Response::Manifest(manifest()), 1, "");
+    let bytes = wasm(
+        &Response::Manifest(experimental(AllowedEngines::Both)),
+        4,
+        "",
+    );
     let root = tmp.0.join("cache");
     let barrier = Barrier::new(2);
     std::thread::scope(|scope| {
         let open = || {
             barrier.wait();
             let (p, result) = load(&bytes, &root).unwrap();
-            assert_eq!(p.manifest(), &manifest());
+            assert_eq!(p.manifest(), &experimental(AllowedEngines::Both));
             assert!(matches!(result, Outcome::Miss | Outcome::Hit));
         };
         let first = scope.spawn(open);
@@ -139,7 +151,11 @@ fn stale_record_key_misses_and_concurrent_writers_publish_complete_records() {
 fn obsolete_upstream_namespace_rebuilds_once() {
     use sha2::{Digest, Sha256};
     let tmp = Private::new("obsolete");
-    let bytes = wasm(&Response::Manifest(manifest()), 1, "");
+    let bytes = wasm(
+        &Response::Manifest(experimental(AllowedEngines::Both)),
+        4,
+        "",
+    );
     assert_eq!(load(&bytes, &tmp.0).unwrap().1, Outcome::Miss);
     let path = record(&tmp.0);
     let mut old = fs::read(&path).unwrap();
@@ -160,7 +176,11 @@ fn obsolete_upstream_namespace_rebuilds_once() {
 #[test]
 fn scratch_cleanup_is_independent_of_background_cache_statistics() {
     let tmp = Private::new("cleanup");
-    let bytes = wasm(&Response::Manifest(manifest()), 1, "");
+    let bytes = wasm(
+        &Response::Manifest(experimental(AllowedEngines::Both)),
+        4,
+        "",
+    );
     assert_eq!(load(&bytes, &tmp.0).unwrap().1, Outcome::Miss);
     std::thread::scope(|scope| {
         for _ in 0..4 {

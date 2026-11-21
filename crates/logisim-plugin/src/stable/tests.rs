@@ -3,7 +3,9 @@ use logisim_plugin_api::{ABI_VERSION, MAX_STATE, OutputDependency, Port, Tool};
 
 fn manifest(abi: u32) -> Manifest {
     Manifest {
-        execution: None,
+        execution: (abi == 4).then_some(logisim_plugin_api::Execution::new(
+            logisim_plugin_api::AllowedEngines::Both,
+        )),
         abi,
         id: "test.stable".into(),
         version: "1.0".into(),
@@ -93,6 +95,9 @@ fn module_with_exports(
         data.push_str(&format!("(data (i32.const {offset}) \"{text}\")"));
         packed.push(((bytes.len() as u64) << 32) | offset as u64);
     }
+    let entry = manifest(abi)
+        .execution
+        .map_or("logisim_abi", |e| e.engines.entry());
     let sample_tag = if abi >= 3 { 116 } else { 115 }; // transition / sample
     let [m, reset, c, o, s] = packed.as_slice() else {
         unreachable!()
@@ -102,7 +107,7 @@ fn module_with_exports(
         (global $query (mut i32) (i32.const 0)) (global $calls (mut i32) (i32.const 0))
         {data}
         {exports}
-        (func (export "logisim_abi") (result i32) i32.const {abi})
+        (func (export "{entry}") (result i32) i32.const {abi})
         (func (export "logisim_buffer") (param i32) (result i32) i32.const 0)
         (func (export "logisim_call") (param i32) (result i64)
             i32.const 9 i32.load8_u i32.const 100 i32.eq
@@ -368,11 +373,11 @@ fn frame_exports(output: &[u8], sample: &[u8], before: &str) -> String {
     )
 }
 fn frame_module(exports: &str) -> Plugin {
-    Plugin::load(&frame_module_bytes(exports)).unwrap()
+    Plugin::load(&frame_module_bytes(ABI_VERSION, exports)).unwrap()
 }
-fn frame_module_bytes(exports: &str) -> Vec<u8> {
+fn frame_module_bytes(abi: u32, exports: &str) -> Vec<u8> {
     module_with_exports(
-        ABI_VERSION,
+        abi,
         Response::StableContract(Some(contract())),
         Response::StableOutputs(outputs()),
         Response::StableTransition(StateTransition::conservative(vec![])),

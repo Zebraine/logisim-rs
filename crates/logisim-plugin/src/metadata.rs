@@ -24,12 +24,13 @@ pub(super) fn load(
 pub(super) fn read<T: serde::de::DeserializeOwned + Default>(
     store: &mut Store,
     memory: &Memory,
+    budget: u64,
     call: Option<&TypedFunc<(), u64>>,
 ) -> Result<T> {
     let Some(call) = call else {
         return Ok(T::default());
     };
-    store.set_fuel(fuel_budget()).map_err(error)?;
+    store.set_fuel(budget).map_err(error)?;
     let packed = call.call(&mut *store, ()).map_err(error)?;
     let length = (packed >> 32) as usize;
     if length > MAX_MESSAGE {

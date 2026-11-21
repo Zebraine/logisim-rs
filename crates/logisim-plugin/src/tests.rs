@@ -1,6 +1,16 @@
 use super::*;
 use logisim_plugin_api::*;
 fn wasm(response: &Response, abi: u32, call: &str) -> Vec<u8> {
+    let entry = match response {
+        Response::Manifest(m) if abi == 4 => m
+            .execution
+            .map_or("logisim_abi4_both", |e| e.engines.entry()),
+        _ => "logisim_abi",
+    };
+    wasm_entry(response, abi, entry, call)
+}
+
+fn wasm_entry(response: &Response, abi: u32, entry: &str, call: &str) -> Vec<u8> {
     let json = serde_json::to_vec(response).unwrap();
     let data = json
         .iter()
@@ -11,7 +21,7 @@ fn wasm(response: &Response, abi: u32, call: &str) -> Vec<u8> {
         r#"(module
         (memory (export "memory") 1)
         (data (i32.const 4096) "{data}")
-        (func (export "logisim_abi") (result i32) i32.const {abi})
+        (func (export "{entry}") (result i32) i32.const {abi})
         (func (export "logisim_buffer") (param i32) (result i32) i32.const 0)
         (func (export "logisim_call") (param i32) (result i64) {call} i64.const {packed})
     )"#
@@ -36,6 +46,74 @@ fn manifest() -> Manifest {
         }],
     }
 }
+fn experimental(engines: AllowedEngines) -> Manifest {
+    Manifest {
+        abi: EXECUTION_ABI_VERSION,
+        execution: Some(Execution::new(engines)),
+        ..manifest()
+    }
+}
+
+#[test]
+fn both_runtime_choices_require_a_matching_static_and_manifest_contract() {
+    for abi in 1..=3 {
+        let legacy = Manifest { abi, ..manifest() };
+        let bytes = wasm(&Response::Manifest(legacy.clone()), abi, "");
+        for choice in [WasmEngine::Wasmi, WasmEngine::Wasmtime] {
+            let p = Plugin::load_with_engine(&bytes, choice).unwrap();
+            assert_eq!(p.engine(), WasmEngine::Wasmi);
+            assert_eq!(p.manifest(), &legacy);
+        }
+    }
+    for allowed in [
+        AllowedEngines::Wasmi,
+        AllowedEngines::Wasmtime,
+        AllowedEngines::Both,
+    ] {
+        let m = experimental(allowed);
+        let bytes = wasm(&Response::Manifest(m.clone()), 4, "");
+        for engine in [WasmEngine::Wasmi, WasmEngine::Wasmtime] {
+            let loaded = Plugin::load_with_engine(&bytes, engine);
+            match (allowed, engine) {
+                (AllowedEngines::Wasmi, WasmEngine::Wasmtime)
+                | (AllowedEngines::Wasmtime, WasmEngine::Wasmi) => {
+                    assert!(loaded.err().unwrap().contains("does not permit"))
+                }
+                _ if !engine.available() => {
+                    assert!(loaded.err().unwrap().contains("does not include"))
+                }
+                _ => {
+                    let plugin = loaded.unwrap();
+                    assert_eq!(plugin.engine(), engine);
+                    assert_eq!(plugin.manifest(), &m);
+                }
+            }
+        }
+    }
+    let m = Response::Manifest(experimental(AllowedEngines::Wasmi));
+    for (name, abi, expected) in [
+        ("logisim_abi4_both", 4, "declaration differ"),
+        ("logisim_abi4_both", 3, "Unsupported plugin ABI"),
+        ("logisim_abi", 4, "Unsupported plugin ABI"),
+        ("logisim_abi4_other", 4, "Unknown ABI 4"),
+    ] {
+        let err = Plugin::load(&wasm_entry(&m, abi, name, "")).err().unwrap();
+        assert!(err.contains(expected), "{err}");
+    }
+    let ambiguous = wat::parse_str(
+        r#"(module
+        (func (export "logisim_abi") (export "logisim_abi4_both") (result i32) i32.const 3)
+        (func $stop unreachable) (start $stop))"#,
+    )
+    .unwrap();
+    assert!(
+        Plugin::load_with_engine(&ambiguous, WasmEngine::Wasmtime)
+            .err()
+            .unwrap()
+            .contains("one plugin ABI")
+    );
+}
+
 #[test]
 fn handshake_definition_identity_duplicates_and_imports_are_checked() {
     let m = manifest();
@@ -232,7 +310,7 @@ fn evaluation_validates_actions_outputs_graphics_state_and_fuel() {
 fn instance_enforces_memory_table_and_response_limits() {
     // A successful manifest proves rejection in the variants below is due to the
     // resource boundary rather than a missing export or bad handshake.
-    let response = Response::Manifest(manifest());
+    let response = Response::Manifest(experimental(AllowedEngines::Both));
     let json = serde_json::to_string(&response).unwrap();
     let data: String = json.bytes().map(|b| format!("\\{b:02x}")).collect();
     let module = |pages: u32, entries: u32, response_len: usize| {
@@ -240,7 +318,7 @@ fn instance_enforces_memory_table_and_response_limits() {
             r#"(module
             (memory (export "memory") {pages}) (table {entries} funcref)
             (data (i32.const 4096) "{data}")
-            (func (export "logisim_abi") (result i32) i32.const 1)
+            (func (export "logisim_abi4_both") (result i32) i32.const 4)
             (func (export "logisim_buffer") (param i32) (result i32) i32.const 0)
             (func (export "logisim_call") (param i32) (result i64) i64.const {}))"#,
             ((response_len as u64) << 32) | 4096
@@ -267,8 +345,8 @@ mod engine_contract;
 
 #[test]
 fn loading_pins_the_engine_per_module_and_implicit_load_stays_wasmi() {
-    let manifest = manifest();
-    let bytes = wasm(&Response::Manifest(manifest.clone()), 1, "");
+    let manifest = experimental(AllowedEngines::Both);
+    let bytes = wasm(&Response::Manifest(manifest.clone()), 4, "");
     let default = Plugin::load(&bytes).unwrap();
     assert_eq!(default.engine(), WasmEngine::Wasmi);
     let explicit = Plugin::load_dependency_with_engine(

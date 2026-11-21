@@ -9,6 +9,8 @@ macro_rules! timed {
         $value
     }};
 }
+mod admission;
+use admission::Declaration;
 mod backend;
 mod frame;
 mod interaction;
@@ -69,16 +71,17 @@ impl Plugin {
     }
 
     pub fn load_with_engine(bytes: &[u8], engine: WasmEngine) -> Result<Self> {
-        check_binary(bytes)?;
-        Self::from_module(Engine::new(engine)?.compile(bytes)?)
+        let declaration = Declaration::read(bytes)?;
+        let selected = declaration.select(engine)?;
+        Self::from_module(Engine::new(selected)?.compile(bytes)?, declaration)
     }
 
     pub fn engine(&self) -> WasmEngine {
         self.module.engine_choice()
     }
 
-    fn from_module(module: Module) -> Result<Self> {
-        let mut instance = Instance::new(&module)?;
+    fn from_module(module: Module, declaration: Declaration) -> Result<Self> {
+        let mut instance = Instance::new(&module, declaration)?;
         let Response::Manifest(manifest) = instance.call(&Request::Describe)? else {
             return Err("Plugin did not return a manifest.".into());
         };
@@ -86,17 +89,22 @@ impl Plugin {
         if manifest.abi != instance.abi {
             return Err("Plugin manifest and exported ABI differ.".into());
         }
+        if manifest.execution.map(|e| e.engines) != declaration.0 {
+            return Err("Plugin manifest and static execution declaration differ.".into());
+        }
         let presentation = instance.presentation()?;
         presentation.validate(&manifest)?;
         let reconfiguration: logisim_plugin_api::reconfiguration::Policy = metadata::read(
             &mut instance.store,
             &instance.memory,
+            instance.budget,
             instance.reconfiguration.as_ref(),
         )?;
         reconfiguration.validate(&manifest)?;
         let interaction: logisim_plugin_api::interaction::Interaction = metadata::read(
             &mut instance.store,
             &instance.memory,
+            instance.budget,
             instance.interaction.as_ref(),
         )?;
         interaction.validate(&manifest)?;
@@ -161,7 +169,10 @@ impl Plugin {
         #[cfg(feature = "plugin-metrics")]
         let _span = metrics::timer("instantiate");
         self.check_component(component)?;
-        let mut instance = Instance::new(&self.module)?;
+        let mut instance = Instance::new(
+            &self.module,
+            Declaration(self.manifest.execution.map(|e| e.engines)),
+        )?;
         instance.bind_raster(component)?;
         Ok(instance)
     }
@@ -183,21 +194,29 @@ pub struct Instance {
     frame: Option<frame::FrameApi>,
     raster: Option<raster::RasterApi>,
     abi: u32,
+    budget: u64,
     store: Store,
     memory: Memory,
     buffer: TypedFunc<u32, u32>,
     call: TypedFunc<u32, u64>,
 }
 impl Instance {
-    fn new(module: &Module) -> Result<Self> {
+    fn new(module: &Module, declaration: Declaration) -> Result<Self> {
         #[cfg(feature = "plugin-metrics")]
         let _span = metrics::timer("vm_new");
-        let (instance, mut store) = module.instantiate()?;
+        let budget = if declaration.0.is_some() {
+            FUEL
+        } else {
+            fuel_budget()
+        };
+        let (instance, mut store) = module.instantiate(budget)?;
         let abi = instance
-            .get_typed_func::<(), u32>(&mut store, "logisim_abi")
+            .get_typed_func::<(), u32>(&mut store, declaration.entry())
             .map_err(error)?;
         let abi = abi.call(&mut store, ()).map_err(error)?;
-        if !supports_abi(abi) {
+        if !supports_abi(abi)
+            || (abi == logisim_plugin_api::EXECUTION_ABI_VERSION) != declaration.0.is_some()
+        {
             return Err("Unsupported plugin ABI version.".into());
         }
         let frame = frame::FrameApi::load(&instance, &mut store, abi)?;
@@ -219,6 +238,7 @@ impl Instance {
             )?,
             raster: raster::RasterApi::load(&instance, &mut store)?,
             frame,
+            budget,
             abi,
             memory: instance
                 .memory(&mut store, "memory")
@@ -237,7 +257,7 @@ impl Instance {
         if bytes.len() > MAX_MESSAGE {
             return Err("Plugin request exceeds message limit.".into());
         }
-        self.store.set_fuel(fuel_budget()).map_err(error)?;
+        self.store.set_fuel(self.budget).map_err(error)?;
         let offset = timed!(
             "guest_buffer",
             self.buffer.call(&mut self.store, bytes.len() as u32)

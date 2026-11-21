@@ -55,7 +55,8 @@ impl Page {
             Wasmtime => "Wasmtime",
         };
         theme::card(ui, tr("Wasm plugin engine"), |ui| {
-            ui.label(tf!("Running engine: {}", running));
+            ui.label(tf!("Session engine preference: {}", running));
+            ui.label(tr("Plugin ABI 1–3: wasmi only."));
             ui.push_id("plugins.wasm_engine", |ui| {
                 ui.horizontal_wrapped(|ui| {
                     if ui

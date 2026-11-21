@@ -4,8 +4,8 @@ use logisim_plugin::Plugin;
 
 fn module(runtime: logisim_plugin::WasmEngine, fail: bool, sample_code: &str) -> Plugin {
     let manifest = api::Manifest {
-        execution: None,
-        abi: 3,
+        execution: Some(api::Execution::new(api::AllowedEngines::Both)),
+        abi: 4,
         id: "test.worker".into(),
         version: "1".into(),
         name: "Worker test".into(),
@@ -68,7 +68,7 @@ fn module(runtime: logisim_plugin::WasmEngine, fail: bool, sample_code: &str) ->
     };
     let wasm = wat::parse_str(format!(
         r#"(module (memory (export "memory") 2) {data}
-        (func (export "logisim_abi") (result i32) i32.const 3)
+        (func (export "logisim_abi4_both") (result i32) i32.const 4)
         (func (export "logisim_buffer") (param i32) (result i32) i32.const 0)
         (func (export "logisim_call") (param i32) (result i64)
             i32.const 9 i32.load8_u i32.const 100 i32.eq
@@ -84,7 +84,9 @@ fn module(runtime: logisim_plugin::WasmEngine, fail: bool, sample_code: &str) ->
             end))"#
     ))
     .unwrap();
-    Plugin::load_with_engine(&wasm, runtime).unwrap()
+    let plugin = Plugin::load_with_engine(&wasm, runtime).unwrap();
+    assert_eq!(plugin.engine(), runtime);
+    plugin
 }
 
 #[test]

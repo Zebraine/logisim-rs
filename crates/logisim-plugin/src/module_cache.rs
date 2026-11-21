@@ -10,6 +10,7 @@ mod linux;
 /// persist its result. A rebuild replaced an unusable record using the original Wasm.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Outcome {
+    LegacyWasmi,
     Hit,
     Miss,
     Rebuilt(String),
@@ -20,7 +21,7 @@ impl Outcome {
     pub fn warning(&self) -> Option<&str> {
         match self {
             Self::Rebuilt(reason) | Self::Bypassed(reason) => Some(reason),
-            Self::Hit | Self::Miss => None,
+            Self::LegacyWasmi | Self::Hit | Self::Miss => None,
         }
     }
 }
@@ -28,10 +29,13 @@ impl Outcome {
 /// Compile or open using Wasmtime, then run the usual manifest and ABI admission.
 /// Project loaders must still call `Plugin::check_dependency` with their saved definitions.
 pub fn load(bytes: &[u8], directory: &Path) -> Result<(Plugin, Outcome)> {
-    crate::check_binary(bytes)?;
+    let declaration = crate::Declaration::read(bytes)?;
+    if declaration.select(WasmEngine::Wasmtime)? == WasmEngine::Wasmi {
+        return Ok((Plugin::load(bytes)?, Outcome::LegacyWasmi));
+    }
     #[cfg(target_os = "linux")]
     let reason = match linux::prepare(directory, bytes) {
-        Ok(cache) => return cache.load(bytes),
+        Ok(cache) => return cache.load(bytes, declaration),
         Err(error) => error.to_string(),
     };
     #[cfg(not(target_os = "linux"))]

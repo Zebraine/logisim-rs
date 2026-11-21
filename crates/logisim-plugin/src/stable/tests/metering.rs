@@ -22,7 +22,7 @@ fn fixture(iterations: Option<u32>) -> Vec<u8> {
         None => "(loop $work br $work)".into(),
     };
     let exports = frame_exports(&out, &next, "call $burn");
-    frame_module_bytes(&format!("{exports} (func $burn {burn})"))
+    frame_module_bytes(4, &format!("{exports} (func $burn {burn})"))
 }
 
 #[test]
@@ -48,8 +48,9 @@ fn measure_engine(engine: WasmEngine) {
         let bytes = fixture(count);
         let sha256 = format!("{:x}", Sha256::digest(&bytes));
         let plugin = Plugin::load_with_engine(&bytes, engine).unwrap();
+        assert_eq!(plugin.engine(), engine);
         let component = &plugin.manifest().components()[0];
-        for multiple in [1, 2, 4, 8] {
+        for multiple in [1, 8] {
             study::with_multiplier(multiple, || {
                 for phase in ["outputs", "transition"] {
                     let mut vm = plugin.instantiate_stable(component).unwrap().unwrap();
@@ -84,8 +85,7 @@ fn measure_engine(engine: WasmEngine) {
                     }
                     // This particular two-million-iteration trace is the ABI decision boundary.
                     let completes = count.is_some_and(|n| {
-                        multiple > 1
-                            || if engine == WasmEngine::Wasmtime {
+                        if engine == WasmEngine::Wasmtime {
                                 n < 2_000_000
                             } else {
                                 n < 3_600_000
@@ -100,7 +100,7 @@ fn measure_engine(engine: WasmEngine) {
                         };
                         assert_eq!(result.as_ref().unwrap(), &expected);
                     }
-                    let budget = multiple * 10_000_000;
+                    let budget = 10_000_000; // ABI 4 stays capped even inside the historical multiplier study.
                     println!(
                         "FUEL {}",
                         json!({"engine":engine.code(),"sha256":sha256,"iterations":count,"phase":phase,"budget":budget,

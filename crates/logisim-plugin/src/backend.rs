@@ -1,5 +1,5 @@
 //! Runtime-selected Wasm handles. All handles of a VM originate from its module.
-use super::{Result, error, fuel_budget};
+use super::{Result, error};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum WasmEngine {
@@ -138,7 +138,7 @@ impl Module {
         }
     }
 
-    pub(super) fn instantiate(&self) -> Result<(Instance, Store)> {
+    pub(super) fn instantiate(&self, budget: u64) -> Result<(Instance, Store)> {
         macro_rules! instantiate {
             ($runtime:ident, $module:expr, $variant:ident, $start:ident) => {{
                 let module = $module;
@@ -152,7 +152,7 @@ impl Module {
                     .build();
                 let mut store = $runtime::Store::new(module.engine(), limits);
                 store.limiter(|s| s);
-                store.set_fuel(fuel_budget()).map_err(error)?;
+                store.set_fuel(budget).map_err(error)?;
                 let instance = $runtime::Linker::new(module.engine())
                     .$start(&mut store, module)
                     .map_err(error)?;

@@ -36,22 +36,22 @@ fn engine_admission_and_fault_messages() {
 }
 
 fn check_faults(engine: WasmEngine) {
-    let m = Response::Manifest(manifest());
+    let m = Response::Manifest(experimental(AllowedEngines::Both));
     let cases = [
-        ("guest_trap", wasm(&m, 1, "unreachable")),
-        ("memory_grow", wasm(&m, 1, "i32.const 256 memory.grow drop")),
+        ("guest_trap", wasm(&m, 4, "unreachable")),
+        ("memory_grow", wasm(&m, 4, "i32.const 256 memory.grow drop")),
         (
             "start_trap",
-            wat::parse_str("(module (func $start unreachable) (start $start))").unwrap(),
+            wat::parse_str(r#"(module (func (export "logisim_abi4_both") (result i32) i32.const 4) (func $start unreachable) (start $start))"#).unwrap(),
         ),
         (
             "forbidden_import",
-            wat::parse_str(r#"(module (import "env" "a" (func)))"#).unwrap(),
+            wat::parse_str(r#"(module (import "env" "a" (func)) (func (export "logisim_abi4_both") (result i32) i32.const 4))"#).unwrap(),
         ),
         ("missing_abi", wat::parse_str("(module)").unwrap()),
         (
             "invalid_export_type",
-            wat::parse_str(r#"(module (func (export "logisim_abi") (result i64) i64.const 1))"#)
+            wat::parse_str(r#"(module (func (export "logisim_abi4_both") (result i64) i64.const 1))"#)
                 .unwrap(),
         ),
         ("module_bytes", vec![0; MAX_MODULE + 1]),
@@ -59,7 +59,7 @@ fn check_faults(engine: WasmEngine) {
             "json_response_bytes",
             wasm(
                 &m,
-                1,
+                4,
                 &format!("i64.const {} return", ((MAX_MESSAGE + 1) as u64) << 32),
             ),
         ),
@@ -72,7 +72,7 @@ fn check_faults(engine: WasmEngine) {
             serde_json::json!({"engine":engine.code(),"case":name,"error":e})
         );
     }
-    let vm = Plugin::load_with_engine(&wasm(&m, 1, ""), engine).unwrap();
+    let vm = Plugin::load_with_engine(&wasm(&m, 4, ""), engine).unwrap();
     let c = vm.manifest.components().remove(0);
     let mut instance = vm.instantiate(&c).unwrap();
     let request = Request::Evaluate(Evaluation {
@@ -113,7 +113,11 @@ fn trusted_cache_recovers_from_misses_changed_compiler_and_unavailable_storage()
         .join(format!("logisim-stage2-{}-{stamp}", std::process::id()));
     fs::DirBuilder::new().mode(0o700).create(&path).unwrap();
     let _owned = Directory(path.clone());
-    let bytes = wasm(&Response::Manifest(manifest()), 1, "");
+    let bytes = wasm(
+        &Response::Manifest(experimental(AllowedEngines::Both)),
+        4,
+        "",
+    );
     let reopen = |dir: &Path| {
         let mut loader = Loader::new(Reuse::Disk(dir.into()));
         assert_eq!(loader.load(&bytes).unwrap().manifest().id, manifest().id);

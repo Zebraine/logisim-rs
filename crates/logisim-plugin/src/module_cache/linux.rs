@@ -262,7 +262,11 @@ impl Cache {
         Err(invalid("Wasmtime did not produce a cacheable artifact"))
     }
 
-    pub(super) fn load(self, wasm: &[u8]) -> crate::Result<(Plugin, Outcome)> {
+    pub(super) fn load(
+        self,
+        wasm: &[u8],
+        declaration: crate::Declaration,
+    ) -> crate::Result<(Plugin, Outcome)> {
         let restored = self.restore();
         // On an I/O/permission error abandon the scratch tree, including any partial copy.
         if let Err(e) = &restored
@@ -273,7 +277,7 @@ impl Cache {
                 Outcome::Bypassed(e.to_string()),
             ));
         }
-        let plugin = Plugin::from_module(self.engine.compile(wasm)?)?;
+        let plugin = Plugin::from_module(self.engine.compile(wasm)?, declaration)?;
         let status = if self.cache.cache_hits() == 1 {
             Outcome::Hit
         } else if let Err(e) = self.publish(restored.as_ref().ok().and_then(Option::as_ref)) {
