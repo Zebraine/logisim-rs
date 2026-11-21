@@ -42,10 +42,7 @@ fn real_memory_picker_cancels_retries_and_preserves_document_file_and_ram() {
     let mut h = Harness::default();
     logisim_ui::configure(&h.ctx);
     h.ws.replace_circuit(circuit);
-    h.files
-        .storage
-        .save(h.ws.project(), &source, SaveMode::Current, false)
-        .unwrap();
+    h.files.storage.open_legacy_fixture(h.ws.project(), &source);
     h.files.directory = dir.0.clone();
     let original_disk = std::fs::read(&source).unwrap();
     let original = h.ws.project().clone();

@@ -1,6 +1,7 @@
 //! Small egui file browser, usable without a desktop portal or an external process.
 use super::dialog::Response;
 use eframe::egui;
+use logisim_file::ProjectFormat;
 use logisim_ui::{
     dialog::{Dialog, Dismiss},
     i18n::tr,
@@ -10,8 +11,8 @@ use std::path::{Path, PathBuf};
 pub(super) enum Mode {
     Open,
     OpenNative,
-    Copy(logisim_file::ProjectFormat),
-    Save,
+    Copy(ProjectFormat),
+    Save(ProjectFormat),
     Memory,
     Library,
     Plugin,
@@ -28,15 +29,15 @@ impl Mode {
             Self::ExportImage => Some("png"),
             Self::Memory => Some("hex"),
             Self::OpenNative => Some("lrs"),
-            Self::Copy(format) => Some(format.extension()),
-            Self::Open | Self::Save | Self::Library => Some("circ"),
+            Self::Copy(format) | Self::Save(format) => Some(format.extension()),
+            Self::Open | Self::Library => Some("circ"),
         }
     }
     fn saving(self) -> bool {
         matches!(
             self,
             Self::Copy(_)
-                | Self::Save
+                | Self::Save(_)
                 | Self::ExportImage
                 | Self::Settings(logisim_ui::SettingsFileAction::Export)
         )
@@ -63,6 +64,17 @@ impl Picker {
         this.refresh();
         this
     }
+    fn select_format(&mut self, format: ProjectFormat) {
+        let path = Path::new(&self.path);
+        if ProjectFormat::from_extension(path).is_some() {
+            self.path = path
+                .with_extension(format.extension())
+                .to_string_lossy()
+                .into_owned();
+        }
+        self.mode = Mode::Save(format);
+        self.refresh();
+    }
     fn refresh(&mut self) {
         self.entries.clear();
         self.error = None;
@@ -74,7 +86,7 @@ impl Picker {
                     let dir = path.is_dir();
                     if dir
                         || (self.mode == Mode::Open
-                            && logisim_file::ProjectFormat::from_extension(&path).is_some())
+                            && ProjectFormat::from_extension(&path).is_some())
                         || path
                             .extension()
                             .zip(self.mode.extension())
@@ -108,9 +120,9 @@ impl Picker {
             Mode::Directory => ("choose-plugin-directory", "Plugin fallback directory"),
             Mode::Open => ("open-circuit", "Open circuit"),
             Mode::OpenNative => ("open-native", "Open .lrs…"),
-            Mode::Copy(logisim_file::ProjectFormat::Lrs) => ("copy-native", "Convert to .lrs…"),
-            Mode::Copy(logisim_file::ProjectFormat::Circ) => ("copy-legacy", "Export .circ…"),
-            Mode::Save => ("save-circuit", "Save circuit as"),
+            Mode::Copy(ProjectFormat::Lrs) => ("copy-native", "Convert to .lrs…"),
+            Mode::Copy(ProjectFormat::Circ) => ("copy-legacy", "Export .circ…"),
+            Mode::Save(_) => ("save-circuit", "Save circuit as"),
             Mode::Memory => ("import-memory", "Import memory image"),
             Mode::Library => ("load-library", "Load .circ Library…"),
             Mode::Plugin => ("load-plugin", "Load Wasm Plugin…"),
@@ -118,29 +130,41 @@ impl Picker {
         let mut picked = None;
         let mut submit = false;
         let dismiss = Dialog::standard(id, ctx).show(ctx, tr(title), |dialog| {
-            let list_height = (dialog.body_height() - 144.).max(56.);
+            let extra = if matches!(self.mode, Mode::Save(_) | Mode::Copy(ProjectFormat::Circ)) { 52. } else { 0. };
+            let list_height = (dialog.body_height() - 144. - extra).max(56.);
             dialog.body(|ui| {
-                ui.label(tr(if matches!(self.mode, Mode::Settings(_)) {
-                    "Settings files (.json)"
-                } else if self.mode == Mode::Open {
-                    "Project files (.circ, .lrs)"
-                } else if self.mode == Mode::OpenNative
-                    || self.mode == Mode::Copy(logisim_file::ProjectFormat::Lrs)
-                {
-                    "Native project (.lrs)"
-                } else if self.mode == Mode::Directory {
-                    "Choose the folder containing the plugin files."
-                } else if self.mode == Mode::ExportImage {
-                    "Current canvas viewport (.png)"
-                } else if self.mode == Mode::Plugin {
-                    "Wasm plugins provide component graphics and behavior."
-                } else if self.mode == Mode::Library {
-                    "Import an editable snapshot; saved projects do not need the source library."
-                } else if self.mode == Mode::Memory {
-                    "Logisim .hex · v2.0 raw · replaces all words"
+                if let Mode::Save(mut format) = self.mode {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(tr("Save as type"));
+                        egui::ComboBox::from_id_salt("project-save-format")
+                            .selected_text(format_label(format))
+                            .show_ui(ui, |ui| {
+                                for choice in [ProjectFormat::Lrs, ProjectFormat::Circ] {
+                                    ui.selectable_value(&mut format, choice, format_label(choice));
+                                }
+                            });
+                    });
+                    if self.mode != Mode::Save(format) {
+                        self.select_format(format);
+                    }
                 } else {
-                    "Logisim .circ · Wasm components require logisim-rs"
-                }));
+                    let description = match self.mode {
+                        Mode::Settings(_) => "Settings files (.json)",
+                        Mode::Open => "Project files (.circ, .lrs)",
+                        Mode::OpenNative | Mode::Copy(ProjectFormat::Lrs) => "Native project (.lrs)",
+                        Mode::Copy(ProjectFormat::Circ) => "Legacy Logisim (*.circ)",
+                        Mode::Directory => "Choose the folder containing the plugin files.",
+                        Mode::ExportImage => "Current canvas viewport (.png)",
+                        Mode::Plugin => "Wasm plugins provide component graphics and behavior.",
+                        Mode::Library => "Import an editable snapshot; saved projects do not need the source library.",
+                        Mode::Memory => "Logisim .hex · v2.0 raw · replaces all words",
+                        Mode::Save(_) => unreachable!(),
+                    };
+                    ui.label(tr(description));
+                }
+                if matches!(self.mode, Mode::Save(ProjectFormat::Circ) | Mode::Copy(ProjectFormat::Circ)) {
+                    ui.weak(tr("For older tools. Saving stops and lists any data the legacy format cannot preserve."));
+                }
                 ui.horizontal(|ui| {
                     if ui.button(tr("Up")).clicked()
                         && let Some(parent) = self.directory.parent().map(Path::to_path_buf)
@@ -263,17 +287,20 @@ impl Picker {
                 self.enter(&path);
                 return Response::Wait;
             }
-            if matches!(self.mode, Mode::Copy(_) | Mode::Open | Mode::OpenNative) {
-                if let Mode::Copy(format) = self.mode
+            if matches!(
+                self.mode,
+                Mode::Save(_) | Mode::Copy(_) | Mode::Open | Mode::OpenNative
+            ) {
+                if let Mode::Copy(format) | Mode::Save(format) = self.mode
                     && path.extension().is_none()
                 {
                     path.set_extension(format.extension());
                 }
-                let format = logisim_file::ProjectFormat::from_extension(&path);
+                let format = ProjectFormat::from_extension(&path);
                 let valid = match self.mode {
                     Mode::Open => format.is_some(),
-                    Mode::OpenNative => format == Some(logisim_file::ProjectFormat::Lrs),
-                    Mode::Copy(target) => format == Some(target),
+                    Mode::OpenNative => format == Some(ProjectFormat::Lrs),
+                    Mode::Copy(target) | Mode::Save(target) => format == Some(target),
                     _ => unreachable!(),
                 };
                 if !valid {
@@ -300,15 +327,16 @@ impl Picker {
                     );
                     return Response::Wait;
                 }
-            } else if self.mode == Mode::Save
-                && !path
-                    .extension()
-                    .is_some_and(|s| s.eq_ignore_ascii_case("circ"))
-            {
-                path.as_mut_os_string().push(".circ");
             }
             return Response::Pick(path);
         }
         Response::Wait
     }
+}
+
+fn format_label(format: ProjectFormat) -> &'static str {
+    tr(match format {
+        ProjectFormat::Lrs => "Logisim-rs Project (*.lrs)",
+        ProjectFormat::Circ => "Legacy Logisim (*.circ)",
+    })
 }

@@ -19,8 +19,7 @@ fn backup_rotates_exactly_one_generation_of_disk_bytes() {
     let backup = dir.path("layout.circ.bak.bak");
     let mut disk = Storage::new();
     let mut project = circuit();
-    disk.save(&project, &path, SaveMode::Selected(None), true)
-        .unwrap();
+    disk.open_legacy_fixture(&project, &path);
     assert!(!backup.exists());
     let mut original = fs::read(&path).unwrap();
     original.extend_from_slice(b"\r\n<!-- user formatting -->\r\n");
@@ -39,7 +38,7 @@ fn backup_rotates_exactly_one_generation_of_disk_bytes() {
             .document,
         project
     );
-    assert_eq!(fs::read_dir(&dir.0).unwrap().count(), 2);
+    assert_eq!(fs::read_dir(&dir.0).unwrap().count(), 3);
     fs::write(&path, b"external edit").unwrap();
     assert!(disk.save(&project, &path, SaveMode::Current, true).is_err());
     assert_eq!(fs::read(&backup).unwrap(), first);
@@ -55,7 +54,7 @@ fn new_backup_inherits_private_mode_and_never_follows_sidecar_links() {
     let backup = dir.path("private.circ.bak");
     let mut disk = Storage::new();
     let project = circuit();
-    disk.save(&project, &path, SaveMode::Current, true).unwrap();
+    disk.open_legacy_fixture(&project, &path);
     fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
     disk.save(&project, &path, SaveMode::Current, true).unwrap();
     assert_eq!(
@@ -81,9 +80,7 @@ fn disk_roundtrip_updates_baseline_only_after_success() {
     let mut storage = Storage::new();
     let mut circuit = circuit();
     assert!(storage.dirty(&circuit));
-    storage
-        .save(&circuit, &path, SaveMode::Current, false)
-        .unwrap();
+    storage.open_legacy_fixture(&circuit, &path);
     assert!(!storage.dirty(&circuit));
     circuit.main_circuit_mut().circuit.components[0].label = "saved again".into();
     storage
@@ -115,7 +112,7 @@ fn disk_roundtrip_updates_baseline_only_after_success() {
     assert!(storage.dirty(&circuit));
     assert_eq!(
         fs::read_dir(&dir.0).unwrap().count(),
-        2,
+        3,
         "No temporary files remain"
     );
 }
@@ -126,9 +123,7 @@ fn external_changes_and_unconfirmed_overwrites_preserve_both_documents() {
     let other = dir.path("two.circ");
     let mut storage = Storage::new();
     let circuit = circuit();
-    storage
-        .save(&circuit, &path, SaveMode::Current, false)
-        .unwrap();
+    storage.open_legacy_fixture(&circuit, &path);
     fs::write(&path, "external edit").unwrap();
     assert!(
         storage
@@ -150,7 +145,7 @@ fn external_changes_and_unconfirmed_overwrites_preserve_both_documents() {
             .save(
                 &circuit,
                 &other,
-                SaveMode::Selected(Some(&confirmed)),
+                SaveMode::Selected(logisim_file::ProjectFormat::Circ, Some(&confirmed)),
                 false
             )
             .is_err()
@@ -160,7 +155,7 @@ fn external_changes_and_unconfirmed_overwrites_preserve_both_documents() {
         .save(
             &circuit,
             &other,
-            SaveMode::Selected(Some(&confirmed)),
+            SaveMode::Selected(logisim_file::ProjectFormat::Circ, Some(&confirmed)),
             false,
         )
         .unwrap();
@@ -198,7 +193,7 @@ fn partial_import_requires_a_different_destination() {
             .save(
                 &circuit,
                 &target,
-                SaveMode::Selected(Some(b"previous")),
+                SaveMode::Selected(logisim_file::ProjectFormat::Circ, Some(b"previous")),
                 true
             )
             .is_err()
@@ -217,7 +212,12 @@ fn partial_import_requires_a_different_destination() {
     }
     let copy = dir.path("subset.circ");
     storage
-        .save(&circuit, &copy, SaveMode::Current, true)
+        .save(
+            &circuit,
+            &copy,
+            SaveMode::Selected(logisim_file::ProjectFormat::Circ, None),
+            true,
+        )
         .unwrap();
     assert!(storage.protected.is_none());
     assert!(
@@ -286,17 +286,27 @@ fn save_as_can_confirm_an_externally_modified_or_deleted_current_path() {
     let path = dir.path("document.circ");
     let mut storage = Storage::new();
     let c = circuit();
-    storage.save(&c, &path, SaveMode::Current, false).unwrap();
+    storage.open_legacy_fixture(&c, &path);
     fs::write(&path, "external change").unwrap();
     assert!(storage.save(&c, &path, SaveMode::Current, false).is_err());
     let confirmed = storage::read(&path).unwrap();
     storage
-        .save(&c, &path, SaveMode::Selected(Some(&confirmed)), false)
+        .save(
+            &c,
+            &path,
+            SaveMode::Selected(logisim_file::ProjectFormat::Circ, Some(&confirmed)),
+            false,
+        )
         .unwrap();
     fs::remove_file(&path).unwrap();
     assert!(storage.save(&c, &path, SaveMode::Current, false).is_err());
     storage
-        .save(&c, &path, SaveMode::Selected(None), false)
+        .save(
+            &c,
+            &path,
+            SaveMode::Selected(logisim_file::ProjectFormat::Circ, None),
+            false,
+        )
         .unwrap();
     assert!(!storage.dirty(&c));
 }

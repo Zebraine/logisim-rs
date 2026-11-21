@@ -125,7 +125,12 @@ fn save_as_and_library_import_preserve_dependency_bases_without_dirtying_open() 
     assert!(Path::new(&loaded.plugin_sources[0].path).is_absolute());
     let destination = temp.path("saved/new.circ");
     storage
-        .save(&loaded, &destination, SaveMode::Selected(None), false)
+        .save(
+            &loaded,
+            &destination,
+            SaveMode::Selected(logisim_file::ProjectFormat::Circ, None),
+            false,
+        )
         .unwrap();
     let disk = logisim_file::parse(&fs::read_to_string(&destination).unwrap())
         .unwrap()

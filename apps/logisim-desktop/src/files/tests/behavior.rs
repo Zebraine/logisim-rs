@@ -14,10 +14,7 @@ fn project_options_navigates_and_records_main_against_the_file_baseline() {
         .main_circuit_mut()
         .circuit
         .add_component(Component::new(Kind::Pin, Point::ZERO));
-    h.files
-        .storage
-        .save(&project, &path, SaveMode::Current, false)
-        .unwrap();
+    h.files.storage.open_legacy_fixture(&project, &path);
     h.ws.replace_project(project);
     let document = h.files.present(&h.ws);
     assert_eq!(document.path.as_deref(), Some(path.as_path()));
@@ -126,10 +123,7 @@ fn label_bearing_placements_reopen_with_serif_and_joystick_keeps_its_native_font
         } else {
             assert_eq!(font.size, 12);
         }
-        h.files
-            .storage
-            .save(h.ws.project(), &path, SaveMode::Current, false)
-            .unwrap();
+        h.files.storage.open_legacy_fixture(h.ws.project(), &path);
         let saved = std::fs::read_to_string(&path).unwrap();
         if !kind.has_label() {
             assert!(!saved.contains("name=\"labelfont\"") && !saved.contains("name=\"font\""));
@@ -174,10 +168,7 @@ fn placing_and_reopening_unary_gates_preserves_their_sizes() {
             .map(|c| (c.kind, c.gate_options.size))
             .eq(expected)
     );
-    h.files
-        .storage
-        .save(h.ws.project(), &path, SaveMode::Current, false)
-        .unwrap();
+    h.files.storage.open_legacy_fixture(h.ws.project(), &path);
     let (loaded, warnings) = Storage::new().load(&path).unwrap();
     assert!(warnings.is_empty());
     assert_eq!(&loaded.main_circuit().circuit.components, components);
@@ -196,8 +187,7 @@ fn library_picker_is_additive_and_failure_or_cancel_keeps_document_baseline() {
     let ctx = egui::Context::default();
     files
         .storage
-        .save(workspace.project(), &current, SaveMode::Current, false)
-        .unwrap();
+        .open_legacy_fixture(workspace.project(), &current);
     let bytes = std::fs::read(&current).unwrap();
     for cancel in [true, false] {
         files.request(FileAction::ImportLibrary, &ctx, &mut workspace, &mut sim);
@@ -261,7 +251,7 @@ fn cancelling_save_before_new_preserves_document_and_clears_deferred_action() {
 fn recent_navigation_keeps_the_chosen_target_through_dirty_save_as() {
     let temp = crate::tests::support::Temp::new();
     let target = temp.path("target.circ");
-    let copy = temp.path("copy.circ");
+    let copy = temp.path("copy.lrs");
     let project = Project::single("remembered", Circuit::default());
     std::fs::write(&target, logisim_file::serialize(&project).unwrap()).unwrap();
     let ctx = egui::Context::default();
@@ -373,7 +363,12 @@ fn dark_artwork_preference_preserves_saved_project_bytes_on_reopen() {
     let mut h = super::Harness::default();
     h.files
         .storage
-        .save(&project, &path, SaveMode::Current, false)
+        .save(
+            &project,
+            &path,
+            SaveMode::Selected(ProjectFormat::Circ, None),
+            false,
+        )
         .unwrap();
     let original = std::fs::read(&path).unwrap();
     assert!(h.files.load(&path, &mut h.ws, &mut h.sim));

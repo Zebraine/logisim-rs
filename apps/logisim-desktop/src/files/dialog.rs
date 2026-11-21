@@ -34,7 +34,9 @@ pub(super) enum Dialog {
         bytes: Vec<u8>,
         format: logisim_file::ProjectFormat,
     },
+    ConfirmLegacy(PathBuf),
     Replace {
+        format: logisim_file::ProjectFormat,
         path: PathBuf,
         bytes: Vec<u8>,
     },
@@ -174,6 +176,13 @@ impl Dialog {
                     || answer = Response::Import,
                 )
             }
+            Dialog::ConfirmLegacy(path) => Window::prompt("confirm-legacy-save").confirm(
+                ctx,
+                tr("Save as Legacy .circ?"),
+                &path.to_string_lossy(),
+                tr("Save"),
+                || answer = Response::Save,
+            ),
             Dialog::ReplaceImage(super::image::ImageTarget { path, .. })
             | Dialog::ReplaceSettings { path, .. }
             | Dialog::ReplaceCopy { path, .. }

@@ -4,8 +4,8 @@ use std::path::{Component, Path, PathBuf};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ProjectFormat {
-    #[default]
     Circ,
+    #[default]
     Lrs,
 }
 impl ProjectFormat {

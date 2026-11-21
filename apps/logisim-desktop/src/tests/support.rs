@@ -25,6 +25,16 @@ impl Drop for Temp {
         fs::remove_dir_all(&self.0).unwrap();
     }
 }
+impl crate::storage::Storage {
+    pub(crate) fn open_legacy_fixture(
+        &mut self,
+        project: &logisim_core::Project,
+        path: &std::path::Path,
+    ) {
+        fs::write(path, logisim_file::serialize(project).unwrap()).unwrap();
+        self.load(path).unwrap();
+    }
+}
 pub(crate) mod plugins;
 
 mod simulation;

@@ -127,6 +127,12 @@ fn malformed_xml_with_consistent_metadata_is_damaged_and_survives_restarts() {
     assert_eq!(Pair::read(&dir).unwrap(), pair);
 }
 
+fn tagged_project() -> Project {
+    let mut p = Project::default();
+    p.main_circuit_mut().circuit.agent_ids.circuit = Some(42);
+    p
+}
+
 fn write_checkpoint(auto: &mut Autosave, project: &Project) -> Instant {
     let start = Instant::now();
     for at in [start, start + Duration::from_secs(300)] {
@@ -147,7 +153,7 @@ fn observed_foreign_copy_survives_settings_clear_and_finish_but_not_startup_disc
     let temp = Temp::new();
     let dir = temp.path("recovery");
     let mut owner = Autosave::at(Some(dir.clone()));
-    let mut project = Project::default();
+    let mut project = tagged_project();
     let now = write_checkpoint(&mut owner, &project);
     let mut other = Autosave::at(Some(dir.clone()));
     let saved = Pair::read(&dir).unwrap();
@@ -155,8 +161,7 @@ fn observed_foreign_copy_survives_settings_clear_and_finish_but_not_startup_disc
     assert!(other.clear_from_settings().is_err());
     let mut disk = Storage::default();
     let source = temp.path("other.circ");
-    disk.save(&project, &source, crate::storage::SaveMode::Current, false)
-        .unwrap();
+    disk.open_legacy_fixture(&project, &source);
     let checksum = disk.source_checksum();
     other.changed = false;
     assert_eq!(
@@ -188,7 +193,7 @@ fn observed_foreign_copy_survives_settings_clear_and_finish_but_not_startup_disc
     assert_eq!(
         Pair::read(&dir)
             .unwrap()
-            .project(&dir, logisim_file::ProjectFormat::Circ)
+            .project(&dir, logisim_file::ProjectFormat::Lrs)
             .unwrap(),
         project
     );
@@ -263,7 +268,7 @@ fn unchanged_checkpoints_keep_both_mtimes_and_failed_edits_retry() {
     let tmp = Temp::new();
     let dir = tmp.path("recovery");
     let mut owner = Autosave::at(Some(dir.clone()));
-    let mut project = Project::default();
+    let mut project = tagged_project();
     let now = write_checkpoint(&mut owner, &project);
     let at = |s| now + Duration::from_secs(s);
     let tick = |auto: &mut Autosave, s, project: &Project| {
@@ -297,7 +302,7 @@ fn unchanged_checkpoints_keep_both_mtimes_and_failed_edits_retry() {
     assert_eq!(
         Pair::read(&dir)
             .unwrap()
-            .project(&dir, logisim_file::ProjectFormat::Circ)
+            .project(&dir, logisim_file::ProjectFormat::Lrs)
             .unwrap(),
         project
     );
@@ -350,7 +355,7 @@ fn damaged_clear_rejects_the_live_writer_then_releases_its_temporary_lease() {
     let tmp = Temp::new();
     let dir = tmp.path("recovery");
     let mut owner = Autosave::at(Some(dir.clone()));
-    let mut project = Project::default();
+    let mut project = tagged_project();
     let at = write_checkpoint(&mut owner, &project);
     let meta = dir.join(slot::META);
     let original = fs::read(&meta).unwrap();
@@ -375,7 +380,7 @@ fn damaged_clear_rejects_the_live_writer_then_releases_its_temporary_lease() {
     assert_eq!(
         Pair::read(&dir)
             .unwrap()
-            .project(&dir, logisim_file::ProjectFormat::Circ)
+            .project(&dir, logisim_file::ProjectFormat::Lrs)
             .unwrap(),
         project
     );
@@ -384,7 +389,7 @@ fn damaged_clear_rejects_the_live_writer_then_releases_its_temporary_lease() {
     assert_eq!(
         Pair::read(&dir)
             .unwrap()
-            .project(&dir, logisim_file::ProjectFormat::Circ)
+            .project(&dir, logisim_file::ProjectFormat::Lrs)
             .unwrap(),
         project
     );
@@ -466,7 +471,7 @@ fn owner_lock_io_error_preserves_storage_and_the_observed_checkpoint() {
     let tmp = Temp::new();
     let dir = tmp.path("recovery");
     let mut writer = Autosave::at(Some(dir.clone()));
-    write_checkpoint(&mut writer, &Project::default());
+    write_checkpoint(&mut writer, &tagged_project());
     drop(writer);
     let mut reader = Autosave::at(Some(dir.clone()));
     fs::remove_file(tmp.path(slot::OWNER)).unwrap();
@@ -481,7 +486,7 @@ fn owner_lock_io_error_preserves_storage_and_the_observed_checkpoint() {
     assert!(reader.metadata.is_some() && !storage.dirty(&Project::default()));
     assert_eq!(reader.observed, before);
     fs::remove_dir(tmp.path(slot::OWNER)).unwrap();
-    assert_eq!(reader.recover(&mut storage).unwrap(), Project::default());
+    assert_eq!(reader.recover(&mut storage).unwrap(), tagged_project());
 }
 
 #[test]
@@ -530,7 +535,7 @@ fn native_checkpoint_survives_source_removal_and_a_second_crash() {
         disk.save(
             &restored,
             &export,
-            crate::storage::SaveMode::Selected(None),
+            crate::storage::SaveMode::Selected(logisim_file::ProjectFormat::Circ, None),
             false
         )
         .is_err()

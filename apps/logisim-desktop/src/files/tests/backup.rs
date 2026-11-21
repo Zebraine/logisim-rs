@@ -7,9 +7,9 @@ use std::fs;
 #[test]
 fn save_as_backs_up_only_the_confirmed_destination_and_records_only_the_project() {
     let temp = Temp::new();
-    let fresh = temp.path("new.circ");
-    let existing = temp.path("existing.circ");
-    let backup = temp.path("existing.circ.bak");
+    let fresh = temp.path("new.lrs");
+    let existing = temp.path("existing.lrs");
+    let backup = temp.path("existing.lrs.bak");
     let mut h = super::Harness::default();
     let mut settings = h.ws.preferences();
     settings.files.backup_before_save = true;
@@ -28,7 +28,7 @@ fn save_as_backs_up_only_the_confirmed_destination_and_records_only_the_project(
         );
     };
     choose(&mut h, &fresh);
-    assert!(!h.files.busy() && !temp.path("new.circ.bak").exists());
+    assert!(!h.files.busy() && !temp.path("new.lrs.bak").exists());
     let old = b"confirmed\0raw\xff\r\n";
     fs::write(&existing, old).unwrap();
     choose(&mut h, &existing);
@@ -161,4 +161,73 @@ fn project_copy_cancel_conflict_and_open_native_preserve_binding_and_recent() {
     );
     assert_eq!(fs::read(dir.path("converted.lrs.bak")).unwrap(), bytes);
     assert_eq!(fs::read(circ).unwrap(), xml.as_bytes());
+}
+
+#[test]
+fn first_save_binds_native_and_legacy_save_as_requires_a_type_and_confirmation() {
+    let mut h = super::Harness::default();
+    let dir = Temp::new();
+    h.files.directory.clone_from(&dir.0);
+    h.files
+        .request(FileAction::New, &h.ctx, &mut h.ws, &mut h.sim);
+    h.files
+        .request(FileAction::Save, &h.ctx, &mut h.ws, &mut h.sim);
+    assert!(matches!(
+        h.files.dialog,
+        Some(Dialog::Picker(Picker {
+            mode: Mode::Save(ProjectFormat::Lrs),
+            ..
+        }))
+    ));
+    h.click("Save");
+    let native = dir.path("Untitled.lrs");
+    assert!(logisim_file::parse_native(&fs::read(&native).unwrap()).is_ok());
+    assert_eq!(h.files.storage.path.as_ref(), Some(&native));
+    let legacy = dir.path("Untitled.circ");
+    h.files
+        .request(FileAction::SaveAs, &h.ctx, &mut h.ws, &mut h.sim);
+    h.click("Logisim-rs Project (*.lrs)");
+    h.click("Legacy Logisim (*.circ)");
+    h.click("Save");
+    assert!(matches!(h.files.dialog, Some(Dialog::ConfirmLegacy(_))));
+    h.click("Cancel");
+    assert!(!legacy.exists());
+    assert_eq!(h.files.storage.path.as_ref(), Some(&native));
+    h.files
+        .request(FileAction::SaveAs, &h.ctx, &mut h.ws, &mut h.sim);
+    h.click("Logisim-rs Project (*.lrs)");
+    h.click("Legacy Logisim (*.circ)");
+    h.click("Save");
+    h.click("Save");
+    let first = fs::read(&legacy).unwrap();
+    let xml = |bytes: &[u8]| ProjectFormat::Circ.parse(bytes).unwrap().document;
+    let tag = xml(&first)
+        .main_circuit()
+        .circuit
+        .agent_ids
+        .circuit
+        .unwrap();
+    assert_eq!(
+        h.ws.recent(),
+        &[legacy.to_str().unwrap(), native.to_str().unwrap()]
+    );
+    h.files
+        .request(FileAction::Save, &h.ctx, &mut h.ws, &mut h.sim);
+    assert_eq!(
+        xml(&fs::read(&legacy).unwrap())
+            .main_circuit()
+            .circuit
+            .agent_ids
+            .circuit,
+        Some(tag)
+    );
+    h.files
+        .request(FileAction::SaveAs, &h.ctx, &mut h.ws, &mut h.sim);
+    assert!(matches!(
+        h.files.dialog,
+        Some(Dialog::Picker(Picker {
+            mode: Mode::Save(ProjectFormat::Lrs),
+            ..
+        }))
+    ));
 }

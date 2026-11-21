@@ -11,7 +11,7 @@ type Result<T> = std::result::Result<T, String>;
 pub(crate) enum SaveMode<'a> {
     Current,
     /// The file chooser observed absence, or the user confirmed these exact bytes.
-    Selected(Option<&'a [u8]>),
+    Selected(ProjectFormat, Option<&'a [u8]>),
 }
 #[derive(Default)]
 pub(crate) struct Storage {
@@ -22,6 +22,8 @@ pub(crate) struct Storage {
     format: ProjectFormat,
     identities: std::cell::RefCell<IdentityAssignments>,
     disk: Vec<u8>,
+    // Explicit legacy exports include identities allocated for live editor objects.
+    tagged_legacy: bool,
     recovered: bool,
     // The source changed between the last normal load/save and crash recovery.
     conflicting_source: Option<u64>,
@@ -77,6 +79,7 @@ impl Storage {
         }
         self.identities = identities.into();
         self.format = format;
+        self.tagged_legacy = false;
         self.partial_warnings = if import.partial {
             import.warnings.clone()
         } else {
@@ -95,13 +98,23 @@ impl Storage {
         self.format
     }
     pub fn encode(&self, format: ProjectFormat, p: &mut Project) -> Result<Vec<u8>> {
-        if format == ProjectFormat::Lrs {
+        if format == ProjectFormat::Lrs || self.tagged_legacy {
             self.identities
                 .borrow_mut()
                 .complete(p)
                 .map_err(|e| e.to_string())?;
         }
         format.serialize(p).map_err(|e| e.to_string())
+    }
+    fn require_complete(&self) -> Result<()> {
+        if !self.partial_warnings.is_empty() {
+            return Err(format!(
+                "{}\n{}",
+                logisim_ui::i18n::tr("Cannot convert a partial project."),
+                self.partial_warnings.join("\n")
+            ));
+        }
+        Ok(())
     }
     pub fn export(
         &self,
@@ -111,13 +124,7 @@ impl Storage {
         expected: Option<&[u8]>,
         backup: bool,
     ) -> Result<()> {
-        if !self.partial_warnings.is_empty() {
-            return Err(format!(
-                "{}\n{}",
-                logisim_ui::i18n::tr("Cannot convert a partial project."),
-                self.partial_warnings.join("\n")
-            ));
-        }
+        self.require_complete()?;
         let path = destination(path)?;
         if self.path.as_ref() == Some(&path) || ProjectFormat::from_extension(&path) != Some(format)
         {
@@ -148,11 +155,22 @@ impl Storage {
         if self.protected.as_ref() == Some(&path) {
             return Err("This import omitted unsupported content. Save to a different file to protect the original.".into());
         }
-        let expected = match mode {
-            SaveMode::Current if self.conflicting_source.is_some() => return Err(CHANGED.into()),
-            SaveMode::Current if self.path.as_ref() == Some(&path) => Some(self.disk.as_slice()),
-            SaveMode::Current => None,
-            SaveMode::Selected(expected) => expected,
+        let (format, expected) = match mode {
+            SaveMode::Current => {
+                if self.path.as_ref() != Some(&path) || self.conflicting_source.is_some() {
+                    return Err(CHANGED.into());
+                }
+                (self.format, Some(self.disk.as_slice()))
+            }
+            SaveMode::Selected(format, expected) => {
+                if ProjectFormat::from_extension(&path) != Some(format) {
+                    return Err("Choose a project file with the indicated extension.".into());
+                }
+                if format == ProjectFormat::Lrs {
+                    self.require_complete()?;
+                }
+                (format, expected)
+            }
         };
         let mut portable = project.clone();
         crate::plugins::rebase(
@@ -160,8 +178,8 @@ impl Storage {
             &crate::plugins::base(self.path.as_deref()),
             &crate::plugins::base(Some(&path)),
         );
-        let format = ProjectFormat::binding(&path);
-        let bytes = if self.bound_format() == ProjectFormat::Lrs && format == ProjectFormat::Circ {
+        let legacy_export = matches!(mode, SaveMode::Selected(ProjectFormat::Circ, _));
+        let bytes = if legacy_export {
             self.identities
                 .borrow_mut()
                 .complete(&mut portable)
@@ -170,41 +188,29 @@ impl Storage {
         } else {
             self.encode(format, &mut portable)?
         };
-        if format == ProjectFormat::Lrs {
-            logisim_preferences::storage::write_project_copy(
-                &path,
-                &bytes,
-                expected,
-                backup_before_save,
-                MAX_BYTES,
-            )
-            .map_err(|e| e.to_string())?;
-        } else {
-            if backup_before_save && let Some(original) = expected {
-                // These are the exact bytes observed at load or Replace confirmation.
-                // Verify them before rotating the backup; atomic_write checks the target again.
-                check_expected(&path, Some(original))?;
-                let mut name = path.as_os_str().to_owned();
-                name.push(".bak");
-                let backup = PathBuf::from(name);
-                if self.protected.as_ref() == Some(&backup) {
-                    return Err("The backup would replace the protected source. Choose a different destination.".into());
-                }
-                logisim_preferences::storage::write_backup(&path, &backup, original, MAX_BYTES)
-                    .map_err(|cause| {
-                        let message = match cause {
-                            logisim_preferences::storage::WriteError::Conflict => CHANGED.into(),
-                            logisim_preferences::storage::WriteError::Io(message) => message,
-                        };
-                        logisim_ui::tf!(
-                            "Could not write backup {}. Save stopped.\n{}",
-                            backup.display(),
-                            logisim_ui::i18n::tr(&message)
-                        )
-                    })?;
+        if backup_before_save
+            && expected.is_some()
+            && let Some(protected) = &self.protected
+        {
+            let mut backup = path.as_os_str().to_owned();
+            backup.push(".bak");
+            if protected == Path::new(&backup) {
+                return Err("The backup would replace the protected source. Choose a different destination.".into());
             }
-            atomic_write(&path, &bytes, expected)?;
         }
+        use logisim_preferences::storage::{CopyError, WriteError, write_project_copy};
+        write_project_copy(&path, &bytes, expected, backup_before_save, MAX_BYTES).map_err(
+            |error| match error {
+                CopyError::Destination(WriteError::Conflict) => CHANGED.into(),
+                CopyError::Destination(e) => e.to_string(),
+                CopyError::Backup(path, e) => logisim_ui::tf!(
+                    "Could not write backup {}. Save stopped.\n{}",
+                    path.display(),
+                    logisim_ui::i18n::tr(&e.to_string())
+                ),
+            },
+        )?;
+        self.tagged_legacy = format == ProjectFormat::Circ && (legacy_export || self.tagged_legacy);
         self.partial_warnings.clear();
         self.format = format;
         self.path = Some(path);

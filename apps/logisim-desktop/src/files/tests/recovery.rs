@@ -39,10 +39,7 @@ fn only_completed_file_actions_clear_the_owned_snapshot() {
         let mut w = Workspace::default();
         let mut sim = Simulator::default();
         let ctx = egui::Context::default();
-        files
-            .storage
-            .save(w.project(), &source, SaveMode::Current, false)
-            .unwrap();
+        files.storage.open_legacy_fixture(w.project(), &source);
         let original = fs::read(&source).unwrap();
         let mut edited = w.project().clone();
         edited
@@ -91,9 +88,10 @@ fn only_completed_file_actions_clear_the_owned_snapshot() {
 
 fn dirty_project() -> logisim_core::Project {
     let mut p = logisim_core::Project::default();
-    p.main_circuit_mut()
-        .circuit
-        .add_component(Component::new(Kind::Pin, Point::new(100, 100)));
+    let c = &mut p.main_circuit_mut().circuit;
+    let pin = c.add_component(Component::new(Kind::Pin, Point::new(100, 100)));
+    c.agent_ids.circuit = Some(1);
+    c.agent_ids.items.insert(pin, 2);
     p
 }
 
@@ -136,7 +134,7 @@ fn startup_gives_recovery_priority_even_when_disabled_and_save_keeps_conflict_ch
     assert!(matches!(files.dialog, Some(Dialog::Message { .. })));
     assert_eq!(fs::read_to_string(&source).unwrap(), different);
     assert!(dir.join("current.circ").exists());
-    let copy = temp.path("copy.circ");
+    let copy = temp.path("copy.lrs");
     files.dialog = None;
     files.request(FileAction::SaveAs, &ctx, &mut recovered, &mut sim);
     let picker = files.dialog.take().unwrap();
@@ -149,9 +147,7 @@ fn startup_gives_recovery_priority_even_when_disabled_and_save_keeps_conflict_ch
     );
     assert!(!files.present(&recovered).dirty && !dir.join("current.json").exists());
     assert_eq!(
-        logisim_file::parse(&fs::read_to_string(copy).unwrap())
-            .unwrap()
-            .document,
+        logisim_file::parse_native(&fs::read(copy).unwrap()).unwrap(),
         edited
     );
 }
@@ -165,10 +161,7 @@ fn missing_and_untitled_sources_recover_without_a_destination_or_history_entry()
         let mut w = Workspace::default();
         let source = temp.path("gone.circ");
         if named {
-            files
-                .storage
-                .save(w.project(), &source, SaveMode::Current, false)
-                .unwrap();
+            files.storage.open_legacy_fixture(w.project(), &source);
         }
         w.replace_project(dirty_project());
         checkpoint(&mut files, &w);
@@ -190,7 +183,7 @@ fn missing_and_untitled_sources_recover_without_a_destination_or_history_entry()
         assert!(matches!(
             files.dialog,
             Some(Dialog::Picker(Picker {
-                mode: Mode::Save,
+                mode: Mode::Save(ProjectFormat::Lrs),
                 ..
             }))
         ));
@@ -320,10 +313,7 @@ fn clear_only_removes_snapshot_files_and_preserves_the_working_document() {
     let mut w = Workspace::default();
     let mut sim = Simulator::default();
     let path = tmp.path("source.circ");
-    files
-        .storage
-        .save(w.project(), &path, SaveMode::Current, false)
-        .unwrap();
+    files.storage.open_legacy_fixture(w.project(), &path);
     let disk = fs::read(&path).unwrap();
     w.replace_project(dirty_project());
     w.simulation_mut().ticks = 37;

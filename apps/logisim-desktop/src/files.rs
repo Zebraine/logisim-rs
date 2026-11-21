@@ -15,6 +15,7 @@ use crate::plugins::Resolution;
 use crate::simulation::Host;
 use crate::storage::{self, SaveMode, Storage};
 use eframe::egui;
+use logisim_file::ProjectFormat;
 use logisim_ui::{DocumentView, FileAction, Workspace};
 use logisim_ui::{i18n::tr, tf};
 use std::path::{Path, PathBuf};
@@ -340,7 +341,7 @@ impl Files {
                 self.capture = Some(capture::Capture::new(capture::Target::Print, ctx))
             }
             FileAction::ExportImage => self.picker(Mode::ExportImage),
-            FileAction::SaveAs => self.picker(Mode::Save),
+            FileAction::SaveAs => self.picker(Mode::Save(ProjectFormat::Lrs)),
             FileAction::ClearRecovery { disabled_autosave } => {
                 let result = if self.busy() {
                     Err("Recovery storage is busy.".into())
@@ -368,7 +369,7 @@ impl Files {
                 {
                     self.save(&path, SaveMode::Current, ctx, workspace, sim);
                 } else {
-                    self.picker(Mode::Save);
+                    self.picker(Mode::Save(ProjectFormat::Lrs));
                 }
             }
         }
@@ -415,17 +416,14 @@ impl Files {
         }
     }
     fn picker(&mut self, mode: Mode) {
-        let suggested = if mode == Mode::Save || matches!(mode, Mode::Copy(_)) {
+        let suggested = if let Mode::Save(format) | Mode::Copy(format) = mode {
             let stem = self
                 .storage
                 .path
                 .as_deref()
                 .and_then(Path::file_stem)
                 .unwrap_or(std::ffi::OsStr::new("Untitled"));
-            let ext = match mode {
-                Mode::Copy(format) => format.extension(),
-                _ => "circ",
-            };
+            let ext = format.extension();
             format!("{}.{ext}", stem.to_string_lossy())
         } else if mode == Mode::ExportImage {
             let stem = self.storage.path.as_deref().and_then(Path::file_stem);
@@ -475,7 +473,7 @@ impl Files {
         workspace: &mut Workspace,
         sim: &mut impl Host,
     ) {
-        let save_as = matches!(mode, SaveMode::Selected(_));
+        let save_as = matches!(mode, SaveMode::Selected(..));
         if storage::destination(path).is_ok_and(|p| self.autosave.reserved(&p)) {
             self.error(tr("Recovery files cannot be used as a project destination.").into());
             return;
@@ -659,9 +657,27 @@ impl Files {
                 },
                 Response::Replace,
             ) => self.export_copy(&path, format, Some(&bytes), workspace),
-            (Dialog::Replace { path, bytes }, Response::Replace) => {
-                self.save(&path, SaveMode::Selected(Some(&bytes)), ctx, workspace, sim)
-            }
+            (
+                Dialog::Replace {
+                    path,
+                    bytes,
+                    format,
+                },
+                Response::Replace,
+            ) => self.save(
+                &path,
+                SaveMode::Selected(format, Some(&bytes)),
+                ctx,
+                workspace,
+                sim,
+            ),
+            (Dialog::ConfirmLegacy(path), Response::Save) => self.save(
+                &path,
+                SaveMode::Selected(ProjectFormat::Circ, None),
+                ctx,
+                workspace,
+                sim,
+            ),
             (Dialog::PluginImportPicker { target, .. }, Response::Pick(path)) => {
                 match crate::memory_import::load_plugin(&path, &target, workspace) {
                     Ok(()) => {
@@ -770,18 +786,19 @@ impl Files {
                     }
                 } else if matches!(picker.mode, Mode::Open | Mode::OpenNative) {
                     self.load(&path, workspace, sim);
-                } else {
+                } else if let Mode::Save(format) = picker.mode {
                     match storage::destination(&path) {
-                        Ok(path) if logisim_file::ProjectFormat::binding(&path) != logisim_file::ProjectFormat::Circ => self.error(tr("Choose a project file with the indicated extension.").into()),
+                        Ok(target) if ProjectFormat::from_extension(&path) != Some(format) || ProjectFormat::from_extension(&target) != Some(format) => self.error(tr("Choose a project file with the indicated extension.").into()),
                         Ok(path) if self.storage.protected.as_ref() == Some(&path) => self.error(
                             tr("Choose a different file: this source contains unsupported content.")
                                 .into(),
                         ),
                         Ok(path) if path.exists() => match storage::read(&path) {
-                            Ok(bytes) => self.dialog = Some(Dialog::Replace { path, bytes }),
+                            Ok(bytes) => self.dialog = Some(Dialog::Replace { path, bytes, format }),
                             Err(e) => self.error(e),
                         },
-                        Ok(path) => self.save(&path, SaveMode::Selected(None), ctx, workspace, sim),
+                        Ok(path) if format == ProjectFormat::Circ => self.dialog = Some(Dialog::ConfirmLegacy(path)),
+                        Ok(path) => self.save(&path, SaveMode::Selected(format, None), ctx, workspace, sim),
                         Err(e) => self.error(e),
                     }
                 }

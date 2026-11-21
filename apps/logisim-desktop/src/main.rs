@@ -136,9 +136,14 @@ impl DesktopApp {
             );
         }
         let title = format!(
-            "Logisim rs — {} · {}{}{}",
+            "Logisim rs — {} · {}{}{}{}",
             view.circuit_name,
             view.display_title(),
+            match self.files.storage.bound_format() {
+                logisim_file::ProjectFormat::Circ => logisim_ui::i18n::tr(" · Legacy .circ"),
+                logisim_file::ProjectFormat::Lrs if view.untitled => ".lrs",
+                logisim_file::ProjectFormat::Lrs => "",
+            },
             if view.dirty { " *" } else { "" },
             if view.partial {
                 logisim_ui::i18n::tr(" (partial)")
