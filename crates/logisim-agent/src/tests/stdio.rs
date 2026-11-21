@@ -7,6 +7,9 @@ use std::{
 };
 const BIN: &str = env!("CARGO_BIN_EXE_logisim-agent");
 
+#[path = "stdio/rooted.rs"]
+mod rooted;
+
 struct Client {
     process: Child,
     output: BufReader<ChildStdout>,

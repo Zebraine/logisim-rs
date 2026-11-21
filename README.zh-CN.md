@@ -130,18 +130,25 @@ cargo test --workspace --all-features --locked --offline
 
 ## 无界面 Agent
 
-用 `cargo build --release --locked -p logisim-agent` 构建独立程序。本地 MCP 客户端可将 `target/release/logisim-agent` 设为命令，参数为 `mcp`。也可以直接使用 JSON CLI。
+用 `cargo build --release --locked -p logisim-agent` 构建独立程序。生产环境建议将 MCP 客户端的命令设为 `target/release/logisim-agent`，参数设为 `--root /work/project mcp`。JSON CLI 也支持相同的根目录。
 
 ```sh
+logisim-agent --root /work/project mcp
+logisim-agent --root /work/project project open --path example.circ
+logisim-agent --root /work/project settings get --config preferences.json
 logisim-agent project catalog
 logisim-agent settings catalog
 logisim-agent settings get --config /path/to/preferences.json
 logisim-agent settings patch --config /path/to/preferences.json --ops edits.json --dry-run
 ```
 
+请选择仅由可信本机进程管理的现有目录。指定 `--root` 后，工程、配置和 CLI `--ops` 的相对路径均从该目录解析。Agent 在文件读写前校验绝对路径、符号链接和保存所用的锁与备份路径，越界返回 `path_outside_root`。省略该选项时，相对路径从工作目录解析，绝对路径不受此限制。工程中记录的插件依赖沿用工程自身的解析规则。
+
+MCP 支持 `2024-11-05`、`2025-03-26`、`2025-06-18` 和 `2025-11-25`。握手时原样返回支持的版本，对其他版本返回 `2025-11-25`。调用 `tools/call` 后，客户端可读取 `result.isError` 判断执行结果。`structuredContent` 与 `content[0].text` 中的 JSON 携带相同的 CLI 响应，失败时保留错误码和详情。请求格式、未知工具与握手错误通过 JSON-RPC 顶层错误返回。单次 CLI 命令失败时输出顶层 `ok:false` 并以非零状态退出。
+
 例如，`{"ops":[{"key":"appearance.theme","value":"dark"}]}` 修改 v16 便携偏好。可在同一 JSON 对象中将 `expected_sha256` 设为读取时返回的 `source_sha256`，要求原文件仍为该版本。确认预演结果后，用 `--apply` 写入。桌面端与 Agent 通过同目录的 `.lock` 文件协调原子更新，保留最近工程、窗口几何、面板布局和本机插件目录。
 
-读取电路时，启动 `logisim-agent cli`，在同一个进程内逐行发送 JSON。
+读取电路时，启动 `logisim-agent cli`，在同一个进程内逐行发送 JSON。每个进程最多同时打开 64 个工程会话，达到上限时 `project_open` 返回 `session_limit`。使用 `project_close` 可释放名额。
 
 ```jsonl
 {"tool":"project_open","arguments":{"path":"examples/course/single-cycle.circ"}}

@@ -1,7 +1,6 @@
 //! Exercise the same service used by both transports against disposable files.
 use super::{Temp, open};
 use crate::{Operation, Request, Service};
-use serde_json::json;
 use std::{collections::BTreeSet, fs, path::Path};
 
 const CIRCUIT: &str = r#"<project version="1.0" source="logisim-rs-plugin-v1"><main name="main"/><circuit name="main"/></project>"#;

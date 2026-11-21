@@ -130,18 +130,25 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the development and release workflow.
 
 ## Headless agent
 
-Build the separate binary with `cargo build --release --locked -p logisim-agent`. Point a local MCP client at `target/release/logisim-agent` with the single argument `mcp`, or use the JSON CLI directly.
+Build the separate binary with `cargo build --release --locked -p logisim-agent`. For production MCP clients, use `target/release/logisim-agent` with the arguments `--root /work/project mcp`. The same root can be used in the JSON CLI.
 
 ```sh
+logisim-agent --root /work/project mcp
+logisim-agent --root /work/project project open --path example.circ
+logisim-agent --root /work/project settings get --config preferences.json
 logisim-agent project catalog
 logisim-agent settings catalog
 logisim-agent settings get --config /path/to/preferences.json
 logisim-agent settings patch --config /path/to/preferences.json --ops edits.json --dry-run
 ```
 
+Choose an existing directory managed by trusted local processes. With `--root`, relative project, configuration and CLI `--ops` paths start there. The agent checks absolute paths, symbolic links and save sidecars before file I/O. An escape returns `path_outside_root`. Without the option, relative paths start in the working directory and absolute paths are unrestricted. Plugin dependencies recorded in a project follow the project's existing resolution rules.
+
+MCP negotiates `2024-11-05`, `2025-03-26`, `2025-06-18` and `2025-11-25`. It returns the requested revision when supported and offers `2025-11-25` otherwise. In `tools/call`, read `result.isError` for the tool outcome. Both `structuredContent` and the JSON text in `content[0].text` carry the CLI envelope, including the error code and details on failure. Malformed requests, unknown tools and handshake errors use top-level JSON-RPC errors. A one-shot CLI command prints a top-level `ok:false` envelope and exits unsuccessfully on failure.
+
 An edits file such as `{"ops":[{"key":"appearance.theme","value":"dark"}]}` changes portable v16 preferences. Set `expected_sha256` to the `source_sha256` from the get response to require that exact revision. Use `--apply` to commit. The desktop and agent coordinate atomic updates using a sibling `.lock` file. Recent files, window geometry, panel layout and the local plugin directory stay in the host configuration.
 
-For a circuit, run `logisim-agent cli` and send one JSON object per line in the same process:
+For a circuit, run `logisim-agent cli` and send one JSON object per line in the same process. Each process can hold 64 open project sessions. At the limit, `project_open` returns `session_limit`. Use `project_close` to free a slot.
 
 ```jsonl
 {"tool":"project_open","arguments":{"path":"examples/course/single-cycle.circ"}}

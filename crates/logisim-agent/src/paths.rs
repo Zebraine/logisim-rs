@@ -34,10 +34,6 @@ impl Root {
     }
 
     pub fn resolve(&self, input: &Path) -> Result<PathBuf> {
-        self.checked(input, false)
-    }
-
-    fn checked(&self, input: &Path, allow_missing_leaf: bool) -> Result<PathBuf> {
         let relative = if input.is_absolute() {
             input
                 .strip_prefix(&self.canonical)
@@ -74,10 +70,10 @@ impl Root {
                                 return Err(outside());
                             }
                         }
+                        // Only the parent can be canonicalized for a new sidecar or a
+                        // removed source. The save operation handles a missing source as a conflict.
                         Err(e)
-                            if allow_missing_leaf
-                                && components.peek().is_none()
-                                && e.kind() == ErrorKind::NotFound => {}
+                            if components.peek().is_none() && e.kind() == ErrorKind::NotFound => {}
                         Err(e) => return Err(io::file_error(e)),
                     }
                 }
@@ -96,7 +92,7 @@ impl Root {
         for suffix in suffixes {
             let mut sibling = target.as_os_str().to_owned();
             sibling.push(suffix);
-            self.checked(Path::new(&sibling), true)?;
+            self.resolve(Path::new(&sibling))?;
         }
         Ok(())
     }
