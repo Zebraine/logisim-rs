@@ -30,6 +30,8 @@ git diff --check
 
 变更文档字段时运行两条往返测试。原生保存后应能重开并生成相同字节。旧格式导出后应能重建同一文档，遇到有损转换则须在写文件前报错。桌面验收分别覆盖未命名工程首次保存、已绑定工程直接保存、另存为切换绑定和显式转换副本。核对实际编码与扩展名、最近文件、覆盖目标的原字节备份，以及原生与旧版恢复槽。Agent 用同一会话在转换后直接保存，核对原路径与格式。
 
+恢复路径改动先用 `cargo test -p logisim-rs --bin logisim-rs recovery --locked --offline` 检查两种格式的恢复与锁交接。持锁窗口应排除其他写入者，释放后即使子进程仍持有同一文件描述的副本，下一个窗口也应能立即接手。用完整桌面测试分别覆盖默认并行和 `-- --test-threads=1`，核对恢复后的内容、脏状态、目标格式与最近文件。
+
 ## 无界面性能基线
 
 在仓库根目录执行 `cargo build -p logisim-bench --release --locked --offline`，再执行 `target/release/logisim-bench single-cycle --runs 20`。负载可选 `wide`（独立 32 位加法器，每步改变一路）、`deep`（串联 NOT）、`single-cycle`（课程 CPU）或 `plugin`（课程寄存器文件）。用同一逻辑核顺序运行，每个负载至少三个独立进程；保存每次 stdout JSON、提交、工具链、CPU 和模块哈希。
