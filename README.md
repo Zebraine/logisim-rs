@@ -34,8 +34,9 @@ Download a package for your platform and its `.sha256` checksum from [Releases](
 | Platform | Start |
 | --- | --- |
 | Linux x86-64 | `./logisim-rs`; built on Ubuntu 24.04, requires Fontconfig and a working graphics driver |
-| Windows x86-64 | `logisim-rs.exe` |
-| macOS 15+ | Open `Logisim rs.app` (Apple Silicon); an Intel build was only provided for v0.1.0. |
+| Windows x86-64 | `logisim-rs.exe`; `logisim-agent.exe` for the headless CLI/MCP service |
+| macOS 15+ | Open `Logisim rs.app` (Apple Silicon); `./logisim-agent` for the headless CLI/MCP service |
+| All packages | The headless `logisim-agent` binary is included; Linux uses `./logisim-agent`. |
 
 The Windows and macOS packages are not signed or notarized. UI validation for this release was performed on Linux X11; the other packages are built by the same release workflow but have not been manually UI-tested on their platforms.
 
@@ -132,7 +133,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the development and release workflow.
 
 ## Headless agent
 
-Build the separate binary with `cargo build --release --locked -p logisim-agent`. For production MCP clients, use `target/release/logisim-agent` with the arguments `--root /work/project mcp`. The same root can be used in the JSON CLI.
+Release packages include the headless `logisim-agent` binary. Build it from source with `cargo build --release --locked -p logisim-agent`. For production MCP clients, use `logisim-agent` with the arguments `--root /work/project mcp`. The same root can be used in the JSON CLI.
 
 ```sh
 logisim-agent --root /work/project mcp
@@ -269,6 +270,7 @@ Pass the returned ID to `update_plugin` to edit individual `properties` or the d
 - A Joystick's label font is not serialized in the existing `.circ` format; it keeps its intrinsic size of 12 after reopening, even if a different default label size is configured.
 - In Dark mode, custom subcircuit artwork receives a contrast outline, but plugin interiors are drawn by the plugin author. The host only adds a boundary around the plugin component.
 - Print uses the system default printer. Physical paper output and the Windows/macOS print handlers were not verified in this release; jobs already accepted by the print queue must be cancelled there.
+- The headless agent was smoke-tested on Linux x86-64; the Windows/macOS agent binaries are built by the same workflow but have not been manually exercised on those platforms.
 - The UI has been manually validated on Linux X11. Windows, macOS, and native Wayland have not been manually UI-tested in this release.
 
 ## License

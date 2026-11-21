@@ -34,8 +34,9 @@
 | 平台 | 启动方式 |
 | --- | --- |
 | Linux x86-64 | `./logisim-rs`；基于 Ubuntu 24.04 构建，需要 Fontconfig 和可用的图形驱动 |
-| Windows x86-64 | `logisim-rs.exe` |
-| macOS 15+ | 打开 `Logisim rs.app`（Apple Silicon）；Intel 包仅 v0.1.0 提供。 |
+| Windows x86-64 | `logisim-rs.exe`；无界面 CLI/MCP 服务为 `logisim-agent.exe` |
+| macOS 15+ | 打开 `Logisim rs.app`（Apple Silicon）；无界面 CLI/MCP 服务为 `./logisim-agent` |
+| 所有平台包 | 包含无界面 `logisim-agent`；Linux 使用 `./logisim-agent`。 |
 
 Windows/macOS 包未签名或公证。本版本的界面实机验证在 Linux X11 上完成；其他平台包由同一发布流程构建，但尚未在对应系统上人工验证界面。
 
@@ -132,7 +133,7 @@ cargo test --workspace --all-features --locked --offline
 
 ## 无界面 Agent
 
-用 `cargo build --release --locked -p logisim-agent` 构建独立程序。生产环境建议将 MCP 客户端的命令设为 `target/release/logisim-agent`，参数设为 `--root /work/project mcp`。JSON CLI 也支持相同的根目录。
+发布包已包含无界面 `logisim-agent`。也可用 `cargo build --release --locked -p logisim-agent` 从源码构建。生产环境建议将 MCP 客户端的命令设为 `logisim-agent`，参数设为 `--root /work/project mcp`。JSON CLI 也支持相同的根目录。
 
 ```sh
 logisim-agent --root /work/project mcp
@@ -269,6 +270,7 @@ PLA 的两个平面均以项为行。输入单元取 `disconnected`、`direct` �
 - Joystick 的标签字体不写入现有 `.circ` 格式；重开后保持固有字号 12，即使配置了其他默认标签字号。
 - 深色模式下，自定义封装会增加对比度轮廓；插件内部仍由插件作者绘制，宿主只增加元件外围边界。
 - Print 使用系统默认打印机。本版本未验证实体出纸及 Windows/macOS 的打印处理器；已进入系统打印队列的作业须从队列取消。
+- 无界面 Agent 在 Linux x86-64 上做过快速验证；Windows/macOS 的 Agent 由同一流程构建，但尚未在对应系统上人工验证。
 - 界面在 Linux X11 上做过人工验证；本版本尚未在 Windows、macOS 和原生 Wayland 上人工验证界面。
 
 ## 许可证

@@ -52,9 +52,13 @@ def package(target, plugins):
     windows = "windows" in target
     macos = "apple" in target
     binary = "logisim-rs.exe" if windows else "logisim-rs"
+    agent_binary = "logisim-agent.exe" if windows else "logisim-agent"
     executable = ROOT / "target" / target / "release" / binary
+    agent_executable = ROOT / "target" / target / "release" / agent_binary
     if not executable.is_file():
         raise FileNotFoundError(executable)
+    if not agent_executable.is_file():
+        raise FileNotFoundError(agent_executable)
     if set(plugins) != {"course", "ttl", "ttl-combinational", "ttl-sequential", "input", "display"}:
         raise ValueError("Provide the course, ttl, ttl-combinational, ttl-sequential, input and display plugins")
     for plugin in plugins.values():
@@ -121,6 +125,9 @@ def package(target, plugins):
             output = staging / binary
         shutil.copyfile(executable, output)
         output.chmod(0o755)
+        agent_output = staging / agent_binary
+        shutil.copyfile(agent_executable, agent_output)
+        agent_output.chmod(0o755)
         if windows:
             archive = destination / f"{name}.zip"
             with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:

@@ -82,8 +82,10 @@ jobs:
           rustup show
           rustup target add "$BUILD_TARGET"
           cargo fetch --locked
-      - name: Build desktop
-        run: cargo build -p logisim-rs --release --target "$BUILD_TARGET" --locked --offline
+      - name: Build desktop and agent
+        run: |
+          cargo build -p logisim-rs --release --target "$BUILD_TARGET" --locked --offline
+          cargo build -p logisim-agent --release --target "$BUILD_TARGET" --locked --offline
       - uses: actions/download-artifact@v8.0.2
         with:
           name: bundled-wasm
