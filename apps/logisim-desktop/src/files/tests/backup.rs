@@ -72,7 +72,10 @@ fn blocked_backup_reports_failure_and_keeps_target_baseline_and_pending_edits() 
         let Some(Dialog::Message { body, .. }) = files.dialog.take() else {
             panic!("expected a visible save error")
         };
-        assert!(body.contains("layout.circ.bak") && body.contains("Save stopped"));
+        assert!(
+            body.contains("layout.circ.bak") && body.contains("Save stopped"),
+            "{body}"
+        );
         assert!(files.present(&ws).dirty);
         assert_eq!(fs::read(&path).unwrap(), original);
         if directory {
@@ -151,7 +154,7 @@ fn project_copy_cancel_conflict_and_open_native_preserve_binding_and_recent() {
     assert!(matches!(h.files.dialog, Some(Dialog::Message { .. })));
     assert!(h.files.present(&h.ws).dirty);
     assert_eq!(fs::read(&lrs).unwrap(), bytes);
-    lock.unlock().unwrap();
+    drop(lock);
     respond(&mut h, Response::Cancel);
     h.files
         .request(FileAction::Save, &h.ctx, &mut h.ws, &mut h.sim);

@@ -2,6 +2,7 @@
 mod slot;
 use crate::{plugins, storage::Storage};
 use logisim_core::Project;
+use logisim_preferences::storage::FileLock;
 use logisim_ui::FileSettings;
 use slot::CHANGED;
 pub(crate) use slot::checksum;
@@ -30,7 +31,7 @@ pub(crate) struct Autosave {
     metadata: Option<Metadata>,
     access: Access,
     changed: bool,
-    owned: Option<std::fs::File>,
+    owned: Option<FileLock>,
     written: Option<Project>,
     last_success: Option<Instant>,
     next_due: Option<Instant>,

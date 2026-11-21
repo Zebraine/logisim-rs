@@ -60,9 +60,9 @@ fn failed_clear_of_two_invalid_entries_keeps_the_unbuffered_record() {
 fn check_lock_handoff(name: &str) {
     let tmp = Temp::new();
     let dir = tmp.path("recovery");
-    let writer = try_lock(&dir, name).unwrap().unwrap();
     // dup and fork both retain a reference to the same open file description on Unix.
-    let surviving_descriptor = writer.try_clone().unwrap();
+    let surviving_descriptor = fs::File::create(dir.with_file_name(name)).unwrap();
+    let writer = FileLock::try_acquire(surviving_descriptor.try_clone().unwrap()).unwrap();
     assert!(try_lock(&dir, name).unwrap().is_none());
     drop(writer);
     let next_writer = try_lock(&dir, name)

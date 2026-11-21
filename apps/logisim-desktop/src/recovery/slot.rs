@@ -1,5 +1,6 @@
 //! One data file and one commit record. The checksum detects interrupted commits.
 use crate::storage;
+use logisim_preferences::storage::FileLock;
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -16,12 +17,11 @@ pub(super) const META: &str = "current.json";
 pub(super) const LOCK: &str = ".recovery.lock";
 pub(super) const OWNER: &str = ".recovery.owner";
 
-/// The OS releases the exclusive writer lease on process exit, including after a crash.
-pub(super) fn owner(dir: &Path) -> Result<fs::File> {
+pub(super) fn owner(dir: &Path) -> Result<FileLock> {
     try_lock(dir, OWNER)?.ok_or_else(|| logisim_ui::RecoveryView::FOREIGN_OWNER.into())
 }
 
-pub(super) fn try_lock(dir: &Path, name: &str) -> Result<Option<fs::File>> {
+pub(super) fn try_lock(dir: &Path, name: &str) -> Result<Option<FileLock>> {
     fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     let file = fs::OpenOptions::new()
         .read(true)
@@ -30,8 +30,8 @@ pub(super) fn try_lock(dir: &Path, name: &str) -> Result<Option<fs::File>> {
         .truncate(false)
         .open(dir.with_file_name(name))
         .map_err(|e| e.to_string())?;
-    match file.try_lock() {
-        Ok(()) => Ok(Some(file)),
+    match FileLock::try_acquire(file) {
+        Ok(lock) => Ok(Some(lock)),
         Err(fs::TryLockError::WouldBlock) => Ok(None),
         Err(fs::TryLockError::Error(e)) => Err(e.to_string()),
     }
@@ -198,7 +198,7 @@ impl Pair {
     }
     /// The lock covers both renames and cleanup across desktop instances. Compare
     /// the observed pair under the lock so another instance retains its snapshot.
-    fn lock(dir: &Path) -> Result<fs::File> {
+    fn lock(dir: &Path) -> Result<FileLock> {
         try_lock(dir, LOCK)?.ok_or_else(|| "Recovery storage is busy.".into())
     }
     pub fn verify(&self, dir: &Path) -> Result<()> {

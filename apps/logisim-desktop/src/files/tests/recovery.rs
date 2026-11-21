@@ -411,7 +411,7 @@ fn clear_failure_rolls_back_only_the_disclosed_setting_and_allows_retry() {
         assert!(dir.join("current.lrs").is_file() && dir.join("current.json").is_file());
         assert_eq!(w.preferences().files.autosave, previously_on);
         assert!(!files.busy() && files.present(&w).dirty);
-        drop(lock);
+        lock.unlock().unwrap();
         w.apply_settings(values);
         files.request(action, &ctx, &mut w, &mut sim);
         assert_eq!(

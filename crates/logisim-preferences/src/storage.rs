@@ -95,9 +95,27 @@ pub fn write_preferences(
     replace_checked(&target, bytes, expected, None)
 }
 
+/// Release the exclusive lock at the end of the transaction, even if a child
+/// between fork and exec still holds a copy of the open file description.
+#[derive(Debug)]
+pub struct FileLock(fs::File);
+
+impl FileLock {
+    pub fn try_acquire(file: fs::File) -> std::result::Result<Self, fs::TryLockError> {
+        file.try_lock()?;
+        Ok(Self(file))
+    }
+}
+
+impl Drop for FileLock {
+    fn drop(&mut self) {
+        let _ = self.0.unlock();
+    }
+}
+
 /// Lock a stable sibling inode across backup and target replacements. The empty sidecar stays
 /// in place after unlocking so all cooperating writers continue to lock the same inode.
-pub fn lock_target(target: &Path) -> std::result::Result<fs::File, WriteError> {
+pub fn lock_target(target: &Path) -> std::result::Result<FileLock, WriteError> {
     use std::fs::TryLockError;
     let io = |e: std::io::Error| WriteError::Io(e.to_string());
     let mut lock_name = target.as_os_str().to_owned();
@@ -112,12 +130,10 @@ pub fn lock_target(target: &Path) -> std::result::Result<fs::File, WriteError> {
     if !lock.metadata().map_err(io)?.is_file() {
         return Err(WriteError::Io("Expected a regular lock file.".into()));
     }
-    match lock.try_lock() {
-        Ok(()) => {}
-        Err(TryLockError::WouldBlock) => return Err(WriteError::Conflict),
-        Err(TryLockError::Error(e)) => return Err(io(e)),
-    }
-    Ok(lock)
+    FileLock::try_acquire(lock).map_err(|error| match error {
+        TryLockError::WouldBlock => WriteError::Conflict,
+        TryLockError::Error(e) => io(e),
+    })
 }
 
 pub fn replace_checked(
@@ -250,3 +266,6 @@ pub fn write_project_copy(
     }
     replace_checked(target, bytes, expected, None).map_err(CopyError::Destination)
 }
+
+#[cfg(test)]
+mod tests;

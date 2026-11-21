@@ -241,7 +241,6 @@ fn conversion_checks_the_target_and_keeps_each_session_bound_to_its_format() {
         "conflict"
     );
     assert!(!root.join("board.lrs.bak").exists());
-    lock.unlock().unwrap();
     drop(lock);
     let backup = root.join("board.lrs.bak");
     fs::create_dir(&backup).unwrap();
