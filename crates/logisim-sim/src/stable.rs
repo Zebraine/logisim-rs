@@ -170,7 +170,14 @@ impl Plan {
         let plugins = crate::plugins::stable::Plan::compile(sim, &mut dependencies)?;
         let memories = memory::Plan::compile(sim, &mut dependencies);
         check_feedback(&dependencies)?;
+        #[cfg(feature = "circuit-jit-experiment")]
+        crate::jit_experiment::record(|stats| {
+            stats.planned_components += sim.circuit.components.len()
+        });
         Ok(Self {
+            #[cfg(feature = "circuit-jit-experiment")]
+            evaluator: compiled.experiment_evaluator(),
+            #[cfg(not(feature = "circuit-jit-experiment"))]
             evaluator: compiled.evaluator(),
             input_drivers,
             stats: compiled.stats(),

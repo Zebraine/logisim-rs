@@ -5,6 +5,8 @@ mod engine;
 mod execution;
 mod gates;
 mod hierarchy;
+#[cfg(feature = "circuit-jit-experiment")]
+pub mod jit_experiment;
 mod progress;
 pub mod stable;
 #[cfg(test)]

@@ -82,6 +82,12 @@ pub struct Evaluator {
     all_changed: bool,
     valid: bool,
     stats: EvaluationStats,
+    #[cfg(feature = "circuit-jit-experiment")]
+    native: Option<super::native::Native>,
+    #[cfg(feature = "circuit-jit-experiment")]
+    shadow: Option<Box<Evaluator>>,
+    #[cfg(feature = "circuit-jit-experiment")]
+    profile: bool,
 }
 impl Evaluator {
     pub(super) fn new(program: Arc<Program>) -> Self {
@@ -93,7 +99,32 @@ impl Evaluator {
             all_changed: false,
             valid: false,
             stats: EvaluationStats::default(),
+            #[cfg(feature = "circuit-jit-experiment")]
+            native: None,
+            #[cfg(feature = "circuit-jit-experiment")]
+            shadow: None,
+            #[cfg(feature = "circuit-jit-experiment")]
+            profile: false,
             program,
+        }
+    }
+
+    #[cfg(feature = "circuit-jit-experiment")]
+    pub(super) fn configure_experiment(&mut self, mode: crate::jit_experiment::Mode) {
+        use crate::jit_experiment::{self, Mode};
+        let stats = self.program.stats;
+        jit_experiment::record(|s| {
+            s.plans += 1;
+            s.pure_nodes += stats.nodes;
+            s.folded_nodes += stats.folded_nodes;
+            s.plan_instructions += stats.instructions;
+        });
+        self.profile = mode.profile();
+        if mode != Mode::ProfileInterpreter {
+            self.native = super::native::Native::new(&self.program, mode);
+        }
+        if mode == Mode::Verify {
+            self.shadow = Some(Box::new(Self::new(self.program.clone())));
         }
     }
 
@@ -132,6 +163,8 @@ impl Evaluator {
         mut read: impl FnMut(usize, Port, u8) -> Option<Value>,
         force: bool,
     ) -> Result<bool, EvaluationError> {
+        #[cfg(feature = "circuit-jit-experiment")]
+        let start = self.profile.then(std::time::Instant::now);
         let full = force || !self.valid;
         let mut refreshed = full;
         self.all_changed = !self.valid;
@@ -160,6 +193,62 @@ impl Evaluator {
                 self.values[slot] = value;
             }
         }
+        self.execute_instructions(full);
+        self.stats.changed_outputs = if self.all_changed {
+            self.program.outputs.len()
+        } else {
+            self.changed.len()
+        };
+        self.valid = true;
+        #[cfg(feature = "circuit-jit-experiment")]
+        {
+            if let Some(start) = start {
+                let ns = start.elapsed().as_nanos() as u64;
+                crate::jit_experiment::record(|s| {
+                    s.evaluator_ns += ns;
+                    s.evaluated_instructions += self.stats.instructions;
+                });
+            }
+            self.verify_drives(force, refreshed)?;
+        }
+        Ok(refreshed)
+    }
+
+    #[cfg(feature = "circuit-jit-experiment")]
+    fn verify_drives(&mut self, force: bool, refreshed: bool) -> Result<(), EvaluationError> {
+        if let Some(mut shadow) = self.shadow.take() {
+            if self.all_changed {
+                shadow.valid = false;
+            }
+            let other = shadow.run(|i, _, _| Some(self.values[self.program.inputs[i].1]), force)?;
+            assert_eq!(refreshed, other, "stable boundary refresh");
+            assert_eq!(self.values, shadow.values, "all expression drive slots");
+            assert_eq!(
+                self.changed_values().collect::<BTreeMap<_, _>>(),
+                shadow.changed_values().collect::<BTreeMap<_, _>>(),
+                "materialized drive deltas"
+            );
+            self.shadow = Some(shadow);
+        }
+        Ok(())
+    }
+
+    fn execute_instructions(&mut self, full: bool) {
+        #[cfg(feature = "circuit-jit-experiment")]
+        if self.native.is_some() {
+            if full {
+                let mut index = 0;
+                while index < self.program.instructions.len() {
+                    index += self.experimental_step(index, true);
+                }
+            } else {
+                while let Some(Reverse(index)) = self.queue.pending.pop() {
+                    self.queue.marked[index] = false;
+                    self.experimental_step(index, false);
+                }
+            }
+            return;
+        }
         if full {
             for instruction in &self.program.instructions {
                 instruction.execute(&mut self.values, &mut self.scratch, |slot, _, _| {
@@ -184,13 +273,34 @@ impl Evaluator {
                 self.stats.instructions += 1;
             }
         }
-        self.stats.changed_outputs = if self.all_changed {
-            self.program.outputs.len()
-        } else {
-            self.changed.len()
+    }
+
+    #[cfg(feature = "circuit-jit-experiment")]
+    fn experimental_step(&mut self, index: usize, full: bool) -> usize {
+        let mut update = |end: usize, slot: usize, old: Value, new: Value| {
+            self.changed.push(slot);
+            if !full {
+                let consumers = &self.program.consumers[slot];
+                // Earlier consumers within this block have already been evaluated.
+                let external = consumers.partition_point(|c| c.instruction < end);
+                self.queue.changed(&consumers[external..], old, new);
+            }
         };
-        self.valid = true;
-        Ok(refreshed)
+        let count = self
+            .native
+            .as_mut()
+            .unwrap()
+            .execute(index, &mut self.values, &mut update)
+            .unwrap_or_else(|| {
+                self.program.instructions[index].execute(
+                    &mut self.values,
+                    &mut self.scratch,
+                    |slot, old, new| update(index + 1, slot, old, new),
+                );
+                1
+            });
+        self.stats.instructions += count;
+        count
     }
 
     pub fn stats(&self) -> Option<EvaluationStats> {

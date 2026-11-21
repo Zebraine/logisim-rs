@@ -1,5 +1,7 @@
 //! Dense, immutable expression plans. No event queue, clock or mutable circuit state.
 mod incremental;
+#[cfg(feature = "circuit-jit-experiment")]
+mod native;
 mod operation;
 pub use incremental::{EvaluationStats, Evaluator};
 #[cfg(test)]
@@ -305,6 +307,24 @@ impl CompiledCircuit {
     /// Boundary order used by the stable runtime's indexed input reader.
     pub(crate) fn input_ports(&self) -> impl Iterator<Item = Port> + '_ {
         self.0.inputs.iter().map(|&(port, _)| port)
+    }
+
+    /// Use the current thread's explicitly scoped experiment. Rejected topologies
+    /// and ordinary callers keep their interpreter.
+    #[cfg(feature = "circuit-jit-experiment")]
+    pub fn experiment_evaluator(&self) -> Evaluator {
+        let mut evaluator = self.evaluator();
+        if let Some(mode) = crate::jit_experiment::mode()
+            && !self.analysis().boundaries.iter().any(|b| {
+                matches!(
+                    b.reason,
+                    super::BoundaryReason::Feedback | super::BoundaryReason::WidthMismatch
+                )
+            })
+        {
+            evaluator.configure_experiment(mode);
+        }
+        evaluator
     }
 
     pub fn evaluator(&self) -> Evaluator {

@@ -189,3 +189,106 @@ fn bundled_course_replays_identical_traces_on_both_requested_engines() -> Result
     }
     Ok(())
 }
+
+#[cfg(all(
+    feature = "circuit-jit-experiment",
+    target_os = "linux",
+    target_arch = "x86_64",
+    target_pointer_width = "64"
+))]
+#[test]
+fn experiment_replays_every_resolved_net_and_event_handoff() -> Result<()> {
+    use logisim_core::{Id, Kind};
+    use logisim_sim::jit_experiment::{self, Mode};
+
+    fn compare(a: &ProjectSimulator, b: &ProjectSimulator, paths: &[Vec<Id>]) {
+        assert_eq!(
+            (a.ticks(), a.steps(), a.pending_count()),
+            (b.ticks(), b.steps(), b.pending_count())
+        );
+        assert_eq!(a.error(), b.error());
+        assert_eq!(a.plugin_failures(), b.plugin_failures());
+        for path in paths {
+            let diag = |s: &ProjectSimulator| {
+                s.diagnostics(path)
+                    .into_iter()
+                    .map(|d| (d.problem, d.wires, d.components))
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(diag(a), diag(b), "diagnostics {path:?}");
+            let nets = |s: &logisim_sim::Simulator| {
+                s.signal_nets()
+                    .map(|n| {
+                        (
+                            n.width_mismatch,
+                            n.value,
+                            n.ports.to_vec(),
+                            n.wires.to_vec(),
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(
+                nets(a.view(path).unwrap()),
+                nets(b.view(path).unwrap()),
+                "nets {path:?}"
+            );
+        }
+    }
+
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    for name in ["wide", "deep", "single-cycle", "plugin"] {
+        let f = Fixture::load(name, &root)?;
+        let mut paths = vec![];
+        let mut stack = vec![(vec![], f.project.main)];
+        while let Some((path, id)) = stack.pop() {
+            for component in &f.project.circuit(id).unwrap().circuit.components {
+                if let Kind::Subcircuit(child) = component.kind {
+                    let mut next = path.clone();
+                    next.push(component.id);
+                    stack.push((next, child));
+                }
+            }
+            paths.push(path);
+        }
+        let prepare = || -> Result<_> {
+            let mut s = ProjectSimulator::default();
+            s.set_plugins(f.plugins.clone());
+            s.synchronize(&f.project, f.project.main);
+            measure::reset(&f, &mut s)?;
+            Ok(s)
+        };
+        let mut reference = prepare()?;
+        let (trace, stats) = jit_experiment::run(Mode::Verify, || -> Result<()> {
+            let mut native = prepare()?;
+            compare(&reference, &native, &paths);
+            for i in 0..f.stimulus.iterations() {
+                f.stimulus.drive(&mut reference, i);
+                f.stimulus.drive(&mut native, i);
+                if matches!(f.stimulus, workload::Stimulus::Plugin { .. }) {
+                    reference.settle_compiled()?;
+                    native.settle_compiled()?;
+                    compare(&reference, &native, &paths);
+                }
+                if f.stimulus.clocked() {
+                    assert!(reference.tick() && native.tick());
+                }
+                reference.settle_compiled()?;
+                native.settle_compiled()?;
+                compare(&reference, &native, &paths);
+            }
+            for s in [&mut reference, &mut native] {
+                f.stimulus.drive(s, 0);
+                if matches!(f.stimulus, workload::Stimulus::Cpu { .. }) {
+                    assert!(s.tick());
+                }
+            }
+            assert_eq!(reference.step(), native.step());
+            compare(&reference, &native, &paths);
+            Ok(())
+        });
+        trace?;
+        assert_eq!(stats.native_nodes > 0, name != "plugin", "{name}");
+    }
+    Ok(())
+}

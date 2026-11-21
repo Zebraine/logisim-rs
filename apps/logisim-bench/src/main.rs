@@ -1,4 +1,6 @@
 //! Run from the workspace root. See CONTRIBUTING.md for sampling and counter units.
+#[cfg(feature = "circuit-jit-experiment")]
+mod circuit_jit;
 #[cfg(feature = "engine-study")]
 mod engine_study;
 mod measure;
@@ -117,6 +119,8 @@ fn benchmark_with(
             Ok(time)
         })
         .transpose()?;
+    #[cfg(feature = "circuit-jit-experiment")]
+    let cold_jit = logisim_sim::jit_experiment::stats();
     let reference = trial(&fixture, &mut sim)?.trace;
     if reference.digest != fixture.stimulus.expected_digest() {
         return Err(format!(
@@ -130,16 +134,28 @@ fn benchmark_with(
     let mut per_run_rates = Vec::with_capacity(runs);
     #[cfg(feature = "plugin-metrics")]
     let mut periods = phases::Intervals::default();
+    #[cfg(feature = "circuit-jit-experiment")]
+    let mut jit_hot = circuit_jit::Profile::default();
     for i in 1..WARMUP + runs {
-        #[cfg(feature = "plugin-metrics")]
         let sample = if i >= WARMUP {
+            #[cfg(feature = "plugin-metrics")]
             periods.setup(|| measure::reset(&fixture, &mut sim))?;
-            periods.hot(|| measure::trace(&fixture, &mut sim))?
+            #[cfg(not(feature = "plugin-metrics"))]
+            measure::reset(&fixture, &mut sim)?;
+            #[cfg(feature = "circuit-jit-experiment")]
+            let before = logisim_sim::jit_experiment::stats();
+            #[cfg(feature = "plugin-metrics")]
+            let sample = periods.hot(|| measure::trace(&fixture, &mut sim))?;
+            #[cfg(not(feature = "plugin-metrics"))]
+            let sample = measure::trace(&fixture, &mut sim)?;
+            #[cfg(feature = "circuit-jit-experiment")]
+            if let Some(before) = before {
+                jit_hot.accumulate(&before, &logisim_sim::jit_experiment::stats().unwrap());
+            }
+            sample
         } else {
             trial(&fixture, &mut sim)?
         };
-        #[cfg(not(feature = "plugin-metrics"))]
-        let sample = trial(&fixture, &mut sim)?;
         if sample.trace != reference {
             return Err(format!(
                 "Trace divergence at run {i}: {:?} != {reference:?}",
@@ -187,7 +203,7 @@ fn benchmark_with(
     });
     #[cfg(not(feature = "plugin-metrics"))]
     let plugin_phases = json!({"schema": 1, "enabled": false});
-    Ok(json!({
+    let report = json!({
         "plugin_phases": plugin_phases,
         "schema": 1,
         "workload": name,
@@ -218,7 +234,21 @@ fn benchmark_with(
         "work_per_run": reference.work,
         "digest": format!("{:016x}", reference.digest),
         "diagnostics": 0
-    }))
+    });
+    #[cfg(feature = "circuit-jit-experiment")]
+    let report = if let Some(cold) = cold_jit {
+        let mut report = report;
+        report["jit_cold"] = json!(cold);
+        if jit_hot.is_profiled() {
+            report["jit_hot"] = json!(jit_hot);
+            report["jit_hot"]["settle_ns"] =
+                json!(settles.iter().sum::<Duration>().as_nanos() as u64);
+        }
+        report
+    } else {
+        report
+    };
+    Ok(report)
 }
 
 fn main() -> ExitCode {
@@ -244,6 +274,11 @@ fn run(args: impl Iterator<Item = String>) -> Result<Value> {
     if args.peek().is_some_and(|arg| arg == "engine-study") {
         args.next();
         return engine_study::run(args, engine);
+    }
+    #[cfg(feature = "circuit-jit-experiment")]
+    if args.peek().is_some_and(|arg| arg == "--circuit-jit") {
+        args.next();
+        return circuit_jit::run(args, engine);
     }
     let (name, runs) = options(args)?;
     benchmark(&name, runs, engine)

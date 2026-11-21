@@ -8,9 +8,12 @@ license.workspace = true
 publish.workspace = true
 
 [features]
+circuit-jit-experiment = ["dep:logisim-jit-spike", "logisim-jit-spike/circuit-jit-experiment", "dep:serde"]
 plugin-metrics = ["logisim-plugin/plugin-metrics"]
 
 [dependencies]
+logisim-jit-spike = { path = "../../apps/logisim-jit-spike", optional = true }
+serde = { workspace = true, optional = true }
 logisim-core.workspace = true
 logisim-plugin.workspace = true
 

@@ -9,7 +9,7 @@ publish = false
 [features]
 circuit-jit-experiment = ["dep:cranelift-codegen", "dep:cranelift-frontend", "dep:memmap2"]
 
-[target.'cfg(all(target_os = "linux", target_arch = "x86_64"))'.dependencies]
+[target.'cfg(all(target_os = "linux", target_arch = "x86_64", target_pointer_width = "64"))'.dependencies]
 cranelift-codegen = { version = "=0.123.20", default-features = false, features = ["std", "x86"], optional = true }
 cranelift-frontend = { version = "=0.123.20", optional = true }
 memmap2 = { version = "=0.9.12", optional = true }
