@@ -514,3 +514,6 @@ fn json_transport_accounts_for_messages_and_reset() {
         (1, 1)
     );
 }
+
+#[cfg(feature = "engine-study")]
+mod metering;

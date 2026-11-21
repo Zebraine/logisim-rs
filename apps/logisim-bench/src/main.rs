@@ -1,4 +1,6 @@
 //! Run from the workspace root. See CONTRIBUTING.md for sampling and counter units.
+#[cfg(feature = "engine-study")]
+mod engine_study;
 mod measure;
 #[cfg(feature = "plugin-metrics")]
 mod phases;
@@ -33,39 +35,57 @@ fn options(mut args: impl Iterator<Item = String>) -> Result<(String, usize)> {
     Ok((name, runs))
 }
 
+struct Open {
+    fixture: Fixture,
+    sim: ProjectSimulator,
+    sync_ms: f64,
+    compile_ms: f64,
+    compiled_nodes: usize,
+    first_settle_ms: f64,
+}
+
+fn open(fixture: Result<Fixture>) -> Result<Open> {
+    let fixture = fixture?;
+    let mut sim = ProjectSimulator::default();
+    sim.set_plugins(fixture.plugins.clone());
+    let syncing = Instant::now();
+    sim.synchronize(&fixture.project, fixture.project.main);
+    let sync_ms = ms(syncing.elapsed());
+    let compiling = Instant::now();
+    let plan = sim.prepare_compiled()?;
+    let compile_ms = ms(compiling.elapsed());
+    let initial = Instant::now();
+    sim.settle_compiled()?;
+    let first_settle_ms = ms(initial.elapsed());
+    Ok(Open {
+        fixture,
+        sim,
+        sync_ms,
+        compile_ms,
+        compiled_nodes: plan.compiled_nodes,
+        first_settle_ms,
+    })
+}
+
 fn benchmark(name: &str, runs: usize) -> Result<Value> {
-    let initialize = || -> Result<_> {
-        let start = Instant::now();
-        let fixture = Fixture::load(name, std::path::Path::new("."))?;
-        let mut sim = ProjectSimulator::default();
-        sim.set_plugins(fixture.plugins.clone());
-        let syncing = Instant::now();
-        sim.synchronize(&fixture.project, fixture.project.main);
-        let sync_ms = ms(syncing.elapsed());
-        let compiling = Instant::now();
-        let plan = sim.prepare_compiled()?;
-        let compile_ms = ms(compiling.elapsed());
-        let initial = Instant::now();
-        sim.settle_compiled()?;
-        let first_settle_ms = ms(initial.elapsed());
-        let cold_ms = ms(start.elapsed());
-        Ok((
-            fixture,
-            sim,
-            sync_ms,
-            compile_ms,
-            plan,
-            first_settle_ms,
-            cold_ms,
-        ))
-    };
+    let start = Instant::now();
+    let initialize = || open(Fixture::load(name, std::path::Path::new(".")));
     #[cfg(feature = "plugin-metrics")]
     let mut cold = logisim_plugin::metrics::Recording::default();
     #[cfg(feature = "plugin-metrics")]
     let initial = phases::capture(&mut cold, initialize);
     #[cfg(not(feature = "plugin-metrics"))]
     let initial = initialize();
-    let (fixture, mut sim, sync_ms, compile_ms, plan, first_settle_ms, cold_ms) = initial?;
+    let Open {
+        fixture,
+        mut sim,
+        sync_ms,
+        compile_ms,
+        compiled_nodes,
+        first_settle_ms,
+        ..
+    } = initial?;
+    let cold_ms = ms(start.elapsed());
     // Isolate a single stable VM instantiation on the already loaded module.
     // Synchronization and plan preparation above include their real runtime instance costs.
     let instance_ms = fixture
@@ -169,7 +189,7 @@ fn benchmark(name: &str, runs: usize) -> Result<Value> {
         "module_load_ms": fixture.module_load_ms,
         "plugin_instance_ms": instance_ms,
         "first_settle_ms": first_settle_ms,
-        "compiled_nodes": plan.compiled_nodes,
+        "compiled_nodes": compiled_nodes,
         "settle_ms": distribution(&mut settles),
         "phase_settle_ms": phase_times,
         "iteration_ms": distribution(&mut iterations),
@@ -187,7 +207,17 @@ fn benchmark(name: &str, runs: usize) -> Result<Value> {
 }
 
 fn main() -> ExitCode {
-    match options(std::env::args().skip(1)).and_then(|(name, runs)| benchmark(&name, runs)) {
+    let mut args = std::env::args().skip(1).peekable();
+    #[cfg(feature = "engine-study")]
+    if args.peek().is_some_and(|arg| arg == "engine-study") {
+        args.next();
+        return print_result(engine_study::run(args));
+    }
+    print_result(options(args.by_ref()).and_then(|(name, runs)| benchmark(&name, runs)))
+}
+
+fn print_result(result: Result<Value>) -> ExitCode {
+    match result {
         Ok(report) => {
             println!("{report}");
             ExitCode::SUCCESS

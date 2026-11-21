@@ -16,6 +16,8 @@ mod presentation;
 mod raster;
 mod reconfiguration;
 mod stable;
+#[cfg(feature = "engine-study")]
+pub mod study;
 #[cfg(test)]
 mod tests;
 use logisim_plugin_api::{
@@ -33,6 +35,39 @@ fn error(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
 
+fn check_binary(bytes: &[u8]) -> Result<()> {
+    if bytes.len() > MAX_MODULE || !bytes.starts_with(b"\0asm") {
+        return Err("Choose a WebAssembly binary within the 4 MiB limit.".into());
+    }
+    Ok(())
+}
+
+fn new_engine() -> Result<Engine> {
+    let mut config = Config::default();
+    config.consume_fuel(true);
+    Ok(Engine::new(&config))
+}
+
+fn compile(engine: &Engine, bytes: &[u8]) -> Result<Module> {
+    let module = timed!("module_compile", Module::new(engine, bytes)).map_err(error)?;
+    if module.imports().next().is_some() {
+        return Err("Plugin imports are not supported (including WASI).".into());
+    }
+    Ok(module)
+}
+
+#[inline]
+fn fuel_budget() -> u64 {
+    #[cfg(feature = "engine-study")]
+    {
+        study::budget()
+    }
+    #[cfg(not(feature = "engine-study"))]
+    {
+        FUEL
+    }
+}
+
 #[derive(Clone)]
 pub struct Plugin {
     module: Module,
@@ -43,16 +78,11 @@ pub struct Plugin {
 }
 impl Plugin {
     pub fn load(bytes: &[u8]) -> Result<Self> {
-        if bytes.len() > MAX_MODULE || !bytes.starts_with(b"\0asm") {
-            return Err("Choose a WebAssembly binary within the 4 MiB limit.".into());
-        }
-        let mut config = Config::default();
-        config.consume_fuel(true);
-        let engine = Engine::new(&config);
-        let module = timed!("module_compile", Module::new(&engine, bytes)).map_err(error)?;
-        if module.imports().next().is_some() {
-            return Err("Plugin imports are not supported (including WASI).".into());
-        }
+        check_binary(bytes)?;
+        Self::from_module(compile(&new_engine()?, bytes)?)
+    }
+
+    fn from_module(module: Module) -> Result<Self> {
         let mut instance = Instance::new(&module)?;
         let Response::Manifest(manifest) = instance.call(&Request::Describe)? else {
             return Err("Plugin did not return a manifest.".into());
@@ -87,13 +117,24 @@ impl Plugin {
         #[cfg(feature = "plugin-metrics")]
         let _span = metrics::timer("load_dependency");
         let plugin = Self::load(bytes)?;
-        if plugin.manifest.id != id || plugin.manifest.version != version {
+        plugin.check_dependency(id, version, components)?;
+        Ok(plugin)
+    }
+
+    /// Validate the saved identity and each saved tool, including on a module-cache hit.
+    pub fn check_dependency<'a>(
+        &self,
+        id: &str,
+        version: &str,
+        components: impl IntoIterator<Item = &'a Component>,
+    ) -> Result<()> {
+        if self.manifest.id != id || self.manifest.version != version {
             return Err("Plugin identity or version does not match the circuit.".into());
         }
         for component in components {
-            plugin.check_component(component)?;
+            self.check_component(component)?;
         }
-        Ok(plugin)
+        Ok(())
     }
     pub fn library(&self) -> logisim_plugin_api::presentation::Library {
         logisim_plugin_api::presentation::Library {
@@ -150,7 +191,7 @@ impl Instance {
             .build();
         let mut store = Store::new(module.engine(), limits);
         store.limiter(|s| s);
-        store.set_fuel(FUEL).map_err(error)?;
+        store.set_fuel(fuel_budget()).map_err(error)?;
         let instance = Linker::<StoreLimits>::new(module.engine())
             .instantiate_and_start(&mut store, module)
             .map_err(error)?;
@@ -198,7 +239,7 @@ impl Instance {
         if bytes.len() > MAX_MESSAGE {
             return Err("Plugin request exceeds message limit.".into());
         }
-        self.store.set_fuel(FUEL).map_err(error)?;
+        self.store.set_fuel(fuel_budget()).map_err(error)?;
         let offset = timed!(
             "guest_buffer",
             self.buffer.call(&mut self.store, bytes.len() as u32)
@@ -212,8 +253,10 @@ impl Instance {
         let packed = timed!(
             "guest_dispatch",
             self.call.call(&mut self.store, bytes.len() as u32)
-        )
-        .map_err(error)?;
+        );
+        #[cfg(feature = "engine-study")]
+        study::record_remaining(&self.store)?;
+        let packed = packed.map_err(error)?;
         let length = (packed >> 32) as usize;
         if length > MAX_MESSAGE {
             return Err("Plugin response exceeds message limit.".into());

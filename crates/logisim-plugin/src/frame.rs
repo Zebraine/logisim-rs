@@ -48,7 +48,7 @@ impl Instance {
         if bytes.len() > MAX_MESSAGE {
             return Err("Plugin configuration exceeds message limit.".into());
         }
-        self.store.set_fuel(FUEL).map_err(error)?;
+        self.store.set_fuel(fuel_budget()).map_err(error)?;
         let offset = self
             .buffer
             .call(&mut self.store, bytes.len() as u32)
@@ -79,7 +79,7 @@ impl Instance {
         #[cfg(feature = "plugin-metrics")]
         let before_copy = frame::metrics::copied_ns();
         let length = timed!("encode", frame::request_len(signals, state))?;
-        self.store.set_fuel(FUEL).map_err(error)?;
+        self.store.set_fuel(fuel_budget()).map_err(error)?;
         let offset = timed!(
             "guest_buffer",
             self.buffer.call(&mut self.store, length as u32)
@@ -102,8 +102,10 @@ impl Instance {
         let packed = timed!(
             "guest_dispatch",
             api.call.call(&mut self.store, length as u32)
-        )
-        .map_err(error)?;
+        );
+        #[cfg(feature = "engine-study")]
+        study::record_remaining(&self.store)?;
+        let packed = packed.map_err(error)?;
         #[cfg(feature = "plugin-metrics")]
         metrics::on_call(|c| {
             c.frame_calls += 1;

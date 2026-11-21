@@ -74,6 +74,14 @@ fn named(c: &Circuit, kind: Kind, label: &str) -> Result<Id> {
 
 impl Fixture {
     pub fn load(name: &str, root: &Path) -> Result<Self> {
+        Self::load_with(name, root, Plugin::load)
+    }
+
+    pub fn load_with(
+        name: &str,
+        root: &Path,
+        mut load: impl FnMut(&[u8]) -> std::result::Result<Plugin, String>,
+    ) -> Result<Self> {
         let mut project = Project::default();
         let mut plugins = Registry::default();
         let mut module_load_ms = None;
@@ -118,12 +126,11 @@ impl Fixture {
                     let bytes = fs::read(path.parent().unwrap().join(&source.path))?;
                     #[cfg(feature = "plugin-metrics")]
                     drop(read);
-                    plugins.insert(Plugin::load_dependency(
-                        &bytes,
-                        &source.plugin,
-                        &source.version,
-                        definitions,
-                    )?)?;
+                    #[cfg(feature = "plugin-metrics")]
+                    let _span = logisim_plugin::metrics::timer("load_dependency");
+                    let plugin = load(&bytes)?;
+                    plugin.check_dependency(&source.plugin, &source.version, definitions)?;
+                    plugins.insert(plugin)?;
                 }
                 module_load_ms = Some(start.elapsed().as_secs_f64() * 1000.0);
                 let c = &project.main_circuit().circuit;

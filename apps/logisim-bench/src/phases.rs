@@ -39,8 +39,17 @@ fn calls(c: &mut Calls) -> Value {
         p50: c.latency_ns[n.div_ceil(2) - 1] as f64 / 1e6,
         p95: c.latency_ns[(95 * n).div_ceil(100) - 1] as f64 / 1e6,
     });
+    #[cfg(feature = "engine-study")]
+    let fuel = {
+        let readings = &mut c.remaining_fuel;
+        readings.sort_unstable();
+        json!({"dispatches": readings.len(), "min_remaining": readings.first(),
+               "max_remaining": readings.last(), "sum_remaining": readings.iter().sum::<u64>()})
+    };
+    #[cfg(not(feature = "engine-study"))]
+    let fuel = Value::Null;
     json!({
-        "calls": n, "total_ns": sum, "first_ns": first, "latency_ms": timing,
+        "fuel": fuel, "calls": n, "total_ns": sum, "first_ns": first, "latency_ms": timing,
         "input_signals": c.input_signals, "output_signals": c.output_signals,
         "linear_memory_used": c.frame_calls != 0,
         "frame_state_copy_ns": {"within_encode": c.state_write_ns, "within_decode": c.state_read_ns},

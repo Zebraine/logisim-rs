@@ -47,7 +47,7 @@ impl Instance {
         if bytes.len() > MAX_MESSAGE {
             return Err("Plugin configuration exceeds message limit.".into());
         }
-        self.store.set_fuel(FUEL).map_err(error)?;
+        self.store.set_fuel(fuel_budget()).map_err(error)?;
         let offset = self
             .buffer
             .call(&mut self.store, bytes.len() as u32)
@@ -78,7 +78,7 @@ impl Instance {
         let revision = previous.map(|i| i.revision);
         let mut request = Vec::new();
         raster::write_request(&mut request, revision, state)?;
-        self.store.set_fuel(FUEL).map_err(error)?;
+        self.store.set_fuel(fuel_budget()).map_err(error)?;
         let offset = self
             .buffer
             .call(&mut self.store, request.len() as u32)

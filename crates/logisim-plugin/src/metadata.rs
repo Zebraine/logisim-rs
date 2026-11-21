@@ -29,7 +29,7 @@ impl Instance {
         let Some(call) = call else {
             return Ok(T::default());
         };
-        self.store.set_fuel(FUEL).map_err(error)?;
+        self.store.set_fuel(fuel_budget()).map_err(error)?;
         let packed = call.call(&mut self.store, ()).map_err(error)?;
         let length = (packed >> 32) as usize;
         if length > MAX_MESSAGE {

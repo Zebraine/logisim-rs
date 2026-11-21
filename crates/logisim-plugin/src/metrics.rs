@@ -11,6 +11,8 @@ pub struct Tally {
 
 #[derive(Default)]
 pub struct Calls {
+    #[cfg(feature = "engine-study")]
+    pub remaining_fuel: Vec<u64>,
     pub latency_ns: Vec<u64>,
     pub spans: BTreeMap<&'static str, Tally>,
     pub frame_calls: usize,
