@@ -86,6 +86,8 @@ logisim-rs 使用带版本号的 Wasm 插件 ABI 提供外部元件。插件可�
 - [`dynamic-branch-prediction.circ`](examples/course/dynamic-branch-prediction.circ) — 动态分支预测。
 - [`single-interrupt.circ`](examples/course/single-interrupt.circ) 与 [`nested-interrupt.circ`](examples/course/nested-interrupt.circ) — 中断变体。
 
+仓库还提供一组由无界面 CLI 生成/编辑的 [Agent 示例](examples/agent/README.md)：计数器、加法器和插件寄存器文件电路。构建脚本记录了具体编辑、仿真结果和插件动作。
+
 示例用于演示已实现行为，并不是所有时序或异常细节的兼容性证明。移动示例时请保留 `examples/` 与 `plugins/` 的相对目录，或使用插件补选功能。
 
 ## 兼容范围

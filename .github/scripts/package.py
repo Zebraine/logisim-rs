@@ -70,7 +70,7 @@ def package(target, plugins):
             shutil.copyfile(ROOT / document, staging / document)
         shutil.copytree(ROOT / "assets", staging / "assets")
         plugin_paths = {f"../../plugins/{name}/{name}.wasm" for name in plugins}
-        for group in ("course", "game"):
+        for group in ("course", "game", "agent"):
             examples = staging / "examples" / group
             examples.mkdir(parents=True)
             circuits = sorted((ROOT / "examples" / group).glob("*.circ"))
@@ -79,15 +79,18 @@ def package(target, plugins):
             for circuit in circuits:
                 tree = ET.parse(circuit)
                 sources = tree.find("./lib[@desc='logisim-rs#plugin-v1']/a[@name='sources']")
-                if sources is None:
+                if sources is not None:
+                    dependencies = json.loads(sources.attrib["val"])
+                    if not dependencies or any(
+                        s["path"] not in plugin_paths or s.get("fallback")
+                        for s in dependencies
+                    ):
+                        raise ValueError(f"Non-portable plugin dependency: {circuit.name}")
+                elif group != "agent":
                     raise ValueError(f"Missing plugin dependency: {circuit.name}")
-                dependencies = json.loads(sources.attrib["val"])
-                if not dependencies or any(
-                    s["path"] not in plugin_paths or s.get("fallback")
-                    for s in dependencies
-                ):
-                    raise ValueError(f"Non-portable plugin dependency: {circuit.name}")
                 shutil.copyfile(circuit, examples / circuit.name)
+            if group == "agent":
+                shutil.copyfile(ROOT / "examples" / "agent" / "README.md", examples / "README.md")
             if group == "game":
                 sources = sorted((ROOT / "examples" / group).glob("*.asm"))
                 images = sorted((ROOT / "examples" / group).glob("*.hex"))

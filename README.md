@@ -86,6 +86,8 @@ Representative starting points include:
 - [`dynamic-branch-prediction.circ`](examples/course/dynamic-branch-prediction.circ) — branch prediction.
 - [`single-interrupt.circ`](examples/course/single-interrupt.circ) and [`nested-interrupt.circ`](examples/course/nested-interrupt.circ) — interrupt variants.
 
+The repository also contains a small [agent-built showcase](examples/agent/README.md) created through the headless CLI: a counter, an adder, and a plugin register-file circuit. The builder script records the exact edits, simulation results and plugin action.
+
 The examples illustrate the implemented behavior; they are not a compatibility test for every timing or exception detail. If you move an example, keep the relative layout between `examples/` and `plugins/`, or use the plugin locator.
 
 ## Compatibility

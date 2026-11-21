@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Written by logisim-rs; source identifies the file format. -->
+<project source="2.16.2.2.jar" version="1.0">
+  <lib desc="#Wiring" name="0"/>
+  <lib desc="#Gates" name="1"/>
+  <lib desc="#Base" name="2"/>
+  <lib desc="#Memory" name="3"/>
+  <lib desc="#Plexers" name="4"/>
+  <lib desc="#Arithmetic" name="5"/>
+  <lib desc="#I/O" name="6"/>
+  <main name="Counter"/>
+  <options>
+    <a name="gateUndefined" val="ignore"/>
+    <a name="simlimit" val="1000"/>
+    <a name="simrand" val="0"/>
+  </options>
+  <mappings>
+    <tool lib="2" map="Button2" name="Poke Tool"/>
+    <tool lib="2" map="Button3" name="Menu Tool"/>
+    <tool lib="2" map="Ctrl Button1" name="Menu Tool"/>
+  </mappings>
+  <toolbar>
+    <tool lib="2" name="Poke Tool"/>
+    <tool lib="2" name="Edit Tool"/>
+    <sep/>
+    <tool lib="2" name="Text Tool"/>
+    <tool lib="0" name="Pin"><a name="tristate" val="false"/></tool>
+    <tool lib="0" name="Pin"><a name="output" val="true"/><a name="facing" val="west"/></tool>
+    <tool lib="1" name="NOT Gate"/>
+    <tool lib="1" name="AND Gate"/>
+    <tool lib="1" name="OR Gate"/>
+  </toolbar>
+  <circuit name="Counter" agent-id="k-2f2a94fc6abf590ce26e0c14e647ecb2">
+    <wire from="(100,100)" to="(100,120)" agent-id="w-f4407aeac9bb7047d6dbf710716a2b9c"/>
+    <wire from="(100,120)" to="(280,120)" agent-id="w-dfd7329b2b58e5e93b10788ab47958b9"/>
+    <wire from="(300,100)" to="(450,100)" agent-id="w-36cf1dff56f2d4828b08eccbdfac8f42"/>
+    <wire from="(180,80)" to="(180,300)" agent-id="w-bb7d0623c50861ad55b163ed386fae6e"/>
+    <wire from="(180,80)" to="(280,80)" agent-id="w-f38e5bba5b5f0a0b5f6f3929950b43e8"/>
+    <wire from="(200,20)" to="(270,20)" agent-id="w-78579d13daa74c858f65f90e03437887"/>
+    <wire from="(270,20)" to="(270,90)" agent-id="w-27833bc115185f747b465a4503ba01ac"/>
+    <wire from="(290,200)" to="(350,200)" agent-id="w-d04f44f97550421bfc334309a334d269"/>
+    <wire from="(290,120)" to="(290,200)" agent-id="w-d9c0ca6900f27ade6ebc874477c0cdea"/>
+    <wire from="(290,80)" to="(290,120)" agent-id="w-d0779947d56c25d5492713c52730d7bd"/>
+    <wire from="(100,320)" to="(270,320)" agent-id="w-a4ea0e5cc29fc5a3b63ed5f8e07027a0"/>
+    <wire from="(270,110)" to="(270,320)" agent-id="w-f10e97ef2f661d45c814d148e3a19289"/>
+    <comp lib="0" loc="(100,100)" name="Clock" agent-id="c-418d7f98d78887b9d17dc5f9dff90412">
+      <a name="facing" val="east"/>
+      <a name="highDuration" val="1"/>
+      <a name="lowDuration" val="1"/>
+      <a name="labelloc" val="west"/>
+      <a name="label" val="Clock"/>
+      <a name="labelfont" val="Dialog plain 14"/>
+      <a name="labelcolor" val="#334155"/>
+    </comp>
+    <comp lib="3" loc="(300,100)" name="Counter" agent-id="c-67d3bd49a930e451039e36971628768c">
+      <a name="width" val="4"/>
+      <a name="trigger" val="rising"/>
+      <a name="max" val="0xf"/>
+      <a name="label" val="Count"/>
+      <a name="labelfont" val="Dialog plain 14"/>
+      <a name="labelcolor" val="#334155"/>
+    </comp>
+    <comp lib="0" loc="(450,100)" name="Probe" agent-id="c-499acd9e7cbe194354bd60c5258b56aa">
+      <a name="facing" val="east"/>
+      <a name="radix" val="16"/>
+      <a name="labelloc" val="north"/>
+      <a name="label" val="Count"/>
+      <a name="labelfont" val="Dialog plain 14"/>
+      <a name="labelcolor" val="#334155"/>
+    </comp>
+    <comp lib="0" loc="(180,300)" name="Power" agent-id="c-75a0654c4a9187e59f8179a91fb67619">
+      <a name="facing" val="north"/>
+      <a name="width" val="1"/>
+    </comp>
+    <comp lib="0" loc="(200,20)" name="Ground" agent-id="c-487564ccf6cafda2e923a8dac7f3016c">
+      <a name="facing" val="south"/>
+      <a name="width" val="1"/>
+    </comp>
+    <comp lib="0" loc="(350,200)" name="Ground" agent-id="c-5017c4d78bf7ea7299659fd9d1b7dc07">
+      <a name="facing" val="south"/>
+      <a name="width" val="1"/>
+    </comp>
+    <comp lib="0" loc="(100,320)" name="Ground" agent-id="c-2360d13426767a96d5b99d548d846f92">
+      <a name="facing" val="south"/>
+      <a name="width" val="1"/>
+    </comp>
+  </circuit>
+</project>

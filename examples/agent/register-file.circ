@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Written by logisim-rs; source identifies the file format. -->
+<project source="logisim-rs-plugin-v1" version="1.0">
+  <lib desc="#Wiring" name="0"/>
+  <lib desc="#Gates" name="1"/>
+  <lib desc="#Base" name="2"/>
+  <lib desc="#Memory" name="3"/>
+  <lib desc="#Plexers" name="4"/>
+  <lib desc="#Arithmetic" name="5"/>
+  <lib desc="#I/O" name="6"/>
+  <!-- Plugin components require logisim-rs and matching Wasm modules. -->
+  <lib desc="logisim-rs#plugin-v1" name="rs-plugin-v1">
+      <a name="sources" val="[{&quot;plugin&quot;:&quot;org.logisim-rs.course&quot;,&quot;version&quot;:&quot;1.0.0&quot;,&quot;path&quot;:&quot;../../plugins/course/course.wasm&quot;,&quot;fallback&quot;:&quot;&quot;}]"/>
+  </lib>
+  <main name="RegisterFile"/>
+  <options>
+    <a name="gateUndefined" val="ignore"/>
+    <a name="simlimit" val="1000"/>
+    <a name="simrand" val="0"/>
+  </options>
+  <mappings>
+    <tool lib="2" map="Button2" name="Poke Tool"/>
+    <tool lib="2" map="Button3" name="Menu Tool"/>
+    <tool lib="2" map="Ctrl Button1" name="Menu Tool"/>
+  </mappings>
+  <toolbar>
+    <tool lib="2" name="Poke Tool"/>
+    <tool lib="2" name="Edit Tool"/>
+    <sep/>
+    <tool lib="2" name="Text Tool"/>
+    <tool lib="0" name="Pin"><a name="tristate" val="false"/></tool>
+    <tool lib="0" name="Pin"><a name="output" val="true"/><a name="facing" val="west"/></tool>
+    <tool lib="1" name="NOT Gate"/>
+    <tool lib="1" name="AND Gate"/>
+    <tool lib="1" name="OR Gate"/>
+  </toolbar>
+  <circuit name="RegisterFile" agent-id="k-ba89a7010fe9d0fec93e680be8103acf">
+    <wire from="(100,290)" to="(190,290)" agent-id="w-0d0f41c47389778a0d15109e68f1e22d"/>
+    <wire from="(100,340)" to="(260,340)" agent-id="w-9b82c29d5fee0651187fdb2f8a9ac61f"/>
+    <wire from="(260,340)" to="(260,390)" agent-id="w-9f30beb404591792ffd74a5bb997cae6"/>
+    <wire from="(100,410)" to="(300,410)" agent-id="w-2aa7f5c871eef149b79adf9dd17761d9"/>
+    <wire from="(300,390)" to="(300,410)" agent-id="w-2cfeeba561b1ec4e462568ed77f16ba1"/>
+    <wire from="(100,440)" to="(230,440)" agent-id="w-4cf3c323018a8cdb739da62d17489f8a"/>
+    <wire from="(230,390)" to="(230,440)" agent-id="w-00fcd0a187760b3f985ec10f54ddb8e7"/>
+    <wire from="(100,380)" to="(190,380)" agent-id="w-3b751d45e095c874ad83c185510ead2b"/>
+    <wire from="(350,250)" to="(500,250)" agent-id="w-aded74a67fb412d216a0ff2ee36030d4"/>
+    <comp lib="rs-plugin-v1" name="register-file" loc="(350,300)" agent-id="c-dfb9dec89d88ffc25a07cd6684099cac">
+      <a name="definition" val="{&quot;plugin&quot;:&quot;org.logisim-rs.course&quot;,&quot;version&quot;:&quot;1.0.0&quot;,&quot;tool&quot;:{&quot;id&quot;:&quot;register-file&quot;,&quot;name&quot;:&quot;Register File (Wasm)&quot;,&quot;bounds&quot;:[[-160,-90],[0,90]],&quot;ports&quot;:[{&quot;id&quot;:&quot;a&quot;,&quot;label&quot;:&quot;Read data A&quot;,&quot;at&quot;:[0,-50],&quot;width&quot;:32,&quot;output&quot;:true},{&quot;id&quot;:&quot;b&quot;,&quot;label&quot;:&quot;Read data B&quot;,&quot;at&quot;:[0,50],&quot;width&quot;:32,&quot;output&quot;:true},{&quot;id&quot;:&quot;w&quot;,&quot;label&quot;:&quot;Write data&quot;,&quot;at&quot;:[-160,-10],&quot;width&quot;:32,&quot;output&quot;:false},{&quot;id&quot;:&quot;clock&quot;,&quot;label&quot;:&quot;Clock&quot;,&quot;at&quot;:[-160,80],&quot;width&quot;:1,&quot;output&quot;:false},{&quot;id&quot;:&quot;enable&quot;,&quot;label&quot;:&quot;Write enable&quot;,&quot;at&quot;:[-120,90],&quot;width&quot;:1,&quot;output&quot;:false},{&quot;id&quot;:&quot;write&quot;,&quot;label&quot;:&quot;Write address&quot;,&quot;at&quot;:[-90,90],&quot;width&quot;:5,&quot;output&quot;:false},{&quot;id&quot;:&quot;read-a&quot;,&quot;label&quot;:&quot;Read address A&quot;,&quot;at&quot;:[-50,90],&quot;width&quot;:5,&quot;output&quot;:false},{&quot;id&quot;:&quot;read-b&quot;,&quot;label&quot;:&quot;Read address B&quot;,&quot;at&quot;:[-30,90],&quot;width&quot;:5,&quot;output&quot;:false}],&quot;graphics&quot;:[{&quot;type&quot;:&quot;rect&quot;,&quot;min&quot;:[-160,-90],&quot;max&quot;:[0,90],&quot;fill&quot;:[237,242,249,255],&quot;stroke&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-146,-84],&quot;text&quot;:&quot;00&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-146,-74],&quot;text&quot;:&quot;01&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-146,-64],&quot;text&quot;:&quot;02&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-146,-54],&quot;text&quot;:&quot;03&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-146,-44],&quot;text&quot;:&quot;04&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-146,-34],&quot;text&quot;:&quot;05&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-146,-24],&quot;text&quot;:&quot;06&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-146,-14],&quot;text&quot;:&quot;07&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-146,-4],&quot;text&quot;:&quot;08&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-146,6],&quot;text&quot;:&quot;09&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-146,16],&quot;text&quot;:&quot;10&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-146,26],&quot;text&quot;:&quot;11&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-146,36],&quot;text&quot;:&quot;12&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-146,46],&quot;text&quot;:&quot;13&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-146,56],&quot;text&quot;:&quot;14&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-146,66],&quot;text&quot;:&quot;15&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-70,-84],&quot;text&quot;:&quot;16&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-70,-74],&quot;text&quot;:&quot;17&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-70,-64],&quot;text&quot;:&quot;18&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-70,-54],&quot;text&quot;:&quot;19&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-70,-44],&quot;text&quot;:&quot;20&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-70,-34],&quot;text&quot;:&quot;21&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-70,-24],&quot;text&quot;:&quot;22&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-70,-14],&quot;text&quot;:&quot;23&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-70,-4],&quot;text&quot;:&quot;24&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-70,6],&quot;text&quot;:&quot;25&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-70,16],&quot;text&quot;:&quot;26&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-70,26],&quot;text&quot;:&quot;27&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-70,36],&quot;text&quot;:&quot;28&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-70,46],&quot;text&quot;:&quot;29&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-70,56],&quot;text&quot;:&quot;30&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-70,66],&quot;text&quot;:&quot;31&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-157,-15],&quot;text&quot;:&quot;W&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-157,72],&quot;text&quot;:&quot;CLK&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-12,-55],&quot;text&quot;:&quot;A&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-12,45],&quot;text&quot;:&quot;B&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-125,80],&quot;text&quot;:&quot;WE&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-95,80],&quot;text&quot;:&quot;rW&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-55,80],&quot;text&quot;:&quot;rA&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]},{&quot;type&quot;:&quot;text&quot;,&quot;at&quot;:[-35,80],&quot;text&quot;:&quot;rB&quot;,&quot;size&quot;:7,&quot;color&quot;:[51,65,85,255]}],&quot;properties&quot;:[{&quot;id&quot;:&quot;trigger&quot;,&quot;label&quot;:&quot;Trigger&quot;,&quot;default&quot;:&quot;rising&quot;,&quot;kind&quot;:{&quot;type&quot;:&quot;choice&quot;,&quot;values&quot;:[&quot;rising&quot;,&quot;falling&quot;,&quot;high&quot;,&quot;low&quot;]}}],&quot;actions&quot;:[{&quot;id&quot;:&quot;write&quot;,&quot;label&quot;:&quot;Write register&quot;,&quot;argument&quot;:&quot;Address (decimal), word (hex)&quot;}]},&quot;properties&quot;:{&quot;trigger&quot;:&quot;rising&quot;}}"/>
+      <a name="label" val="Register File"/>
+    </comp>
+    <comp lib="0" loc="(100,290)" name="Pin" agent-id="c-7b04e28e365857a4a262f733f0c1064d">
+      <a name="facing" val="east"/>
+      <a name="width" val="32"/>
+      <a name="output" val="false"/>
+      <a name="tristate" val="false"/>
+      <a name="pull" val="none"/>
+      <a name="labelloc" val="north"/>
+      <a name="label" val="W"/>
+      <a name="labelfont" val="Dialog plain 14"/>
+      <a name="labelcolor" val="#334155"/>
+    </comp>
+    <comp lib="0" loc="(100,340)" name="Pin" agent-id="c-dd77f3af2ec5c952cdaeea8829610d7c">
+      <a name="facing" val="east"/>
+      <a name="width" val="5"/>
+      <a name="output" val="false"/>
+      <a name="tristate" val="false"/>
+      <a name="pull" val="none"/>
+      <a name="labelloc" val="north"/>
+      <a name="label" val="Write address"/>
+      <a name="labelfont" val="Dialog plain 14"/>
+      <a name="labelcolor" val="#334155"/>
+    </comp>
+    <comp lib="0" loc="(100,410)" name="Pin" agent-id="c-81910f69b44bb69e70f03494392a4cbf">
+      <a name="facing" val="east"/>
+      <a name="width" val="5"/>
+      <a name="output" val="false"/>
+      <a name="tristate" val="false"/>
+      <a name="pull" val="none"/>
+      <a name="labelloc" val="north"/>
+      <a name="label" val="Read address A"/>
+      <a name="labelfont" val="Dialog plain 14"/>
+      <a name="labelcolor" val="#334155"/>
+    </comp>
+    <comp lib="0" loc="(500,250)" name="Probe" agent-id="c-bc96516876a47e3830fa3f3b9c4c0ece">
+      <a name="facing" val="east"/>
+      <a name="radix" val="16"/>
+      <a name="labelloc" val="north"/>
+      <a name="label" val="Read A"/>
+      <a name="labelfont" val="Dialog plain 14"/>
+      <a name="labelcolor" val="#334155"/>
+    </comp>
+    <comp lib="0" loc="(100,440)" name="Power" agent-id="c-40824a6030e8e4a0446c4d086f1a090e">
+      <a name="facing" val="north"/>
+      <a name="width" val="1"/>
+    </comp>
+    <comp lib="0" loc="(100,380)" name="Clock" agent-id="c-8ba3622898a182fceb7d455c710a4eaf">
+      <a name="facing" val="east"/>
+      <a name="highDuration" val="1"/>
+      <a name="lowDuration" val="1"/>
+      <a name="labelloc" val="west"/>
+      <a name="label" val="Clock"/>
+      <a name="labelfont" val="Dialog plain 14"/>
+      <a name="labelcolor" val="#334155"/>
+    </comp>
+  </circuit>
+</project>

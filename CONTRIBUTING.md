@@ -36,7 +36,7 @@ Git 采用 `.gitignore` 白名单，仅包含：
 - 必要的 Rust 源码、Cargo/工具链文件、LICENSE 和 Git/构建配置。
 - `crates/logisim-ui/locales/` 与自带插件 `locales/` 中编译必需的词条。
 - 根目录 `README.md`、`README.zh-CN.md`、`CONTRIBUTING.md`、`AGENTS.md` 及 `assets/` 中的 README 截图。
-- `examples/{course,game}/*.circ`、`examples/game/*.{asm,hex}` 和自带插件的 `plugins/*/*.wasm`。
+- `examples/{course,game,agent}/*.circ`、`examples/game/*.{asm,hex}`、`examples/agent/{README.md,build_showcase.py}` 和自带插件的 `plugins/*/*.wasm`。
 
 `docs/`、`specs/`、`experiments/`、`fixtures/`、`resources/`、缓存及构建产物留在本地，不作为构建依赖。
 新增必要文件同步调整白名单，不用 `git add -f`。示例使用相对插件路径；更新模块后重新校验定义匹配和示例。

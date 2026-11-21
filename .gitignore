@@ -70,6 +70,10 @@
 !/examples/game/*.circ
 !/examples/game/*.asm
 !/examples/game/*.hex
+!/examples/agent/
+!/examples/agent/*.circ
+!/examples/agent/README.md
+!/examples/agent/build_showcase.py
 
 # Local design and observation material, including each directory's README.
 /docs/
