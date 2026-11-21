@@ -123,7 +123,7 @@ impl Files {
         self.autosave.publish(w);
     }
     pub fn busy(&self) -> bool {
-        self.dialog.is_some() || self.capture.is_some()
+        self.dialog.is_some() || self.capture.is_some() || self.restart_pending
     }
     pub fn capturing_image(&self) -> bool {
         self.capture.is_some()
@@ -428,13 +428,45 @@ impl Files {
                 self.load(&path, workspace, sim);
             }
             NextDocument::Restart => self.restart_pending = true,
-            NextDocument::Close => {
-                self.autosave.finish_document();
-                self.allow_close = true;
-                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            NextDocument::Close => self.close(ctx),
+        }
+    }
+
+    fn close(&mut self, ctx: &egui::Context) {
+        self.autosave.finish_document();
+        self.allow_close = true;
+        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+    }
+
+    /// Called after observing this frame's layout. Only approved navigation reaches here.
+    pub fn restart_if_pending<T>(
+        &mut self,
+        ctx: &egui::Context,
+        workspace: &mut Workspace,
+        preferences: &mut crate::preferences::Preferences,
+        spawn: impl FnOnce() -> std::io::Result<T>,
+    ) -> Option<T> {
+        if !std::mem::take(&mut self.restart_pending) {
+            return None;
+        }
+        let result = preferences
+            .flush_for_restart(workspace)
+            .and_then(|()| spawn().map_err(|err| tf!("Could not start the application: {}", err)));
+        match result {
+            Ok(replacement) => {
+                self.close(ctx);
+                Some(replacement)
+            }
+            Err(body) => {
+                self.dialog = Some(Dialog::Message {
+                    title: "Restart failed".into(),
+                    body,
+                });
+                None
             }
         }
     }
+
     fn picker(&mut self, mode: Mode) {
         let suggested = if let Mode::Save(format) | Mode::Copy(format) = mode {
             let stem = self

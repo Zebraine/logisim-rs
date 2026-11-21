@@ -9,6 +9,7 @@ mod memory_import;
 mod plugins;
 mod preferences;
 mod recovery;
+mod restart;
 mod runtime_rates;
 mod simulation;
 mod storage;
@@ -38,6 +39,8 @@ fn main() -> eframe::Result {
         );
         return Ok(());
     }
+    restart::wait_for_previous_process()
+        .map_err(|err| eframe::Error::AppCreation(Box::new(err)))?;
     let mut workspace = logisim_ui::Workspace::default();
     let preferences = preferences::Preferences::load(&mut workspace);
     let window = preferences.initial_window(&workspace);
@@ -52,6 +55,7 @@ fn main() -> eframe::Result {
                 analysis: Default::default(),
                 generation: Default::default(),
                 last_panels: workspace.layout(),
+                replacement: None,
                 workspace,
                 preferences,
                 window,
@@ -88,6 +92,8 @@ struct DesktopApp {
     window: window::WindowState,
     initial_geometry_pending: bool,
     last_panels: logisim_ui::WorkspaceLayout,
+    // Drop the child's stdin after Files and its recovery lease during shutdown.
+    replacement: Option<std::process::Child>,
 }
 
 impl eframe::App for DesktopApp {
@@ -98,6 +104,9 @@ impl eframe::App for DesktopApp {
 impl DesktopApp {
     fn show(&mut self, ui: &mut eframe::egui::Ui) {
         use simulation::Host;
+        if self.replacement.is_some() {
+            return;
+        }
         self.rates
             .record_ticks(self.simulator.receive(&mut self.workspace));
         self.rates.present(
@@ -138,6 +147,15 @@ impl DesktopApp {
             &mut self.preferences,
         );
         self.sync_layout(ui);
+        self.replacement = self.files.restart_if_pending(
+            ui.ctx(),
+            &mut self.workspace,
+            &mut self.preferences,
+            restart::spawn,
+        );
+        if self.replacement.is_some() {
+            return;
+        }
         self.preferences.synchronize(&mut self.workspace);
         let context = ui.ctx().clone();
         self.analysis

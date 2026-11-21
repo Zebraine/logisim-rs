@@ -4,6 +4,7 @@ mod image;
 mod memory;
 mod plugin;
 mod recovery;
+mod restart;
 mod settings;
 
 use super::*;

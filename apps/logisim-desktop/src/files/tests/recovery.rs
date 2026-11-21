@@ -7,7 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-fn checkpoint(files: &mut Files, w: &Workspace) {
+pub(super) fn checkpoint(files: &mut Files, w: &Workspace) {
     let options = w.preferences().files;
     let now = Instant::now();
     for at in [
@@ -86,7 +86,7 @@ fn only_completed_file_actions_clear_the_owned_snapshot() {
     }
 }
 
-fn dirty_project() -> logisim_core::Project {
+pub(super) fn dirty_project() -> logisim_core::Project {
     let mut p = logisim_core::Project::default();
     let c = &mut p.main_circuit_mut().circuit;
     let pin = c.add_component(Component::new(Kind::Pin, Point::new(100, 100)));

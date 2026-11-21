@@ -216,6 +216,18 @@ impl Preferences {
     pub fn flush_layout(&mut self) {
         self.layout_due = Some(Instant::now());
     }
+    pub fn flush_for_restart(&mut self, workspace: &mut Workspace) -> Result<(), String> {
+        // Verify the disk baseline even when the engine choice was saved on an earlier frame.
+        self.write_changes(workspace, true);
+        if self.blocked || !workspace.preferences().files.valid_interval() {
+            return Err(logisim_ui::i18n::tr(
+                "Could not save preferences before restarting. Check Settings and retry.",
+            )
+            .into());
+        }
+        Ok(())
+    }
+
     fn read_settings(&mut self, workspace: &mut Workspace) -> Option<Loaded> {
         let Some(path) = self.path.as_ref() else {
             self.blocked = true;
@@ -281,6 +293,10 @@ impl Preferences {
         self.loaded = loaded;
     }
     pub fn synchronize(&mut self, workspace: &mut Workspace) {
+        self.write_changes(workspace, false);
+    }
+
+    fn write_changes(&mut self, workspace: &mut Workspace, flush_all: bool) {
         if workspace.take_settings_retry() {
             self.retry(workspace);
         }
@@ -290,10 +306,11 @@ impl Preferences {
         {
             recent::truncate(workspace);
         }
-        let layout_due = self.layout_due.is_some_and(|at| Instant::now() >= at);
+        let layout_due = flush_all || self.layout_due.is_some_and(|at| Instant::now() >= at);
         if self.blocked
             || !values.files.valid_interval()
-            || (values == self.loaded.config.settings
+            || (!flush_all
+                && values == self.loaded.config.settings
                 && workspace.plugin_fallback_directory.as_deref()
                     == self.loaded.config.plugins.directory()
                 && workspace.recent() == self.loaded.config.recent
