@@ -4,10 +4,11 @@ use crate::{Accent, Density, Language, SimulationMode};
 use logisim_core::{GateSize, Radix};
 
 pub use logisim_preferences::model::{
-    DefaultZoom, FileSettings, FontPreset, TickHz, UiScale, WorkspaceSettings,
+    DefaultZoom, FileSettings, FontPreset, TickHz, UiScale, WasmEnginePreference, WorkspaceSettings,
 };
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Settings {
+    pub wasm_engine: WasmEnginePreference,
     pub shortcuts: crate::shortcuts::Shortcuts,
     pub files: FileSettings,
     pub workspace: WorkspaceSettings,
@@ -44,6 +45,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            wasm_engine: Default::default(),
             shortcuts: Default::default(),
             files: FileSettings::default(),
             workspace: WorkspaceSettings::default(),
@@ -154,6 +156,9 @@ impl Settings {
             self.shortcuts = self
                 .shortcuts
                 .with_changes(before.shortcuts, after.shortcuts)?;
+        }
+        if before.wasm_engine != after.wasm_engine {
+            self.wasm_engine = after.wasm_engine;
         }
         for entry in super::registry::REGISTRY {
             entry.merge(&mut self, before, after);

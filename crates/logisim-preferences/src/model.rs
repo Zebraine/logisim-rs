@@ -1,6 +1,14 @@
 pub const DEFAULT_TICK_HZ: u32 = 4;
 pub const MAX_TICK_HZ: u32 = 32768;
-pub const CONFIG_VERSION: u32 = 16;
+pub const CONFIG_VERSION: u32 = 17;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum WasmEnginePreference {
+    #[default]
+    Wasmi,
+    Wasmtime,
+}
 pub const FONT_SIZES: std::ops::RangeInclusive<u8> = 8..=32;
 pub const GATE_INPUTS: std::ops::RangeInclusive<u8> = 2..=32;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

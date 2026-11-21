@@ -1,6 +1,5 @@
 //! Versioned disk representation. The UI owns the validated preference types.
 use logisim_ui::{Accent, Density, Language, Settings, SignalPalette, SimulationMode, ThemeMode};
-use serde::{Deserialize, Serialize};
 
 use crate::window::WindowGeometry as _;
 use crate::window::WindowState;
@@ -9,8 +8,7 @@ use logisim_preferences::schema::{
     ModeCode, SignalPaletteCode, Simulation, ThemeCode,
 };
 use logisim_ui::{CONFIG_VERSION, WorkspaceLayout};
-type File<R = Vec<String>, W = WindowState, P = WorkspaceLayout, F = PluginSettings> =
-    wire::File<R, W, P, F>;
+type File<R = Vec<String>, W = WindowState, P = WorkspaceLayout> = wire::File<R, W, P>;
 
 macro_rules! bridge {
     ($read:ident,$write:ident,$ui:ident,$disk:ident; $($v:ident),+) => {
@@ -24,27 +22,22 @@ bridge!(accent_from_disk,accent_to_disk,Accent,AccentCode; Indigo,Blue,Teal);
 bridge!(density_from_disk,density_to_disk,Density,DensityCode; Comfortable,Compact);
 bridge!(signal_palette_from_disk,signal_palette_to_disk,SignalPalette,SignalPaletteCode; Default,HighContrast,ColorblindSafe);
 bridge!(mode_from_disk,mode_to_disk,SimulationMode,ModeCode; Stable,Event);
-#[derive(Default, Clone, Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
+#[derive(Default, Clone)]
 pub(super) struct PluginSettings {
-    #[serde(deserialize_with = "fallback_directory")]
     pub fallback_directory: Option<String>,
 }
 
-fn fallback_directory<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
-    let value = serde_json::Value::deserialize(d)?;
-    let Some(text) = value.as_str() else {
-        return Ok(None);
-    };
+fn fallback_directory(value: &serde_json::Value) -> Option<String> {
+    let text = value.as_str()?;
     let path = std::path::Path::new(text);
-    Ok(match super::canonical_plugin_directory(path) {
+    match super::canonical_plugin_directory(path) {
         Ok(path) => path.into_os_string().into_string().ok(),
         // A configured directory can be temporarily inaccessible (for example a network mount).
         Err(e) if path.is_absolute() && e.kind() == std::io::ErrorKind::PermissionDenied => {
             Some(text.to_owned())
         }
         Err(_) => None,
-    })
+    }
 }
 
 #[derive(Default)]
@@ -69,7 +62,12 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Config, &'static str> {
     let window = file.window.unwrap_or_default();
     logisim_preferences::host::validate(window, panels, &recent)?;
     Ok(Config {
-        plugins: file.plugins.unwrap_or_default(),
+        plugins: PluginSettings {
+            fallback_directory: file
+                .plugins
+                .as_ref()
+                .and_then(|p| fallback_directory(&p.fallback_directory)),
+        },
         settings,
         recent,
         panels,
@@ -84,18 +82,23 @@ pub(super) fn decode_settings(bytes: &[u8]) -> Result<Settings, String> {
     }
     // Host history and geometry can occur in a local config copied by the user.
     // Deserialize only the portable sections, retaining serde's strict field checks.
-    let file: File<IgnoredAny, IgnoredAny, IgnoredAny, IgnoredAny> = serde_json::from_slice(bytes)
-        .map_err(|error| match error.classify() {
+    let file: File<IgnoredAny, IgnoredAny, IgnoredAny> =
+        serde_json::from_slice(bytes).map_err(|error| match error.classify() {
             serde_json::error::Category::Data => logisim_ui::tf!("Invalid preference: {}", error),
             _ => logisim_ui::tf!("Invalid settings JSON: {}", error),
         })?;
     validated(&file).map_err(str::to_owned)
 }
 
-fn validated<R, W, P, F>(file: &File<R, W, P, F>) -> Result<Settings, &'static str> {
+fn validated<R, W, P>(file: &File<R, W, P>) -> Result<Settings, &'static str> {
     let (ui_scale, tick_hz) = file.validate()?;
     let workspace = file.workspace.unwrap_or_default();
     Ok(Settings {
+        wasm_engine: file
+            .plugins
+            .as_ref()
+            .map(|p| p.wasm_engine)
+            .unwrap_or_default(),
         shortcuts: file.shortcuts,
         files: file.files,
         workspace,
@@ -132,7 +135,10 @@ fn validated<R, W, P, F>(file: &File<R, W, P, F>) -> Result<Settings, &'static s
 }
 pub(super) fn encode(config: &Config) -> Vec<u8> {
     bytes(&File {
-        plugins: Some(config.plugins.clone()),
+        plugins: Some(wire::PluginFields {
+            wasm_engine: config.settings.wasm_engine,
+            fallback_directory: serde_json::Value::from(config.plugins.fallback_directory.clone()),
+        }),
         panels: Some(config.panels),
         window: Some(config.window),
         recent: Some(config.recent.clone()),
@@ -146,7 +152,10 @@ pub(super) fn encode_settings(settings: Settings) -> Vec<u8> {
 
 fn portable(s: Settings) -> File {
     File {
-        plugins: None,
+        plugins: Some(wire::PluginFields {
+            wasm_engine: s.wasm_engine,
+            ..Default::default()
+        }),
         recent: None,
         window: None,
         panels: None,

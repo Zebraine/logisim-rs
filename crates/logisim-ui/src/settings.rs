@@ -8,7 +8,8 @@ mod model;
 pub use crate::theme::SignalPalette;
 use crate::{Language, Workspace, i18n::tr, theme};
 pub use model::{
-    DefaultZoom, FileSettings, FontPreset, Settings, TickHz, UiScale, WorkspaceSettings,
+    DefaultZoom, FileSettings, FontPreset, Settings, TickHz, UiScale, WasmEnginePreference,
+    WorkspaceSettings,
 };
 pub(crate) use model::{EditorDisplay, PlacementDefaults};
 
@@ -39,6 +40,15 @@ impl SimulationMode {
 }
 
 impl Workspace {
+    pub fn set_plugin_runtime(
+        &mut self,
+        active: WasmEnginePreference,
+        experimental_available: bool,
+    ) {
+        self.settings_page
+            .set_runtime(active, experimental_available);
+    }
+
     pub fn set_recovery_view(&mut self, view: RecoveryView) {
         self.settings_page.set_recovery(view);
     }

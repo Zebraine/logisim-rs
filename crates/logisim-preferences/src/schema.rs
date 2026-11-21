@@ -8,10 +8,8 @@ use logisim_core::{GateSize, Radix};
 use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[serde(bound(
-    deserialize = "R: Deserialize<'de>, W: Deserialize<'de>, P: Deserialize<'de>, F: Deserialize<'de>"
-))]
-pub struct File<R = Vec<String>, W = WindowState, P = WorkspaceLayout, F = PluginFields> {
+#[serde(bound(deserialize = "R: Deserialize<'de>, W: Deserialize<'de>, P: Deserialize<'de>"))]
+pub struct File<R = Vec<String>, W = WindowState, P = WorkspaceLayout> {
     pub version: u32,
     #[serde(default)]
     pub shortcuts: Shortcuts,
@@ -38,7 +36,7 @@ pub struct File<R = Vec<String>, W = WindowState, P = WorkspaceLayout, F = Plugi
     )]
     pub panels: Option<P>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub plugins: Option<F>,
+    pub plugins: Option<PluginFields>,
     #[serde(default)]
     pub general: General,
     #[serde(default)]
@@ -237,9 +235,11 @@ fn present<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(
 #[derive(Default, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct PluginFields {
+    pub wasm_engine: WasmEnginePreference,
+    #[serde(skip_serializing_if = "serde_json::Value::is_null")]
     pub fallback_directory: serde_json::Value,
 }
-impl<R, W, P, F> File<R, W, P, F> {
+impl<R, W, P> File<R, W, P> {
     pub fn validate(&self) -> Result<(UiScale, TickHz), &'static str> {
         if !matches!(self.version, 1..=CONFIG_VERSION) {
             return Err("Unsupported configuration version.");
@@ -297,7 +297,9 @@ impl File {
         self.recent = None;
         self.window = None;
         self.panels = None;
-        self.plugins = None;
+        self.plugins
+            .get_or_insert_with(Default::default)
+            .fallback_directory = serde_json::Value::Null;
         self
     }
 }

@@ -1009,6 +1009,14 @@
     "{} · {} bit(s)": "{} · {} 位",
     "{} · {} ports": "{} · {} 个端口",
     "{} · {} · {} bit": "{} · {} · {} 位",
-    "{} · {} · {} bit(s) · Pin ({}, {})": "{} · {} · {} 位 · 引脚（{}, {}）"
+    "{} · {} · {} bit(s) · Pin ({}, {})": "{} · {} · {} 位 · 引脚（{}, {}）",
+    "Restart the desktop application to apply this change.": "重启桌面应用后生效。",
+    "Running engine: {}": "当前运行引擎：{}",
+    "This build does not include the experimental engine.": "此构建未包含实验性引擎。",
+    "Use experimental Wasmtime on the next desktop start?": "下次启动桌面应用时使用实验性 Wasmtime？",
+    "Wasm plugin engine": "Wasm 插件引擎",
+    "Wasmtime (Experimental)": "Wasmtime（实验性）",
+    "Wasmtime can take longer on first load. The same fuel budget can pause a plugin at a different point. Windows and macOS have not been verified.": "Wasmtime 首次加载可能明显更慢。相同的 fuel 预算可能使插件在不同位置暂停。Windows 和 macOS 尚未实机验证。",
+    "wasmi (default)": "wasmi（默认）"
   }
 }

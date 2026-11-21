@@ -33,12 +33,49 @@ pub(crate) struct Page {
     category: Category,
     query: String,
     confirm_reset: bool,
+    active_engine: WasmEnginePreference,
+    experimental_available: bool,
+    confirm_engine: bool,
     bindings: bindings::BindingEditor,
     confirm_clear: bool,
     recovery: RecoveryView,
     frequency_draft: Option<u32>,
 }
 impl Page {
+    pub(super) fn set_runtime(&mut self, active: WasmEnginePreference, available: bool) {
+        self.active_engine = active;
+        self.experimental_available = available;
+    }
+
+    fn engine_card(&mut self, ui: &mut Ui, values: &mut Settings) {
+        use WasmEnginePreference::{Wasmi, Wasmtime};
+        ui.push_id("plugins.wasm_engine", |ui| {
+        theme::card(ui, tr("Wasm plugin engine"), |ui| {
+            ui.label(tf!("Running engine: {}", match self.active_engine { Wasmi => "wasmi", Wasmtime => "Wasmtime" }));
+            ui.horizontal_wrapped(|ui| {
+                if ui.selectable_label(values.wasm_engine == Wasmi, tr("wasmi (default)")).clicked() {
+                    values.wasm_engine = Wasmi;
+                    self.confirm_engine = false;
+                }
+                if ui.add_enabled(self.experimental_available, egui::Button::selectable(values.wasm_engine == Wasmtime, tr("Wasmtime (Experimental)"))).clicked() && values.wasm_engine != Wasmtime {
+                    self.confirm_engine = true;
+                }
+            });
+            if !self.experimental_available { ui.label(tr("This build does not include the experimental engine.")); }
+            ui.label(tr("Wasmtime can take longer on first load. The same fuel budget can pause a plugin at a different point. Windows and macOS have not been verified."));
+            if self.confirm_engine {
+                ui.label(tr("Use experimental Wasmtime on the next desktop start?"));
+                ui.horizontal_wrapped(|ui| {
+                    if ui.button(tr("Confirm")).clicked() { values.wasm_engine = Wasmtime; self.confirm_engine = false; }
+                    if ui.button(tr("Cancel")).clicked() { self.confirm_engine = false; }
+                });
+            }
+            if values.wasm_engine != self.active_engine && self.experimental_available {
+                ui.label(tr("Restart the desktop application to apply this change."));
+            }
+        });
+        });
+    }
     pub(super) fn showing_files(&self) -> bool {
         self.category == Category::Files && self.query.trim().is_empty()
     }
@@ -53,6 +90,7 @@ impl Page {
         self.confirm_clear = false;
         self.query.clear();
         self.confirm_reset = false;
+        self.confirm_engine = false;
         self.frequency_draft = None;
     }
     pub(super) fn show(
@@ -222,6 +260,7 @@ impl Page {
         self.confirm_clear = false;
         self.query.clear();
         self.confirm_reset = false;
+        self.confirm_engine = false;
         self.frequency_draft = None;
     }
     fn content(
@@ -284,6 +323,7 @@ impl Page {
             });
             ui.add_space(f32::from(theme::metrics(ui.ctx()).gap));
             fallback_card(ui, info.plugin_fallback_directory, compact, action);
+            self.engine_card(ui, values);
             return;
         }
         let mut found = !q.is_empty()
@@ -297,6 +337,20 @@ impl Page {
         if found {
             fallback_card(ui, info.plugin_fallback_directory, compact, action);
             ui.add_space(f32::from(theme::metrics(ui.ctx()).gap));
+        }
+        if !q.is_empty()
+            && [
+                "plugins.wasm_engine",
+                "wasmi",
+                "wasmtime",
+                "Wasm plugin engine",
+                tr("Wasm plugin engine"),
+            ]
+            .iter()
+            .any(|s| s.to_lowercase().contains(&q))
+        {
+            self.engine_card(ui, values);
+            found = true;
         }
         let active = self.category;
         let files_page = self.showing_files();

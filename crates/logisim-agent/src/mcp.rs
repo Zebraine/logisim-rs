@@ -33,7 +33,7 @@ const TOOLS: [(&str, &str, Effect); 19] = [
     ),
     (
         "settings_catalog",
-        "List portable v16 preference keys, defaults and allowed values.",
+        "List portable v17 preference keys, defaults and allowed values.",
         Effect::ReadOnly,
     ),
     (

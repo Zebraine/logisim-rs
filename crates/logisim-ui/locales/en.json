@@ -1009,6 +1009,14 @@
     "{} · {} bit(s)": "{} · {} bit(s)",
     "{} · {} ports": "{} · {} ports",
     "{} · {} · {} bit": "{} · {} · {} bit",
-    "{} · {} · {} bit(s) · Pin ({}, {})": "{} · {} · {} bit(s) · Pin ({}, {})"
+    "{} · {} · {} bit(s) · Pin ({}, {})": "{} · {} · {} bit(s) · Pin ({}, {})",
+    "Restart the desktop application to apply this change.": "Restart the desktop application to apply this change.",
+    "Running engine: {}": "Running engine: {}",
+    "This build does not include the experimental engine.": "This build does not include the experimental engine.",
+    "Use experimental Wasmtime on the next desktop start?": "Use experimental Wasmtime on the next desktop start?",
+    "Wasm plugin engine": "Wasm plugin engine",
+    "Wasmtime (Experimental)": "Wasmtime (Experimental)",
+    "Wasmtime can take longer on first load. The same fuel budget can pause a plugin at a different point. Windows and macOS have not been verified.": "Wasmtime can take longer on first load. The same fuel budget can pause a plugin at a different point. Windows and macOS have not been verified.",
+    "wasmi (default)": "wasmi (default)"
   }
 }

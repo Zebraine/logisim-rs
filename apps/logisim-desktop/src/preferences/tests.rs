@@ -125,7 +125,7 @@ fn missing_fields_default_and_invalid_json_stays_intact_after_edits() {
     for json in [
         "{",
         "{}",
-        r#"{"version":17}"#,
+        r#"{"version":18}"#,
         r#"{"version":16,"editor":{"default_font_family":"unknown"}}"#,
         r#"{"version":16,"editor":{"default_font_italic":1}}"#,
         r#"{"version":15,"appearance":{"dark_artwork_contrast":"false"}}"#,
@@ -208,6 +208,7 @@ fn all_fields_restart_reset_and_atomic_conflict_protection() {
         .bind(logisim_ui::shortcuts::Command::Save, "f5".parse().unwrap())
         .unwrap();
     let alternative = Settings {
+        wasm_engine: logisim_ui::WasmEnginePreference::Wasmtime,
         shortcuts,
         files: logisim_ui::FileSettings {
             autosave: false,
@@ -258,7 +259,7 @@ fn all_fields_restart_reset_and_atomic_conflict_protection() {
         let bytes = schema::encode_settings(desired);
         assert_eq!(schema::decode_settings(&bytes).unwrap(), desired);
         let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-        assert_eq!(json.as_object().unwrap().len(), 9);
+        assert_eq!(json.as_object().unwrap().len(), 10);
         for key in [
             "version",
             "general",
@@ -269,6 +270,7 @@ fn all_fields_restart_reset_and_atomic_conflict_protection() {
             "shortcuts",
             "simulation",
             "generation",
+            "plugins",
         ] {
             assert!(json.get(key).is_some(), "{key}");
         }
@@ -414,8 +416,8 @@ fn layout_waits_for_idle_or_close_and_restores_only_when_enabled() {
 }
 
 #[test]
-fn earlier_preferences_migrate_to_v16_and_editor_defaults_round_trip() {
-    for version in 1..=15 {
+fn earlier_preferences_migrate_to_v17_and_editor_defaults_round_trip() {
+    for version in 1..=16 {
         let json = serde_json::json!({"version":version,"editor":{"show_grid":false}});
         let config = schema::decode(json.to_string().as_bytes()).unwrap();
         assert_eq!(
@@ -426,7 +428,7 @@ fn earlier_preferences_migrate_to_v16_and_editor_defaults_round_trip() {
             }
         );
         let encoded: serde_json::Value = serde_json::from_slice(&schema::encode(&config)).unwrap();
-        assert_eq!(encoded["version"], 16);
+        assert_eq!(encoded["version"], logisim_ui::CONFIG_VERSION);
         assert_eq!(encoded["editor"]["default_font_family"], "dialog");
         assert_eq!(encoded["editor"]["default_font_bold"], false);
         assert_eq!(encoded["editor"]["default_font_italic"], false);
@@ -729,13 +731,13 @@ fn portable_files_migrate_validate_bindings_and_ignore_host_metadata() {
         assert_eq!(
             serde_json::from_slice::<serde_json::Value>(&schema::encode_settings(settings))
                 .unwrap()["version"],
-            16
+            logisim_ui::CONFIG_VERSION
         );
     }
     for json in [
         "",
         "{}",
-        r#"{"version":17}"#,
+        r#"{"version":18}"#,
         r#"{"version":16,"editor":{"default_font_family":"unknown"}}"#,
         r#"{"version":16,"editor":{"default_font_italic":1}}"#,
         r#"{"version":15,"appearance":{"dark_artwork_contrast":"false"}}"#,
@@ -868,7 +870,7 @@ fn fallback_directory_is_validated_local_state_and_survives_portable_transfers()
     );
     let portable: serde_json::Value =
         serde_json::from_slice(&Preferences::export_settings(&ws)).unwrap();
-    assert!(portable.get("plugins").is_none());
+    assert!(portable["plugins"] == serde_json::json!({"wasm_engine":"wasmi"}));
     let local = dir.canonicalize().unwrap();
     for version in [13, 14, 15] {
         let mut other = serde_json::json!({
@@ -888,14 +890,14 @@ fn fallback_directory_is_validated_local_state_and_survives_portable_transfers()
         assert_eq!(saved.plugins.directory(), Some(local.as_path()));
         let exported: serde_json::Value =
             serde_json::from_slice(&Preferences::export_settings(&ws)).unwrap();
-        assert_eq!(exported["version"], 16);
+        assert_eq!(exported["version"], logisim_ui::CONFIG_VERSION);
         assert_eq!(exported["general"]["language"], "zh-CN");
         assert_eq!(exported["appearance"]["theme"], "dark");
         assert_eq!(
             exported["appearance"]["dark_artwork_contrast"],
             version < 15
         );
-        assert!(exported.get("plugins").is_none());
+        assert!(exported["plugins"] == serde_json::json!({"wasm_engine":"wasmi"}));
     }
     ws.plugin_fallback_directory = None;
     prefs.synchronize(&mut ws);
@@ -1055,12 +1057,33 @@ fn agent_catalog_and_atomic_patch_round_trip_every_desktop_preference() {
         serde_json::from_slice(&schema::encode_settings(decoded.settings)).unwrap();
     assert_eq!(
         desktop.as_object_mut().unwrap().remove("version"),
-        Some(json!(16))
+        Some(json!(logisim_ui::CONFIG_VERSION))
     );
     assert_eq!(desktop, expected);
     let old: Value = serde_json::from_slice(&original).unwrap();
     let new: Value = serde_json::from_slice(&bytes).unwrap();
-    for key in ["recent", "window", "panels", "plugins"] {
+    assert_eq!(
+        old["plugins"]["fallback_directory"],
+        new["plugins"]["fallback_directory"]
+    );
+    for key in ["recent", "window", "panels"] {
         assert_eq!(old[key], new[key]);
     }
+}
+
+#[test]
+fn engine_preference_is_portable_and_validated_before_import() {
+    use logisim_ui::WasmEnginePreference;
+    let config =
+        schema::decode(br#"{"version":16,"plugins":{"fallback_directory":null}}"#).unwrap();
+    assert_eq!(config.settings.wasm_engine, WasmEnginePreference::Wasmi);
+    let settings = Settings {
+        wasm_engine: WasmEnginePreference::Wasmtime,
+        ..config.settings
+    };
+    let bytes = schema::encode_settings(settings);
+    assert_eq!(schema::decode_settings(&bytes).unwrap(), settings);
+    let bad = br#"{"version":17,"plugins":{"wasm_engine":"auto"}}"#;
+    assert!(schema::decode_settings(bad).is_err());
+    assert!(schema::decode(bad).is_err());
 }
