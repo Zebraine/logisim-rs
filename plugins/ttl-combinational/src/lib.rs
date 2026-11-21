@@ -13,6 +13,7 @@ use logisim_plugin_api::*;
 pub use presentation::metadata as ui_metadata;
 
 logisim_plugin_sdk::export_plugin!(
+    execution = Both,
     handle,
     stable = handle_stable_frame,
     presentation = ui_metadata

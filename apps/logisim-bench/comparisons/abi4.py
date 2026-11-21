@@ -44,7 +44,7 @@ def run(args, root, name, abi, engine, cache=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--abi4", type=Path, required=True, help="SDK-built course ABI 4 module")
+    parser.add_argument("--abi4", type=Path, default=REPO / COURSE, help="SDK-built course ABI 4 module")
     parser.add_argument("--bench", type=Path, default=REPO / "target/release/logisim-bench")
     parser.add_argument("--cpu", type=int, required=True)
     parser.add_argument("--trials", type=int, default=5)
@@ -54,11 +54,11 @@ def main():
     if args.trials < 1:
         parser.error("trials must be positive")
     report = {"sha256": {str(abi): hashlib.sha256(path.read_bytes()).hexdigest()
-                         for abi, path in [(3, REPO / COURSE), (4, args.abi4)]},
+                         for abi, path in [(3, REPO / "plugins/abi3/course.wasm"), (4, args.abi4)]},
               "cpu": args.cpu, "trials": []}
     with tempfile.TemporaryDirectory(prefix="logisim-abi4-") as scratch:
         base = Path(scratch)
-        for abi, wasm in [(3, REPO / COURSE), (4, args.abi4)]:
+        for abi, wasm in [(3, REPO / "plugins/abi3/course.wasm"), (4, args.abi4)]:
             fixtures(base / str(abi), wasm)
         for trial in range(args.trials):
             for name in CASES:

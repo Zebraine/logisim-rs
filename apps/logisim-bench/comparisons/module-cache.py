@@ -79,8 +79,8 @@ def one_trial(args, name, trial):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bench", type=Path, default=REPO/"target/release/logisim-bench")
-    parser.add_argument("--abi4", type=Path, default=REPO/"target/wasm32-unknown-unknown/release/logisim_course_plugin.wasm",
-                        help="Course module built with execution-abi4")
+    parser.add_argument("--abi4", type=Path, default=REPO/"plugins/course/course.wasm",
+                        help="Dual-engine ABI 4 course module")
     parser.add_argument("--cpu", required=True, type=int)
     parser.add_argument("--peer-cpu", required=True, type=int)
     parser.add_argument("--trials", type=int, default=5)

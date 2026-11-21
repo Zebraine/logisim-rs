@@ -6,6 +6,7 @@ mod tests;
 use logisim_plugin_api::*;
 use state::State;
 logisim_plugin_sdk::export_plugin!(
+    execution = Both,
     handle,
     stable = stable_frame,
     presentation = presentation,

@@ -55,6 +55,7 @@
 !/plugins/**/src/**/*.rs
 !/plugins/course/locales/zh-CN.json
 !/plugins/ttl/locales/zh-CN.json
+!/plugins/abi3/*.wasm
 !/plugins/course/course.wasm
 !/plugins/ttl/ttl.wasm
 !/plugins/ttl-combinational/ttl-combinational.wasm

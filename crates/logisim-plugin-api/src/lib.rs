@@ -2,7 +2,7 @@
 //!
 //! An ABI 1–3 Wasm32 module exports `memory`, `logisim_abi: () -> i32` (returns its ABI version),
 //! `logisim_buffer: (i32) -> i32`, and `logisim_call: (i32) -> i64`.
-//! Experimental ABI 4 replaces `logisim_abi` with exactly one function named by
+//! Opt-in ABI 4 replaces `logisim_abi` with exactly one function named by
 //! [`AllowedEngines::entry`]. It returns 4. Its static engine declaration and the
 //! Describe manifest must agree. Each request gets 10M units of engine-specific fuel.
 //! The host allocates an initialized request buffer, writes exactly the requested bytes,

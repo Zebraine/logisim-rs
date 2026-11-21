@@ -202,7 +202,7 @@ impl Manifest {
         require(supports_abi(self.abi), "Unsupported plugin ABI version.")?;
         require(
             (self.abi == EXECUTION_ABI_VERSION) == self.execution.is_some(),
-            "Execution declaration is required exclusively for experimental ABI 4.",
+            "Execution declaration is required exclusively for ABI 4.",
         )?;
         require(
             id(&self.id)

@@ -172,17 +172,14 @@ fn stable_call_intervals_partition_real_frame_settles() -> Result<()> {
 
 #[cfg(feature = "wasmtime-experimental")]
 #[test]
-fn both_preferences_replay_the_legacy_course_traces_using_wasmi() -> Result<()> {
+fn bundled_course_replays_identical_traces_on_both_requested_engines() -> Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     for name in ["plugin", "single-cycle"] {
         let replay = |engine| -> Result<_> {
             let mut opened = open(Fixture::load_with(name, &root, |bytes| {
                 logisim_plugin::Plugin::load_with_engine(bytes, engine)
             }))?;
-            assert_eq!(
-                opened.fixture.runtime,
-                Some((3, logisim_plugin::WasmEngine::Wasmi))
-            );
+            assert_eq!(opened.fixture.runtime, Some((4, engine)));
             let trace = trial(&opened.fixture, &mut opened.sim)?.trace;
             assert_eq!(trace.digest, opened.fixture.stimulus.expected_digest());
             assert!(opened.sim.diagnostics(&[]).is_empty());

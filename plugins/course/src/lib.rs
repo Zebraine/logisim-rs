@@ -12,13 +12,6 @@ mod tests;
 use logisim_core::Value;
 use logisim_course::RegisterFile;
 use logisim_plugin_api::*;
-#[cfg(not(feature = "execution-abi4"))]
-logisim_plugin_sdk::export_plugin!(
-    handle,
-    stable = handle_stable_frame,
-    presentation = ui_metadata
-);
-#[cfg(feature = "execution-abi4")]
 logisim_plugin_sdk::export_plugin!(
     execution = Both,
     handle,
