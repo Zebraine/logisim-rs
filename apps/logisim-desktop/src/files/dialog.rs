@@ -152,19 +152,35 @@ impl Dialog {
                     });
                 })
             }
-            Dialog::ImportSettings { path, .. } => Window::prompt("confirm-settings-import").confirm(
-                ctx, tr("Import settings?"),
-                &logisim_ui::tf!("Replace your current preferences with the settings in {}? Your circuit, recent projects, window and panel layout are preserved.", path.file_name().expect("selected file").to_string_lossy()),
-                tr("Import settings"), || answer = Response::Import
-            ),
-            Dialog::ReplaceImage(super::image::ImageTarget { path, .. }) | Dialog::ReplaceSettings { path, .. } | Dialog::Replace { path, .. } => Window::prompt("replace-file").confirm(
+            Dialog::ImportSettings { path, settings } => {
+                let mut question = logisim_ui::tf!(
+                    "Replace your current preferences with the settings in {}? Your circuit, recent projects, window and panel layout are preserved.",
+                    path.file_name().expect("selected file").to_string_lossy()
+                );
+                if settings.uses_experimental_engine() {
+                    question.push_str("\n\n");
+                    question.push_str(tr("On restart, experimental Wasmtime may load more slowly and may pause at a different fuel boundary. Builds without it use wasmi."));
+                }
+                Window::prompt("confirm-settings-import").confirm(
+                    ctx,
+                    tr("Import settings?"),
+                    &question,
+                    tr("Import settings"),
+                    || answer = Response::Import,
+                )
+            }
+            Dialog::ReplaceImage(super::image::ImageTarget { path, .. })
+            | Dialog::ReplaceSettings { path, .. }
+            | Dialog::Replace { path, .. } => Window::prompt("replace-file").confirm(
                 ctx,
                 tr("Replace existing file?"),
                 &path.to_string_lossy(),
                 tr("Replace"),
                 || answer = Response::Replace,
             ),
-            Dialog::ImageMessage {title, body} | Dialog::SettingsMessage {title, body} => Window::prompt("settings-file-message").message(ctx,tr(title),body),
+            Dialog::ImageMessage { title, body } | Dialog::SettingsMessage { title, body } => {
+                Window::prompt("settings-file-message").message(ctx, tr(title), body)
+            }
             Dialog::Message { title, body } => {
                 Window::prompt("file-message").message(ctx, tr(title), body)
             }

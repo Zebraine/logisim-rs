@@ -1017,6 +1017,8 @@
     "Wasm plugin engine": "Wasm plugin engine",
     "Wasmtime (Experimental)": "Wasmtime (Experimental)",
     "Wasmtime can take longer on first load. The same fuel budget can pause a plugin at a different point. Windows and macOS have not been verified.": "Wasmtime can take longer on first load. The same fuel budget can pause a plugin at a different point. Windows and macOS have not been verified.",
-    "wasmi (default)": "wasmi (default)"
+    "wasmi (default)": "wasmi (default)",
+    "This build does not include Wasmtime. Plugins will run with wasmi for this session.": "This build does not include Wasmtime. Plugins will run with wasmi for this session.",
+    "On restart, experimental Wasmtime may load more slowly and may pause at a different fuel boundary. Builds without it use wasmi.": "On restart, experimental Wasmtime may load more slowly and may pause at a different fuel boundary. Builds without it use wasmi."
   }
 }

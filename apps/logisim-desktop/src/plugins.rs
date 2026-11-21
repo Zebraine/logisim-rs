@@ -3,7 +3,7 @@ use logisim_core::{
     Project,
     plugin::{PluginSource, api},
 };
-use logisim_plugin::{Plugin, Registry};
+use logisim_plugin::{Plugin, Registry, WasmEngine};
 use logisim_ui::i18n::tr;
 #[cfg(test)]
 mod tests;
@@ -22,6 +22,7 @@ pub(crate) struct Row {
     components: Vec<api::Component>,
 }
 pub(crate) struct Resolution {
+    engine: WasmEngine,
     pub rows: Vec<Row>,
     pub base: PathBuf,
     fallback_directory: Option<PathBuf>,
@@ -150,6 +151,7 @@ impl Row {
 
 impl Resolution {
     pub fn new(
+        engine: WasmEngine,
         project: &Project,
         base: PathBuf,
         fallback_directory: Option<&Path>,
@@ -195,6 +197,7 @@ impl Resolution {
                 .push(c.clone());
         }
         let mut result = Self {
+            engine,
             rows: rows.into_values().collect(),
             base,
             fallback_directory: fallback_directory.map(Path::to_owned),
@@ -217,6 +220,7 @@ impl Resolution {
         let mut errors = Vec::new();
         for (path, from_directory) in candidates {
             match load(
+                self.engine,
                 &path,
                 &row.source.plugin,
                 &row.source.version,
@@ -279,11 +283,13 @@ impl Resolution {
     }
 }
 fn load(
+    engine: WasmEngine,
     path: &Path,
     id: &str,
     version: &str,
     components: &[api::Component],
 ) -> Result<Plugin, String> {
     let bytes = crate::storage::read_file(path, tr("Choose a regular .wasm file."))?;
-    Plugin::load_dependency(&bytes, id, version, components).map_err(|e| tr(&e).to_owned())
+    Plugin::load_dependency_with_engine(&bytes, id, version, components, engine)
+        .map_err(|e| tr(&e).to_owned())
 }

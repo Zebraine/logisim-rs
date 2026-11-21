@@ -27,7 +27,7 @@ fn main() -> eframe::Result {
         Box::new(move |cc| {
             logisim_ui::configure(&cc.egui_ctx);
             workspace.preferences().apply_appearance(&cc.egui_ctx);
-            let files = files::Files::with_recovery(preferences.recovery_directory());
+            let files = files::Files::for_desktop(preferences.recovery_directory(), &mut workspace);
             let mut app = DesktopApp {
                 analysis: Default::default(),
                 generation: Default::default(),

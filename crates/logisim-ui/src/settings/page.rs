@@ -49,31 +49,54 @@ impl Page {
 
     fn engine_card(&mut self, ui: &mut Ui, values: &mut Settings) {
         use WasmEnginePreference::{Wasmi, Wasmtime};
-        ui.push_id("plugins.wasm_engine", |ui| {
+        const WARNING: &str = "Wasmtime can take longer on first load. The same fuel budget can pause a plugin at a different point. Windows and macOS have not been verified.";
+        let running = match self.active_engine {
+            Wasmi => "wasmi",
+            Wasmtime => "Wasmtime",
+        };
         theme::card(ui, tr("Wasm plugin engine"), |ui| {
-            ui.label(tf!("Running engine: {}", match self.active_engine { Wasmi => "wasmi", Wasmtime => "Wasmtime" }));
-            ui.horizontal_wrapped(|ui| {
-                if ui.selectable_label(values.wasm_engine == Wasmi, tr("wasmi (default)")).clicked() {
-                    values.wasm_engine = Wasmi;
-                    self.confirm_engine = false;
-                }
-                if ui.add_enabled(self.experimental_available, egui::Button::selectable(values.wasm_engine == Wasmtime, tr("Wasmtime (Experimental)"))).clicked() && values.wasm_engine != Wasmtime {
-                    self.confirm_engine = true;
-                }
+            ui.label(tf!("Running engine: {}", running));
+            ui.push_id("plugins.wasm_engine", |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    if ui
+                        .selectable_label(values.wasm_engine == Wasmi, tr("wasmi (default)"))
+                        .clicked()
+                    {
+                        values.wasm_engine = Wasmi;
+                        self.confirm_engine = false;
+                    }
+                    let experimental = egui::Button::selectable(
+                        values.wasm_engine == Wasmtime,
+                        tr("Wasmtime (Experimental)"),
+                    );
+                    if ui
+                        .add_enabled(self.experimental_available, experimental)
+                        .clicked()
+                        && values.wasm_engine != Wasmtime
+                    {
+                        self.confirm_engine = true;
+                    }
+                });
             });
-            if !self.experimental_available { ui.label(tr("This build does not include the experimental engine.")); }
-            ui.label(tr("Wasmtime can take longer on first load. The same fuel budget can pause a plugin at a different point. Windows and macOS have not been verified."));
+            if !self.experimental_available {
+                ui.label(tr("This build does not include the experimental engine."));
+            }
+            ui.label(tr(WARNING));
             if self.confirm_engine {
                 ui.label(tr("Use experimental Wasmtime on the next desktop start?"));
                 ui.horizontal_wrapped(|ui| {
-                    if ui.button(tr("Confirm")).clicked() { values.wasm_engine = Wasmtime; self.confirm_engine = false; }
-                    if ui.button(tr("Cancel")).clicked() { self.confirm_engine = false; }
+                    if ui.button(tr("Confirm")).clicked() {
+                        values.wasm_engine = Wasmtime;
+                        self.confirm_engine = false;
+                    }
+                    if ui.button(tr("Cancel")).clicked() {
+                        self.confirm_engine = false;
+                    }
                 });
             }
             if values.wasm_engine != self.active_engine && self.experimental_available {
                 ui.label(tr("Restart the desktop application to apply this change."));
             }
-        });
         });
     }
     pub(super) fn showing_files(&self) -> bool {

@@ -94,6 +94,7 @@ fn backup_search_toggle_and_resets_work_in_both_files_layouts() {
 fn registry_restores_each_field_without_changing_other_preferences() {
     let defaults = Settings::default();
     let alternative = Settings {
+        wasm_engine: defaults.wasm_engine,
         shortcuts: Default::default(),
         files: FileSettings {
             autosave: false,
@@ -1856,6 +1857,57 @@ fn dark_artwork_toggle_and_resets_preserve_the_workspace_in_both_layouts() {
                 assert!(!app.simulation_mut().enabled && app.simulation_mut().ticks == 27);
                 assert!(app.take_simulation_actions().is_empty());
             }
+        }
+    }
+}
+
+#[test]
+fn experimental_engine_requires_confirmation_and_keeps_current_runtime() {
+    use WasmEnginePreference::{Wasmi, Wasmtime};
+    for language in Language::ALL {
+        let t = |label| crate::i18n::with_language(language, || tr(label));
+        for (size, theme) in [
+            (vec2(720., 480.), crate::ThemeMode::Dark),
+            (vec2(1200., 820.), crate::ThemeMode::Light),
+        ] {
+            let ctx = Context::default();
+            crate::configure(&ctx);
+            let mut w = Workspace {
+                settings_open: true,
+                ..Default::default()
+            };
+            w.apply_settings(Settings {
+                language,
+                theme,
+                ..Default::default()
+            });
+            w.settings_page.query = "plugins.wasm_engine".into();
+            let click = |w: &mut Workspace, label| {
+                let mut labels = vec![];
+                for _ in 0..3 {
+                    labels = frame_at_size(&ctx, w, vec![], size);
+                }
+                let pos = labels
+                    .iter()
+                    .rfind(|(s, _)| s == t(label))
+                    .unwrap()
+                    .1
+                    .center();
+                tap(&ctx, size, w, pos);
+            };
+            click(&mut w, "Wasmtime (Experimental)");
+            assert!(!w.settings_page.confirm_engine);
+            w.set_plugin_runtime(Wasmi, true);
+            click(&mut w, "Wasmtime (Experimental)");
+            assert_eq!(w.preferences().wasm_engine, Wasmi);
+            assert!(w.settings_page.confirm_engine);
+            click(&mut w, "Cancel");
+            assert!(!w.settings_page.confirm_engine);
+            click(&mut w, "Wasmtime (Experimental)");
+            click(&mut w, "Confirm");
+            assert_eq!(w.preferences().wasm_engine, Wasmtime);
+            assert_eq!(w.settings_page.active_engine, Wasmi);
+            assert!(!w.document.dirty && !w.editor.can_undo());
         }
     }
 }

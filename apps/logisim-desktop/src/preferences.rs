@@ -109,6 +109,12 @@ impl Loaded {
 /// A portable settings file that passed the same schema validation as local preferences.
 pub(crate) struct ValidatedSettings(Settings);
 
+impl ValidatedSettings {
+    pub(crate) fn uses_experimental_engine(&self) -> bool {
+        self.0.wasm_engine == logisim_ui::WasmEnginePreference::Wasmtime
+    }
+}
+
 pub(crate) struct Preferences {
     path: Option<PathBuf>,
     loaded: Loaded,

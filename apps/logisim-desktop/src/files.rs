@@ -33,6 +33,8 @@ enum ResolutionReason {
 }
 
 pub(crate) struct Files {
+    engine: logisim_plugin::WasmEngine,
+    engine_warning_pending: bool,
     pub plugins: logisim_plugin::Registry,
     pub storage: Storage,
     pub autosave: crate::recovery::Autosave,
@@ -46,6 +48,8 @@ pub(crate) struct Files {
 impl Default for Files {
     fn default() -> Self {
         Self {
+            engine: Default::default(),
+            engine_warning_pending: false,
             plugins: Default::default(),
             storage: Storage::new(),
             autosave: Default::default(),
@@ -59,6 +63,31 @@ impl Default for Files {
     }
 }
 impl Files {
+    pub fn for_desktop(directory: Option<PathBuf>, workspace: &mut Workspace) -> Self {
+        use logisim_plugin::WasmEngine;
+        use logisim_ui::WasmEnginePreference;
+        let requested = workspace.preferences().wasm_engine;
+        let available = WasmEngine::Wasmtime.available();
+        let experimental = requested == WasmEnginePreference::Wasmtime;
+        let engine = if experimental && available {
+            WasmEngine::Wasmtime
+        } else {
+            WasmEngine::Wasmi
+        };
+        workspace.set_plugin_runtime(
+            match engine {
+                WasmEngine::Wasmi => WasmEnginePreference::Wasmi,
+                WasmEngine::Wasmtime => WasmEnginePreference::Wasmtime,
+            },
+            available,
+        );
+        Self {
+            engine,
+            engine_warning_pending: experimental && !available,
+            ..Self::with_recovery(directory)
+        }
+    }
+
     pub fn with_recovery(directory: Option<PathBuf>) -> Self {
         Self {
             autosave: crate::recovery::Autosave::at(directory),
@@ -130,6 +159,7 @@ impl Files {
             ResolutionReason::Repair => Vec::new(),
         };
         let resolution = Resolution::new(
+            self.engine,
             workspace.project(),
             crate::plugins::base(self.storage.path.as_deref()),
             workspace.plugin_fallback_directory.as_deref(),
@@ -459,6 +489,12 @@ impl Files {
             }
             return;
         }
+        if self.dialog.is_none() && std::mem::take(&mut self.engine_warning_pending) {
+            self.dialog = Some(Dialog::SettingsMessage {
+                title: "Wasm plugin engine",
+                body: tr("This build does not include Wasmtime. Plugins will run with wasmi for this session.").into(),
+            });
+        }
         let Some(mut dialog) = self.dialog.take() else {
             return;
         };
@@ -607,7 +643,8 @@ impl Files {
                 if picker.mode == Mode::Plugin {
                     match storage::read_file(&path, "Choose a regular .wasm file.").and_then(
                         |bytes| {
-                            let plugin = logisim_plugin::Plugin::load(&bytes)?;
+                            let plugin =
+                                logisim_plugin::Plugin::load_with_engine(&bytes, self.engine)?;
                             let manifest = plugin.manifest();
                             for c in workspace
                                 .project()

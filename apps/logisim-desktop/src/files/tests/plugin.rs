@@ -254,3 +254,43 @@ fn host_directory_loads_without_an_edit_and_only_confirmation_relocates() {
     assert!(h.files.load(&path, &mut h.ws, &mut h.sim));
     assert!(!h.files.busy() && h.ws.plugin_dependencies().next().unwrap().1);
 }
+
+#[test]
+fn desktop_engine_is_pinned_before_loading_and_falls_back_only_if_unavailable() {
+    use logisim_plugin::WasmEngine;
+    use logisim_ui::WasmEnginePreference;
+    let temp = Temp::new();
+    let (mut project, wasm) = fixture("test.engine", 1);
+    fs::write(temp.path("plugin.wasm"), wasm).unwrap();
+    project.plugin_sources[0].path = "plugin.wasm".into();
+    let mut workspace = Workspace::default();
+    let first = Files::for_desktop(None, &mut workspace);
+    assert_eq!(first.engine, WasmEngine::Wasmi);
+    workspace.apply_settings(logisim_ui::Settings {
+        wasm_engine: WasmEnginePreference::Wasmtime,
+        ..workspace.preferences()
+    });
+    let restarted = Files::for_desktop(None, &mut workspace);
+    let available = WasmEngine::Wasmtime.available();
+    assert_eq!(
+        workspace.preferences().wasm_engine,
+        WasmEnginePreference::Wasmtime
+    );
+    assert_eq!(restarted.engine_warning_pending, !available);
+    for (files, expected) in [
+        (first, WasmEngine::Wasmi),
+        (
+            restarted,
+            if available {
+                WasmEngine::Wasmtime
+            } else {
+                WasmEngine::Wasmi
+            },
+        ),
+    ] {
+        let mut resolution = Resolution::new(files.engine, &project, temp.0.clone(), None, vec![]);
+        resolution.check(0);
+        let plugin = resolution.rows[0].loaded.as_ref().unwrap();
+        assert_eq!(plugin.engine(), expected);
+    }
+}
