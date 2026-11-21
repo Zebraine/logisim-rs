@@ -62,7 +62,22 @@ Linux 上先用 `cargo build --release --locked --offline -p logisim-agent` 构�
 
 ### 复现 Wasm 引擎对照
 
-默认桌面、Agent 与基准使用 wasmi。阶段 2 的[引擎契约记录](apps/logisim-bench/comparisons/engine-contract.md)给出两个 release 构建、固定核心、fuel 矩阵和冷启动复测命令。桌面与基准的双引擎构建使用 `wasmtime-experimental`；Agent 即使启用同一 feature 也固定运行 wasmi。基准可在负载前加 `--wasm-engine wasmi` 或 `--wasm-engine wasmtime`。只有研究用的 `compare-wasmtime` 增加私有磁盘缓存实验。阶段 1 的[原始对照补丁](apps/logisim-bench/comparisons/wasmtime-36.patch)对应历史提交 `cc5cee9`。
+默认桌面、Agent 与基准使用 wasmi。阶段 2 的[引擎契约记录](apps/logisim-bench/comparisons/engine-contract.md)给出两个 release 构建、固定核心、fuel 矩阵和冷启动复测命令。桌面与基准的双引擎构建使用 `wasmtime-experimental`；Agent 即使启用同一 feature 也固定运行 wasmi。基准可在负载前加 `--wasm-engine wasmi` 或 `--wasm-engine wasmtime`。`compare-wasmtime` 保留阶段 2 的基准对照。阶段 1 的[原始对照补丁](apps/logisim-bench/comparisons/wasmtime-36.patch)对应历史提交 `cc5cee9`。
+
+### 私有模块缓存实验
+
+`wasmtime-cache-experiment` 单独为桌面或基准启用 Wasmtime 36.0.20 的缓存 API。Linux 上只信任当前用户和系统管理员控制的本地目录。逐级校验祖先，缓存根目录须为 0700，记录须为当前用户的 0600 普通文件。标准系统 /tmp 的粘滞位允许在其下创建私有实验目录。共享账号、可被其他主体更改的挂载及已失陷的当前账号均超出信任范围。
+
+持久记录绑定缓存格式版本、源 Wasm 的 SHA-256、引擎版本、目标/CPU 特性、编译配置和 fuel 预算。校验整条记录后才复制到 Wasmtime 专用的一次性私有目录。机器码装载发生在 Wasmtime 内部，自有代码使用安全 API。校验和用于发现损坏，目录所有权负责来源信任。manifest、ABI、工程保存的身份和工具定义在加载路径上照常验证。
+
+32 个槽位，每条上限 16 MiB。并发发布使用同文件系统的唯一临时目录和原子 rename。不同键落在同一槽时下次重新编译。运行中创建的临时目录随本次打开结束而清理，异常终止留下的临时目录可在关闭所有实验实例后随整个缓存删除。损坏、权限和写入异常保留原 Wasmtime 运行方式并报告诊断。空缓存首开仍有编译和写入成本，10M fuel 的跨引擎差异仍适用。
+
+在 Linux 上选两个可用逻辑核运行下列命令。计时器按工程读取至首次 settle 统计，随后校验完整四态轨迹。脚本只把缓存写入私有临时目录，stdout 的 JSON 保存每次打开的分相、诊断、进程峰值 RSS 和缓存大小。
+
+```sh
+cargo build --release -p logisim-bench --features wasmtime-cache-experiment --locked --offline
+python3 apps/logisim-bench/comparisons/module-cache.py --cpu 15 --peer-cpu 14
+```
 
 ## 修改与提交
 

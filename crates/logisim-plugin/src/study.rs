@@ -38,6 +38,8 @@ pub enum Reuse {
     Module,
     #[cfg(feature = "compare-wasmtime")]
     Disk(std::path::PathBuf),
+    #[cfg(feature = "wasmtime-cache-experiment")]
+    PrivateModules(std::path::PathBuf),
 }
 
 pub struct Loader {
@@ -49,7 +51,6 @@ pub struct Loader {
     entry: Option<(Vec<u8>, Module)>,
     #[cfg(feature = "compare-wasmtime")]
     disk: Option<wasmtime::Cache>,
-    #[cfg(feature = "compare-wasmtime")]
     disk_error: Option<String>,
     pub hits: usize,
     pub misses: usize,
@@ -58,6 +59,10 @@ impl Loader {
     pub fn new(reuse: Reuse) -> Self {
         #[cfg(feature = "compare-wasmtime")]
         if matches!(&reuse, Reuse::Disk(_)) {
+            return Self::with_engine(reuse, WasmEngine::Wasmtime);
+        }
+        #[cfg(feature = "wasmtime-cache-experiment")]
+        if matches!(&reuse, Reuse::PrivateModules(_)) {
             return Self::with_engine(reuse, WasmEngine::Wasmtime);
         }
         Self::with_engine(reuse, WasmEngine::Wasmi)
@@ -71,19 +76,31 @@ impl Loader {
             entry: None,
             #[cfg(feature = "compare-wasmtime")]
             disk: None,
-            #[cfg(feature = "compare-wasmtime")]
             disk_error: None,
             hits: 0,
             misses: 0,
         }
     }
 
-    #[cfg(feature = "compare-wasmtime")]
     pub fn cache_error(&self) -> Option<&str> {
         self.disk_error.as_deref()
     }
 
     pub fn load(&mut self, bytes: &[u8]) -> Result<Plugin> {
+        #[cfg(feature = "wasmtime-cache-experiment")]
+        if let Reuse::PrivateModules(path) = &self.reuse {
+            if self.choice != WasmEngine::Wasmtime {
+                return Err("Module cache requires Wasmtime.".into());
+            }
+            let (plugin, outcome) = crate::module_cache::load(bytes, path)?;
+            self.disk_error = outcome.warning().map(str::to_owned);
+            if outcome == crate::module_cache::Outcome::Hit {
+                self.hits += 1;
+            } else {
+                self.misses += 1;
+            }
+            return Ok(plugin);
+        }
         check_binary(bytes)?;
         if let Some((key, module)) = &self.entry
             && key == bytes

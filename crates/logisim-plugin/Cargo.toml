@@ -7,7 +7,7 @@ license.workspace = true
 publish.workspace = true
 [features]
 wasmtime-experimental = ["dep:wasmtime"]
-wasmtime-cache-experiment = ["wasmtime-experimental", "wasmtime/cache", "dep:sha2"]
+wasmtime-cache-experiment = ["wasmtime-experimental", "wasmtime/cache", "dep:sha2", "dep:libc"]
 compare-wasmtime = ["wasmtime-experimental", "wasmtime/cache"]
 engine-study = ["plugin-metrics"]
 plugin-metrics = ["logisim-plugin-api/plugin-metrics"]
@@ -19,6 +19,10 @@ serde_json.workspace = true
 wasmi = { version = "=1.1.0", default-features = false, features = ["std"] }
 wasmtime = { version = "=36.0.20", default-features = false, features = ["std", "runtime", "cranelift"], optional = true }
 sha2 = { version = "=0.10.9", optional = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = { version = "=0.2.191", optional = true }
+
 [dev-dependencies]
 sha2 = "=0.10.9"
 wat = "=1.245.1"

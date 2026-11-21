@@ -1647,6 +1647,7 @@ dependencies = [
 name = "logisim-plugin"
 version = "0.5.0"
 dependencies = [
+ "libc",
  "logisim-plugin-api",
  "serde",
  "serde_json",

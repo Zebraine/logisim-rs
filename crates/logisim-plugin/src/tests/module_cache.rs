@@ -103,3 +103,73 @@ fn untrusted_paths_use_uncached_wasmtime_and_preserve_the_target() {
     }
     fs::set_permissions(root, fs::Permissions::from_mode(0o700)).unwrap();
 }
+
+#[test]
+fn stale_record_key_misses_and_concurrent_writers_publish_complete_records() {
+    use sha2::{Digest, Sha256};
+    use std::sync::Barrier;
+    let tmp = Private::new("publication");
+    let bytes = wasm(&Response::Manifest(manifest()), 1, "");
+    let root = tmp.0.join("cache");
+    let barrier = Barrier::new(2);
+    std::thread::scope(|scope| {
+        let open = || {
+            barrier.wait();
+            let (p, result) = load(&bytes, &root).unwrap();
+            assert_eq!(p.manifest(), &manifest());
+            assert!(matches!(result, Outcome::Miss | Outcome::Hit));
+        };
+        let first = scope.spawn(open);
+        open();
+        first.join().unwrap();
+    });
+    assert_eq!(load(&bytes, &root).unwrap().1, Outcome::Hit);
+    // A correctly checksummed record for another cache key is an ordinary miss.
+    let entry = record(&root);
+    let mut record = fs::read(&entry).unwrap();
+    let (sum, body) = record.split_at_mut(32);
+    body[0] ^= 1;
+    sum.copy_from_slice(&Sha256::digest(body));
+    fs::write(&entry, record).unwrap();
+    assert_eq!(load(&bytes, &root).unwrap().1, Outcome::Miss);
+    assert_eq!(load(&bytes, &root).unwrap().1, Outcome::Hit);
+}
+
+#[test]
+fn obsolete_upstream_namespace_rebuilds_once() {
+    use sha2::{Digest, Sha256};
+    let tmp = Private::new("obsolete");
+    let bytes = wasm(&Response::Manifest(manifest()), 1, "");
+    assert_eq!(load(&bytes, &tmp.0).unwrap().1, Outcome::Miss);
+    let path = record(&tmp.0);
+    let mut old = fs::read(&path).unwrap();
+    let (sum, body) = old.split_at_mut(32);
+    // Keep the valid artifact intact and model an old Wasmtime compiler namespace.
+    let start = 32 + b"wasmtime-".len();
+    assert_ne!(body[start], b'z');
+    body[start] = b'z';
+    sum.copy_from_slice(&Sha256::digest(body));
+    fs::write(path, old).unwrap();
+    assert!(matches!(
+        load(&bytes, &tmp.0).unwrap().1,
+        Outcome::Rebuilt(_)
+    ));
+    assert_eq!(load(&bytes, &tmp.0).unwrap().1, Outcome::Hit);
+}
+
+#[test]
+fn scratch_cleanup_is_independent_of_background_cache_statistics() {
+    let tmp = Private::new("cleanup");
+    let bytes = wasm(&Response::Manifest(manifest()), 1, "");
+    assert_eq!(load(&bytes, &tmp.0).unwrap().1, Outcome::Miss);
+    std::thread::scope(|scope| {
+        for _ in 0..4 {
+            scope.spawn(|| {
+                for _ in 0..12 {
+                    assert_eq!(load(&bytes, &tmp.0).unwrap().1, Outcome::Hit);
+                }
+            });
+        }
+    });
+    assert!(record(&tmp.0).is_file());
+}

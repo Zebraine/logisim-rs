@@ -2,7 +2,7 @@
 
 **阶段 2 决定：旧 ABI 继续使用 wasmi 1.1.0。** Wasmtime 36.0.20 可以在显式对照构建中执行同一插件。对旧插件开放运行时切换会改变部分有限计算的完成、暂停和状态提交结果。Stage 3 保留生产引擎。若产品选择为长时间仿真引入另一种计量契约，再考虑新 ABI。
 
-阶段 3 在显式构建的桌面应用中增加了需确认、重启后生效的实验选项。旧插件使用 Wasmtime 时接受下表的计量差异。默认桌面和 Agent 仍使用 wasmi；磁盘缓存仅用于基准实验。
+阶段 3 在显式构建的桌面应用中增加了需确认、重启后生效的实验选项。旧插件使用 Wasmtime 时接受下表的计量差异。阶段 3 的磁盘缓存仅用于基准实验。后续 Linux 桌面缓存对照使用独立的 `wasmtime-cache-experiment` 构建选项，复测见 [CONTRIBUTING.md](../../../CONTRIBUTING.md)。默认桌面与 Agent 继续使用 wasmi。
 
 ## 可观察的资源契约
 
@@ -105,3 +105,14 @@ cargo test --release --locked --offline -p logisim-plugin --features engine-stud
 ```
 
 `FUEL` 记录包括 10M、20M、40M、80M 的逐次读数；`LIMIT` 记录保留原错误。基准原始 JSON 内 `opens[].spans`、`first_settle_ms` 及 `plugin_phases.hot` 分别给出装载/实例化/契约查询、首次收敛及两个热相位。Runner 核验默认依赖树、二进制引擎、轨迹和工作量，并记录环境和输入 SHA-256。工作区的 all-features 矩阵在同一进程内测试两种后端；普通插件加载入口使用 wasmi。原生缓存的上游说明见 [Wasmtime cache](https://docs.wasmtime.dev/cli-cache.html)。
+
+## 实验 A · 应用私有模块缓存
+
+Linux x86-64，i5-12600KF，Rust 1.99.0，Wasmtime 36.0.20。用同一 release 基准和 course 模块，主进程固定 CPU 15。每个工程使用 5 个独立空目录，每次首次打开后在同进程重开 3 次。再用第二、第三个新进程打开，合并得到各 10 个跨进程命中样本。下表从读工程计到首次 settle，单位 ms，列内为中位数 / 最近秩 p95。
+
+| 工程 | 关闭缓存 | 空缓存 | 同进程重开 | 跨进程命中 |
+| --- | ---: | ---: | ---: | ---: |
+| register-file | 447.17 / 459.25 | 455.28 / 468.05 | 7.41 / 8.28 | 9.51 / 9.78 |
+| single-cycle | 462.57 / 473.11 | 463.27 / 473.36 | 20.77 / 22.09 | 24.35 / 24.84 |
+
+两个工程共用 course.wasm 的 687,281 字节缓存记录。截断、只读及并发首次发布均通过完整四态轨迹检查。跨进程命中 p95 在该组样本中达到 25 ms 目标；并发写入后的独立 CPU 重开 p95 为 25.34 ms。寄存器空缓存首开中位数比关闭缓存增加 8.11 ms。保留显式实验，长会话值得单独评估新 ABI 的 fuel 契约。两种引擎的预算计量仍有差异，默认引擎保持 wasmi。Linux 私有目录、手动清理及复测命令见 [CONTRIBUTING.md](../../../CONTRIBUTING.md)。

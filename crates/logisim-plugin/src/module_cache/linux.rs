@@ -5,7 +5,7 @@ use std::{
     fs::{self, DirBuilder, File, OpenOptions},
     hash::{Hash, Hasher},
     io::{self, ErrorKind, Read, Write},
-    os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt},
+    os::unix::fs::{DirBuilderExt, DirEntryExt, MetadataExt, OpenOptionsExt},
     path::{Component, Path, PathBuf},
 };
 
@@ -83,7 +83,11 @@ struct Scratch(PathBuf);
 
 impl Drop for Scratch {
     fn drop(&mut self) {
-        if let Err(e) = fs::remove_dir_all(&self.0) {
+        // Wasmtime's maintenance thread can still be writing stats by absolute path.
+        // Detach its namespace before walking the directory for deletion. The worker
+        // never recreates missing directories, and this random name is never reused.
+        let retired = self.0.with_extension("retired");
+        if let Err(e) = fs::rename(&self.0, &retired).and_then(|()| fs::remove_dir_all(&retired)) {
             eprintln!(
                 "Could not remove temporary Wasmtime cache {}: {e}",
                 self.0.display()
@@ -161,11 +165,16 @@ fn limited(file: File) -> io::Result<Vec<u8>> {
 }
 
 impl Cache {
-    fn restore(&self) -> io::Result<bool> {
-        let meta = match fs::symlink_metadata(&self.entry) {
-            Err(e) if e.kind() == ErrorKind::NotFound => return Ok(false),
+    fn restore(&self) -> io::Result<Option<File>> {
+        let record = match OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+            .open(&self.entry)
+        {
+            Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
             result => result?,
         };
+        let meta = record.metadata()?;
         if !meta.is_file()
             || meta.uid() != self.uid
             || meta.nlink() != 1
@@ -176,7 +185,7 @@ impl Cache {
                 "Untrusted cache entry",
             ));
         }
-        let bytes = limited(File::open(&self.entry)?)?;
+        let bytes = limited(record)?;
         let Some((digest, body)) = bytes.split_at_checked(32) else {
             return Err(invalid("Truncated cache record"));
         };
@@ -187,7 +196,7 @@ impl Cache {
             return Err(invalid("Truncated cache key"));
         };
         if key != self.key {
-            return Ok(false);
+            return Ok(None);
         }
         let split = artifact
             .iter()
@@ -197,11 +206,18 @@ impl Cache {
         let (dir, file) = artifact_names(&artifact[..split])?;
         let dir = self.scratch.0.join("modules").join(dir);
         fs::create_dir_all(&dir)?;
-        fs::write(dir.join(file), &artifact[split + 1..])?;
-        Ok(true)
+        let mut restored = File::create_new(dir.join(file))?;
+        restored.write_all(&artifact[split + 1..])?;
+        Ok(Some(restored))
     }
 
-    fn publish(&self) -> io::Result<()> {
+    fn publish(&self, restored: Option<&File>) -> io::Result<()> {
+        if self.cache.cache_misses() == 0 {
+            return Err(invalid("Wasmtime could not persist the compiled artifact"));
+        }
+        // The upstream cache may select a new compiler directory (e.g. a debug rebuild).
+        // Only publish its fresh atomic replacement, never the input that just missed.
+        let previous_inode = restored.map(File::metadata).transpose()?.map(|m| m.ino());
         let modules = self.scratch.0.join("modules");
         for directory in fs::read_dir(modules)? {
             let directory = directory?;
@@ -215,7 +231,10 @@ impl Cache {
                     directory.file_name().to_string_lossy(),
                     file.file_name().to_string_lossy()
                 );
-                if !file.file_type()?.is_file() || artifact_names(names.as_bytes()).is_err() {
+                if Some(file.ino()) == previous_inode
+                    || !file.file_type()?.is_file()
+                    || artifact_names(names.as_bytes()).is_err()
+                {
                     continue;
                 }
                 let payload = limited(File::open(file.path())?)?;
@@ -257,15 +276,43 @@ impl Cache {
         let plugin = Plugin::from_module(self.engine.compile(wasm)?)?;
         let status = if self.cache.cache_hits() == 1 {
             Outcome::Hit
-        } else if let Err(e) = self.publish() {
+        } else if let Err(e) = self.publish(restored.as_ref().ok().and_then(Option::as_ref)) {
             Outcome::Bypassed(e.to_string())
         } else {
             match restored {
                 Err(e) => Outcome::Rebuilt(e.to_string()),
-                Ok(true) => Outcome::Rebuilt("Wasmtime rejected the stored artifact".into()),
-                Ok(false) => Outcome::Miss,
+                Ok(Some(_)) => Outcome::Rebuilt("Wasmtime rejected the stored artifact".into()),
+                Ok(None) => Outcome::Miss,
             }
         };
         Ok((plugin, status))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn key_changes_with_source_fuel_and_compiler_options() {
+        let mut config = backend::wasmtime_config();
+        let initial = wasmtime::Engine::new(&config).unwrap();
+        let id = key(&initial, b"module one");
+        assert_ne!(id, key(&initial, b"module two"));
+        assert_eq!(
+            id,
+            key(&wasmtime::Engine::new(&config).unwrap(), b"module one")
+        );
+        config.consume_fuel(false);
+        assert_ne!(
+            id,
+            key(&wasmtime::Engine::new(&config).unwrap(), b"module one")
+        );
+        config
+            .consume_fuel(true)
+            .cranelift_opt_level(wasmtime::OptLevel::None);
+        assert_ne!(
+            id,
+            key(&wasmtime::Engine::new(&config).unwrap(), b"module one")
+        );
     }
 }
