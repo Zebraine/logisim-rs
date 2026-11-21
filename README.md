@@ -40,7 +40,7 @@ Download a package for your platform and its `.sha256` checksum from [Releases](
 
 The Windows and macOS packages are not signed or notarized. UI validation for this release was performed on Linux X11; the other packages are built by the same release workflow but have not been manually UI-tested on their platforms.
 
-Native binary `.lrs` support is available in this source tree and its candidate packages. The published v0.4.0 desktop and Agent use `.circ`.
+This release uses native binary `.lrs` for new projects and Save As. Existing `.circ` files remain readable; v0.4.0 was the last release whose default was `.circ`.
 
 Simplified Chinese text uses system fonts; install a CJK font such as Noto Sans CJK SC if needed.
 
