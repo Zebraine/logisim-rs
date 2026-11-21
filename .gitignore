@@ -27,6 +27,7 @@
 !/.github/workflows/release.yml
 !/.github/scripts/
 !/.github/scripts/package.py
+!/.github/scripts/test_package.py
 
 # Package manifests, build scripts, and Rust sources only.
 !/apps/

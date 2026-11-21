@@ -92,6 +92,41 @@ fn course_and_plugin_projects_survive_both_codecs() {
 }
 
 #[test]
+fn showcase_pairs_preserve_documents_and_ids_through_explicit_legacy_export() {
+    use crate::ProjectFormat::{Circ, Lrs};
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/agent");
+    for (name, parts, wires) in [("adder", 4, 5), ("counter", 7, 12), ("register-file", 7, 9)] {
+        let bytes = std::fs::read(dir.join(format!("{name}.lrs"))).unwrap();
+        let native = Lrs.parse(&bytes).unwrap().document;
+        let xml = std::fs::read(dir.join(format!("{name}.circ"))).unwrap();
+        let legacy = Circ.parse(&xml).unwrap();
+        assert!(!legacy.partial && legacy.warnings.is_empty(), "{name}");
+        // The canonical document covers persistent IDs, geometry, styles and dependencies.
+        assert_eq!(Lrs.export(&legacy.document).unwrap(), bytes, "{name}");
+        let exported = Circ.export(&native).unwrap();
+        let reopened = Circ.parse(&exported).unwrap();
+        assert!(!reopened.partial && reopened.warnings.is_empty(), "{name}");
+        assert_eq!(Lrs.export(&reopened.document).unwrap(), bytes, "{name}");
+
+        let circuit = &native.main_circuit().circuit;
+        assert_eq!(native.circuits.len(), 1);
+        assert_eq!(
+            (circuit.components.len(), circuit.wires.len()),
+            (parts, wires)
+        );
+        if name == "register-file" {
+            let [source] = native.plugin_sources.as_slice() else {
+                panic!("register-file requires exactly one course module")
+            };
+            assert_eq!(source.path, "../../plugins/course/course.wasm");
+            assert!(source.fallback.is_empty() && dir.join(&source.path).is_file());
+        } else {
+            assert!(native.plugin_sources.is_empty());
+        }
+    }
+}
+
+#[test]
 fn legacy_export_reports_native_only_font() {
     let mut p = Project::default();
     let mut stick = logisim_core::Component::new(logisim_core::Kind::Joystick, Point::ZERO);
