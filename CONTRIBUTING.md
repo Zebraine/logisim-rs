@@ -24,6 +24,12 @@ git diff --check
 
 冻结现有 ITA 对照用例及断言。用户依赖的 legacy 行为继续作为 logisim-rs 回归；仅记录参考程序偶然行为的用例标为历史证据，后续单独审查归档或移除。新功能按项目规格验证。
 
+## 工程格式回归
+
+原生 v1 的格式标记为 `logisim-rs-project`。顶层字段 `version`、`main`、`circuits`、`plugin_sources` 与 `format` 一同必填。电路按持久 ID 排列，`display_order` 保存项目中的显示顺序。子电路与外观端口引用持久 ID，接口和外观边界从定义重建。ROM 的 `contents` 用左闭右开的非零区间表示，PLA 按行保存输入、输出连接。编解码定义见 [原生文档模型](crates/logisim-file/src/native.rs) 和 [元件属性](crates/logisim-file/src/native/component.rs)。
+
+变更文档字段时运行两条往返测试。原生保存后应能重开并生成相同字节。旧格式导出后应能重建同一文档，遇到有损转换则须在写文件前报错。验收覆盖当前绑定、目标冲突、备份和恢复。
+
 ## 无界面性能基线
 
 在仓库根目录执行 `cargo build -p logisim-bench --release --locked --offline`，再执行 `target/release/logisim-bench single-cycle --runs 20`。负载可选 `wide`（独立 32 位加法器，每步改变一路）、`deep`（串联 NOT）、`single-cycle`（课程 CPU）或 `plugin`（课程寄存器文件）。用同一逻辑核顺序运行，每个负载至少三个独立进程；保存每次 stdout JSON、提交、工具链、CPU 和模块哈希。

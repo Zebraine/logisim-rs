@@ -19,7 +19,7 @@ Legacy projects from the supported Logisim-ITA v2.16.2.2 subset can be opened an
 - Generate combinational circuits from truth tables or expressions (up to 12/32 inputs and 32 outputs).
 - Work with gates, wiring, arithmetic, plexers, sequential logic, memory, and I/O components.
 - Simulate four-state circuits in stable or event-driven mode, with live wire values and signal colors.
-- Read and write the implemented `.circ` subset; import ROM/RAM images in Logisim `v2.0 raw` `.hex` format.
+- Read and write native `.lrs` projects and the supported `.circ` subset. Import ROM/RAM images in Logisim `v2.0 raw` `.hex` format.
 - Use `.circ` libraries as editable snapshots and load components from Wasm plugins.
 - Work in English or Simplified Chinese, with Light/Dark themes, three accents, two densities, and configurable shortcuts.
 - Keep work safe with autosave, crash recovery, and optional one-generation `.bak` backups.
@@ -93,11 +93,13 @@ The repository also contains a small [agent-built showcase](examples/agent/READM
 
 The examples illustrate the implemented behavior; they are not a compatibility test for every timing or exception detail. If you move an example, keep the relative layout between `examples/` and `plugins/`, or use the plugin locator.
 
-## Legacy projects
+## Project formats
 
 The Logisim-ITA compatibility scope is frozen. New features follow logisim-rs specifications. The supported `.circ` subset remains readable and writable for migration. Import reports unsupported content and protects the original against overwrite. Imported libraries remain editable snapshots. Wasm components require their matching modules. External editors may discard extension attributes such as `agent-id` when resaving.
 
-The planned native project format is `.lrs` (UTF-8 JSON). This version still saves `.circ`. Once the native format passes acceptance, Save and Save As will default to `.lrs`. Existing `.circ` files will remain readable and writing `.circ` will require an explicit format choice.
+Open accepts both legacy `.circ` and native `.lrs` v1 (UTF-8 JSON). **Save** writes the open document in its current format. New documents and **Save As** default to `.circ`.
+
+Use **File → Convert to .lrs…** or **Export .circ…** to write a separate copy and continue editing the original. Conversion requires a complete import. Legacy export verifies the result by reading it back and reports any document properties the legacy format would lose. Open the copy to edit it directly. Native documents require persistent circuit, component and wire IDs. Subcircuit instances and custom appearance ports use these IDs. Wire endpoints retain their coordinates. Wasm modules remain external dependencies.
 
 ## Build from source
 
@@ -163,7 +165,7 @@ MCP executes requests in arrival order within each project session. Independent 
 {"tool":"project_close","arguments":{"session":"ID_FROM_OPEN"}}
 ```
 
-Use the returned `data.session_id` in subsequent requests. CLI and MCP expose the same 19 operations. After the MCP handshake, use `tools/list` to get their names and input schemas. The project snapshot covers every circuit definition. Simulation state includes signals from the active root instance, clock and propagation counters, diagnostics and plugin status.
+Use the returned `data.session_id` in subsequent requests. CLI and MCP expose the same 20 operations. After the MCP handshake, use `tools/list` to get their names and input schemas. The project snapshot covers every circuit definition. Simulation state includes signals from the active root instance, clock and propagation counters, diagnostics and plugin status.
 
 ### Controlling a simulation
 
@@ -199,6 +201,8 @@ Pass `project_patch` a `session`, an explicit `dry_run` boolean, and an ordered 
 {"tool":"project_patch","arguments":{"session":"ID_FROM_OPEN","dry_run":false,"ops":[{"op":"update_component","circuit":1,"id":12,"properties":{"label":"A","facing":"west"}}]}}
 {"tool":"project_save","arguments":{"session":"ID_FROM_OPEN","expected_sha256":"SHA_FROM_OPEN_OR_LAST_SAVE","backup":true}}
 ```
+
+Use `project_convert` with `session` and `output` to write a separate `.lrs` or `.circ` copy. The equivalent command in a running CLI session is `project convert --session ID --output board.lrs`. A new target is create-only. To replace an existing target, pass its byte SHA-256 as `expected_output_sha256` (CLI `--expected-output-sha256`). Replacement keeps a one-generation backup by default. The response identifies the copy by `path`, `format` and `sha256`. Subsequent `project_save` calls still write the original session path and format.
 
 Use IDs from your snapshot. After reviewing the preview, repeat the patch with `dry_run:false`, then save. The `project_patch` input schema describes the operations for circuits, wires and components, including `add_plugin` and `update_plugin` for Wasm instances. Port positions use canvas coordinates, colors use RGBA and Splitter mappings use zero-based branch indices or null. Include `circuit` when a numeric item ID occurs in multiple circuits. Wire edits use the editor's routing and normalization rules.
 

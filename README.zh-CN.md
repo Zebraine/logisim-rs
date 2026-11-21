@@ -19,7 +19,7 @@
 - 从真值表或表达式生成组合电路；真值表最多 12 输入，表达式最多 32 输入，均支持 32 输出。
 - 使用门电路、布线、算术、Plexers、时序、存储器和输入/输出元件。
 - 四态、层次化仿真，支持稳定态或事件传播模式，并实时显示导线值与信号颜色。
-- 读写已实现的 `.circ` 子集；导入 ROM/RAM 的 Logisim `v2.0 raw` `.hex` 文件。
+- 读写原生 `.lrs` 工程和已支持的 `.circ` 子集，导入 ROM/RAM 的 Logisim `v2.0 raw` `.hex` 文件。
 - 将 `.circ` 库作为可编辑快照导入，并从 Wasm 插件加载元件。
 - 英语、简体中文；浅色/深色主题，三种强调色，两种密度，可改绑的快捷键。
 - 自动保存、崩溃恢复、可选的单代 `.bak` 保存前备份。
@@ -93,11 +93,13 @@ logisim-rs 使用带版本号的 Wasm 插件 ABI 提供外部元件。插件可�
 
 示例用于演示已实现行为，并不是所有时序或异常细节的兼容性证明。移动示例时请保留 `examples/` 与 `plugins/` 的相对目录，或使用插件补选功能。
 
-## 旧工程与迁移
+## 工程格式与迁移
 
 Logisim-ITA 兼容范围已冻结，新功能以 logisim-rs 自身规格为准。`.circ` 作为旧工程迁移格式，已支持的子集继续读写。导入时报告未知或未支持的内容，并保护源文件。导入的库仍为可编辑快照，Wasm 元件需要对应的模块。外部编辑器重存工程时可能丢弃 `agent-id` 等扩展属性。
 
-计划中的原生格式为 `.lrs`（UTF-8 JSON），本版仍保存为 `.circ`。原生格式实现并通过验收后，保存与另存为将默认使用 `.lrs`；旧 `.circ` 仍可读取，写出 `.circ` 须显式选择该格式。
+“打开”支持 legacy `.circ` 和原生 `.lrs` v1（UTF-8 JSON）。“保存”按当前文件的格式写回。新工程与“另存为”仍默认使用 `.circ`。
+
+在“文件”菜单选择“转换为 .lrs…”或“导出 .circ…”可写出单独副本，并继续编辑原工程。只有完整导入的工程可以转换。导出 `.circ` 前会回读并核对文档，报告旧格式无法保留的属性。如需编辑副本，请打开新文件。原生文档为电路、元件和导线保存持久 ID，子电路实例与外观端口通过持久 ID 引用对象。导线端点保留画布坐标，Wasm 模块仍是外部依赖。
 
 ## 从源码构建
 
@@ -163,7 +165,7 @@ MCP 按到达顺序执行同一工程会话的请求。独立会话可并行执�
 {"tool":"project_close","arguments":{"session":"ID_FROM_OPEN"}}
 ```
 
-后续请求使用打开工程时返回的 `data.session_id`。CLI 和 MCP 提供相同的 19 项操作。MCP 握手后可用 `tools/list` 查询工具名及输入 schema。工程快照覆盖全部电路定义，仿真状态包含根实例的信号、时钟与传播计数、诊断和插件状态。
+后续请求使用打开工程时返回的 `data.session_id`。CLI 和 MCP 提供相同的 20 项操作。MCP 握手后可用 `tools/list` 查询工具名及输入 schema。工程快照覆盖全部电路定义，仿真状态包含根实例的信号、时钟与传播计数、诊断和插件状态。
 
 ### 控制仿真
 
@@ -199,6 +201,8 @@ MCP 按到达顺序执行同一工程会话的请求。独立会话可并行执�
 {"tool":"project_patch","arguments":{"session":"ID_FROM_OPEN","dry_run":false,"ops":[{"op":"update_component","circuit":1,"id":12,"properties":{"label":"A","facing":"west"}}]}}
 {"tool":"project_save","arguments":{"session":"ID_FROM_OPEN","expected_sha256":"SHA_FROM_OPEN_OR_LAST_SAVE","backup":true}}
 ```
+
+在当前会话调用 `project_convert`，传入 `session` 和 `output`，即可写出独立的 `.lrs` 或 `.circ` 副本。CLI 行协议的等效命令为 `project convert --session ID --output board.lrs`。目标存在时须提供目标原始字节的 `expected_output_sha256`（CLI 参数为 `--expected-output-sha256`），默认保留一代备份。成功响应返回副本的 `path`、`format` 和 `sha256`。后续 `project_save` 仍写回原会话绑定的文件和格式。
 
 请使用快照中的真实 ID。核对预演结果后，将同一补丁的 `dry_run` 改为 `false`，应用后再保存。`project_patch` 的输入 schema 列出电路、导线和元件操作，包括用于 Wasm 实例的 `add_plugin` 和 `update_plugin`。端口坐标使用画布坐标，颜色使用 RGBA，Splitter 映射使用从零开始的分支索引，断开位用 null。多个电路内有相同的元件或导线数字 ID 时须传 `circuit`。导线遵循编辑器的重布线和合并、分段规则。
 

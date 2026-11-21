@@ -1,5 +1,6 @@
 //! Versioned native UTF-8 document. Local IDs and derived interfaces never cross this boundary.
 mod component;
+mod limits;
 #[cfg(test)]
 mod tests;
 use self::component::Part;
@@ -25,6 +26,7 @@ pub(super) struct Native {
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 #[serde(deny_unknown_fields)]
 struct Definition {
+    display_order: usize,
     agent_id: String,
     name: String,
     label: CircuitLabel,
@@ -99,7 +101,7 @@ impl Native {
         let mut circuits = Vec::new();
         let mut used = BTreeSet::new();
         let mut total = 0;
-        for d in &project.circuits {
+        for (display_order, d) in project.circuits.iter().enumerate() {
             let c = &d.circuit;
             budget(c.components.len(), c.wires.len(), &mut total)?;
             register(Tag::Circuit, &names[&d.id], &mut used)?;
@@ -163,6 +165,7 @@ impl Native {
                 .transpose()?;
             validate_label(&c.label)?;
             circuits.push(Definition {
+                display_order,
                 agent_id: names[&d.id].clone(),
                 name: d.name.clone(),
                 label: c.label.clone(),
@@ -181,18 +184,6 @@ impl Native {
         })
     }
     fn decode(self) -> Result<Project> {
-        if self.format != FORMAT {
-            return Err(Error(format!(
-                "Unknown native project format: {}",
-                self.format
-            )));
-        }
-        if self.version != 1 {
-            return Err(Error(format!(
-                "Unsupported native project version {}",
-                self.version
-            )));
-        }
         if self.circuits.is_empty() || self.circuits.len() > MAX_CIRCUITS {
             return Err(Error("Invalid number of circuits".into()));
         }
@@ -200,6 +191,7 @@ impl Native {
         let mut used = BTreeSet::new();
         let mut names = BTreeMap::new();
         let mut p = Project::single(&self.circuits[0].name, Circuit::default());
+        let mut order = vec![None; self.circuits.len()];
         for (i, d) in self.circuits.iter().enumerate() {
             budget(d.components.len(), d.wires.len(), &mut total)?;
             register(Tag::Circuit, &d.agent_id, &mut used)?;
@@ -208,6 +200,12 @@ impl Native {
             } else {
                 p.add(d.name.clone()).map_err(Error)?
             };
+            let slot = order
+                .get_mut(d.display_order)
+                .ok_or_else(|| Error(format!("{}: invalid display_order", d.agent_id)))?;
+            if slot.replace(id).is_some() {
+                return Err(Error(format!("{}: duplicate display_order", d.agent_id)));
+            }
             names.insert(d.agent_id.clone(), id);
         }
         p.main = *names
@@ -274,6 +272,13 @@ impl Native {
                 });
             }
         }
+        let rank: BTreeMap<_, _> = order
+            .into_iter()
+            .flatten()
+            .enumerate()
+            .map(|(rank, id)| (id, rank))
+            .collect();
+        p.circuits.sort_by_key(|d| rank[&d.id]);
         p.validate().map_err(Error)?;
         p.refresh_interfaces(false);
         Ok(p)
@@ -293,18 +298,19 @@ pub fn parse_native(bytes: &[u8]) -> Result<Project> {
     if bytes.len() > MAX_BYTES {
         return Err(Error("Native project exceeds 8 MiB".into()));
     }
+    limits::check(bytes)?;
     serde_json::from_slice::<Native>(bytes)
         .map_err(|e| Error(format!("Invalid .lrs JSON: {e}")))?
         .decode()
 }
 pub fn serialize_native(project: &Project) -> Result<Vec<u8>> {
-    let mut out =
-        serde_json::to_vec_pretty(&Native::encode(project)?).map_err(|e| Error(e.to_string()))?;
-    out.push(b'\n');
-    if out.len() > MAX_BYTES {
-        return Err(Error("Native project exceeds 8 MiB".into()));
-    }
-    Ok(out)
+    use std::io::Write;
+    let mut out = limits::Output(Vec::new());
+    serde_json::to_writer_pretty(&mut out, &Native::encode(project)?)
+        .map_err(|e| Error(e.to_string()))?;
+    out.write_all(b"\n").map_err(|e| Error(e.to_string()))?;
+    limits::check(&out.0)?;
+    Ok(out.0)
 }
 
 mod identities;
@@ -326,6 +332,7 @@ pub(super) fn verify_export(expected: &Project, reopened: &Project) -> Result<()
     let mut lost = vec![];
     for (e, a) in expected.circuits.iter().zip(actual.circuits.iter()) {
         if e.agent_id != a.agent_id
+            || e.display_order != a.display_order
             || e.name != a.name
             || e.label != a.label
             || e.appearance != a.appearance

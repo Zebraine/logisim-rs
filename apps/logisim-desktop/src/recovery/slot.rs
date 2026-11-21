@@ -48,6 +48,8 @@ pub(crate) fn checksum(bytes: &[u8]) -> u64 {
 #[derive(Debug, Serialize, Deserialize)]
 pub(super) struct Metadata {
     format: u8,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    native: bool,
     #[serde(deserialize_with = "source_path")]
     pub source: Option<PathBuf>,
     pub saved_at: u64,
@@ -55,6 +57,16 @@ pub(super) struct Metadata {
     version: String,
     circ_fnv1a64: u64,
     pub source_fnv1a64: Option<u64>,
+}
+
+impl Metadata {
+    pub fn codec(&self) -> logisim_file::ProjectFormat {
+        if self.native {
+            logisim_file::ProjectFormat::Lrs
+        } else {
+            logisim_file::ProjectFormat::Circ
+        }
+    }
 }
 
 // Unlike a missing field, JSON null explicitly identifies an untitled document.
@@ -119,14 +131,12 @@ impl Pair {
             meta: Entry::read(&dir.join(META), 64 * 1024)?,
         })
     }
-    pub fn project(&self, dir: &Path) -> Result<logisim_core::Project> {
+    pub fn project(
+        &self,
+        dir: &Path,
+        format: logisim_file::ProjectFormat,
+    ) -> Result<logisim_core::Project> {
         let bytes = self.data.bytes()?.ok_or("Recovery circuit is missing.")?;
-        let meta = self.metadata()?;
-        let format = meta
-            .source
-            .as_deref()
-            .map(logisim_file::ProjectFormat::binding)
-            .unwrap_or(logisim_file::ProjectFormat::Circ);
         let mut import = format
             .parse(bytes)
             .map_err(|e| format!("Invalid recovery circuit: {e}"))?;
@@ -156,6 +166,10 @@ impl Pair {
                 .map_err(|_| "Invalid recovery metadata.")?;
         let data = self.data.bytes()?.ok_or("Recovery circuit is missing.")?;
         if meta.format != 1
+            || meta
+                .source
+                .as_ref()
+                .is_some_and(|p| logisim_file::ProjectFormat::binding(p) != meta.codec())
             || meta.app != "logisim-rs"
             || meta.version.is_empty()
             || meta.source.as_ref().is_some_and(|p| !p.is_absolute())
@@ -181,12 +195,14 @@ impl Pair {
     pub fn write(
         &mut self,
         dir: &Path,
-        xml: Vec<u8>,
+        payload: Vec<u8>,
         source: Option<PathBuf>,
         original: Option<u64>,
+        codec: logisim_file::ProjectFormat,
     ) -> Result<Metadata> {
         let meta = Metadata {
             format: 1,
+            native: codec == logisim_file::ProjectFormat::Lrs,
             source,
             source_fnv1a64: original,
             saved_at: SystemTime::now()
@@ -195,19 +211,19 @@ impl Pair {
                 .as_secs(),
             app: "logisim-rs".into(),
             version: env!("CARGO_PKG_VERSION").into(),
-            circ_fnv1a64: checksum(&xml),
+            circ_fnv1a64: checksum(&payload),
         };
         let record = serde_json::to_vec_pretty(&meta).map_err(|e| e.to_string())?;
         if record.len() > 64 * 1024 {
             return Err("Recovery metadata is too large.".into());
         }
-        self.replace(dir, xml, record, storage::atomic_write)?;
+        self.replace(dir, payload, record, storage::atomic_write)?;
         Ok(meta)
     }
     fn replace(
         &mut self,
         dir: &Path,
-        xml: Vec<u8>,
+        payload: Vec<u8>,
         record: Vec<u8>,
         write_record: impl FnOnce(&Path, &[u8], Option<&[u8]>) -> Result<()>,
     ) -> Result<()> {
@@ -220,17 +236,17 @@ impl Pair {
         let data = dir.join(DATA);
         let old_data = current.data.bytes()?;
         let old_meta = current.meta.bytes()?;
-        storage::atomic_write(&data, &xml, old_data)?;
+        storage::atomic_write(&data, &payload, old_data)?;
         if let Err(e) = write_record(&dir.join(META), &record, old_meta) {
             let rollback = match old_data {
-                Some(bytes) => storage::atomic_write(&data, bytes, Some(&xml)),
+                Some(bytes) => storage::atomic_write(&data, bytes, Some(&payload)),
                 None => remove(&data),
             };
             rollback?;
             return Err(e);
         }
         *self = Self {
-            data: Entry::Bytes(xml),
+            data: Entry::Bytes(payload),
             meta: Entry::Bytes(record),
         };
         Ok(())

@@ -772,6 +772,7 @@ impl Files {
                     self.load(&path, workspace, sim);
                 } else {
                     match storage::destination(&path) {
+                        Ok(path) if logisim_file::ProjectFormat::binding(&path) != logisim_file::ProjectFormat::Circ => self.error(tr("Choose a project file with the indicated extension.").into()),
                         Ok(path) if self.storage.protected.as_ref() == Some(&path) => self.error(
                             tr("Choose a different file: this source contains unsupported content.")
                                 .into(),

@@ -8,7 +8,14 @@ fn failed_commit_preserves_previous_pair_and_interrupted_commit_is_detected() {
     let mut pair = Pair::default();
     for existing in [false, true] {
         if existing {
-            pair.write(&dir, b"old".to_vec(), None, None).unwrap();
+            pair.write(
+                &dir,
+                b"old".to_vec(),
+                None,
+                None,
+                logisim_file::ProjectFormat::Circ,
+            )
+            .unwrap();
         }
         let previous = Pair::read(&dir).unwrap();
         assert!(

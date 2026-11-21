@@ -2,8 +2,9 @@
 use crate::{Document, Error, Import, Result, native};
 use std::path::{Component, Path, PathBuf};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ProjectFormat {
+    #[default]
     Circ,
     Lrs,
 }
@@ -43,7 +44,34 @@ impl ProjectFormat {
         }
     }
     pub fn export(self, p: &Document) -> Result<Vec<u8>> {
-        let bytes = self.serialize(p)?;
+        let bytes = self.serialize(p).map_err(|error| {
+            if self != Self::Circ {
+                return error;
+            }
+            let mut objects = Vec::new();
+            for d in &p.circuits {
+                if let Err(e) = crate::fonts::write_label(&mut String::new(), &d.circuit.label) {
+                    objects.push(format!("{} (circuit label): {e}", d.name));
+                }
+                for c in &d.circuit.components {
+                    if let Err(e) = crate::validate_component(c, p) {
+                        let id = d
+                            .circuit
+                            .agent_ids
+                            .items
+                            .get(&c.id)
+                            .map(|&id| logisim_core::AgentIdKind::Component.encode(id))
+                            .unwrap_or_else(|| c.id.to_string());
+                        objects.push(format!("{} component {id}: {e}", d.name));
+                    }
+                }
+            }
+            if objects.is_empty() {
+                error
+            } else {
+                Error(objects.join("\n"))
+            }
+        })?;
         if self == Self::Circ {
             let imported = self.parse(&bytes)?;
             if !imported.warnings.is_empty() {

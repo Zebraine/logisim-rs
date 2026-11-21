@@ -127,7 +127,14 @@ impl Session {
             backup,
             logisim_file::MAX_BYTES,
         )
-        .map_err(write_error)?;
+        .map_err(|error| match error {
+            logisim_preferences::storage::CopyError::Destination(cause) => write_error(cause),
+            logisim_preferences::storage::CopyError::Backup(path, cause) => {
+                let mut e = Error::new("backup_failed", write_error(cause).message);
+                e.details["path"] = json!(path);
+                e
+            }
+        })?;
         Ok(
             json!({"session_id":id,"path":path,"format":format.extension(),"sha256":digest::sha256(&bytes)}),
         )

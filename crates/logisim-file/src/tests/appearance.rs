@@ -37,6 +37,31 @@ fn custom_vector_artwork_and_styled_text_roundtrip_with_exact_pin_bindings() {
     let reloaded = parse(&serialized).unwrap();
     assert!(reloaded.warnings.is_empty());
     assert_eq!(serialize(&reloaded.document).unwrap(), serialized);
+    let mut native = imported.document.clone();
+    native::IdentityAssignments::default()
+        .complete(&mut native)
+        .unwrap();
+    let bytes = serialize_native(&native).unwrap();
+    let reopened = parse_native(&bytes).unwrap();
+    assert_eq!(
+        reopened.main_circuit().circuit.components[0].ports(),
+        instance.ports()
+    );
+    let package = reopened
+        .named("part")
+        .unwrap()
+        .circuit
+        .appearance
+        .as_ref()
+        .unwrap();
+    assert_eq!(package.bounds(), a.bounds());
+    assert_eq!(package.shapes, a.shapes);
+    let exported = ProjectFormat::Circ.export(&reopened).unwrap();
+    assert_eq!(
+        serialize_native(&ProjectFormat::Circ.parse(&exported).unwrap().document).unwrap(),
+        bytes
+    );
+
     let mut moved = imported.document;
     let part = moved.named("part").unwrap().id;
     let c = &mut moved.circuit_mut(part).unwrap().circuit;

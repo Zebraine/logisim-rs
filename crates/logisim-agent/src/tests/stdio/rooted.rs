@@ -216,3 +216,136 @@ fn pipelined_settings_writes_and_read_share_one_ordered_disk_revision() {
     );
     c.finish();
 }
+
+#[test]
+fn conversion_checks_the_target_and_keeps_each_session_bound_to_its_format() {
+    let fixture = Fixture::new();
+    let root = fixture.0.join("work");
+    let mut mcp = Client::start(&["--root", root.to_str().unwrap(), "mcp"]);
+    mcp.initialize("2025-11-25");
+    let open = mcp.tool("project_open", json!({"path":"top.circ"}));
+    let session = &open["result"]["structuredContent"]["data"]["session_id"];
+    let mut args = json!({"session":session,"output":"board.lrs"});
+    let created = mcp.tool("project_convert", args.clone());
+    assert_eq!(created["result"]["isError"], false, "{created}");
+    let sha = &created["result"]["structuredContent"]["data"]["sha256"];
+    let original = fs::read(root.join("board.lrs")).unwrap();
+    assert_eq!(
+        tool_error(&mcp.tool("project_convert", args.clone()))["code"],
+        "conflict"
+    );
+    args["expected_output_sha256"] = sha.clone();
+    let lock = logisim_preferences::storage::lock_target(&root.join("board.lrs")).unwrap();
+    assert_eq!(
+        tool_error(&mcp.tool("project_convert", args.clone()))["code"],
+        "conflict"
+    );
+    assert!(!root.join("board.lrs.bak").exists());
+    lock.unlock().unwrap();
+    drop(lock);
+    let backup = root.join("board.lrs.bak");
+    fs::create_dir(&backup).unwrap();
+    let failure = tool_error(&mcp.tool("project_convert", args.clone()));
+    assert_eq!(failure["code"], "backup_failed", "{failure}");
+    assert_eq!(fs::read(root.join("board.lrs")).unwrap(), original);
+    fs::remove_dir(&backup).unwrap();
+    let changed = mcp.tool(
+        "project_patch",
+        json!({"session":session,"dry_run":false,"ops":[{"op":"add_circuit","name":"extra"}]}),
+    );
+    assert_eq!(changed["result"]["isError"], false, "{changed}");
+    assert_eq!(
+        mcp.tool("project_convert", args)["result"]["isError"],
+        false
+    );
+    assert_eq!(fs::read(root.join("board.lrs.bak")).unwrap(), original);
+    assert_eq!(fs::read_to_string(root.join("top.circ")).unwrap(), PROJECT);
+    let snap = mcp.tool("project_snapshot", json!({"session":session}));
+    assert_eq!(
+        snap["result"]["structuredContent"]["data"]["path"],
+        root.join("top.circ").to_str().unwrap()
+    );
+    let opened = mcp.tool("project_open", json!({"path":"board.lrs"}));
+    let native = &opened["result"]["structuredContent"]["data"]["session_id"];
+    assert_eq!(
+        mcp.tool("project_save", json!({"session":native}))["result"]["isError"],
+        false
+    );
+    assert!(logisim_file::parse_native(&fs::read(root.join("board.lrs")).unwrap()).is_ok());
+    assert_eq!(
+        tool_error(&mcp.tool(
+            "project_convert",
+            json!({"session":native,"output":"../outside.circ"})
+        ))["code"],
+        "path_outside_root"
+    );
+    mcp.finish();
+}
+
+#[test]
+fn partial_import_and_unrepresentable_native_copy_preserve_both_files() {
+    let fixture = Fixture::new();
+    let root = fixture.0.join("work");
+    let partial = PROJECT.replace("</project>", "<unknown/></project>");
+    fs::write(root.join("partial.circ"), &partial).unwrap();
+    let mut cli = Client::start(&["--root", root.to_str().unwrap(), "cli"]);
+    cli.send(json!(["project", "open", "--path", "partial.circ"]));
+    let s = cli.read()["data"]["session_id"].clone();
+    cli.send(json!([
+        "project",
+        "convert",
+        "--session",
+        s,
+        "--output",
+        "blocked.lrs"
+    ]));
+    let e = cli.read();
+    assert_eq!(e["error"]["code"], "partial_project");
+    assert!(
+        !e["error"]["details"]["warnings"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert!(!root.join("blocked.lrs").exists());
+    assert_eq!(
+        fs::read_to_string(root.join("partial.circ")).unwrap(),
+        partial
+    );
+    let mut p = logisim_core::Project::default();
+    let mut c =
+        logisim_core::Component::new(logisim_core::Kind::Joystick, logisim_core::Point::ZERO);
+    c.font.size = 24;
+    p.main_circuit_mut().circuit.add_component(c);
+    logisim_file::native::IdentityAssignments::default()
+        .complete(&mut p)
+        .unwrap();
+    let bytes = logisim_file::serialize_native(&p).unwrap();
+    fs::write(root.join("stick.lrs"), &bytes).unwrap();
+    cli.send(json!(["project", "open", "--path", "stick.lrs"]));
+    let s = cli.read()["data"]["session_id"].clone();
+    cli.send(json!(["project", "open", "--path", "top.circ"]));
+    let sha = cli.read()["data"]["source_sha256"].clone();
+    cli.send(json!([
+        "project",
+        "convert",
+        "--session",
+        s,
+        "--output",
+        "top.circ",
+        "--expected-output-sha256",
+        sha
+    ]));
+    let e = cli.read();
+    assert_eq!(e["error"]["code"], "invalid_project");
+    assert!(
+        e["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("component c-")
+    );
+    assert_eq!(fs::read(root.join("stick.lrs")).unwrap(), bytes);
+    assert_eq!(fs::read_to_string(root.join("top.circ")).unwrap(), PROJECT);
+    assert!(!root.join("top.circ.lock").exists() && !root.join("top.circ.bak").exists());
+    cli.finish();
+}

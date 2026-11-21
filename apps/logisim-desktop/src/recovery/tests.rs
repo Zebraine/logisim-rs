@@ -107,7 +107,14 @@ fn malformed_xml_with_consistent_metadata_is_damaged_and_survives_restarts() {
     let tmp = Temp::new();
     let dir = tmp.path("recovery");
     let mut pair = Pair::default();
-    pair.write(&dir, b"<project>".to_vec(), None, None).unwrap();
+    pair.write(
+        &dir,
+        b"<project>".to_vec(),
+        None,
+        None,
+        logisim_file::ProjectFormat::Circ,
+    )
+    .unwrap();
     let mut auto = Autosave::at(Some(dir.clone()));
     assert!(auto.pending());
     assert!(matches!(
@@ -178,7 +185,13 @@ fn observed_foreign_copy_survives_settings_clear_and_finish_but_not_startup_disc
         &project,
     );
     assert!(owner.view().owned);
-    assert_eq!(Pair::read(&dir).unwrap().project(&dir).unwrap(), project);
+    assert_eq!(
+        Pair::read(&dir)
+            .unwrap()
+            .project(&dir, logisim_file::ProjectFormat::Circ)
+            .unwrap(),
+        project
+    );
     other.refresh();
     drop(owner);
     assert_eq!(other.recover(&mut disk).unwrap(), project);
@@ -281,7 +294,13 @@ fn unchanged_checkpoints_keep_both_mtimes_and_failed_edits_retry() {
     assert_eq!(mtimes(), old);
     tick(&mut owner, 1500, &project);
     assert_eq!(owner.written.as_ref(), Some(&project));
-    assert_eq!(Pair::read(&dir).unwrap().project(&dir).unwrap(), project);
+    assert_eq!(
+        Pair::read(&dir)
+            .unwrap()
+            .project(&dir, logisim_file::ProjectFormat::Circ)
+            .unwrap(),
+        project
+    );
     drop(owner);
     let mut restored = Autosave::at(Some(dir.clone()));
     let recovered = restored.recover(&mut Storage::default()).unwrap();
@@ -353,10 +372,22 @@ fn damaged_clear_rejects_the_live_writer_then_releases_its_temporary_lease() {
         &Storage::default(),
         &project,
     );
-    assert_eq!(Pair::read(&dir).unwrap().project(&dir).unwrap(), project);
+    assert_eq!(
+        Pair::read(&dir)
+            .unwrap()
+            .project(&dir, logisim_file::ProjectFormat::Circ)
+            .unwrap(),
+        project
+    );
     drop(owner);
     assert!(observer.clear_from_settings().is_err()); // Repaired since confirmation.
-    assert_eq!(Pair::read(&dir).unwrap().project(&dir).unwrap(), project);
+    assert_eq!(
+        Pair::read(&dir)
+            .unwrap()
+            .project(&dir, logisim_file::ProjectFormat::Circ)
+            .unwrap(),
+        project
+    );
     fs::write(&meta, b"damaged again").unwrap();
     observer.refresh();
     observer.clear_from_settings().unwrap();
@@ -451,4 +482,58 @@ fn owner_lock_io_error_preserves_storage_and_the_observed_checkpoint() {
     assert_eq!(reader.observed, before);
     fs::remove_dir(tmp.path(slot::OWNER)).unwrap();
     assert_eq!(reader.recover(&mut storage).unwrap(), Project::default());
+}
+
+#[test]
+fn native_checkpoint_survives_source_removal_and_a_second_crash() {
+    use logisim_file::{ProjectFormat, native::IdentityAssignments};
+    let tmp = Temp::new();
+    let dir = tmp.path("recovery");
+    let source = tmp.path("board.lrs");
+    let mut p = Project::default();
+    let mut stick = Component::new(Kind::Joystick, Point::ZERO);
+    stick.font.size = 24;
+    p.main_circuit_mut().circuit.add_component(stick);
+    IdentityAssignments::default().complete(&mut p).unwrap();
+    let before = logisim_file::serialize_native(&p).unwrap();
+    fs::write(&source, &before).unwrap();
+    let mut disk = Storage::default();
+    let (mut p, _) = disk.load(&source).unwrap();
+    let save_checkpoint = |disk: &Storage, p: &Project| {
+        let mut auto = Autosave::at(Some(dir.clone()));
+        let now = Instant::now();
+        for t in [now, now + Duration::from_secs(300)] {
+            auto.update(t, FileSettings::default(), true, disk, p);
+        }
+        assert!(auto.error.is_none(), "{:?}", auto.error);
+    };
+    p.main_circuit_mut().circuit.label.text = "first".into();
+    save_checkpoint(&disk, &p);
+    assert_eq!(fs::read(&source).unwrap(), before);
+    fs::remove_file(&source).unwrap();
+    let mut next = Autosave::at(Some(dir.clone()));
+    let mut restored = next.recover(&mut disk).unwrap();
+    assert_eq!(p, restored);
+    assert!(disk.path.is_none());
+    assert_eq!(disk.bound_format(), ProjectFormat::Lrs);
+    restored.main_circuit_mut().circuit.label.text = "second".into();
+    let now = Instant::now();
+    for t in [now, now + Duration::from_secs(300)] {
+        next.update(t, FileSettings::default(), true, &disk, &restored);
+    }
+    drop(next);
+    let mut last = Autosave::at(Some(dir.clone()));
+    assert_eq!(last.recover(&mut disk).unwrap(), restored);
+    assert_eq!(disk.bound_format(), ProjectFormat::Lrs);
+    let export = tmp.path("lossy.circ");
+    assert!(
+        disk.save(
+            &restored,
+            &export,
+            crate::storage::SaveMode::Selected(None),
+            false
+        )
+        .is_err()
+    );
+    assert!(!export.exists());
 }

@@ -18,7 +18,8 @@ pub(crate) struct Storage {
     pub path: Option<PathBuf>,
     pub protected: Option<PathBuf>,
     baseline: Project,
-    partial: bool,
+    partial_warnings: Vec<String>,
+    format: ProjectFormat,
     identities: std::cell::RefCell<IdentityAssignments>,
     disk: Vec<u8>,
     recovered: bool,
@@ -38,9 +39,14 @@ impl Storage {
     pub fn dirty(&self, project: &Project) -> bool {
         self.recovered || *project != self.baseline
     }
-    pub fn recovered(source: Option<&Path>, expected: Option<u64>) -> Result<Self> {
+    pub fn recovered(
+        source: Option<&Path>,
+        expected: Option<u64>,
+        format: ProjectFormat,
+    ) -> Result<Self> {
         let mut state = Self {
             recovered: true,
+            format,
             ..Default::default()
         };
         if let Some(path) = source {
@@ -61,11 +67,21 @@ impl Storage {
     pub fn load(&mut self, path: &Path) -> Result<(Project, Vec<String>)> {
         let path = destination(path)?;
         let bytes = read(&path)?;
-        let mut import = ProjectFormat::binding(&path)
-            .parse(&bytes)
-            .map_err(|e| e.to_string())?;
-        self.identities = Default::default();
-        self.partial = import.partial;
+        let format = ProjectFormat::binding(&path);
+        let mut import = format.parse(&bytes).map_err(|e| e.to_string())?;
+        let mut identities = IdentityAssignments::default();
+        if format == ProjectFormat::Circ {
+            identities
+                .reserve(&import.document)
+                .map_err(|e| e.to_string())?;
+        }
+        self.identities = identities.into();
+        self.format = format;
+        self.partial_warnings = if import.partial {
+            import.warnings.clone()
+        } else {
+            vec![]
+        };
         crate::plugins::absolutize(&mut import.document, &crate::plugins::base(Some(&path)));
         self.recovered = false;
         self.conflicting_source = None;
@@ -76,10 +92,7 @@ impl Storage {
         Ok((import.document, import.warnings))
     }
     pub fn bound_format(&self) -> ProjectFormat {
-        self.path
-            .as_deref()
-            .map(ProjectFormat::binding)
-            .unwrap_or(ProjectFormat::Circ)
+        self.format
     }
     pub fn encode(&self, format: ProjectFormat, p: &mut Project) -> Result<Vec<u8>> {
         if format == ProjectFormat::Lrs {
@@ -98,8 +111,12 @@ impl Storage {
         expected: Option<&[u8]>,
         backup: bool,
     ) -> Result<()> {
-        if self.partial {
-            return Err("Cannot convert a partial project.".into());
+        if !self.partial_warnings.is_empty() {
+            return Err(format!(
+                "{}\n{}",
+                logisim_ui::i18n::tr("Cannot convert a partial project."),
+                self.partial_warnings.join("\n")
+            ));
         }
         let path = destination(path)?;
         if self.path.as_ref() == Some(&path) || ProjectFormat::from_extension(&path) != Some(format)
@@ -153,31 +170,43 @@ impl Storage {
         } else {
             self.encode(format, &mut portable)?
         };
-        if backup_before_save && let Some(original) = expected {
-            // These are the exact bytes observed at load or Replace confirmation.
-            // Verify them before rotating the backup; atomic_write checks the target again.
-            check_expected(&path, Some(original))?;
-            let mut name = path.as_os_str().to_owned();
-            name.push(".bak");
-            let backup = PathBuf::from(name);
-            if self.protected.as_ref() == Some(&backup) {
-                return Err("The backup would replace the protected source. Choose a different destination.".into());
+        if format == ProjectFormat::Lrs {
+            logisim_preferences::storage::write_project_copy(
+                &path,
+                &bytes,
+                expected,
+                backup_before_save,
+                MAX_BYTES,
+            )
+            .map_err(|e| e.to_string())?;
+        } else {
+            if backup_before_save && let Some(original) = expected {
+                // These are the exact bytes observed at load or Replace confirmation.
+                // Verify them before rotating the backup; atomic_write checks the target again.
+                check_expected(&path, Some(original))?;
+                let mut name = path.as_os_str().to_owned();
+                name.push(".bak");
+                let backup = PathBuf::from(name);
+                if self.protected.as_ref() == Some(&backup) {
+                    return Err("The backup would replace the protected source. Choose a different destination.".into());
+                }
+                logisim_preferences::storage::write_backup(&path, &backup, original, MAX_BYTES)
+                    .map_err(|cause| {
+                        let message = match cause {
+                            logisim_preferences::storage::WriteError::Conflict => CHANGED.into(),
+                            logisim_preferences::storage::WriteError::Io(message) => message,
+                        };
+                        logisim_ui::tf!(
+                            "Could not write backup {}. Save stopped.\n{}",
+                            backup.display(),
+                            logisim_ui::i18n::tr(&message)
+                        )
+                    })?;
             }
-            logisim_preferences::storage::write_backup(&path, &backup, original, MAX_BYTES)
-                .map_err(|cause| {
-                    let message = match cause {
-                        logisim_preferences::storage::WriteError::Conflict => CHANGED.into(),
-                        logisim_preferences::storage::WriteError::Io(message) => message,
-                    };
-                    logisim_ui::tf!(
-                        "Could not write backup {}. Save stopped.\n{}",
-                        backup.display(),
-                        logisim_ui::i18n::tr(&message)
-                    )
-                })?;
+            atomic_write(&path, &bytes, expected)?;
         }
-        atomic_write(&path, &bytes, expected)?;
-        self.partial = false;
+        self.partial_warnings.clear();
+        self.format = format;
         self.path = Some(path);
         self.disk = bytes;
         self.recovered = false;

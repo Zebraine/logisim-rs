@@ -1,4 +1,5 @@
-//! V1 stores overrides of the per-kind document defaults. Ports and local IDs are derived.
+//! V1 records common properties and each kind’s applicable options explicitly.
+//! Extra document overrides survive native saves. Ports and local IDs are derived.
 use super::*;
 use logisim_core::*;
 use serde::{Deserialize, Serialize};
@@ -49,7 +50,7 @@ part_kinds!(Plugin, ControlledBuffer, ControlledInverter, PullResistor, Transist
     RgbLed, DotMatrix, Rom, PlaRom, Ram; Gate, FlipFlop, Parity, Latch, Plexer, Arithmetic);
 
 macro_rules! properties {
-    ($($field:ident: $ty:ty),+ $(,)?) => {
+    ($($field:ident: $ty:ty => $kinds:pat),+ $(,)?) => {
         #[derive(Serialize, Deserialize, PartialEq, Debug)]
         #[serde(deny_unknown_fields)]
         pub(super) struct Properties {
@@ -58,22 +59,33 @@ macro_rules! properties {
         impl Properties {
             fn encode(c: &Component) -> Self {
                 let defaults = Component::new(c.kind, c.position);
-                Self { $($field: (c.$field != defaults.$field).then(|| c.$field.clone()),)+ }
+                Self { $($field: (matches!(c.kind, $kinds) || c.$field != defaults.$field)
+                    .then(|| c.$field.clone()),)+ }
             }
-            fn apply(self, c: &mut Component) {
-                $(if let Some(value) = self.$field { c.$field = value; })+
+            fn apply(self, c: &mut Component) -> Result<()> {
+                $(if let Some(value) = self.$field {
+                    c.$field = value;
+                } else if matches!(c.kind, $kinds) {
+                    return Err(Error(format!("missing properties.{}", stringify!($field))));
+                })+
+                Ok(())
             }
         }
     }
 }
 properties!(
-    facing: Facing, bits: u8, output: bool, pin: PinOptions, label: String,
-    font: ArtworkFont, color: [u8;3], color_alpha: u8, gate_options: GateOptions,
-    text_horizontal: HorizontalAlign, text_vertical: VerticalAlign, constant: u32,
-    radix: Radix, label_facing: Facing, label_center: bool, splitter: Splitter,
-    input_bits: u8, extension: Extension, sequential: Sequential, plexing: Plexing,
-    arithmetic: ArithmeticOptions, io: Io, terminal: TerminalOptions, bus: BusControl,
-    transistor: TransistorOptions, parity: ParityOptions, latch_enable: LatchEnable,
+    facing: Facing => _, bits: u8 => _, label: String => _, font: ArtworkFont => _,
+    color: [u8;3] => _, color_alpha: u8 => _, label_facing: Facing => _, label_center: bool => _,
+    output: bool => Kind::Pin, pin: PinOptions => Kind::Pin,
+    gate_options: GateOptions => Kind::Gate(_) | Kind::Parity(_),
+    text_horizontal: HorizontalAlign => Kind::Text, text_vertical: VerticalAlign => Kind::Text,
+    constant: u32 => Kind::Constant, radix: Radix => Kind::Pin | Kind::Probe,
+    splitter: logisim_core::Splitter => Kind::Splitter, input_bits: u8 => Kind::BitExtender, extension: Extension => Kind::BitExtender,
+    sequential: Sequential => Kind::FlipFlop(_) | Kind::Latch(_) | Kind::Register | Kind::Counter | Kind::ShiftRegister | Kind::Random | Kind::Clock,
+    plexing: Plexing => Kind::Plexer(_), arithmetic: ArithmeticOptions => Kind::Arithmetic(_),
+    io: Io => Kind::Button | Kind::Switch | Kind::DipSwitch | Kind::Slider | Kind::Joystick | Kind::Keyboard | Kind::Tty | Kind::Led | Kind::SevenSegment | Kind::HexDisplay | Kind::RgbLed | Kind::DotMatrix,
+    terminal: TerminalOptions => Kind::Keyboard | Kind::Tty, bus: BusControl => Kind::ControlledBuffer | Kind::ControlledInverter | Kind::PullResistor,
+    transistor: TransistorOptions => Kind::Transistor | Kind::TransmissionGate, parity: ParityOptions => Kind::Parity(_), latch_enable: LatchEnable => Kind::Latch(_),
 );
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -209,7 +221,7 @@ impl Part {
     pub fn decode(self, names: &BTreeMap<String, Id>) -> Result<Component> {
         let kind = self.kind.decode(names)?;
         let mut c = Component::new(kind, self.position);
-        self.properties.apply(&mut c);
+        self.properties.apply(&mut c)?;
         c.plugin = self.plugin;
         if kind.is_memory() != self.memory.is_some() || (kind == Kind::PlaRom) != self.pla.is_some()
         {

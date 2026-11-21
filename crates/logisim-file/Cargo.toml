@@ -1,6 +1,6 @@
 [package]
 name = "logisim-file"
-description = "Supported .circ circuit import, export and diagnostics"
+description = "Native .lrs projects, legacy .circ conversion and diagnostics"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

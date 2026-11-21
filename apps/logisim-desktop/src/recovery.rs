@@ -123,7 +123,8 @@ impl Autosave {
         if meta.source.as_ref().is_some_and(|p| self.reserved(p)) {
             return Err("Invalid recovery metadata.".into());
         }
-        Ok((meta, pair.project(self.dir()?)?))
+        let project = pair.project(self.dir()?, meta.codec())?;
+        Ok((meta, project))
     }
 
     fn recover_with_lease(&mut self, storage: &mut Storage) -> Result<Project, String> {
@@ -139,7 +140,7 @@ impl Autosave {
         let pair = replacement.as_ref().unwrap_or(&self.observed);
         pair.verify(dir)?;
         let (meta, project) = self.inspect(pair)?;
-        *storage = Storage::recovered(meta.source.as_deref(), meta.source_fnv1a64)?;
+        *storage = Storage::recovered(meta.source.as_deref(), meta.source_fnv1a64, meta.codec())?;
         if let Some(pair) = replacement {
             self.observed = pair;
         }
@@ -241,9 +242,13 @@ impl Autosave {
         let mut portable = project.clone();
         plugins::rebase(&mut portable, &plugins::base(storage.path.as_deref()), &dir);
         let bytes = storage.encode(storage.bound_format(), &mut portable)?;
-        let meta =
-            self.observed
-                .write(&dir, bytes, storage.path.clone(), storage.source_checksum())?;
+        let meta = self.observed.write(
+            &dir,
+            bytes,
+            storage.path.clone(),
+            storage.source_checksum(),
+            storage.bound_format(),
+        )?;
         if let Some(lease) = lease {
             self.owned = Some(lease);
         }

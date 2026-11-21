@@ -195,37 +195,58 @@ pub fn write_backup(
     replace_checked(backup, original, previous.as_deref(), Some(permissions))
 }
 
-/// Write an explicitly selected project copy. The caller supplies the bytes
-/// confirmed for replacement, or None for create-only. Hold the sibling lock
-/// through comparison, optional backup and the checked target rename.
+#[derive(Debug)]
+pub enum CopyError {
+    Destination(WriteError),
+    Backup(std::path::PathBuf, WriteError),
+}
+impl std::fmt::Display for CopyError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Destination(e) => e.fmt(f),
+            Self::Backup(path, e) => write!(f, "Backup failed ({}): {e}", path.display()),
+        }
+    }
+}
+
+fn confirm_target(target: &Path, old: &[u8]) -> std::result::Result<(), WriteError> {
+    let metadata = fs::symlink_metadata(target)?;
+    if !metadata.is_file() || metadata.permissions().readonly() {
+        return Err(WriteError::Io(
+            "Destination must be a writable regular file.".into(),
+        ));
+    }
+    let mut actual = Vec::new();
+    fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(target)?
+        .take(old.len() as u64 + 1)
+        .read_to_end(&mut actual)?;
+    if actual != old {
+        return Err(WriteError::Conflict);
+    }
+    Ok(())
+}
+
+/// Write an explicitly selected project copy. Hold the sibling lock through
+/// verification of the confirmed bytes, backup rotation and checked rename.
 pub fn write_project_copy(
     target: &Path,
     bytes: &[u8],
     expected: Option<&[u8]>,
     backup: bool,
     max_bytes: usize,
-) -> std::result::Result<(), WriteError> {
-    let _lock = lock_target(target)?;
+) -> std::result::Result<(), CopyError> {
+    let _lock = lock_target(target).map_err(CopyError::Destination)?;
     if let Some(old) = expected {
-        let metadata = fs::symlink_metadata(target)?;
-        if !metadata.is_file() || metadata.permissions().readonly() {
-            return Err(WriteError::Io(
-                "Destination must be a writable regular file.".into(),
-            ));
-        }
-        let mut actual = Vec::new();
-        fs::File::open(target)?
-            .take(old.len() as u64 + 1)
-            .read_to_end(&mut actual)?;
-        if actual != old {
-            return Err(WriteError::Conflict);
-        }
+        confirm_target(target, old).map_err(CopyError::Destination)?;
         if backup {
             let mut name = target.as_os_str().to_owned();
             name.push(".bak");
-            write_backup(target, Path::new(&name), old, max_bytes)
-                .map_err(|e| WriteError::Io(format!("Backup failed: {e}")))?;
+            let path = std::path::PathBuf::from(name);
+            write_backup(target, &path, old, max_bytes).map_err(|e| CopyError::Backup(path, e))?;
         }
     }
-    replace_checked(target, bytes, expected, None)
+    replace_checked(target, bytes, expected, None).map_err(CopyError::Destination)
 }

@@ -1,4 +1,4 @@
-//! The supported .circ subset, independently specified from runtime-created files.
+//! Native v1 JSON projects and the supported legacy .circ subset.
 //! No filesystem or simulator dependency; unsupported content is never silently saved.
 mod agent_ids;
 mod appearance;

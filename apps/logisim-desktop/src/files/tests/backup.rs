@@ -91,3 +91,74 @@ fn blocked_backup_reports_failure_and_keeps_target_baseline_and_pending_edits() 
     assert_eq!(fs::read(&backup).unwrap(), original);
     assert_ne!(fs::read(&path).unwrap(), original);
 }
+
+#[test]
+fn project_copy_cancel_conflict_and_open_native_preserve_binding_and_recent() {
+    let dir = Temp::new();
+    let circ = dir.path("original.circ");
+    let lrs = dir.path("converted.lrs");
+    let xml = logisim_file::serialize(&Project::default()).unwrap();
+    fs::write(&circ, &xml).unwrap();
+    fs::write(&lrs, b"previous").unwrap();
+    let mut h = super::Harness::default();
+    let mut prefs = h.ws.preferences();
+    prefs.files.backup_before_save = true;
+    h.ws.apply_settings(prefs);
+    assert!(h.files.load(&circ, &mut h.ws, &mut h.sim));
+    fn respond(h: &mut super::Harness, answer: Response) {
+        let dialog = h.files.dialog.take().unwrap();
+        h.files
+            .respond(dialog, answer, &h.ctx, &mut h.ws, &mut h.sim);
+    }
+    let choose = |h: &mut super::Harness| {
+        h.files
+            .request(FileAction::ConvertNative, &h.ctx, &mut h.ws, &mut h.sim);
+        respond(h, Response::Pick(lrs.clone()));
+        assert!(matches!(h.files.dialog, Some(Dialog::ReplaceCopy { .. })));
+    };
+    choose(&mut h);
+    respond(&mut h, Response::Cancel);
+    assert_eq!(fs::read(&lrs).unwrap(), b"previous");
+    choose(&mut h);
+    fs::write(&lrs, b"external").unwrap();
+    respond(&mut h, Response::Replace);
+    assert_eq!(fs::read(&lrs).unwrap(), b"external");
+    respond(&mut h, Response::Cancel);
+    choose(&mut h);
+    respond(&mut h, Response::Replace);
+    assert_eq!(
+        fs::read(dir.path("converted.lrs.bak")).unwrap(),
+        b"external"
+    );
+    let bytes = fs::read(&lrs).unwrap();
+    let native = logisim_file::parse_native(&bytes).unwrap();
+    assert_eq!(h.files.storage.path.as_ref(), Some(&circ));
+    assert_eq!(h.ws.recent(), &[circ.to_str().unwrap()]);
+    assert!(!h.files.present(&h.ws).dirty);
+    assert_eq!(fs::read(&circ).unwrap(), xml.as_bytes());
+    respond(&mut h, Response::Cancel);
+    h.files
+        .request(FileAction::OpenNative, &h.ctx, &mut h.ws, &mut h.sim);
+    respond(&mut h, Response::Pick(lrs.clone()));
+    assert_eq!(h.ws.project(), &native);
+    assert_eq!(h.ws.recent()[0], lrs.to_str().unwrap());
+    let mut edit = native;
+    edit.main_circuit_mut().circuit.label.text = "native edit".into();
+    h.ws.replace_project(edit);
+    let lock = logisim_preferences::storage::lock_target(&lrs).unwrap();
+    h.files
+        .request(FileAction::Save, &h.ctx, &mut h.ws, &mut h.sim);
+    assert!(matches!(h.files.dialog, Some(Dialog::Message { .. })));
+    assert!(h.files.present(&h.ws).dirty);
+    assert_eq!(fs::read(&lrs).unwrap(), bytes);
+    lock.unlock().unwrap();
+    respond(&mut h, Response::Cancel);
+    h.files
+        .request(FileAction::Save, &h.ctx, &mut h.ws, &mut h.sim);
+    assert_eq!(
+        logisim_file::parse_native(&fs::read(&lrs).unwrap()).unwrap(),
+        *h.ws.project()
+    );
+    assert_eq!(fs::read(dir.path("converted.lrs.bak")).unwrap(), bytes);
+    assert_eq!(fs::read(circ).unwrap(), xml.as_bytes());
+}
