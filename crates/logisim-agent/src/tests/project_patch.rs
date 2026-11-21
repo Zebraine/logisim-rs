@@ -175,6 +175,10 @@ fn partial_stale_source_and_failed_backup_protect_bytes_and_session() {
     for (name, args) in [
         ("project_patch", json!({"ops":[],"dry_run":true})),
         ("project_patch", json!({"ops":[],"dry_run":false})),
+        (
+            "project_patch",
+            json!({"ops":[{"op":"add_component","kind":"ROM","circuit":1,"position":[120,0],"properties":{"contents":[[0,1]]}}],"dry_run":false}),
+        ),
         ("project_save", json!({})),
     ] {
         assert_eq!(
@@ -302,11 +306,11 @@ fn only_unique_item_ids_work_without_an_owner_and_plugin_instances_are_read_only
         logisim_file::parse(&SOURCE.replace("</project>", r#"<circuit name="other"/></project>"#))
             .unwrap()
             .document;
-    let course = logisim_file::parse(include_str!(
-        "../../../../examples/course/single-cycle.circ"
-    ))
-    .unwrap()
-    .document;
+    let example =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/course/single-cycle.circ");
+    let course = logisim_file::parse(&fs::read_to_string(example).unwrap())
+        .unwrap()
+        .document;
     let plugin = course
         .circuits
         .into_iter()

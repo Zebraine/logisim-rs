@@ -134,6 +134,19 @@ fn owner(project: &Project, scope: Option<Id>, id: Id, wire: bool) -> Result<Id>
     Ok(first.id)
 }
 
+fn apply_properties(
+    c: &mut Component,
+    properties: &Map<String, Value>,
+    change: &mut Value,
+) -> Result<()> {
+    let old_dimensions = c.pla.dimensions();
+    edit::apply(c, properties)?;
+    if c.kind == Kind::PlaRom && c.pla.dimensions() != old_dimensions {
+        super::pla::describe(&c.pla, &mut change["properties"]);
+    }
+    Ok(())
+}
+
 impl ProjectOp {
     fn apply(&self, project: &mut Project) -> Result<Value> {
         use ProjectOp::*;
@@ -149,7 +162,7 @@ impl ProjectOp {
             } => {
                 let at = point(*position)?;
                 let mut c = new_component(project, *cid, name, *circuit_id, at)?;
-                edit::apply(&mut c, properties)?;
+                apply_properties(&mut c, properties, &mut change)?;
                 if c.position != at {
                     return Err(invalid("Conflicting component positions in add_component."));
                 }
@@ -181,7 +194,7 @@ impl ProjectOp {
                     }
                     UpdateComponent { properties, .. } => {
                         let mut c = old.clone();
-                        edit::apply(&mut c, properties)?;
+                        apply_properties(&mut c, properties, &mut change)?;
                         logisim_file::validate_component(&c, project).map_err(invalid)?;
                         let delta = c.position - old.position;
                         let circuit = circuit(project, cid)?;

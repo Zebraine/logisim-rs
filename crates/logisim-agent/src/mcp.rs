@@ -103,7 +103,7 @@ fn project_operations() -> Value {
                 "position" | "from" | "to" => point.clone(),
                 "properties" => properties.clone(),
                 "kind" => {
-                    json!({"type":"string","minLength":1,"description":"Editable component kind, such as Bit Adder, Register, or subcircuit. A subcircuit requires a target circuit_id."})
+                    json!({"type":"string","minLength":1,"description":"Use an addable name or alias from project_catalog. Only a subcircuit instance requires a target circuit_id."})
                 }
                 "name" => json!({"type":"string","minLength":1}),
                 _ => unreachable!(),

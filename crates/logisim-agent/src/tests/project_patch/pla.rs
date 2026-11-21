@@ -29,11 +29,17 @@ fn pla_resizes_before_writing_planes_and_preserves_overlap_on_reopen() {
             json!([[true, false, true]]),
         ),
     ] {
-        f.patch(
-            json!([{"op":"update_component","id":id,"properties":props}]),
-            false,
-        )
-        .unwrap();
+        let updated = f
+            .patch(
+                json!([{"op":"update_component","id":id,"properties":props}]),
+                false,
+            )
+            .unwrap();
+        if props.get("terms").is_some() {
+            let changed = &updated["changes"][0]["properties"];
+            assert_eq!(changed["input_plane"], expected_i);
+            assert_eq!(changed["output_plane"], expected_o);
+        }
         f.call("project_save", json!({})).unwrap();
         f.id = open(&mut f.cli, &f.path);
         let snap = f.snapshot();

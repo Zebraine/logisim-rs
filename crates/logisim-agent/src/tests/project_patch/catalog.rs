@@ -9,6 +9,7 @@ fn catalog_names_are_unique_and_all_editable_kinds_can_be_placed_by_name_or_alia
     assert_eq!(catalog["schema"], 1);
     let kinds = catalog["kinds"].as_array().unwrap();
     assert_eq!(kinds.len(), 67);
+    assert_eq!(kinds.iter().filter(|c| c["addable"] == true).count(), 66);
     let mut names = BTreeSet::new();
     let mut read_only = BTreeSet::new();
     let mut ops = vec![json!({"op":"add_circuit","name":"child"})];
@@ -236,4 +237,46 @@ fn schema_exposes_codec_limits_and_validates_partial_font_rgba_and_splitter_mapp
         assert_eq!(err.details["op_index"], 0);
     }
     assert_eq!(f.snapshot(), before);
+}
+
+#[test]
+fn memory_programming_and_terminal_schemas_describe_only_persistent_fields() {
+    let catalog = Service::default().call(Request::ProjectCatalog {}).unwrap();
+    let fields = |name: &str| {
+        &catalog["kinds"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|k| k["name"] == name)
+            .unwrap()["properties"]
+    };
+    let rom = &fields("ROM")["contents"];
+    assert_eq!(rom["maxItems"], 65536);
+    assert_eq!(rom["items"]["minItems"], 2);
+    assert_eq!(rom["items"]["maxItems"], 2);
+    assert_eq!(rom["items"]["prefixItems"][0]["maximum"], 0xffffff);
+    assert_eq!(rom["items"]["prefixItems"][1]["maximum"], u32::MAX);
+    assert!(fields("RAM").get("contents").is_none());
+    let pla = fields("PLA ROM");
+    assert_eq!(
+        pla["input_plane"]["items"]["items"]["enum"],
+        json!(["disconnected", "direct", "inverted"])
+    );
+    assert_eq!(pla["output_plane"]["items"]["items"]["type"], "boolean");
+    for (key, columns) in [("input_plane", "inputs"), ("output_plane", "outputs")] {
+        assert_eq!(pla[key]["x-rows"], "terms");
+        assert_eq!(pla[key]["x-columns"], columns);
+        assert_eq!(pla[key]["maxItems"], pla["terms"]["maximum"]);
+        assert_eq!(pla[key]["items"]["maxItems"], pla[columns]["maximum"]);
+    }
+    assert_eq!(fields("Slider")["slider_value"]["x-wordBits"], "bits");
+    assert_eq!(fields("Joystick").as_object().unwrap().len(), 2);
+    for term in ["Keyboard", "TTY"] {
+        assert_eq!(fields(term)["bits"]["enum"], json!([7, 16]));
+        assert_eq!(
+            fields(term)["trigger"]["enum"],
+            json!(["rising", "falling"])
+        );
+        assert!(fields(term).get("font").is_none());
+    }
 }

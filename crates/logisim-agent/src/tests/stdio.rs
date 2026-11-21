@@ -219,7 +219,14 @@ fn project_edits_have_the_same_outcome_over_cli_flags_and_mcp() {
         {"op":"add_component","circuit":1,"kind":"Controlled Inverter","position":[300,100],"properties":{"size":"wide"}},
         {"op":"add_component","circuit":1,"kind":"SR Latch","position":[400,100],"properties":{"trigger":"latch"}},
         {"op":"add_component","circuit":1,"kind":"Counter","position":[500,100],"properties":{"bits":5,"counter_max":29}},
-        {"op":"update_component","circuit":1,"id":7,"properties":{"trigger":"falling","counter_overflow":"stay"}}
+        {"op":"update_component","circuit":1,"id":7,"properties":{"trigger":"falling","counter_overflow":"stay"}},
+        {"op":"add_component","circuit":1,"kind":"ROM","position":[100,300],"properties":{"address_bits":3,"bits":4,"contents":[[0,3],[3,0],[7,15]]}},
+        {"op":"add_component","circuit":1,"kind":"RAM","position":[200,300],"properties":{"interface":"shared_async","simple":false}},
+        {"op":"add_component","circuit":1,"kind":"PLA ROM","position":[300,300],"properties":{"terms":1,"inputs":2,"outputs":1,"input_plane":[["direct","inverted"]],"output_plane":[[true]]}},
+        {"op":"add_component","circuit":1,"kind":"Slider","position":[400,300],"properties":{"bits":4,"slider_value":14}},
+        {"op":"add_component","circuit":1,"kind":"Joystick","position":[500,300],"properties":{"bits":3,"facing":"West"}},
+        {"op":"add_component","circuit":1,"kind":"Keyboard","position":[600,300],"properties":{"bits":16,"buffer_len":128}},
+        {"op":"add_component","circuit":1,"kind":"TTY","position":[700,300],"properties":{"rows":29,"columns":70}}
     ]);
     let edits = dir.join("ops.json");
     fs::write(&edits, json!({"ops":ops}).to_string()).unwrap();

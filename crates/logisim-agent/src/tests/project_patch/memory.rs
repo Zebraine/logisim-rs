@@ -105,3 +105,19 @@ fn invalid_rom_images_and_ram_contents_roll_back_the_batch() {
     }
     assert_eq!(f.snapshot(), before);
 }
+
+#[test]
+fn oversized_imported_rom_returns_a_structured_snapshot_error_without_truncating() {
+    // Alternating words require one change point per address. The image is valid .circ data.
+    let image = "1 0 ".repeat(32769);
+    let xml = format!(
+        r##"<project version="1.0" source="logisim-rs-plugin-v1"><lib name="m" desc="#Memory"/><main name="top"/><circuit name="top"><comp lib="m" name="ROM" loc="(100,100)"><a name="addrWidth" val="17"/><a name="dataWidth" val="1"/><a name="contents">addr/data: 17 1
+{image}</a></comp></circuit></project>"##
+    );
+    let mut f = Fixture::new(&xml);
+    assert_eq!(
+        f.call("project_snapshot", json!({})).unwrap_err().code,
+        "too_large"
+    );
+    assert_eq!(std::fs::read_to_string(&f.path).unwrap(), xml);
+}

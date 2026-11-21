@@ -200,8 +200,16 @@ logisim-agent settings patch --config /path/to/preferences.json --ops edits.json
 | D、T、J-K、S-R 触发器与 D、S-R 锁存器 | `trigger` 对触发器支持 rising/falling，对锁存器支持 high/low。S-R 锁存器还可选 latch 表示无使能。均支持 `controls`（above_below/below_above/legacy）、`negate_controls`、`new_layout`。旧触发器布局要求 legacy 控制位置 |
 | Register、Counter、Shift Register、Random Generator | `bits` 与 `trigger`（rising/falling，Register 另支持 high/low）。寄存器支持 `select_high`，计数器支持 `counter_max`、`counter_overflow`（wrap/stay/continue/load）和 `counter_old`，随机数发生器支持有符号 32 位 `random_seed` |
 | LED、SevenSegment、HexDisplay、RGBLED、DotMatrix | 适用的 RGBA 颜色和极性、RGB 多位输入、点阵行列数（1–32）、`matrix_input`（column/row/select）、圆点和余辉时间 |
+| ROM、RAM | 均支持 `bits`（1–32）、`address_bits`（2–24）、`select_high` 和标签属性。ROM 支持 `contents`。RAM 支持 `interface`（shared_sync/shared_async/separate）和 `simple`，其存储内容属于仿真实例 |
+| PLA ROM | `inputs`、`terms`、`outputs`（各 1–32）、`input_plane`、`output_plane`、`select_high` 和标签属性 |
+| Slider、Joystick | Slider 支持 `bits`（1–32）、`slider_reverse`、最终位宽内的无符号 `slider_value`、朝向、标签、字体及颜色。Joystick 支持 `facing` 和 `bits`（2–5） |
+| Keyboard、TTY | 均支持 `bits`（7 或 16）和 `trigger`（rising/falling）。Keyboard 支持 `buffer_len`（1–256）。TTY 支持 `rows`（1–48）、`columns`（1–120）和 RGBA 前景色 `on_color`、背景色 `background` |
 
-添加子电路实例时分别指定父电路和已有的目标定义，例如 `{"op":"add_component","circuit":1,"kind":"subcircuit","circuit_id":2,"position":[100,100]}`。快照中 `circuit_name` 和 `interface_ports` 给出目标名称与 Pin 绑定。实例可更新标签、字体、朝向和位置。修改目标 Pin 会同步刷新实例接口。递归引用和删除仍被引用的电路会被拒绝。ROM、RAM、PLA ROM、插件实例、Slider、Joystick、Keyboard、TTY 保持只读。
+ROM 的 `contents` 整体替换镜像，最多接受 65,536 个地址严格递增的 `[address, word]` 边界。每个值持续到下一边界或容量末尾。例如 `[[2,7],[5,0]]` 将地址 2 至 4 设为 7，其余字为零。空数组清空镜像。仅调整尺寸时沿用 core 规则，丢弃新容量外的地址，并按新位宽屏蔽高位。已有 ROM 超过边界数量上限时，快照返回 `too_large`。
+
+PLA 的两个平面均以项为行。输入单元取 `disconnected`、`direct` 或 `inverted`，输出单元取布尔值。提交的平面须符合最终尺寸。调整尺寸会保留重叠单元，并在 patch 结果中返回两个完整平面。
+
+添加子电路实例时分别指定父电路和已有的目标定义，例如 `{"op":"add_component","circuit":1,"kind":"subcircuit","circuit_id":2,"position":[100,100]}`。快照中 `circuit_name` 和 `interface_ports` 给出目标名称与 Pin 绑定。实例可更新标签、字体、朝向和位置。修改目标 Pin 会同步刷新实例接口。递归引用和删除仍被引用的电路会被拒绝。目录中有 66 个可编辑种类，唯一只读的是插件实例。
 
 时序元件补丁编辑文档属性，运行状态通过仿真工具查看。若缩小计数器位宽后原上限超出范围，请在同一操作中指定新的 `counter_max`。
 
