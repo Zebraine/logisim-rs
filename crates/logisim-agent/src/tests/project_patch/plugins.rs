@@ -237,3 +237,51 @@ fn alternate_location_keeps_recorded_source_and_mismatched_saved_tool_is_readabl
     assert_eq!(e.code, "plugin_unavailable");
     assert_eq!(f.snapshot(), before);
 }
+
+#[test]
+fn moving_a_plugin_reroutes_attached_wire_and_removing_last_keeps_source() {
+    let mut f = Fixture::new(SOURCE);
+    fs::copy(module(), f.path.with_file_name("input.wasm")).unwrap();
+    let added = f
+        .patch(
+            json!([add(), {"op":"add_wire","circuit":1,"from":[100,300],"to":[200,300]}]),
+            false,
+        )
+        .unwrap();
+    let id = &added["changes"][0]["id"];
+    f.patch(
+        json!([{"op":"move_component","circuit":1,"id":id,"position":[250,300]}]),
+        false,
+    )
+    .unwrap();
+    let snap = f.snapshot();
+    let circuit = &snap["circuits"][0];
+    assert_eq!(circuit["components"][2]["id"], *id);
+    assert_eq!(
+        circuit["components"][2]["ports"][0]["position"],
+        json!([250, 300])
+    );
+    assert!(
+        circuit["wires"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|w| w["from"] == json!([250, 300]) || w["to"] == json!([250, 300]))
+    );
+    f.patch(
+        json!([{"op":"remove_component","circuit":1,"id":id}]),
+        false,
+    )
+    .unwrap();
+    f.call("project_save", json!({})).unwrap();
+    f.id = crate::tests::open(&mut f.cli, &f.path);
+    let reopened = f.snapshot();
+    assert_eq!(reopened["plugin_sources"], json!([source()]));
+    assert_eq!(
+        reopened["circuits"][0]["components"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+}

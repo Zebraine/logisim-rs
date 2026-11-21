@@ -4,8 +4,6 @@ use crate::Result;
 use logisim_core::{Gate, Kind, Parity};
 use serde_json::{Value, json};
 
-const READ_ONLY: [Kind; 1] = [Kind::Plugin];
-
 pub(super) struct Entry {
     pub kind: Kind,
     alias: Option<&'static str>,
@@ -26,10 +24,9 @@ fn entries() -> impl Iterator<Item = Entry> {
         .chain(Gate::ALL.map(Kind::Gate))
         .chain(Parity::ALL.map(Kind::Parity))
         // Only the kind's name is used here. Placement resolves the caller's actual target ID.
-        .chain([Kind::Subcircuit(0)])
+        .chain([Kind::Subcircuit(0), Kind::Plugin])
         .map(Entry::named)
         .chain(builtins::names().map(|(kind, alias)| Entry { kind, alias }))
-        .chain(READ_ONLY.map(Entry::named))
 }
 
 pub(super) fn placement(name: &str) -> Result<Entry> {
@@ -52,14 +49,21 @@ pub(crate) fn catalog() -> Value {
         .map(|entry| {
             let fields = properties::fields(entry.kind);
             let writable = !fields.is_empty();
-            json!({
+            let mut descriptor = json!({
                 "name": entry.kind.name(),
                 "aliases": entry.alias.as_slice(),
                 "addable": writable,
-                "editable": writable,
+                "editable": writable || entry.kind == Kind::Plugin,
                 "requires_circuit_id": entry.requires_circuit_id(),
                 "properties": properties::property_schema(entry.kind, &fields),
-            })
+            });
+            if entry.kind == Kind::Plugin {
+                descriptor["requires_plugin_source"] = true.into();
+                descriptor["description"] =
+                    "Use plugin_catalog for tool properties and add_plugin to create an instance."
+                        .into();
+            }
+            descriptor
         })
         .collect();
     json!({"schema":1,"kinds":kinds})

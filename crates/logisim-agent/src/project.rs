@@ -161,7 +161,7 @@ mod tests {
     }
 
     #[test]
-    fn plugin_instances_remain_read_only_in_project_patches() {
+    fn plugin_catalog_entry_requires_a_module_for_dynamic_fields() {
         let kind = Kind::Plugin;
         let catalog = catalog::catalog();
         let snapshot = component(&Component::new(kind, Point::ZERO));
@@ -173,6 +173,9 @@ mod tests {
             .iter()
             .find(|k| k["name"] == kind.name())
             .unwrap();
+        assert_eq!(entry["addable"], false);
+        assert_eq!(entry["editable"], true);
+        assert_eq!(entry["requires_plugin_source"], true);
         assert_eq!(entry["properties"], json!({}));
         assert_eq!(snapshot["property_schema"], entry["properties"]);
         assert_eq!(

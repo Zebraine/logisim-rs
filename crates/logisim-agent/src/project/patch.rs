@@ -215,7 +215,6 @@ impl ProjectOp {
                     .circuit(cid)
                     .and_then(|d| d.circuit.component(*id))
                     .expect("resolved component");
-                edit::require_supported(old.kind)?;
                 pin_edit = old.kind == Kind::Pin;
                 match self {
                     MoveComponent { position, .. } => {

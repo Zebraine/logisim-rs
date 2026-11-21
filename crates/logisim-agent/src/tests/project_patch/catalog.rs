@@ -4,21 +4,25 @@ use serde_json::{Value, json};
 use std::collections::BTreeSet;
 
 #[test]
-fn catalog_names_are_unique_and_all_editable_kinds_can_be_placed_by_name_or_alias() {
+fn catalog_names_are_unique_and_all_statically_addable_kinds_can_be_placed_by_name_or_alias() {
     let catalog = Service::default().call(Request::ProjectCatalog {}).unwrap();
     assert_eq!(catalog["schema"], 1);
     let kinds = catalog["kinds"].as_array().unwrap();
     assert_eq!(kinds.len(), 67);
     assert_eq!(kinds.iter().filter(|c| c["addable"] == true).count(), 66);
     let mut names = BTreeSet::new();
-    let mut read_only = BTreeSet::new();
+    let mut dynamic = BTreeSet::new();
     let mut ops = vec![json!({"op":"add_circuit","name":"child"})];
     let mut f = Fixture::new(SOURCE);
     for entry in kinds {
         let name = entry["name"].as_str().unwrap();
         let instance = name == "Subcircuit";
         assert_eq!(entry["requires_circuit_id"], instance);
-        assert_eq!(entry["addable"], entry["editable"]);
+        assert_eq!(entry["editable"], true);
+        assert_eq!(
+            entry["requires_plugin_source"] == true,
+            name == "Plugin component"
+        );
         for spelling in std::iter::once(name).chain(
             entry["aliases"]
                 .as_array()
@@ -34,7 +38,7 @@ fn catalog_names_are_unique_and_all_editable_kinds_can_be_placed_by_name_or_alia
             if entry["addable"] == true {
                 ops.push(op);
             } else {
-                read_only.insert(name);
+                dynamic.insert(name);
                 assert_eq!(
                     f.patch(json!([op]), true).unwrap_err().code,
                     "unsupported_component"
@@ -42,7 +46,7 @@ fn catalog_names_are_unique_and_all_editable_kinds_can_be_placed_by_name_or_alia
             }
         }
     }
-    assert_eq!(read_only, BTreeSet::from(["Plugin component"]));
+    assert_eq!(dynamic, BTreeSet::from(["Plugin component"]));
     assert!(
         names.contains("jk flip-flop")
             && names.contains("sr latch")

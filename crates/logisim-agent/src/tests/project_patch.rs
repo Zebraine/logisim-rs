@@ -301,7 +301,7 @@ fn replacement_symlinks_are_preserved_on_save_conflict() {
 }
 
 #[test]
-fn only_unique_item_ids_work_without_an_owner_and_plugin_instances_are_read_only() {
+fn ambiguous_ids_require_an_owner_and_offline_plugin_instances_can_move_or_be_removed() {
     let mut fixture =
         logisim_file::parse(&SOURCE.replace("</project>", r#"<circuit name="other"/></project>"#))
             .unwrap()
@@ -324,15 +324,7 @@ fn only_unique_item_ids_work_without_an_owner_and_plugin_instances_are_read_only
     for (op, code) in [
         (json!({"op":"remove_component","id":1}), "ambiguous_id"),
         (
-            json!({"op":"remove_component","circuit":2,"id":1}),
-            "unsupported_component",
-        ),
-        (
             json!({"op":"update_component","circuit":2,"id":1,"properties":{"label":"new"}}),
-            "unsupported_component",
-        ),
-        (
-            json!({"op":"move_component","circuit":2,"id":1,"position":[20,20]}),
             "unsupported_component",
         ),
     ] {
@@ -345,6 +337,18 @@ fn only_unique_item_ids_work_without_an_owner_and_plugin_instances_are_read_only
         f.snapshot()["circuits"][1]["components"],
         orig["circuits"][1]["components"]
     );
+    f.patch(
+        json!([{"op":"move_component","circuit":2,"id":1,"position":[20,20]}]),
+        false,
+    )
+    .unwrap();
+    assert_eq!(
+        f.snapshot()["circuits"][1]["components"][0]["position"],
+        json!([20, 20])
+    );
+    f.patch(json!([{"op":"remove_component","circuit":2,"id":1}]), false)
+        .unwrap();
+    assert_eq!(f.snapshot()["circuits"][1]["components"], json!([]));
 }
 
 #[test]
