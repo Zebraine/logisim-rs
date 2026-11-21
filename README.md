@@ -44,7 +44,7 @@ Simplified Chinese text uses system fonts; install a CJK font such as Noto Sans 
 
 ### First circuit
 
-1. Create a circuit from **File → New**, or open a `.circ` example.
+1. Create a circuit from **File → New**, or open the native [counter example](examples/agent/counter.lrs).
 2. Pick a component from the left catalogue, place it on the canvas, and edit its properties in the inspector.
 3. Drag from a port, or from the middle of a wire, to connect components.
 4. Select the Poke tool (`P`) to operate inputs and inspect signals.
@@ -89,7 +89,7 @@ Representative starting points include:
 - [`dynamic-branch-prediction.circ`](examples/course/dynamic-branch-prediction.circ) — branch prediction.
 - [`single-interrupt.circ`](examples/course/single-interrupt.circ) and [`nested-interrupt.circ`](examples/course/nested-interrupt.circ) — interrupt variants.
 
-The repository also contains a small [agent-built showcase](examples/agent/README.md) created through the headless CLI: a counter, an adder, and a plugin register-file circuit. The builder script records the exact edits, simulation results and plugin action.
+The Agent examples use the native project format. Open the [counter](examples/agent/counter.lrs), [adder](examples/agent/adder.lrs) or [plugin register file](examples/agent/register-file.lrs). Each ships with its legacy `.circ` source. The [showcase guide](examples/agent/README.md) gives the inputs, expected probe values and export commands.
 
 The examples illustrate the implemented behavior; they are not a compatibility test for every timing or exception detail. If you move an example, keep the relative layout between `examples/` and `plugins/`, or use the plugin locator.
 
@@ -158,7 +158,7 @@ For a circuit, run `logisim-agent cli` and send one JSON object per line in the 
 MCP executes requests in arrival order within each project session. Independent sessions can run concurrently. Match replies by JSON-RPC ID. Settings operations and CLI line requests execute sequentially.
 
 ```jsonl
-{"tool":"project_open","arguments":{"path":"examples/course/single-cycle.circ"}}
+{"tool":"project_open","arguments":{"path":"examples/agent/counter.lrs"}}
 {"tool":"project_snapshot","arguments":{"session":"ID_FROM_OPEN"}}
 {"tool":"simulation_open","arguments":{"session":"ID_FROM_OPEN"}}
 {"tool":"simulation_state","arguments":{"session":"ID_FROM_OPEN"}}

@@ -32,6 +32,8 @@ git diff --check
 
 恢复路径改动先用 `cargo test -p logisim-rs --bin logisim-rs recovery --locked --offline` 检查两种格式的恢复与锁交接。持锁窗口应排除其他写入者，释放后即使子进程仍持有同一文件描述的副本，下一个窗口也应能立即接手。用完整桌面测试分别覆盖默认并行和 `-- --test-threads=1`，核对恢复后的内容、脏状态、目标格式与最近文件。
 
+Agent 示例用 release 版 `logisim-agent` 和 `python3 examples/agent/build_showcase.py` 从已提交的 `.circ` 生成。保留原始 XML 字节。提交前运行 `cargo test -p logisim-file showcase --locked --offline`，通过原生编解码和显式旧格式导出核对两种示例的完整内容、持久 ID 和插件相对路径。打包后从解压目录验证寄存器文件探针。
+
 ## 无界面性能基线
 
 在仓库根目录执行 `cargo build -p logisim-bench --release --locked --offline`，再执行 `target/release/logisim-bench single-cycle --runs 20`。负载可选 `wide`（独立 32 位加法器，每步改变一路）、`deep`（串联 NOT）、`single-cycle`（课程 CPU）或 `plugin`（课程寄存器文件）。用同一逻辑核顺序运行，每个负载至少三个独立进程；保存每次 stdout JSON、提交、工具链、CPU 和模块哈希。
@@ -72,7 +74,7 @@ Git 采用 `.gitignore` 白名单，仅包含：
 - 必要的 Rust 源码、Cargo/工具链文件、LICENSE 和 Git/构建配置。
 - `crates/logisim-ui/locales/` 与自带插件 `locales/` 中编译必需的词条。
 - 根目录 `README.md`、`README.zh-CN.md`、`CONTRIBUTING.md`、`AGENTS.md` 及 `assets/` 中的 README 截图。
-- `examples/{course,game,agent}/*.circ`、`examples/game/*.{asm,hex}`、`examples/agent/{README.md,build_showcase.py}` 和自带插件的 `plugins/*/*.wasm`。
+- `examples/{course,game,agent}/*.circ`、`examples/agent/*.lrs`、`examples/game/*.{asm,hex}`、`examples/agent/{README.md,build_showcase.py}` 和自带插件的 `plugins/*/*.wasm`。
 
 `docs/`、`specs/`、`experiments/`、`fixtures/`、`resources/`、缓存及构建产物留在本地，不作为构建依赖。
 新增必要文件同步调整白名单，不用 `git add -f`。示例使用相对插件路径；更新模块后重新校验定义匹配和示例。

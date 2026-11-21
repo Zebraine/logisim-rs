@@ -44,7 +44,7 @@ Windows/macOS 包未签名或公证。本版本的界面实机验证在 Linux X1
 
 ### 第一个电路
 
-1. 用 **File → New** 新建电路，或打开一个 `.circ` 示例。
+1. 用 **File → New** 新建电路，或打开原生[计数器示例](examples/agent/counter.lrs)。
 2. 从左侧目录选择元件，放到画布上，在检查器中编辑属性。
 3. 从元件端口或导线中段拖出连线。
 4. 选择 Poke 工具（`P`）操作输入、查看信号。
@@ -89,7 +89,7 @@ logisim-rs 使用带版本号的 Wasm 插件 ABI 提供外部元件。插件可�
 - [`dynamic-branch-prediction.circ`](examples/course/dynamic-branch-prediction.circ) — 动态分支预测。
 - [`single-interrupt.circ`](examples/course/single-interrupt.circ) 与 [`nested-interrupt.circ`](examples/course/nested-interrupt.circ) — 中断变体。
 
-仓库还提供一组由无界面 CLI 生成/编辑的 [Agent 示例](examples/agent/README.md)：计数器、加法器和插件寄存器文件电路。构建脚本记录了具体编辑、仿真结果和插件动作。
+Agent 示例以原生格式提供[计数器](examples/agent/counter.lrs)、[加法器](examples/agent/adder.lrs)和[插件寄存器文件](examples/agent/register-file.lrs)。每个示例随包保留对应的旧版 `.circ` 源文件。[示例指南](examples/agent/README.md)列出了输入、预期探针读数和显式导出命令。
 
 示例用于演示已实现行为，并不是所有时序或异常细节的兼容性证明。移动示例时请保留 `examples/` 与 `plugins/` 的相对目录，或使用插件补选功能。
 
@@ -158,7 +158,7 @@ MCP 支持 `2024-11-05`、`2025-03-26`、`2025-06-18` 和 `2025-11-25`。握手�
 MCP 按到达顺序执行同一工程会话的请求。独立会话可并行执行，请用 JSON-RPC ID 匹配响应。设置操作和 CLI 行协议仍按顺序执行。
 
 ```jsonl
-{"tool":"project_open","arguments":{"path":"examples/course/single-cycle.circ"}}
+{"tool":"project_open","arguments":{"path":"examples/agent/counter.lrs"}}
 {"tool":"project_snapshot","arguments":{"session":"ID_FROM_OPEN"}}
 {"tool":"simulation_open","arguments":{"session":"ID_FROM_OPEN"}}
 {"tool":"simulation_state","arguments":{"session":"ID_FROM_OPEN"}}
