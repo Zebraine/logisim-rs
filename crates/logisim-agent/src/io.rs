@@ -18,6 +18,9 @@ pub(crate) fn file_error(e: std::io::Error) -> Error {
     )
 }
 pub fn read(path: &Path) -> Result<Vec<u8>> {
+    read_limited(path, logisim_file::MAX_BYTES)
+}
+pub(crate) fn read_limited(path: &Path, limit: usize) -> Result<Vec<u8>> {
     if path.to_str().is_none() {
         return Err(Error::invalid("Protocol paths must be valid UTF-8."));
     }
@@ -27,11 +30,14 @@ pub fn read(path: &Path) -> Result<Vec<u8>> {
     let mut bytes = Vec::new();
     fs::File::open(path)
         .map_err(file_error)?
-        .take(logisim_file::MAX_BYTES as u64 + 1)
+        .take(limit as u64 + 1)
         .read_to_end(&mut bytes)
         .map_err(file_error)?;
-    if bytes.len() > logisim_file::MAX_BYTES {
-        return Err(Error::new("too_large", "File exceeds 8 MiB."));
+    if bytes.len() > limit {
+        return Err(Error::new(
+            "too_large",
+            format!("File exceeds {} MiB.", limit / (1024 * 1024)),
+        ));
     }
     Ok(bytes)
 }

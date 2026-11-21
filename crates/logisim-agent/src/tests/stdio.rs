@@ -150,7 +150,7 @@ fn mcp_handshake_tools_errors_and_session_lifetime_match_cli() {
     assert_eq!(init["result"]["protocolVersion"], "2025-11-25");
     m.send(json!({"jsonrpc":"2.0","method":"notifications/initialized"}));
     let tools = m.call("tools/list", json!({}));
-    assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 17);
+    assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 18);
     assert_eq!(
         tool_error(&m.tool("settings_patch", json!({"config":"whatever","ops":[]})))["code"],
         "invalid_arguments"
@@ -604,8 +604,8 @@ fn annotations_describe_all_tools_including_in_memory_side_effects() {
     for tool in tools {
         let name = tool["name"].as_str().unwrap();
         let (read, destructive, idempotent) = match name {
-            "project_catalog" | "project_snapshot" | "settings_catalog" | "settings_get"
-            | "simulation_state" => (true, false, true),
+            "plugin_catalog" | "project_catalog" | "project_snapshot" | "settings_catalog"
+            | "settings_get" | "simulation_state" => (true, false, true),
             "project_open" => (false, false, false),
             "simulation_open" => (false, false, true),
             "settings_patch" | "project_close" | "simulation_set_input" | "simulation_settle" => {
@@ -627,4 +627,35 @@ fn annotations_describe_all_tools_including_in_memory_side_effects() {
         );
     }
     c.finish();
+}
+
+#[test]
+fn wasm_catalog_cli_and_mcp_return_matching_metadata_inside_root() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins/input");
+    let root = root.to_str().unwrap();
+    let cli = Command::new(BIN)
+        .args(["--root", root, "plugin", "catalog", "--wasm", "input.wasm"])
+        .output()
+        .unwrap();
+    assert!(cli.status.success());
+    let envelope: Value = serde_json::from_slice(&cli.stdout).unwrap();
+    let mut m = Client::start(&["--root", root, "mcp"]);
+    m.initialize("2025-06-18");
+    let reply = m.tool("plugin_catalog", json!({"path":"input.wasm"}));
+    assert_eq!(reply["result"]["structuredContent"], envelope);
+    assert_eq!(reply["result"]["isError"], false);
+    let plugin = &envelope["data"];
+    assert_eq!(plugin["id"], "org.logisim-rs.input");
+    let tool = &plugin["tools"][0];
+    assert_eq!(tool["id"], "keyboard");
+    assert_eq!(tool["properties"]["capacity"]["maximum"], 64);
+    assert_eq!(tool["property_schema"]["capacity"]["type"], "string");
+    assert!(!tool["ports"].as_array().unwrap().is_empty());
+    assert_eq!(tool["actions"][0]["id"], "key");
+    assert!(tool.get("graphics").is_none());
+    assert_eq!(
+        tool_error(&m.tool("plugin_catalog", json!({"path":"../course/course.wasm"})))["code"],
+        "path_outside_root"
+    );
+    m.finish();
 }

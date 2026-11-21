@@ -1,90 +1,10 @@
 //! Session-owned main-circuit simulation and current signal observations.
 pub(crate) mod control;
-use crate::io;
-use logisim_core::{
-    Kind, Project,
-    plugin::{PluginSource, api},
-};
-use logisim_plugin::{Plugin, Registry};
+use crate::plugins::load_dependencies;
+use logisim_core::{Kind, Project};
 use logisim_sim::{Bit, Problem, ProjectSimulator, Value as Signal};
 use serde_json::{Value, json};
-use std::{collections::BTreeMap, path::Path};
-
-#[derive(Default)]
-struct Dependency<'a> {
-    source: Option<&'a PluginSource>,
-    components: Vec<&'a api::Component>,
-}
-
-fn load_dependencies(project: &Project, base: &Path) -> (Registry, Vec<Value>) {
-    let mut dependencies = BTreeMap::new();
-    for source in &project.plugin_sources {
-        dependencies.insert(
-            (source.plugin.as_str(), source.version.as_str()),
-            Dependency {
-                source: Some(source),
-                components: Vec::new(),
-            },
-        );
-    }
-    for component in project
-        .circuits
-        .iter()
-        .flat_map(|d| &d.circuit.components)
-        .filter_map(|c| c.plugin.as_ref())
-    {
-        dependencies
-            .entry((&component.plugin, &component.version))
-            .or_default()
-            .components
-            .push(component);
-    }
-    let mut registry = Registry::default();
-    let mut reports = Vec::new();
-    for ((id, version), dep) in dependencies {
-        let mut candidates = Vec::new();
-        if let Some(source) = dep.source {
-            for name in [&source.path, &source.fallback]
-                .into_iter()
-                .filter(|s| !s.is_empty())
-            {
-                candidates.push(Path::new(name));
-            }
-            candidates.sort_by_key(|p| p.is_absolute());
-            candidates.dedup();
-        }
-        let mut errors = Vec::new();
-        let mut found = None;
-        for path in candidates {
-            let path = base.join(path);
-            let loaded = io::read(&path)
-                .map_err(|e| e.message)
-                .and_then(|bytes| {
-                    Plugin::load_dependency(&bytes, id, version, dep.components.iter().copied())
-                })
-                .and_then(|p| registry.insert(p));
-            match loaded {
-                Ok(()) => {
-                    found = Some(path);
-                    break;
-                }
-                Err(e) => errors.push(format!("{}: {e}", path.display())),
-            }
-        }
-        if let Some(path) = found {
-            reports.push(json!({"id":id,"version":version,"status":"loaded","path":path}));
-        } else {
-            let error = if errors.is_empty() {
-                "No plugin path is recorded.".to_owned()
-            } else {
-                errors.join("\n")
-            };
-            registry.unavailable(id.into(), version.into(), error.clone());
-            reports.push(json!({"id":id,"version":version,"status":"missing","error":error}));
-        }
-    }
-    (registry, reports)
-}
+use std::path::Path;
 
 fn value(v: Signal) -> Value {
     json!({"bits":v.width(),"binary":v.binary(),"number":v.number()})

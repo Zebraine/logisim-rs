@@ -9,6 +9,7 @@ use std::{
 mod digest;
 pub mod io;
 mod paths;
+mod plugins;
 mod project;
 mod settings;
 mod simulation;
@@ -77,6 +78,9 @@ pub enum Request {
         ops: Vec<Operation>,
     },
     ProjectCatalog {},
+    PluginCatalog {
+        path: PathBuf,
+    },
     ProjectOpen {
         path: PathBuf,
     },
@@ -219,6 +223,7 @@ impl Service {
     }
     pub fn call(&mut self, request: Request) -> Result<Value> {
         match request {
+            Request::PluginCatalog { path } => plugins::catalog(&self.resolve_path(&path)?),
             Request::ProjectCatalog {} => Ok(project::catalog::catalog()),
             Request::SettingsCatalog {} => Ok(settings::catalog()),
             Request::SettingsGet { config } => settings::get(&self.resolve_path(&config)?),

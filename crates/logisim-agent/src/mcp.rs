@@ -25,7 +25,12 @@ impl Effect {
     }
 }
 
-const TOOLS: [(&str, &str, Effect); 17] = [
+const TOOLS: [(&str, &str, Effect); 18] = [
+    (
+        "plugin_catalog",
+        "Inspect a Wasm manifest, tool ports, actions and document property schemas.",
+        Effect::ReadOnly,
+    ),
     (
         "settings_catalog",
         "List portable v16 preference keys, defaults and allowed values.",
@@ -200,7 +205,7 @@ fn tool_list() -> Value {
                 json!({"session":string, "enabled":{"type":"boolean"}}),
                 json!(["session", "enabled"]),
             ),
-            "project_open" => (json!({"path": string}), json!(["path"])),
+            "plugin_catalog" | "project_open" => (json!({"path": string}), json!(["path"])),
             _ => (json!({"session": string}), json!(["session"])),
         };
         let mut schema = json!({"type":"object", "properties":properties, "required":required, "additionalProperties":false});

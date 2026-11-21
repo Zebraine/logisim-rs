@@ -59,9 +59,10 @@ fn parse(args: &[OsString], service: &Service) -> Result<Request> {
         match flag.to_str() {
             Some(s @ ("--dry-run" | "--apply")) if mode.is_none() => mode = Some(s == "--dry-run"),
             Some("--no-backup") if !no_backup => no_backup = true,
-            Some(s @ ("--config" | "--path" | "--ops" | "--session" | "--expected-sha256"))
-                if !flags.contains_key(s) =>
-            {
+            Some(
+                s
+                @ ("--config" | "--wasm" | "--path" | "--ops" | "--session" | "--expected-sha256"),
+            ) if !flags.contains_key(s) => {
                 let value = iter
                     .next()
                     .filter(|v| !v.is_empty())
@@ -95,6 +96,9 @@ fn parse(args: &[OsString], service: &Service) -> Result<Request> {
                 expected_sha256: patch.expected_sha256,
             }
         }
+        (Some("plugin"), Some("catalog")) => Request::PluginCatalog {
+            path: take("--wasm")?.into(),
+        },
         (Some("project"), Some("catalog")) => Request::ProjectCatalog {},
         (Some("project"), Some("open")) => Request::ProjectOpen {
             path: take("--path")?.into(),
