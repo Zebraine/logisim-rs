@@ -1,6 +1,7 @@
 """Package a native desktop build and the matching bundled Wasm plugins."""
 
 import argparse
+import gzip
 import hashlib
 import json
 import os
@@ -65,6 +66,15 @@ def check_native_example(agent, circuit, plugin_paths):
         raise ValueError(f"Cannot open {circuit.name}: {result.stdout or result.stderr}")
     project = json.loads(result.stdout)["data"]
     check_plugin_paths(project["plugin_sources"], plugin_paths, circuit)
+
+
+def archive_member(info):
+    """Store portable metadata, retaining execute permission for the two programs."""
+    info.uid = info.gid = info.mtime = 0
+    info.uname = info.gname = ""
+    program = Path(info.name).name in {"logisim-rs", "logisim-agent"}
+    info.mode = 0o755 if info.isdir() or program else 0o644
+    return info
 
 
 def package(target, plugins):
@@ -162,8 +172,10 @@ def package(target, plugins):
                         bundle.write(file, file.relative_to(staging.parent))
         else:
             archive = destination / f"{name}.tar.gz"
-            with tarfile.open(archive, "w:gz") as bundle:
-                bundle.add(staging, arcname=name)
+            with archive.open("wb") as raw, gzip.GzipFile(
+                filename="", mode="wb", fileobj=raw, compresslevel=9, mtime=0
+            ) as compressed, tarfile.open(fileobj=compressed, mode="w") as bundle:
+                bundle.add(staging, arcname=name, filter=archive_member)
         with archive.open("rb") as built:
             digest = hashlib.file_digest(built, "sha256").hexdigest()
         archive.with_name(archive.name + ".sha256").write_text(
