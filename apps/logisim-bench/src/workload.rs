@@ -21,6 +21,7 @@ pub struct Fixture {
     pub stimulus: Stimulus,
     pub probes: Vec<Id>,
     pub module_load_ms: Option<f64>,
+    pub runtime: Option<(u32, logisim_plugin::WasmEngine)>,
 }
 
 fn part(kind: Kind, position: Point, bits: u8) -> Component {
@@ -86,6 +87,7 @@ impl Fixture {
         let mut project = Project::default();
         let mut plugins = Registry::default();
         let mut module_load_ms = None;
+        let mut runtime = None;
         let (stimulus, probes) = match name {
             "wide" => wide(&mut project.main_circuit_mut().circuit),
             "deep" => deep(&mut project.main_circuit_mut().circuit),
@@ -131,6 +133,7 @@ impl Fixture {
                     let _span = logisim_plugin::metrics::timer("load_dependency");
                     let plugin = load(&bytes)?;
                     plugin.check_dependency(&source.plugin, &source.version, definitions)?;
+                    runtime = Some((plugin.manifest().abi, plugin.engine()));
                     plugins.insert(plugin)?;
                 }
                 module_load_ms = Some(start.elapsed().as_secs_f64() * 1000.0);
@@ -167,6 +170,7 @@ impl Fixture {
             stimulus,
             probes,
             module_load_ms,
+            runtime,
         })
     }
 }

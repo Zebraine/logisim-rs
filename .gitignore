@@ -39,6 +39,7 @@
 !/apps/logisim-bench/comparisons/engine-contract.md
 !/apps/logisim-bench/comparisons/evaluator-hotpath.md
 !/apps/logisim-bench/comparisons/module-cache.py
+!/apps/logisim-bench/comparisons/abi4.py
 !/apps/logisim-bench/comparisons/engine-study.py
 !/apps/logisim-bench/comparisons/agent-sessions.py
 !/crates/

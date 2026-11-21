@@ -1,7 +1,10 @@
 //! Versioned plugin wire contract. All messages are UTF-8 JSON, enum tags snake_case.
 //!
-//! A Wasm32 module exports `memory`, `logisim_abi: () -> i32` (returns its ABI version),
+//! An ABI 1–3 Wasm32 module exports `memory`, `logisim_abi: () -> i32` (returns its ABI version),
 //! `logisim_buffer: (i32) -> i32`, and `logisim_call: (i32) -> i64`.
+//! Experimental ABI 4 replaces `logisim_abi` with exactly one function named by
+//! [`AllowedEngines::entry`]. It returns 4. Its static engine declaration and the
+//! Describe manifest must agree. Each request gets 10M units of engine-specific fuel.
 //! The host allocates an initialized request buffer, writes exactly the requested bytes,
 //! then calls with that length. The returned integer packs response length in the high
 //! 32 bits and offset in the low 32 bits. Response storage remains valid until the next

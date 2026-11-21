@@ -62,7 +62,7 @@ Linux 上先用 `cargo build --release --locked --offline -p logisim-agent` 构�
 
 ### 复现 Wasm 引擎对照
 
-默认桌面、Agent 与基准使用 wasmi。阶段 2 的[引擎契约记录](apps/logisim-bench/comparisons/engine-contract.md)给出两个 release 构建、固定核心、fuel 矩阵和冷启动复测命令。桌面与基准的双引擎构建使用 `wasmtime-experimental`；Agent 即使启用同一 feature 也固定运行 wasmi。基准可在负载前加 `--wasm-engine wasmi` 或 `--wasm-engine wasmtime`。`compare-wasmtime` 保留阶段 2 的基准对照。阶段 1 的[原始对照补丁](apps/logisim-bench/comparisons/wasmtime-36.patch)对应历史提交 `cc5cee9`。
+默认桌面、Agent 与基准使用 wasmi。历史和当前实验的[引擎契约记录](apps/logisim-bench/comparisons/engine-contract.md)给出两个 release 构建、固定核心、fuel 矩阵和冷启动复测命令。桌面与基准的双引擎构建使用 `wasmtime-experimental`；Agent 即使启用同一 feature 也固定运行 wasmi。基准可在负载前加 `--wasm-engine wasmi` 或 `--wasm-engine wasmtime`。当前分支按模块导出和 manifest 选择运行时；旧 ABI 在所有入口都使用 wasmi。历史阶段 2/3 的旧 ABI 双引擎数据应在对应历史提交复测。阶段 1 的[原始对照补丁](apps/logisim-bench/comparisons/wasmtime-36.patch)对应历史提交 `cc5cee9`。
 
 ### 私有模块缓存实验
 
@@ -76,6 +76,8 @@ Linux 上先用 `cargo build --release --locked --offline -p logisim-agent` 构�
 
 ```sh
 cargo build --release -p logisim-bench --features wasmtime-cache-experiment --locked --offline
+cargo build --release --target wasm32-unknown-unknown -p logisim-course-plugin --lib --features execution-abi4 --locked --offline
+python3 apps/logisim-bench/comparisons/abi4.py --cpu 15 --abi4 target/wasm32-unknown-unknown/release/logisim_course_plugin.wasm
 python3 apps/logisim-bench/comparisons/module-cache.py --cpu 15 --peer-cpu 14
 ```
 

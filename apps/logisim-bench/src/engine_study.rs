@@ -17,7 +17,19 @@ pub fn run(mut args: impl Iterator<Item = String>, engine: WasmEngine) -> Result
         "trace" => {
             let multiple = mode.parse()?;
             let mut report = with_multiplier(multiple, || benchmark(&name, runs, engine))??;
+            if report["plugin_abi"] == 4 && multiple != 1 {
+                return Err("ABI 4 fixes fuel at 10M per request".into());
+            }
             report["fuel_per_request"] = json!(multiple * 10_000_000);
+            Ok(report)
+        }
+        #[cfg(feature = "wasmtime-cache-experiment")]
+        "cached-trace" if mode == "module-cache" => {
+            let mut loader = Loader::with_engine(Reuse::PrivateModules(private_cache()?), engine);
+            let mut report = benchmark_with(&name, runs, engine, |wasm| loader.load(wasm))?;
+            report["cache_hits"] = json!(loader.hits);
+            report["cache_misses"] = json!(loader.misses);
+            report["cache_warning"] = json!(loader.cache_error());
             Ok(report)
         }
         "opens" => {
@@ -34,12 +46,7 @@ pub fn run(mut args: impl Iterator<Item = String>, engine: WasmEngine) -> Result
                     Reuse::Disk(path.into())
                 }
                 #[cfg(feature = "wasmtime-cache-experiment")]
-                "module-cache" => {
-                    let path = std::env::var_os("LOGISIM_BENCH_PRIVATE_CACHE").ok_or(
-                        "Set LOGISIM_BENCH_PRIVATE_CACHE to a private experiment directory",
-                    )?;
-                    Reuse::PrivateModules(path.into())
-                }
+                "module-cache" => Reuse::PrivateModules(private_cache()?),
                 _ => return Err("Unknown module reuse policy".into()),
             };
             let mut loader = Loader::with_engine(reuse, engine);
@@ -62,7 +69,9 @@ pub fn run(mut args: impl Iterator<Item = String>, engine: WasmEngine) -> Result
                     "hits_so_far":loader.hits,"misses_so_far":loader.misses,
                     "spans":recording.spans,"digest":format!("{:016x}",trace.digest),
                     "ticks":trace.ticks,"steps":trace.steps,"diagnostics":0,"cache_warning":loader.cache_error(),
-                    "module_load_ms":opened.fixture.module_load_ms}),
+                    "module_load_ms":opened.fixture.module_load_ms,
+                    "plugin_abi":opened.fixture.runtime.map(|(abi, _)| abi),
+                    "wasm_engine":opened.fixture.runtime.map(|(_, e)| e.code())}),
                 );
             }
             // Read after the timed trials. Linux wait4 can also include the launcher’s
@@ -78,4 +87,11 @@ pub fn run(mut args: impl Iterator<Item = String>, engine: WasmEngine) -> Result
         }
         _ => Err("Expected trace or opens".into()),
     }
+}
+
+#[cfg(feature = "wasmtime-cache-experiment")]
+fn private_cache() -> Result<std::path::PathBuf> {
+    Ok(std::env::var_os("LOGISIM_BENCH_PRIVATE_CACHE")
+        .ok_or("Set LOGISIM_BENCH_PRIVATE_CACHE to a private experiment directory")?
+        .into())
 }

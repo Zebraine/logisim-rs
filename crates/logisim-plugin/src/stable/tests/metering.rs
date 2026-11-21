@@ -103,7 +103,7 @@ fn measure_engine(engine: WasmEngine) {
                     let budget = 10_000_000; // ABI 4 stays capped even inside the historical multiplier study.
                     println!(
                         "FUEL {}",
-                        json!({"engine":engine.code(),"sha256":sha256,"iterations":count,"phase":phase,"budget":budget,
+                        json!({"engine":engine.code(),"sha256":sha256,"iterations":count,"phase":phase,"budget":budget,"study_multiplier":multiple,
                         "remaining":fuel.remaining_fuel[0],"consumed":budget-fuel.remaining_fuel[0],
                         "phase_return":result.as_ref().ok(),"error":result.as_ref().err(),
                         "dispatches_including_retry":fuel.remaining_fuel.len(),

@@ -2,7 +2,12 @@ use super::super::*;
 use logisim_core::{Component, Point, plugin::api};
 use logisim_plugin::Plugin;
 
-fn module(runtime: logisim_plugin::WasmEngine, fail: bool, sample_code: &str) -> Plugin {
+fn module(
+    runtime: logisim_plugin::WasmEngine,
+    fail: bool,
+    output_code: &str,
+    sample_code: &str,
+) -> Plugin {
     let manifest = api::Manifest {
         execution: Some(api::Execution::new(api::AllowedEngines::Both)),
         abi: 4,
@@ -78,7 +83,7 @@ fn module(runtime: logisim_plugin::WasmEngine, fail: bool, sample_code: &str) ->
                 else i32.const 16 i32.load8_u i32.const 99 i32.eq
                     if (result i64) i64.const {contract}
                     else i32.const 16 i32.load8_u i32.const 111 i32.eq
-                        if (result i64) i64.const {outputs} else {sample_code} i64.const {sample} end
+                        if (result i64) {output_code} i64.const {outputs} else {sample_code} i64.const {sample} end
                     end
                 end
             end))"#
@@ -91,30 +96,36 @@ fn module(runtime: logisim_plugin::WasmEngine, fail: bool, sample_code: &str) ->
 
 #[test]
 fn runtime_fault_stays_visible_without_event_fallback_and_module_replacement_recovers() {
-    assert_worker_recovery("", "sample failed");
+    assert_worker_recovery("", "", "sample failed");
 }
 
 #[test]
 fn exhausted_transition_pauses_the_worker_without_publishing_state() {
-    assert_worker_recovery("(loop $work br $work)", "fuel");
+    assert_worker_recovery("", "(loop $work br $work)", "fuel");
 }
 
-fn assert_worker_recovery(sample_code: &str, expected_error: &str) {
+#[test]
+fn exhausted_outputs_pause_the_worker_before_sampling() {
+    assert_worker_recovery("(loop $work br $work)", "", "fuel");
+}
+
+fn assert_worker_recovery(output_code: &str, sample_code: &str, expected_error: &str) {
     use logisim_plugin::WasmEngine;
     for runtime in [WasmEngine::Wasmi, WasmEngine::Wasmtime]
         .into_iter()
         .filter(|e| e.available())
     {
-        assert_worker_fault(runtime, sample_code, expected_error);
+        assert_worker_fault(runtime, output_code, sample_code, expected_error);
     }
 }
 
 fn assert_worker_fault(
     runtime: logisim_plugin::WasmEngine,
+    output_code: &str,
     sample_code: &str,
     expected_error: &str,
 ) {
-    let plugin = module(runtime, true, sample_code);
+    let plugin = module(runtime, true, output_code, sample_code);
     let mut project = Project::default();
     let id = project
         .main_circuit_mut()
@@ -154,7 +165,7 @@ fn assert_worker_fault(
     assert!(!engine.sim.enabled());
     assert_eq!(engine.propagation, Propagation::Compiled);
     let mut plugins = Registry::default();
-    plugins.insert(module(runtime, false, "")).unwrap();
+    plugins.insert(module(runtime, false, "", "")).unwrap();
     context.plugins = plugins;
     engine.command(Command::Configure(context));
     engine.command(Command::Action(1, SimulationAction::ToggleEnabled));

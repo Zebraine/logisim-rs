@@ -77,7 +77,9 @@ logisim-rs uses a versioned Wasm plugin ABI for externally supplied components. 
 
 Packages include six optional Wasm modules under `plugins/`. The source repository also contains their Rust implementations.
 
-The desktop uses wasmi by default. A build made with `cargo build --release -p logisim-rs --features wasmtime-experimental` also offers **Settings → Advanced → Wasm plugin engine**. Confirm Wasmtime and restart the desktop to use it. The panel shows the engine running in this process. Initial module compilation can be substantially slower. With the same 10M fuel budget a plugin may finish in wasmi and pause in Wasmtime. The ordinary experimental build compiles each module from Wasm. Windows and macOS execution of this option has not been verified.
+The desktop and Agent default to wasmi. ABI 1–3 plugins always use wasmi. A desktop built with `--features wasmtime-experimental` offers **Settings → Advanced → Wasm plugin engine**. After confirmation and restart, the preference applies to experimental ABI 4 plugins that explicitly allow that engine. A mismatch is reported at load time. The Agent always selects wasmi, including for ABI 4.
+
+ABI 4 budgets 10 million units of engine-specific fuel per request. A finite calculation can finish on one engine and exhaust its budget on the other. A stable execution fault pauses simulation and discards the pending transition. Reset creates a fresh VM. Initial Wasmtime compilation can be substantially slower. This experiment was exercised on Linux x86-64. Windows and macOS execution remain unverified.
 
 A separate Linux build with `--features wasmtime-cache-experiment` can reuse compiled modules after you select Wasmtime and restart. The desktop stores executable code in a private `wasmtime-cache-v1/` directory beside its preferences. Use a trusted local filesystem. An unavailable cache or a damaged entry triggers compilation from the source Wasm and a diagnostic on stderr. Close the desktop before deleting the directory to clear it. The first open still compiles the module. The Agent uses wasmi.
 

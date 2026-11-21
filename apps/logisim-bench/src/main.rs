@@ -69,14 +69,19 @@ fn open(fixture: Result<Fixture>) -> Result<Open> {
 }
 
 fn benchmark(name: &str, runs: usize, engine: WasmEngine) -> Result<Value> {
+    benchmark_with(name, runs, engine, |bytes| {
+        logisim_plugin::Plugin::load_with_engine(bytes, engine)
+    })
+}
+
+fn benchmark_with(
+    name: &str,
+    runs: usize,
+    requested: WasmEngine,
+    load: impl FnMut(&[u8]) -> std::result::Result<logisim_plugin::Plugin, String>,
+) -> Result<Value> {
     let start = Instant::now();
-    let initialize = || {
-        open(Fixture::load_with(
-            name,
-            std::path::Path::new("."),
-            |bytes| logisim_plugin::Plugin::load_with_engine(bytes, engine),
-        ))
-    };
+    let initialize = || open(Fixture::load_with(name, std::path::Path::new("."), load));
     #[cfg(feature = "plugin-metrics")]
     let mut cold = logisim_plugin::metrics::Recording::default();
     #[cfg(feature = "plugin-metrics")]
@@ -187,7 +192,9 @@ fn benchmark(name: &str, runs: usize, engine: WasmEngine) -> Result<Value> {
         "schema": 1,
         "workload": name,
         "engine": "stable",
-        "wasm_engine": match engine { WasmEngine::Wasmi => "wasmi-1.1.0", WasmEngine::Wasmtime => "wasmtime-36.0.20" },
+        "requested_wasm_engine": requested.code(),
+        "plugin_abi": fixture.runtime.map(|(abi, _)| abi),
+        "wasm_engine": fixture.runtime.map(|(_, engine)| match engine { WasmEngine::Wasmi => "wasmi-1.1.0", WasmEngine::Wasmtime => "wasmtime-36.0.20" }),
         "threads": 1,
         "runs": runs,
         "warmup": WARMUP,

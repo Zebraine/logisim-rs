@@ -370,3 +370,40 @@ fn loading_pins_the_engine_per_module_and_implicit_load_stays_wasmi() {
 
 #[cfg(all(target_os = "linux", feature = "wasmtime-cache-experiment"))]
 mod module_cache;
+
+#[test]
+fn execution_metadata_is_strict_and_old_manifest_bytes_omit_it() {
+    let legacy = serde_json::to_value(manifest()).unwrap();
+    assert!(legacy.get("execution").is_none());
+    let mut json = legacy.clone();
+    json["abi"] = 4.into();
+    assert!(
+        serde_json::from_value::<Manifest>(json.clone())
+            .unwrap()
+            .validate()
+            .is_err()
+    );
+    for bad in [
+        serde_json::Value::Null,
+        serde_json::json!({"fuel":"portable","engines":"both"}),
+        serde_json::json!({"fuel":"engine-specific","engines":"auto"}),
+        serde_json::json!({"fuel":"engine-specific","engines":"both","budget":1}),
+    ] {
+        json["execution"] = bad;
+        assert!(serde_json::from_value::<Manifest>(json.clone()).is_err());
+    }
+    json["execution"] = serde_json::to_value(Execution::new(AllowedEngines::Both)).unwrap();
+    assert_eq!(
+        serde_json::from_value::<Manifest>(json.clone()).unwrap(),
+        experimental(AllowedEngines::Both)
+    );
+    for abi in 1..=3 {
+        json["abi"] = abi.into();
+        assert!(
+            serde_json::from_value::<Manifest>(json.clone())
+                .unwrap()
+                .validate()
+                .is_err()
+        );
+    }
+}

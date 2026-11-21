@@ -540,7 +540,8 @@ impl Files {
         if self.dialog.is_none() && std::mem::take(&mut self.engine_warning_pending) {
             self.dialog = Some(Dialog::SettingsMessage {
                 title: "Wasm plugin engine",
-                body: tr("This build does not include Wasmtime. Plugins will run with wasmi for this session.").into(),
+                body: tr("This build uses wasmi. Plugins that require Wasmtime cannot be loaded.")
+                    .into(),
             });
         }
         let Some(mut dialog) = self.dialog.take() else {

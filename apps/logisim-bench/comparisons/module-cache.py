@@ -10,6 +10,8 @@ import subprocess
 import sys
 import tempfile
 
+from abi4 import fixtures
+
 REPO = Path(__file__).resolve().parents[3]
 TRAJECTORIES = {"plugin": ("a2689cffb70ff825", 512, 1536),
                 "single-cycle": ("73171884c0465aad", 128, 771)}
@@ -19,17 +21,18 @@ def size(directory):
     return sum(p.stat().st_size for p in directory.glob("slot-*"))
 
 
-def measure(bench, name, root, mode, runs, cpu):
+def measure(bench, name, root, mode, runs, cpu, fixtures):
     args = ["taskset", "-c", str(cpu), bench, "--wasm-engine", "wasmtime", "engine-study",
             "opens", name, mode, "--runs", str(runs)]
     env = dict(os.environ, LOGISIM_BENCH_PRIVATE_CACHE=str(root))
-    process = subprocess.run(args, cwd=REPO, env=env, stdout=subprocess.PIPE, check=True)
+    process = subprocess.run(args, cwd=fixtures, env=env, stdout=subprocess.PIPE, check=True)
     report = json.loads(process.stdout)
     rows = report["opens"]
     assert report["peak_rss_kib"] > 0
     for row in rows:
         assert (row["digest"], row["ticks"], row["steps"]) == TRAJECTORIES[name]
         assert row["diagnostics"] == 0
+        assert (row["plugin_abi"], row["wasm_engine"]) == (4, "wasmtime")
     return {"opens": rows, "max_rss_kib": report["peak_rss_kib"], "cache_bytes": size(root)}
 
 
@@ -37,7 +40,7 @@ def one_trial(args, name, trial):
     with tempfile.TemporaryDirectory(prefix="logisim-module-cache-") as temp:
         root = Path(temp) / "cache"
         def run(mode="module-cache"):
-            return measure(args.bench, name, root, mode, args.reopens, args.cpu)
+            return measure(args.bench, name, root, mode, args.reopens, args.cpu, args.fixtures)
 
         result = {}
         for mode in (["none", "module-cache"] if trial % 2 == 0 else ["module-cache", "none"]):
@@ -64,7 +67,7 @@ def one_trial(args, name, trial):
         record.unlink()
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as workers:
             futures = [workers.submit(measure, args.bench, name, root, "module-cache",
-                                      args.reopens, cpu) for cpu in [args.cpu, args.peer_cpu]]
+                                      args.reopens, cpu, args.fixtures) for cpu in [args.cpu, args.peer_cpu]]
             result["concurrent"] = [f.result() for f in futures]
         result["after_concurrent"] = run()
         assert result["after_concurrent"]["opens"][0]["hits_so_far"] == 1
@@ -76,6 +79,8 @@ def one_trial(args, name, trial):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bench", type=Path, default=REPO/"target/release/logisim-bench")
+    parser.add_argument("--abi4", type=Path, default=REPO/"target/wasm32-unknown-unknown/release/logisim_course_plugin.wasm",
+                        help="Course module built with execution-abi4")
     parser.add_argument("--cpu", required=True, type=int)
     parser.add_argument("--peer-cpu", required=True, type=int)
     parser.add_argument("--trials", type=int, default=5)
@@ -84,9 +89,16 @@ def main():
     args.bench = args.bench.resolve()
     if args.trials < 1 or args.reopens < 1:
         parser.error("trials and reopens must be positive")
+    with tempfile.TemporaryDirectory(prefix="logisim-abi4-fixtures-") as projects:
+        args.fixtures = Path(projects)
+        fixtures(args.fixtures, args.abi4)
+        collect(args)
+
+
+def collect(args):
     report = {"platform": platform.platform(), "cpu": args.cpu, "peer_cpu": args.peer_cpu,
               "bench_sha256": hashlib.sha256(args.bench.read_bytes()).hexdigest(),
-              "wasm_sha256": hashlib.sha256((REPO/"plugins/course/course.wasm").read_bytes()).hexdigest(),
+              "wasm_sha256": hashlib.sha256((args.fixtures/"plugins/course/course.wasm").read_bytes()).hexdigest(),
               "workloads": {name: [] for name in TRAJECTORIES}}
     for trial in range(args.trials):
         for name, results in report["workloads"].items():

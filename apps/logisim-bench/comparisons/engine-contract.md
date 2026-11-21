@@ -1,4 +1,35 @@
-# Stage 2 · Wasm 引擎契约与启动成本
+# Wasm 引擎契约与启动成本
+
+## 实验 B 的 ABI 4 契约
+
+SDK 的 `export_plugin!(execution = Both, …)` 生成版本化入口和 Describe 响应。也可选 `Wasmi` 或 `Wasmtime`。wire manifest 使用 `"abi":4,"execution":{"fuel":"engine-specific","engines":"both"}`，引擎集合允许 `wasmi`、`wasmtime`、`both` 三个值。预算由宿主决定。未知字段、枚举、缺少声明和静态入口冲突均拒绝。已有 ABI 1–3 的 Wasm 和 manifest 保持原样；用新版 Rust API 构造旧 manifest 时填写 `execution: None`，序列化时省略此字段。
+
+加载器先读 Wasm 导出表。旧入口 `logisim_abi` 只走 wasmi，选择 Wasmtime 时在 stderr 报告回退。ABI 4 必须恰有一个对应入口 `logisim_abi4_wasmi`、`logisim_abi4_wasmtime` 或 `logisim_abi4_both`。宿主在编译、访问机器码缓存和执行 start 前检查声明。选中的引擎不在声明内则拒绝；加载后还须核对版本函数、manifest 和工程保存的定义。不支持 ABI 4 的旧宿主找不到旧入口。Agent 始终请求 wasmi。
+
+每次 outputs 或 transition 请求补充该引擎的 10M fuel，缓冲区准备和分派共享预算。宿主只提交成功且通过校验的整批状态。耗尽时，该相位没有可提交结果；再次调用返回原故障，Reset 重建 VM 后重试。不同引擎的指令计量和原始错误文本可以不同。缓存只复用 Wasmtime 编译产物，每个实例的状态、预算与故障独立。
+
+### Linux 对照结果
+
+i5-12600KF，逻辑核 15，Rust 1.99.0 release。每个负载五轮，每轮分别启动四个独立进程，进程内预热 3 条轨迹、计量 20 条。ABI 3 使用随附的 course 模块，ABI 4 使用相同业务源码显式构建的模块（SHA-256 前缀分别为 `075dfd27` 和 `eceee0b4`）。首开统计从读取工程到首次 settle，p95 取五次首开的最近秩，等于本组最大值。热态数据取各进程统计的中位数。
+
+| 负载 | ABI / 引擎 | 首开 p50 / p95 (ms) | 热 settle p50 / p95 (ms) | tick/s |
+| --- | --- | ---: | ---: | ---: |
+| Register File | 3 / wasmi | 9.41 / 9.46 | 0.114 / 0.327 | 3,048 |
+| Register File | 4 / wasmi | 9.42 / 9.55 | 0.113 / 0.324 | 3,061 |
+| Register File | 4 / Wasmtime，空缓存 | 458.86 / 475.29 | 0.009 / 0.027 | 35,895 |
+| Register File | 4 / Wasmtime，跨进程命中 | 9.75 / 10.20 | 0.009 / 0.028 | 35,496 |
+| single-cycle | 3 / wasmi | 26.03 / 26.42 | 0.149 / 0.897 | 2,275 |
+| single-cycle | 4 / wasmi | 26.05 / 26.30 | 0.149 / 0.890 | 2,317 |
+| single-cycle | 4 / Wasmtime，空缓存 | 481.94 / 495.93 | 0.038 / 0.261 | 8,387 |
+| single-cycle | 4 / Wasmtime，跨进程命中 | 24.92 / 25.50 | 0.038 / 0.260 | 8,391 |
+
+两条成功轨迹均为零诊断。Register File 的 digest 为 `a2689cffb70ff825`（512 tick / 1536 step）；CPU 为 `73171884c0465aad`（128 / 771）。10M fuel 下，100 万次循环在两种引擎均完成；200 万次在 wasmi 两相均完成，Wasmtime 两相均耗尽。无限循环在两种引擎均耗尽。测试核对失败批次未提交、错误可见、暂停和 Reset 后的行为。缓存损坏、不可写和两个并发进程的恢复均在 ABI 4 模块复测。
+
+建议进入显式 ABI 4 的产品化评审，保留旧插件和 Agent 的 wasmi 路径。Linux 热态收益足以支持长时间运行；空缓存仍有近半秒编译成本，CPU 跨进程首开的 p95 超过 25 ms 目标。Windows/macOS、更多第三方插件及长尾首开仍待验证。
+
+## 历史实验
+
+下文记录阶段 2/3 在当时提交上的规则与实测数字。当前实验使用上面的 ABI 4 入口，复测命令见 CONTRIBUTING.md。
 
 **阶段 2 决定：旧 ABI 继续使用 wasmi 1.1.0。** Wasmtime 36.0.20 可以在显式对照构建中执行同一插件。对旧插件开放运行时切换会改变部分有限计算的完成、暂停和状态提交结果。Stage 3 保留生产引擎。若产品选择为长时间仿真引入另一种计量契约，再考虑新 ABI。
 

@@ -17,8 +17,10 @@ fn module_with_engine(
     fault: &str,
 ) -> Plugin {
     use api::*;
+    let execution = (abi == EXECUTION_ABI_VERSION).then_some(Execution::new(AllowedEngines::Both));
+    let entry = execution.map_or("logisim_abi", |e| e.engines.entry());
     let manifest = Manifest {
-        execution: None,
+        execution,
         abi,
         id: id.into(),
         version: "1".into(),
@@ -127,7 +129,7 @@ fn module_with_engine(
     let bytes = wat::parse_str(format!(
         r#"(module (memory (export "memory") 8)
       (global $outputs (mut i32) (i32.const 0)) {data} {raster}
-      (func (export "logisim_abi") (result i32) i32.const {abi})
+      (func (export "{entry}") (result i32) i32.const {abi})
       (func (export "logisim_buffer") (param i32) (result i32) i32.const 0)
       (func (export "logisim_call") (param $n i32) (result i64)
         i32.const 9 i32.load8_u i32.const 100 i32.eq
@@ -144,7 +146,16 @@ fn module_with_engine(
         end))"#
     ))
     .unwrap();
-    Plugin::load_with_engine(&bytes, engine).unwrap()
+    let p = Plugin::load_with_engine(&bytes, engine).unwrap();
+    assert_eq!(
+        p.engine(),
+        if abi < EXECUTION_ABI_VERSION {
+            logisim_plugin::WasmEngine::Wasmi
+        } else {
+            engine
+        }
+    );
+    p
 }
 fn contract(combinational: bool, state: bool) -> Option<api::StableContract> {
     Some(api::StableContract {
@@ -573,7 +584,7 @@ fn check_batch_rollback(runtime: logisim_plugin::WasmEngine) {
         let bad = library(
             circuit,
             &mut registry,
-            module_with_engine(runtime, "limited", 3, contract(false, true), phase),
+            module_with_engine(runtime, "limited", 4, contract(false, true), phase),
         );
         let mut sim = ProjectSimulator::default();
         sim.set_plugins(registry);

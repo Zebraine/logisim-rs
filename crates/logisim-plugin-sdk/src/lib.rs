@@ -58,19 +58,33 @@ fn metadata(value: &impl serde::Serialize) -> u64 {
 }
 /// Export current ABI entry points from a cdylib. The handler must not assume the Describe
 /// instance is reused for simulation. Each component has independent module memory.
+/// Prefix with `execution = Wasmi`, `Wasmtime` or `Both` to generate the ABI 4
+/// entry point and matching Describe metadata. Ordinary exports stay at ABI 3.
 #[macro_export]
 macro_rules! export_plugin {
-    (execution = Wasmi, $($body:tt)+) => {
+    (execution = $engines:ident, $handler:path $(, $($extensions:tt)+)?) => {
+        $crate::export_plugin!(@execution_entry $engines);
+        #[cfg(target_arch = "wasm32")]
+        fn logisim_execution_dispatch(request: $crate::api::Request) -> $crate::api::Response {
+            match $handler(request) {
+                $crate::api::Response::Manifest(mut manifest) => {
+                    manifest.abi = $crate::api::EXECUTION_ABI_VERSION;
+                    manifest.execution = Some($crate::api::Execution::new($crate::api::AllowedEngines::$engines));
+                    $crate::api::Response::Manifest(manifest)
+                }
+                other => other,
+            }
+        }
+        $crate::export_plugin_body!(logisim_execution_dispatch $(, $($extensions)+)?);
+    };
+    (@execution_entry Wasmi) => {
         $crate::export_plugin!(@entry "logisim_abi4_wasmi", $crate::api::EXECUTION_ABI_VERSION);
-        $crate::export_plugin_body!($($body)+);
     };
-    (execution = Wasmtime, $($body:tt)+) => {
+    (@execution_entry Wasmtime) => {
         $crate::export_plugin!(@entry "logisim_abi4_wasmtime", $crate::api::EXECUTION_ABI_VERSION);
-        $crate::export_plugin_body!($($body)+);
     };
-    (execution = Both, $($body:tt)+) => {
+    (@execution_entry Both) => {
         $crate::export_plugin!(@entry "logisim_abi4_both", $crate::api::EXECUTION_ABI_VERSION);
-        $crate::export_plugin_body!($($body)+);
     };
     (@entry $name:literal, $version:expr) => {
         #[cfg(target_arch = "wasm32")]

@@ -77,7 +77,9 @@ logisim-rs 使用带版本号的 Wasm 插件 ABI 提供外部元件。插件可�
 
 包内的 `plugins/` 附带六个可选 Wasm 模块。相应的 Rust 源码可在仓库中找到。
 
-桌面默认使用 wasmi。用 `cargo build --release -p logisim-rs --features wasmtime-experimental` 构建后，可在**设置 → 高级 → Wasm 插件引擎**中确认选择实验性 Wasmtime。重启桌面后生效，设置页显示本次进程实际使用的引擎。Wasmtime 首次编译模块可能明显更慢。在同一 10M fuel 预算下，wasmi 能完成的请求可能在 Wasmtime 中暂停。常规实验构建每次都从源 Wasm 编译。Windows 和 macOS 尚未实机验证该选项。
+桌面和 Agent 默认使用 wasmi。ABI 1–3 插件始终由 wasmi 执行。使用 `--features wasmtime-experimental` 构建桌面后，可在**设置 → 高级 → Wasm 插件引擎**确认选择并重启。这个偏好只对明确允许相应引擎的实验性 ABI 4 插件生效。声明与选择不匹配时，加载器会报告原因。Agent 对 ABI 4 也固定选择 wasmi。
+
+ABI 4 每次请求的预算是 1,000 万个所选引擎的 fuel 单位。同一段有限计算可能在一个引擎完成，在另一个引擎耗尽预算。稳定态执行故障会暂停仿真并丢弃待提交的 transition，Reset 重建实例。Wasmtime 首次编译可能明显更慢。实验在 Linux x86-64 上验证，Windows 和 macOS 的运行表现仍待验证。
 
 Linux 桌面另有独立构建选项 `--features wasmtime-cache-experiment`。选择 Wasmtime 并重启后，可跨进程复用编译模块。缓存含可执行机器码，存放在应用偏好文件旁的私有目录 `wasmtime-cache-v1/`，应使用可信本地文件系统。目录不可用或记录损坏时，桌面从源 Wasm 编译并向 stderr 报告原因。退出桌面后可删除该目录。首次打开仍需编译，Agent 继续使用 wasmi。
 

@@ -193,3 +193,30 @@ fn scratch_cleanup_is_independent_of_background_cache_statistics() {
     });
     assert!(record(&tmp.0).is_file());
 }
+
+#[test]
+fn legacy_and_disallowed_modules_never_open_the_native_cache() {
+    let tmp = Private::new("selection");
+    let root = tmp.0.join("cache");
+    for abi in 1..=3 {
+        let response = Response::Manifest(Manifest { abi, ..manifest() });
+        let (plugin, outcome) = load(&wasm(&response, abi, ""), &root).unwrap();
+        assert_eq!(
+            (plugin.engine(), outcome),
+            (WasmEngine::Wasmi, Outcome::LegacyWasmi)
+        );
+        assert!(!root.exists());
+    }
+    let bytes = wasm(
+        &Response::Manifest(experimental(AllowedEngines::Wasmi)),
+        4,
+        "",
+    );
+    assert!(
+        load(&bytes, &root)
+            .err()
+            .unwrap()
+            .contains("does not permit")
+    );
+    assert!(!root.exists());
+}
