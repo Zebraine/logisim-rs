@@ -19,6 +19,8 @@ pub struct Calls {
     pub output_signals: usize,
     pub request_bytes: usize,
     pub response_bytes: usize,
+    pub state_write_ns: u64,
+    pub state_read_ns: u64,
     pub input_state_bytes: usize,
     pub returned_state_bytes: usize,
 }

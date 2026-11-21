@@ -226,3 +226,33 @@ fn evaluation_validates_actions_outputs_graphics_state_and_fuel() {
         );
     }
 }
+
+#[test]
+fn instance_enforces_memory_table_and_response_limits() {
+    // A successful manifest proves rejection in the variants below is due to the
+    // resource boundary rather than a missing export or bad handshake.
+    let response = Response::Manifest(manifest());
+    let json = serde_json::to_string(&response).unwrap();
+    let data: String = json.bytes().map(|b| format!("\\{b:02x}")).collect();
+    let module = |pages: u32, entries: u32, response_len: usize| {
+        wat::parse_str(format!(
+            r#"(module
+            (memory (export "memory") {pages}) (table {entries} funcref)
+            (data (i32.const 4096) "{data}")
+            (func (export "logisim_abi") (result i32) i32.const 1)
+            (func (export "logisim_buffer") (param i32) (result i32) i32.const 0)
+            (func (export "logisim_call") (param i32) (result i64) i64.const {}))"#,
+            ((response_len as u64) << 32) | 4096
+        ))
+        .unwrap()
+    };
+    assert!(Plugin::load(&module(256, 10_000, json.len())).is_ok());
+    assert!(Plugin::load(&module(257, 10_000, json.len())).is_err());
+    assert!(Plugin::load(&module(256, 10_001, json.len())).is_err());
+    assert_eq!(
+        Plugin::load(&module(1, 1, MAX_MESSAGE + 1))
+            .err()
+            .as_deref(),
+        Some("Plugin response exceeds message limit.")
+    );
+}

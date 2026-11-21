@@ -42,6 +42,8 @@ fn calls(c: &mut Calls) -> Value {
     json!({
         "calls": n, "total_ns": sum, "first_ns": first, "latency_ms": timing,
         "input_signals": c.input_signals, "output_signals": c.output_signals,
+        "linear_memory_used": c.frame_calls != 0,
+        "frame_state_copy_ns": {"within_encode": c.state_write_ns, "within_decode": c.state_read_ns},
         "frame_calls": c.frame_calls, "json_calls": c.json_calls,
         "request_bytes": c.request_bytes, "response_bytes": c.response_bytes,
         "input_state_bytes": c.input_state_bytes, "returned_state_bytes": c.returned_state_bytes,
@@ -62,7 +64,10 @@ pub fn hot(r: &mut Recording, settle_ns: u64, outputs: usize, samples: usize) ->
     for c in [&r.outputs, &r.transition] {
         let total: u64 = c.latency_ns.iter().sum();
         let parts: u64 = c.spans.values().map(|s| s.ns).sum();
-        if parts > total {
+        if c.state_write_ns > c.spans.get("encode").map_or(0, |s| s.ns)
+            || c.state_read_ns > c.spans.get("decode").map_or(0, |s| s.ns)
+            || parts > total
+        {
             return Err("Overlapping plugin call intervals".into());
         }
         guest += ["guest_dispatch", "guest_buffer"]

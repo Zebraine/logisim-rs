@@ -76,6 +76,8 @@ impl Instance {
             .frame
             .as_ref()
             .ok_or("Plugin has no linear-memory interface.")?;
+        #[cfg(feature = "plugin-metrics")]
+        let before_copy = frame::metrics::copied_ns();
         let length = timed!("encode", frame::request_len(signals, state))?;
         self.store.set_fuel(FUEL).map_err(error)?;
         let offset = timed!(
@@ -95,6 +97,8 @@ impl Instance {
             "encode",
             frame::write_request(input, operation, signals, state)
         )?;
+        #[cfg(feature = "plugin-metrics")]
+        let copy_after_write = frame::metrics::copied_ns();
         let packed = timed!(
             "guest_dispatch",
             api.call.call(&mut self.store, length as u32)
@@ -103,6 +107,7 @@ impl Instance {
         #[cfg(feature = "plugin-metrics")]
         metrics::on_call(|c| {
             c.frame_calls += 1;
+            c.state_write_ns += copy_after_write - before_copy;
             c.request_bytes += length;
             c.response_bytes += (packed >> 32) as usize;
         });
@@ -121,6 +126,9 @@ impl Instance {
             .data(&self.store)
             .get(offset..end)
             .ok_or("Invalid plugin output range.")?;
-        frame::read_output(output, operation)
+        let result = frame::read_output(output, operation);
+        #[cfg(feature = "plugin-metrics")]
+        metrics::on_call(|c| c.state_read_ns += frame::metrics::copied_ns() - copy_after_write);
+        result
     }
 }

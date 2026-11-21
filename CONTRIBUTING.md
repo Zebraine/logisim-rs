@@ -30,6 +30,10 @@ git diff --check
 
 每个进程记录一次从载入到首次收敛的 `cold_ms`，含模块载入、同步和 stable 计划编译；`plugin_instance_ms` 是另取一个已载入模块的实例化样本。每轮从复位开始；预热 3 轮后计时。两条时钟轨迹分别为 128 和 512 个 tick，组合负载每轮施加 512 次输入。寄存器文件每个 tick 先收敛新写入数据，再推进时钟并收敛。每次收敛及完整迭代分别计算最近秩 p50/p95；时钟负载另按奇偶 tick 分组，以区分两个边沿的开销。吞吐按有效迭代总数除以累计执行时间。时钟负载看 `ticks_per_s`，组合负载看 `iterations_per_s`。状态读取、四态轨迹校验、复位和 JSON 输出均在热计时区间外。步数、tick 数、插件读出/采样调用按单轮报告。跨进程吞吐极差除以中位数的目标为 ≤5%，基准耗时不作 CI 断言。
 
+仅基准程序默认启用 `plugin-metrics`。用 `cargo run -p logisim-bench --release --no-default-features --locked --offline -- plugin --runs 20` 复核无埋点吞吐。桌面和 Agent 默认构建均关闭埋点。比较候选时保留两个二进制，在同一核心交替运行，分别比较完整 tick 吞吐及 outputs、transition 的 p95。
+
+JSON 的 `plugin_phases` 分为 cold、reset 和 hot。reset 累计计时轮次开始前的初始化与输入复位。hot 的 `plugin_schedule_ns` 包含 outputs、transition 和 commit 调度，`guest_ns` 是其中 guest 分配缓冲及分派调用的墙钟时间。每种操作各自报告时延、信号槽数、两种传输的调用数、实际线上字节和有效状态字节。帧状态复制时间是 encode/decode 的子项；冷态 load_dependency、instantiate_stable 也含子阶段。缺席的 span 表示零次。只相加同一层的非重叠区间。
+
 桌面快照构造可独立运行 `cargo test --release --locked --offline -p logisim-rs single_cycle_snapshot_cost -- --ignored --nocapture`；它使用真实视图适配器，不启动窗口。
 
 ## 修改与提交

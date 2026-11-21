@@ -36,6 +36,38 @@ use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned};
 #[cfg(test)]
 mod tests;
 
+/// Per-thread copy time for opt-in host benchmarks. The default codec has no clock
+/// reads or counters. A caller can take a difference around a single frame.
+#[cfg(feature = "plugin-metrics")]
+pub mod metrics {
+    use std::{cell::Cell, time::Instant};
+    thread_local! { static NS: Cell<u64> = const { Cell::new(0) }; }
+
+    pub fn copied_ns() -> u64 {
+        NS.get()
+    }
+
+    pub(super) fn copy<T>(run: impl FnOnce() -> T) -> T {
+        let start = Instant::now();
+        let result = run();
+        let elapsed = start.elapsed().as_nanos() as u64;
+        NS.set(NS.get() + elapsed);
+        result
+    }
+}
+
+macro_rules! state_copy {
+    ($copy:expr) => {{
+        #[cfg(feature = "plugin-metrics")]
+        {
+            metrics::copy(|| $copy)
+        }
+        #[cfg(not(feature = "plugin-metrics"))]
+        {
+            $copy
+        }
+    }};
+}
 pub const VERSION: u32 = 1;
 const INVALID: &str = "Invalid plugin linear-memory frame.";
 type Result<T> = std::result::Result<T, String>;
@@ -205,7 +237,7 @@ pub fn write_request(
     write_header(bytes, operation.code(), 0, signals.len(), state.len(), 0, 0);
     let mut position = size_of::<Header>();
     write_signals(bytes, &mut position, signals);
-    bytes[position..].copy_from_slice(state);
+    state_copy!(bytes[position..].copy_from_slice(state));
     Ok(())
 }
 #[derive(Debug, PartialEq, Eq)]
@@ -339,7 +371,7 @@ pub fn read_output(bytes: &[u8], expected: Operation) -> Result<Output> {
                 return Err(INVALID.into());
             }
             Ok(Output::Transition(StateTransition {
-                state: p.state.to_vec(),
+                state: state_copy!(p.state.to_vec()),
                 outputs_changed: p.header.flags.get() & 1 != 0,
                 fixed_point: p.header.flags.get() & 2 != 0,
             }))
