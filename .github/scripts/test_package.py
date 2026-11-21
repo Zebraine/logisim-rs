@@ -42,6 +42,10 @@ def check_inventory(root, package, names):
             raise ValueError(f"Packaged file differs from its source: {rel}")
     for plugin in ("course", "ttl", "ttl-combinational", "ttl-sequential", "input", "display"):
         expected.add(Path("plugins") / plugin / f"{plugin}.wasm")
+        legacy = Path("plugins/abi3") / f"{plugin}.wasm"
+        expected.add(legacy)
+        if (package / legacy).read_bytes() != (root / legacy).read_bytes():
+            raise ValueError(f"Packaged ABI 3 module differs from original: {legacy}")
     if package.name.endswith("-apple-darwin"):
         contents = Path("Logisim rs.app/Contents")
         expected.update({contents / "MacOS/logisim-rs", contents / "Info.plist", Path("logisim-agent")})

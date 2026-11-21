@@ -15,7 +15,7 @@ use std::{
 #[derive(Clone)]
 pub(crate) enum PluginLoader {
     Direct(WasmEngine),
-    #[cfg(feature = "wasmtime-cache-experiment")]
+    #[cfg(feature = "wasmtime-cache")]
     Cached(PathBuf),
 }
 
@@ -29,7 +29,7 @@ impl PluginLoader {
     pub fn load(&self, bytes: &[u8]) -> Result<Plugin, String> {
         match self {
             Self::Direct(engine) => Plugin::load_with_engine(bytes, *engine),
-            #[cfg(feature = "wasmtime-cache-experiment")]
+            #[cfg(feature = "wasmtime-cache")]
             Self::Cached(directory) => {
                 let (plugin, outcome) = logisim_plugin::module_cache::load(bytes, directory)?;
                 if let Some(reason) = outcome.warning() {

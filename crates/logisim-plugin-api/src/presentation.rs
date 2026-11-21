@@ -31,6 +31,8 @@ pub struct MemoryImport {
 /// Loaded UI metadata; not serialized into the circuit's component definitions.
 #[derive(Clone, Debug)]
 pub struct Library {
+    /// Actual host engine when this catalogue entry comes from a loaded module.
+    pub active_engine: Option<&'static str>,
     pub manifest: Manifest,
     pub presentation: Presentation,
     pub interaction: crate::interaction::Interaction,
@@ -38,6 +40,7 @@ pub struct Library {
 impl From<Manifest> for Library {
     fn from(manifest: Manifest) -> Self {
         Self {
+            active_engine: None,
             manifest,
             presentation: Presentation::default(),
             interaction: Default::default(),

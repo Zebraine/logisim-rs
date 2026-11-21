@@ -170,7 +170,7 @@ fn stable_call_intervals_partition_real_frame_settles() -> Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "wasmtime-experimental")]
+#[cfg(feature = "wasmtime-abi4")]
 #[test]
 fn bundled_course_replays_identical_traces_on_both_requested_engines() -> Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");

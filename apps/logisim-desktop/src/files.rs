@@ -84,7 +84,7 @@ impl Files {
             available,
         );
         let loader = PluginLoader::Direct(engine);
-        #[cfg(feature = "wasmtime-cache-experiment")]
+        #[cfg(feature = "wasmtime-cache")]
         let loader = match (engine, directory.as_deref()) {
             (WasmEngine::Wasmtime, Some(recovery)) => {
                 // Both directories belong to the host preferences location.

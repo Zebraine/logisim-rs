@@ -23,7 +23,7 @@ pub fn run(mut args: impl Iterator<Item = String>, engine: WasmEngine) -> Result
             report["fuel_per_request"] = json!(multiple * 10_000_000);
             Ok(report)
         }
-        #[cfg(feature = "wasmtime-cache-experiment")]
+        #[cfg(feature = "wasmtime-cache")]
         "cached-trace" if mode == "module-cache" => {
             let mut loader = Loader::with_engine(Reuse::PrivateModules(private_cache()?), engine);
             let mut report = benchmark_with(&name, runs, engine, |wasm| loader.load(wasm))?;
@@ -45,7 +45,7 @@ pub fn run(mut args: impl Iterator<Item = String>, engine: WasmEngine) -> Result
                     )?;
                     Reuse::Disk(path.into())
                 }
-                #[cfg(feature = "wasmtime-cache-experiment")]
+                #[cfg(feature = "wasmtime-cache")]
                 "module-cache" => Reuse::PrivateModules(private_cache()?),
                 _ => return Err("Unknown module reuse policy".into()),
             };
@@ -89,7 +89,7 @@ pub fn run(mut args: impl Iterator<Item = String>, engine: WasmEngine) -> Result
     }
 }
 
-#[cfg(feature = "wasmtime-cache-experiment")]
+#[cfg(feature = "wasmtime-cache")]
 fn private_cache() -> Result<std::path::PathBuf> {
     Ok(std::env::var_os("LOGISIM_BENCH_PRIVATE_CACHE")
         .ok_or("Set LOGISIM_BENCH_PRIVATE_CACHE to a private experiment directory")?

@@ -38,7 +38,7 @@ pub enum Reuse {
     Module,
     #[cfg(feature = "compare-wasmtime")]
     Disk(std::path::PathBuf),
-    #[cfg(feature = "wasmtime-cache-experiment")]
+    #[cfg(feature = "wasmtime-cache")]
     PrivateModules(std::path::PathBuf),
 }
 
@@ -61,7 +61,7 @@ impl Loader {
         if matches!(&reuse, Reuse::Disk(_)) {
             return Self::with_engine(reuse, WasmEngine::Wasmtime);
         }
-        #[cfg(feature = "wasmtime-cache-experiment")]
+        #[cfg(feature = "wasmtime-cache")]
         if matches!(&reuse, Reuse::PrivateModules(_)) {
             return Self::with_engine(reuse, WasmEngine::Wasmtime);
         }
@@ -87,7 +87,7 @@ impl Loader {
     }
 
     pub fn load(&mut self, bytes: &[u8]) -> Result<Plugin> {
-        #[cfg(feature = "wasmtime-cache-experiment")]
+        #[cfg(feature = "wasmtime-cache")]
         if let Reuse::PrivateModules(path) = &self.reuse {
             if self.choice != WasmEngine::Wasmtime {
                 return Err("Module cache requires Wasmtime.".into());

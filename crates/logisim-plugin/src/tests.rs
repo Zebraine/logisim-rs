@@ -368,7 +368,7 @@ fn loading_pins_the_engine_per_module_and_implicit_load_stays_wasmi() {
     }
 }
 
-#[cfg(all(target_os = "linux", feature = "wasmtime-cache-experiment"))]
+#[cfg(all(target_os = "linux", feature = "wasmtime-cache"))]
 mod module_cache;
 
 #[test]

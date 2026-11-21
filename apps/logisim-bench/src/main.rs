@@ -233,7 +233,7 @@ fn run(args: impl Iterator<Item = String>) -> Result<Value> {
             Some("wasmi") => WasmEngine::Wasmi,
             Some("wasmtime") if WasmEngine::Wasmtime.available() => WasmEngine::Wasmtime,
             Some("wasmtime") => {
-                return Err("Wasmtime requires the wasmtime-experimental feature".into());
+                return Err("Wasmtime requires the wasmtime-abi4 feature".into());
             }
             _ => return Err("Expected --wasm-engine wasmi or wasmtime".into()),
         }

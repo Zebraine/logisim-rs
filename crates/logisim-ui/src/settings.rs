@@ -45,8 +45,11 @@ impl Workspace {
         active: WasmEnginePreference,
         experimental_available: bool,
     ) {
-        self.settings_page
-            .set_runtime(active, experimental_available);
+        self.settings_page.set_runtime(
+            self.preferences.wasm_engine,
+            active,
+            experimental_available,
+        );
     }
 
     pub fn set_recovery_view(&mut self, view: RecoveryView) {

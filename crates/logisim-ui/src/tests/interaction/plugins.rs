@@ -41,6 +41,7 @@ fn setup_input() -> (egui::Context, Workspace, logisim_core::Id) {
             Point::new(200, 200),
         ));
     app.set_plugin_catalogue(vec![Library {
+        active_engine: None,
         manifest,
         presentation: Default::default(),
         interaction: Interaction {

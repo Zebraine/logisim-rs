@@ -6,7 +6,10 @@ use crate::{
     theme,
 };
 use egui::{Align, Context, Label, Layout, Ui, vec2};
-use logisim_core::{Id, plugin::PluginSource};
+use logisim_core::{
+    Id,
+    plugin::{PluginSource, api::presentation::Library},
+};
 
 enum Action {
     Open(Id),
@@ -172,8 +175,13 @@ impl Workspace {
 
     /// Document dependencies paired with their current catalogue status (matching ID and version).
     pub fn plugin_dependencies(&self) -> impl Iterator<Item = (&PluginSource, bool)> {
+        self.resolved_dependencies()
+            .map(|(source, library)| (source, library.is_some()))
+    }
+
+    fn resolved_dependencies(&self) -> impl Iterator<Item = (&PluginSource, Option<&Library>)> {
         self.project().plugin_sources.iter().map(|source| {
-            let loaded = self.plugins.iter().any(|lib| {
+            let loaded = self.plugins.iter().find(|lib| {
                 lib.manifest.id == source.plugin && lib.manifest.version == source.version
             });
             (source, loaded)
@@ -189,7 +197,7 @@ impl Workspace {
         if self.project().plugin_sources.is_empty() {
             ui.weak(tr("No plugin dependencies."));
         }
-        for (i, (source, loaded)) in self.plugin_dependencies().enumerate() {
+        for (i, (source, library)) in self.resolved_dependencies().enumerate() {
             if i > 0 {
                 ui.separator();
             }
@@ -202,9 +210,32 @@ impl Workspace {
                     clipped(ui, &source.version);
                 },
                 |ui| {
-                    theme::chip(ui, tr(if loaded { "Loaded" } else { "Missing" }));
+                    theme::chip(
+                        ui,
+                        tr(if library.is_some() {
+                            "Loaded"
+                        } else {
+                            "Missing"
+                        }),
+                    );
                 },
             );
+            if let Some(lib) = library
+                && let Some(active) = lib.active_engine
+            {
+                let requested = match self.settings_page.requested_engine {
+                    crate::WasmEnginePreference::Wasmi => "wasmi",
+                    crate::WasmEnginePreference::Wasmtime => "wasmtime",
+                };
+                ui.label(crate::tf!("Requested: {} · Active: {}", requested, active));
+                if active != requested {
+                    ui.weak(tr(if lib.manifest.execution.is_none() {
+                        "Reason: legacy ABI"
+                    } else {
+                        "Reason: engine unavailable in this build"
+                    }));
+                }
+            }
             ui.horizontal(|ui| field(ui, "Path", &source.path));
             if !source.fallback.is_empty() {
                 ui.horizontal(|ui| field(ui, "Fallback path", &source.fallback));

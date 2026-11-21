@@ -165,6 +165,51 @@ fn missing_dependency_opens_file_workflow_without_editing_the_project() {
 }
 
 #[test]
+fn loaded_dependency_reports_session_request_and_actual_engine_until_restart() {
+    use crate::WasmEnginePreference::{Wasmi, Wasmtime};
+    use logisim_core::plugin::api::{AllowedEngines, Execution, presentation::Library};
+    let ctx = Context::default();
+    let mut app = Workspace::default();
+    app.apply_settings(crate::Settings {
+        wasm_engine: Wasmtime,
+        ..app.preferences()
+    });
+    app.set_plugin_runtime(Wasmtime, true);
+    // A pending preference must not relabel the modules in the running session.
+    app.apply_settings(crate::Settings {
+        wasm_engine: Wasmi,
+        ..app.preferences()
+    });
+    let mut project = Project::default();
+    project.plugin_sources.push(PluginSource {
+        plugin: "test.runtime".into(),
+        version: "1".into(),
+        path: "module.wasm".into(),
+        fallback: String::new(),
+    });
+    app.replace_project(project);
+    for (abi, active) in [(3, "wasmi"), (4, "wasmtime")] {
+        let mut library = Library::from(Manifest {
+            abi,
+            execution: (abi == 4).then_some(Execution::new(AllowedEngines::Both)),
+            id: "test.runtime".into(),
+            version: "1".into(),
+            name: "Module".into(),
+            tools: vec![],
+        });
+        library.active_engine = Some(active);
+        app.set_plugin_catalogue(vec![library]);
+        app.project_options_open = true;
+        let labels = overview(&ctx, &mut app, vec2(1200., 820.));
+        assert!(has(
+            &labels,
+            &format!("Requested: wasmtime · Active: {active}")
+        ));
+        assert_eq!(has(&labels, "Reason: legacy ABI"), abi == 3);
+    }
+}
+
+#[test]
 fn translated_repair_and_load_actions_fit_both_themes_and_viewports() {
     for language in Language::ALL {
         for theme in [crate::ThemeMode::Light, crate::ThemeMode::Dark] {

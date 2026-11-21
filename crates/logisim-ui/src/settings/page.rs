@@ -33,6 +33,7 @@ pub(crate) struct Page {
     category: Category,
     query: String,
     confirm_reset: bool,
+    pub(crate) requested_engine: WasmEnginePreference,
     active_engine: WasmEnginePreference,
     experimental_available: bool,
     confirm_engine: bool,
@@ -42,14 +43,20 @@ pub(crate) struct Page {
     frequency_draft: Option<u32>,
 }
 impl Page {
-    pub(super) fn set_runtime(&mut self, active: WasmEnginePreference, available: bool) {
+    pub(super) fn set_runtime(
+        &mut self,
+        requested: WasmEnginePreference,
+        active: WasmEnginePreference,
+        available: bool,
+    ) {
+        self.requested_engine = requested;
         self.active_engine = active;
         self.experimental_available = available;
     }
 
     fn engine_card(&mut self, ui: &mut Ui, values: &mut Settings) {
         use WasmEnginePreference::{Wasmi, Wasmtime};
-        const WARNING: &str = "Wasmtime can take longer on first load. The same fuel budget can pause a plugin at a different point. Windows and macOS have not been verified.";
+        const WARNING: &str = "After restart, the first course plugin load with an empty cache takes about 0.5 s. Fuel can pause execution at a different point. The Agent uses wasmi.";
         let running = match self.active_engine {
             Wasmi => "wasmi",
             Wasmtime => "Wasmtime",

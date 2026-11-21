@@ -166,7 +166,7 @@ impl Dialog {
                 );
                 if settings.uses_experimental_engine() {
                     question.push_str("\n\n");
-                    question.push_str(tr("On restart, experimental Wasmtime may load more slowly and may pause at a different fuel boundary. Builds without it use wasmi."));
+                    question.push_str(tr("After restart, experimental Wasmtime may take about 0.5 s to compile the course plugin on an empty cache. Fuel pause points can differ. Legacy plugins and builds without Wasmtime use wasmi."));
                 }
                 Window::prompt("confirm-settings-import").confirm(
                     ctx,

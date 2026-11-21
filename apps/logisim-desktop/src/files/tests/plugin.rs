@@ -285,7 +285,7 @@ fn desktop_engine_is_pinned_before_loading_and_falls_back_only_if_unavailable() 
         resolution.check(0);
         let plugin = resolution.rows[0].loaded.as_ref().unwrap();
         assert_eq!(plugin.engine(), WasmEngine::Wasmi);
-        #[cfg(all(target_os = "linux", feature = "wasmtime-cache-experiment"))]
+        #[cfg(all(target_os = "linux", feature = "wasmtime-cache"))]
         assert!(!temp.path("wasmtime-cache-v1").exists());
     }
 }

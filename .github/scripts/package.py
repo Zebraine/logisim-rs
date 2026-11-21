@@ -138,7 +138,10 @@ def package(target, plugins):
                     raise ValueError("Game programs require matching .asm and .hex files")
                 for program in sources + images:
                     shutil.copyfile(program, examples / program.name)
+        legacy = staging / "plugins" / "abi3"
+        legacy.mkdir(parents=True)
         for plugin_name, module in plugins.items():
+            shutil.copyfile(ROOT / "plugins" / "abi3" / f"{plugin_name}.wasm", legacy / f"{plugin_name}.wasm")
             directory = staging / "plugins" / plugin_name
             directory.mkdir(parents=True)
             shutil.copyfile(module, directory / f"{plugin_name}.wasm")

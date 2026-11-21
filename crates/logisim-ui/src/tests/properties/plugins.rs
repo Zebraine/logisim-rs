@@ -230,6 +230,7 @@ fn plugin_owned_translations_and_image_import_preserve_document_and_identity() {
     let mut app = Workspace::default();
     app.set_language(Language::SimplifiedChinese);
     app.set_plugin_catalogue(vec![Library {
+        active_engine: None,
         interaction: Default::default(),
         manifest: manifest.clone(),
         presentation,

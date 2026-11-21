@@ -15,7 +15,7 @@ mod backend;
 mod frame;
 mod interaction;
 mod metadata;
-#[cfg(feature = "wasmtime-cache-experiment")]
+#[cfg(feature = "wasmtime-cache")]
 pub mod module_cache;
 mod presentation;
 mod raster;
@@ -157,6 +157,7 @@ impl Plugin {
     }
     pub fn library(&self) -> logisim_plugin_api::presentation::Library {
         logisim_plugin_api::presentation::Library {
+            active_engine: Some(self.engine().code()),
             manifest: self.manifest.clone(),
             presentation: self.presentation.clone(),
             interaction: self.interaction.clone(),

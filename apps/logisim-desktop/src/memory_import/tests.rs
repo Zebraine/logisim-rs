@@ -92,6 +92,7 @@ fn plugin_images_dispatch_once_only_after_file_and_target_validation() {
     let mut workspace = Workspace::default();
     workspace.replace_project(project.clone());
     workspace.set_plugin_catalogue(vec![Library {
+        active_engine: None,
         interaction: Default::default(),
         manifest,
         presentation,
