@@ -163,6 +163,27 @@ fn project_operations() -> Value {
         }
         variants.push(variant);
     }
+    let identity = json!({"type":"string","pattern":"^[A-Za-z0-9._-]{1,128}$"});
+    let path = json!({"type":"string","maxLength":4096,"x-maxUtf8Bytes":4096});
+    let source = json!({"type":"object","additionalProperties":false,"required":["plugin","version","path"],
+        "properties":{"plugin":identity,"version":identity,"path":path,"fallback":path},
+        "anyOf":[{"properties":{"path":{"minLength":1}}},{"required":["fallback"],"properties":{"fallback":{"minLength":1}}}]});
+    let mut plugin_fields = logisim_agent::ProjectOp::plugin_document_schema();
+    plugin_fields["properties"] = json!({"type":"object","additionalProperties":{"type":"string","maxLength":1024},
+        "description":"String values keyed by property ID. Use plugin_catalog or the instance property_schema."});
+    plugin_fields["circuit"] = id.clone();
+    let mut add = plugin_fields.clone();
+    add["op"] = json!({"const":"add_plugin"});
+    add["position"] = point;
+    add["tool"] = identity.clone();
+    add["plugin"] = identity.clone();
+    add["version"] = identity;
+    add["source"] = source;
+    variants.push(json!({"type":"object","additionalProperties":false,"properties":add,
+        "required":["op","circuit","position","tool"],"anyOf":[{"required":["source"]},{"required":["plugin","version"]}]}));
+    plugin_fields["op"] = json!({"const":"update_plugin"});
+    plugin_fields["id"] = id;
+    variants.push(json!({"type":"object","additionalProperties":false,"properties":plugin_fields,"required":["op","id"]}));
     json!({"type":"array","items":{"oneOf":variants}})
 }
 

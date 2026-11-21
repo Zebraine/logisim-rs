@@ -313,7 +313,7 @@ fn project_edits_have_the_same_outcome_over_cli_flags_and_mcp() {
             .as_array()
             .unwrap()
             .len(),
-        10
+        12
     );
     let add = &patch["inputSchema"]["properties"]["ops"]["items"]["oneOf"][0];
     assert_eq!(add["properties"]["kind"]["type"], "string");
@@ -659,3 +659,6 @@ fn wasm_catalog_cli_and_mcp_return_matching_metadata_inside_root() {
     );
     m.finish();
 }
+
+#[path = "stdio/plugins.rs"]
+mod plugins;

@@ -158,7 +158,7 @@ MCP 支持 `2024-11-05`、`2025-03-26`、`2025-06-18` 和 `2025-11-25`。握手�
 {"tool":"project_close","arguments":{"session":"ID_FROM_OPEN"}}
 ```
 
-后续请求使用打开工程时返回的 `data.session_id`。CLI 和 MCP 提供相同的 17 项操作。工程快照覆盖全部电路定义，仿真状态包含根实例的信号、时钟与传播计数、诊断和插件状态。
+后续请求使用打开工程时返回的 `data.session_id`。CLI 和 MCP 提供相同的 18 项操作。工程快照覆盖全部电路定义，仿真状态包含根实例的信号、时钟与传播计数、诊断和插件状态。
 
 ### 控制仿真
 
@@ -189,9 +189,9 @@ MCP 支持 `2024-11-05`、`2025-03-26`、`2025-06-18` 和 `2025-11-25`。握手�
 
 请使用快照中的真实 ID。核对预演结果后，将同一补丁的 `dry_run` 改为 `false`，应用后再保存。支持元件添加、移动、更新、删除，导线添加、删除，以及电路添加、重命名、删除和设置主电路。端口坐标使用画布坐标，颜色使用 RGBA，Splitter 映射使用从零开始的分支索引，断开位用 null。多个电路内有相同元件或导线 ID 时须传 `circuit`。导线遵循编辑器的重布线和合并、分段规则，`add_wire` 的 `wire_ids` 列出保留下来的线段。
 
-打开工程前即可运行 `logisim-agent project catalog`，或无参数调用 MCP 工具 `project_catalog`。`data.kinds` 列出 Core 规范名、可用别名，以及 `addable`、`editable` 和 `requires_circuit_id` 标志。仅子电路实例需要目标电路 ID。只读种类的 `properties` 为空对象。
+打开工程前即可运行 `logisim-agent project catalog`，或无参数调用 MCP 工具 `project_catalog`。`data.kinds` 列出 Core 规范名、可用别名，以及 `addable`、`editable` 和 `requires_circuit_id` 标志。仅子电路实例需要目标电路 ID。插件条目标有 `requires_plugin_source:true`，其属性由选定模块和工具决定。
 
-元件快照的 `property_schema` 与同种类目录条目的 `properties` 一致，给出枚举值、整数范围、RGBA 通道、允许分支为空的 Splitter 映射和可部分更新的字体对象。有字节长度限制的字符串通过 `x-maxUtf8Bytes` 给出 UTF-8 上限。最终元件还须满足字段间约束，例如 Counter 最大值须能用其位宽表示。快照保留 `patchable_properties`、`property_types` 以及同名字段中的当前值。添加和更新使用同一套属性。传入部分 `font` 字段只修改对应的字体属性。
+对于可静态添加的种类，元件快照的 `property_schema` 与目录条目的 `properties` 一致，给出枚举值、整数范围、RGBA 通道、允许分支为空的 Splitter 映射和可部分更新的字体对象。有字节长度限制的字符串通过 `x-maxUtf8Bytes` 给出 UTF-8 上限。最终元件还须满足字段间约束，例如 Counter 最大值须能用其位宽表示。快照保留 `patchable_properties`、`property_types` 以及同名字段中的当前值。添加和更新使用同一套属性。传入部分 `font` 字段只修改对应的字体属性。
 
 | 可编辑元件 | 主要属性 |
 | --- | --- |
@@ -216,7 +216,7 @@ ROM 的 `contents` 整体替换镜像，最多接受 65,536 个地址严格递�
 
 PLA 的两个平面均以项为行。输入单元取 `disconnected`、`direct` 或 `inverted`，输出单元取布尔值。提交的平面须符合最终尺寸。调整尺寸会保留重叠单元，并在 patch 结果中返回两个完整平面。
 
-添加子电路实例时分别指定父电路和已有的目标定义，例如 `{"op":"add_component","circuit":1,"kind":"subcircuit","circuit_id":2,"position":[100,100]}`。快照中 `circuit_name` 和 `interface_ports` 给出目标名称与 Pin 绑定。实例可更新标签、字体、朝向和位置。修改目标 Pin 会同步刷新实例接口。递归引用和删除仍被引用的电路会被拒绝。目录中有 66 个可编辑种类，唯一只读的是插件实例。
+添加子电路实例时分别指定父电路和已有的目标定义，例如 `{"op":"add_component","circuit":1,"kind":"subcircuit","circuit_id":2,"position":[100,100]}`。快照中 `circuit_name` 和 `interface_ports` 给出目标名称与 Pin 绑定。实例可更新标签、字体、朝向和位置。修改目标 Pin 会同步刷新实例接口。递归引用和删除仍被引用的电路会被拒绝。原有 66 个种类各有静态属性定义，插件实例通过 `add_plugin` 添加。
 
 时序元件补丁编辑文档属性，运行状态通过仿真工具查看。若缩小计数器位宽后原上限超出范围，请在同一操作中指定新的 `counter_max`。
 
@@ -229,6 +229,20 @@ PLA 的两个平面均以项为行。输入单元取 `disconnected`、`direct` �
 ```
 
 显式保存才会写回原路径。即使调用方省略哈希，保存仍会用打开或上次成功保存时的 SHA 核对磁盘文件。默认原子更新一代 `<文件>.bak`，内容为覆盖前的原始字节。可用 `--no-backup` 或 `backup:false` 跳过备份。备份失败会中止保存，随后目标写入失败时可能保留完整备份。多个 Agent 写入者通过同目录的空 `<文件>.lock` 文件协调。部分导入的工程只读；保存后会话 ID 和工程内各项 ID 继续有效，重新打开时重新分配。
+
+#### Wasm 插件实例
+
+运行 `logisim-agent plugin catalog --wasm plugins/input/input.wasm`，或向 `plugin_catalog` 传入 `{"path":"plugins/input/input.wasm"}`，即可查看模块清单、端口、动作和属性默认值。每个工具的 `properties` 描述布尔、整数和选项控件，`property_schema` 描述补丁接受的字符串。例如队列容量 8 写作 `"8"`。已加载实例的快照返回同一份属性 schema。
+
+下列补丁在电路 1 中放置键盘。模块路径相对于工程文件，成功后用 `changes[0].id` 取得实例 ID。
+
+```json
+{"ops":[{"op":"add_plugin","circuit":1,"position":[100,100],"tool":"keyboard","source":{"plugin":"org.logisim-rs.input","version":"1.0.0","path":"plugins/input/input.wasm"},"properties":{"capacity":"8"}}]}
+```
+
+再次放置同一依赖时，可以省略 `source`，在操作顶层指定已记录的 `plugin` 和 `version`。设置 `--root` 后，显式提交的主路径、备用路径及目录查询路径均须位于根目录内。工程原有依赖仍优先从工程目录解析相对路径，随后尝试绝对备用路径。为已记录的插件版本提供另一位置时，两处模块的目标工具定义必须一致，工程保留原来源。
+
+将返回的 ID 传给 `update_plugin` 可单独修改插件 `properties`，也可修改文档字段 `label`、`facing`、`font` 和不透明 RGBA `color`。使用 `move_component` 移动、`remove_component` 删除。删除最后一个实例后仍保留工程依赖。模块缺失或与已保存的定义不匹配时，快照包含 `plugin_error`，仍可读取已保存的属性值、移动或删除实例。补丁失败时整批回滚。此接口仅列出插件动作元数据。
 
 ## 已知限制
 

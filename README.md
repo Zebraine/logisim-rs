@@ -158,7 +158,7 @@ For a circuit, run `logisim-agent cli` and send one JSON object per line in the 
 {"tool":"project_close","arguments":{"session":"ID_FROM_OPEN"}}
 ```
 
-Use the returned `data.session_id` in subsequent requests. CLI and MCP expose the same 17 operations. The project snapshot covers every circuit definition. Simulation state includes signals from the active root instance, clock and propagation counters, diagnostics and plugin status.
+Use the returned `data.session_id` in subsequent requests. CLI and MCP expose the same 18 operations. The project snapshot covers every circuit definition. Simulation state includes signals from the active root instance, clock and propagation counters, diagnostics and plugin status.
 
 ### Controlling a simulation
 
@@ -189,9 +189,9 @@ Pass `project_patch` a `session`, an explicit `dry_run` boolean, and an ordered 
 
 Use IDs from your snapshot. After reviewing the preview, repeat the patch with `dry_run:false`, then save. Supported operations are `add_component`, `move_component`, `update_component`, `remove_component`, `add_wire`, `remove_wire`, `add_circuit`, `rename_circuit`, `remove_circuit` and `set_main_circuit`. Port positions use canvas coordinates, colors use RGBA and Splitter mappings use zero-based branch indices or null. Include `circuit` when an item ID occurs in multiple circuits. Wire edits use the editor's routing and normalization rules. When normalization splits or merges the added wire, `wire_ids` lists its surviving segments.
 
-Run `logisim-agent project catalog` or call the MCP tool `project_catalog` with no arguments to discover component kinds before opening a file. The response’s `data.kinds` lists core names, accepted aliases, and the `addable`, `editable` and `requires_circuit_id` flags. Only subcircuit instances need a target circuit ID. Read-only kinds have an empty `properties` object.
+Run `logisim-agent project catalog` or call the MCP tool `project_catalog` with no arguments to discover component kinds before opening a file. The response’s `data.kinds` lists core names, accepted aliases, and the `addable`, `editable` and `requires_circuit_id` flags. Only subcircuit instances need a target circuit ID. The plugin entry has `requires_plugin_source:true` and takes its properties from the selected module and tool.
 
-Each component’s `property_schema` in a snapshot matches its catalog entry’s `properties`. It describes enum codes, integer bounds, RGBA channels, nullable Splitter branches and partial font objects. String fields with a byte limit report it in `x-maxUtf8Bytes`. The completed component must also satisfy relationships between fields, such as a Counter maximum fitting its width. Snapshots retain `patchable_properties`, `property_types` and current values under their original keys. Add and update accept the same properties. A partial `font` object changes only its supplied members.
+For a statically addable kind, the snapshot’s `property_schema` matches the catalog entry’s `properties`. It describes enum codes, integer bounds, RGBA channels, nullable Splitter branches and partial font objects. String fields with a byte limit report it in `x-maxUtf8Bytes`. The completed component must also satisfy relationships between fields, such as a Counter maximum fitting its width. Snapshots retain `patchable_properties`, `property_types` and current values under their original keys. Add and update accept the same properties. A partial `font` object changes only its supplied members.
 
 | Editable family | Properties specific to the family |
 | --- | --- |
@@ -216,7 +216,7 @@ ROM `contents` replaces the complete image with at most 65,536 strictly increasi
 
 PLA planes have one row per term. Input cells are `disconnected`, `direct` or `inverted`. Output cells are booleans. Supplied planes must match the final dimensions. Resizing preserves overlapping cells and returns both complete planes in the patch result.
 
-For a subcircuit, pass the owning circuit and the existing target definition separately, for example `{"op":"add_component","circuit":1,"kind":"subcircuit","circuit_id":2,"position":[100,100]}`. Its snapshot includes the target name and pin bindings in `circuit_name` and `interface_ports`. Edit its label, font, facing or position. Editing the target Pins updates instance interfaces. Recursive references and removal of a referenced definition are rejected. The catalog has 66 editable kinds. Plugin instances are the only read-only kind.
+For a subcircuit, pass the owning circuit and the existing target definition separately, for example `{"op":"add_component","circuit":1,"kind":"subcircuit","circuit_id":2,"position":[100,100]}`. Its snapshot includes the target name and pin bindings in `circuit_name` and `interface_ports`. Edit its label, font, facing or position. Editing the target Pins updates instance interfaces. Recursive references and removal of a referenced definition are rejected.
 
 Storage patches edit the document attributes. Use the simulation tools for live state. When narrowing a Counter below its current maximum, supply a fitting `counter_max` in the same operation.
 
@@ -229,6 +229,20 @@ For CLI flags, put `{"ops":[...],"expected_sha256":"..."}` in an edits file (the
 ```
 
 Only explicit save writes the original path. It checks the current file against the session's last disk SHA even when the caller omits the hash. By default it atomically rotates the original bytes to `<file>.bak`. Use `--no-backup` or `backup:false` to skip rotation. A backup failure stops the save. A later target-write failure may leave a complete backup. Agent writers coordinate on a persistent empty `<file>.lock` sidecar. Partial imports are read-only. Saving preserves session IDs, while reopening parses a fresh set.
+
+#### Wasm plugin instances
+
+Run `logisim-agent plugin catalog --wasm plugins/input/input.wasm` or call `plugin_catalog` with `{"path":"plugins/input/input.wasm"}` to inspect the manifest, ports, actions and property defaults. For each tool, `properties` describes the Boolean, Integer and Choice controls. Its `property_schema` describes the strings accepted in a patch. For example, a queue capacity of eight is `"8"`. The same schema appears in a loaded instance's snapshot.
+
+This batch places a keyboard in circuit 1, using a module path relative to the project file. A successful patch returns the new component ID in `changes[0].id`.
+
+```json
+{"ops":[{"op":"add_plugin","circuit":1,"position":[100,100],"tool":"keyboard","source":{"plugin":"org.logisim-rs.input","version":"1.0.0","path":"plugins/input/input.wasm"},"properties":{"capacity":"8"}}]}
+```
+
+For another instance of a recorded dependency, omit `source` and supply its top-level `plugin` and `version`. With `--root`, both caller-supplied source paths and the catalog path must stay inside the root. Previously recorded dependencies retain project-relative resolution with an absolute fallback. An alternate location for an already recorded identity must provide the same tool definition. The project keeps its original source.
+
+Pass the returned ID to `update_plugin` to edit individual `properties` or the document fields `label`, `facing`, `font` and opaque RGBA `color`. Use `move_component` and `remove_component` for placement and removal. Removing the last instance retains the project dependency. If a module is unavailable or disagrees with a saved definition, the snapshot includes `plugin_error`. Its saved property values remain readable and the instance can still be moved or removed. Failed patches roll back the whole batch. Plugin actions are metadata only in this interface.
 
 ## Known limitations
 
