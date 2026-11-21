@@ -1,0 +1,217 @@
+{
+  "format": "logisim-rs-project",
+  "version": 1,
+  "main": "k-6c660a1d159de3bdbae8703301ab18f6",
+  "circuits": [
+    {
+      "display_order": 0,
+      "agent_id": "k-6c660a1d159de3bdbae8703301ab18f6",
+      "name": "Adder",
+      "label": {
+        "text": "",
+        "font": {
+          "family": "Dialog",
+          "size": 12,
+          "bold": false,
+          "italic": false
+        },
+        "up": "east",
+        "color": [
+          0,
+          0,
+          0
+        ]
+      },
+      "appearance": null,
+      "components": [
+        {
+          "agent_id": "c-d95f0ba02cdd903b8ce56415007ece92",
+          "kind": "pin",
+          "position": {
+            "x": 100,
+            "y": 60
+          },
+          "properties": {
+            "facing": "east",
+            "bits": 4,
+            "label": "A",
+            "font": {
+              "family": "Dialog",
+              "size": 14,
+              "bold": false,
+              "italic": false
+            },
+            "color": [
+              51,
+              65,
+              85
+            ],
+            "color_alpha": 255,
+            "label_facing": "north",
+            "label_center": false,
+            "output": false,
+            "pin": {
+              "three_state": false,
+              "pull": "none"
+            },
+            "radix": "binary"
+          }
+        },
+        {
+          "agent_id": "c-d4017c66d2b9e12a1ef6e51f0c03983d",
+          "kind": "pin",
+          "position": {
+            "x": 100,
+            "y": 140
+          },
+          "properties": {
+            "facing": "east",
+            "bits": 4,
+            "label": "B",
+            "font": {
+              "family": "Dialog",
+              "size": 14,
+              "bold": false,
+              "italic": false
+            },
+            "color": [
+              51,
+              65,
+              85
+            ],
+            "color_alpha": 255,
+            "label_facing": "north",
+            "label_center": false,
+            "output": false,
+            "pin": {
+              "three_state": false,
+              "pull": "none"
+            },
+            "radix": "binary"
+          }
+        },
+        {
+          "agent_id": "c-62ae89c8bfb1f988a646b0730260012d",
+          "kind": {
+            "arithmetic": "adder"
+          },
+          "position": {
+            "x": 300,
+            "y": 100
+          },
+          "properties": {
+            "facing": "east",
+            "bits": 4,
+            "label": "",
+            "font": {
+              "family": "Dialog",
+              "size": 14,
+              "bold": false,
+              "italic": false
+            },
+            "color": [
+              51,
+              65,
+              85
+            ],
+            "color_alpha": 255,
+            "label_facing": "north",
+            "label_center": false,
+            "arithmetic": {
+              "signed": true,
+              "shift": "logical_left",
+              "bit_inputs": 1,
+              "search": "lowest_one"
+            }
+          }
+        },
+        {
+          "agent_id": "c-119d815f832f5abc6cfa814b4b527cb1",
+          "kind": "probe",
+          "position": {
+            "x": 450,
+            "y": 100
+          },
+          "properties": {
+            "facing": "east",
+            "bits": 1,
+            "label": "Sum",
+            "font": {
+              "family": "Dialog",
+              "size": 14,
+              "bold": false,
+              "italic": false
+            },
+            "color": [
+              51,
+              65,
+              85
+            ],
+            "color_alpha": 255,
+            "label_facing": "north",
+            "label_center": false,
+            "radix": "hex"
+          }
+        }
+      ],
+      "wires": [
+        {
+          "agent_id": "w-7fa4b1b4a023040f4a99d1614344a440",
+          "from": {
+            "x": 100,
+            "y": 60
+          },
+          "to": {
+            "x": 260,
+            "y": 60
+          }
+        },
+        {
+          "agent_id": "w-f4f50fead9bad9c51cacbfe64b726201",
+          "from": {
+            "x": 260,
+            "y": 60
+          },
+          "to": {
+            "x": 260,
+            "y": 90
+          }
+        },
+        {
+          "agent_id": "w-4e93d9d6d09a5aae031b66e118ffa767",
+          "from": {
+            "x": 100,
+            "y": 140
+          },
+          "to": {
+            "x": 260,
+            "y": 140
+          }
+        },
+        {
+          "agent_id": "w-d7ce766be53a509d6eb9ce1fc53599a1",
+          "from": {
+            "x": 260,
+            "y": 110
+          },
+          "to": {
+            "x": 260,
+            "y": 140
+          }
+        },
+        {
+          "agent_id": "w-b330a6aa77af689f9f4670309aec9d2f",
+          "from": {
+            "x": 300,
+            "y": 100
+          },
+          "to": {
+            "x": 450,
+            "y": 100
+          }
+        }
+      ]
+    }
+  ],
+  "plugin_sources": []
+}

@@ -1,0 +1,1111 @@
+{
+  "format": "logisim-rs-project",
+  "version": 1,
+  "main": "k-ba89a7010fe9d0fec93e680be8103acf",
+  "circuits": [
+    {
+      "display_order": 0,
+      "agent_id": "k-ba89a7010fe9d0fec93e680be8103acf",
+      "name": "RegisterFile",
+      "label": {
+        "text": "",
+        "font": {
+          "family": "Dialog",
+          "size": 12,
+          "bold": false,
+          "italic": false
+        },
+        "up": "east",
+        "color": [
+          0,
+          0,
+          0
+        ]
+      },
+      "appearance": null,
+      "components": [
+        {
+          "agent_id": "c-dfb9dec89d88ffc25a07cd6684099cac",
+          "kind": "plugin",
+          "position": {
+            "x": 350,
+            "y": 300
+          },
+          "properties": {
+            "facing": "east",
+            "bits": 1,
+            "label": "Register File",
+            "font": {
+              "family": "Dialog",
+              "size": 14,
+              "bold": false,
+              "italic": false
+            },
+            "color": [
+              51,
+              65,
+              85
+            ],
+            "color_alpha": 255,
+            "label_facing": "north",
+            "label_center": false
+          },
+          "plugin": {
+            "plugin": "org.logisim-rs.course",
+            "version": "1.0.0",
+            "tool": {
+              "id": "register-file",
+              "name": "Register File (Wasm)",
+              "bounds": [
+                [
+                  -160,
+                  -90
+                ],
+                [
+                  0,
+                  90
+                ]
+              ],
+              "ports": [
+                {
+                  "id": "a",
+                  "label": "Read data A",
+                  "at": [
+                    0,
+                    -50
+                  ],
+                  "width": 32,
+                  "output": true
+                },
+                {
+                  "id": "b",
+                  "label": "Read data B",
+                  "at": [
+                    0,
+                    50
+                  ],
+                  "width": 32,
+                  "output": true
+                },
+                {
+                  "id": "w",
+                  "label": "Write data",
+                  "at": [
+                    -160,
+                    -10
+                  ],
+                  "width": 32,
+                  "output": false
+                },
+                {
+                  "id": "clock",
+                  "label": "Clock",
+                  "at": [
+                    -160,
+                    80
+                  ],
+                  "width": 1,
+                  "output": false
+                },
+                {
+                  "id": "enable",
+                  "label": "Write enable",
+                  "at": [
+                    -120,
+                    90
+                  ],
+                  "width": 1,
+                  "output": false
+                },
+                {
+                  "id": "write",
+                  "label": "Write address",
+                  "at": [
+                    -90,
+                    90
+                  ],
+                  "width": 5,
+                  "output": false
+                },
+                {
+                  "id": "read-a",
+                  "label": "Read address A",
+                  "at": [
+                    -50,
+                    90
+                  ],
+                  "width": 5,
+                  "output": false
+                },
+                {
+                  "id": "read-b",
+                  "label": "Read address B",
+                  "at": [
+                    -30,
+                    90
+                  ],
+                  "width": 5,
+                  "output": false
+                }
+              ],
+              "graphics": [
+                {
+                  "type": "rect",
+                  "min": [
+                    -160,
+                    -90
+                  ],
+                  "max": [
+                    0,
+                    90
+                  ],
+                  "fill": [
+                    237,
+                    242,
+                    249,
+                    255
+                  ],
+                  "stroke": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -146,
+                    -84
+                  ],
+                  "text": "00",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -146,
+                    -74
+                  ],
+                  "text": "01",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -146,
+                    -64
+                  ],
+                  "text": "02",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -146,
+                    -54
+                  ],
+                  "text": "03",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -146,
+                    -44
+                  ],
+                  "text": "04",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -146,
+                    -34
+                  ],
+                  "text": "05",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -146,
+                    -24
+                  ],
+                  "text": "06",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -146,
+                    -14
+                  ],
+                  "text": "07",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -146,
+                    -4
+                  ],
+                  "text": "08",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -146,
+                    6
+                  ],
+                  "text": "09",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -146,
+                    16
+                  ],
+                  "text": "10",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -146,
+                    26
+                  ],
+                  "text": "11",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -146,
+                    36
+                  ],
+                  "text": "12",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -146,
+                    46
+                  ],
+                  "text": "13",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -146,
+                    56
+                  ],
+                  "text": "14",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -146,
+                    66
+                  ],
+                  "text": "15",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -70,
+                    -84
+                  ],
+                  "text": "16",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -70,
+                    -74
+                  ],
+                  "text": "17",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -70,
+                    -64
+                  ],
+                  "text": "18",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -70,
+                    -54
+                  ],
+                  "text": "19",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -70,
+                    -44
+                  ],
+                  "text": "20",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -70,
+                    -34
+                  ],
+                  "text": "21",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -70,
+                    -24
+                  ],
+                  "text": "22",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -70,
+                    -14
+                  ],
+                  "text": "23",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -70,
+                    -4
+                  ],
+                  "text": "24",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -70,
+                    6
+                  ],
+                  "text": "25",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -70,
+                    16
+                  ],
+                  "text": "26",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -70,
+                    26
+                  ],
+                  "text": "27",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -70,
+                    36
+                  ],
+                  "text": "28",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -70,
+                    46
+                  ],
+                  "text": "29",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -70,
+                    56
+                  ],
+                  "text": "30",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -70,
+                    66
+                  ],
+                  "text": "31",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -157,
+                    -15
+                  ],
+                  "text": "W",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -157,
+                    72
+                  ],
+                  "text": "CLK",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -12,
+                    -55
+                  ],
+                  "text": "A",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -12,
+                    45
+                  ],
+                  "text": "B",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -125,
+                    80
+                  ],
+                  "text": "WE",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -95,
+                    80
+                  ],
+                  "text": "rW",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -55,
+                    80
+                  ],
+                  "text": "rA",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                },
+                {
+                  "type": "text",
+                  "at": [
+                    -35,
+                    80
+                  ],
+                  "text": "rB",
+                  "size": 7,
+                  "color": [
+                    51,
+                    65,
+                    85,
+                    255
+                  ]
+                }
+              ],
+              "properties": [
+                {
+                  "id": "trigger",
+                  "label": "Trigger",
+                  "default": "rising",
+                  "kind": {
+                    "type": "choice",
+                    "values": [
+                      "rising",
+                      "falling",
+                      "high",
+                      "low"
+                    ]
+                  }
+                }
+              ],
+              "actions": [
+                {
+                  "id": "write",
+                  "label": "Write register",
+                  "argument": "Address (decimal), word (hex)"
+                }
+              ]
+            },
+            "properties": {
+              "trigger": "rising"
+            }
+          }
+        },
+        {
+          "agent_id": "c-7b04e28e365857a4a262f733f0c1064d",
+          "kind": "pin",
+          "position": {
+            "x": 100,
+            "y": 290
+          },
+          "properties": {
+            "facing": "east",
+            "bits": 32,
+            "label": "W",
+            "font": {
+              "family": "Dialog",
+              "size": 14,
+              "bold": false,
+              "italic": false
+            },
+            "color": [
+              51,
+              65,
+              85
+            ],
+            "color_alpha": 255,
+            "label_facing": "north",
+            "label_center": false,
+            "output": false,
+            "pin": {
+              "three_state": false,
+              "pull": "none"
+            },
+            "radix": "binary"
+          }
+        },
+        {
+          "agent_id": "c-dd77f3af2ec5c952cdaeea8829610d7c",
+          "kind": "pin",
+          "position": {
+            "x": 100,
+            "y": 340
+          },
+          "properties": {
+            "facing": "east",
+            "bits": 5,
+            "label": "Write address",
+            "font": {
+              "family": "Dialog",
+              "size": 14,
+              "bold": false,
+              "italic": false
+            },
+            "color": [
+              51,
+              65,
+              85
+            ],
+            "color_alpha": 255,
+            "label_facing": "north",
+            "label_center": false,
+            "output": false,
+            "pin": {
+              "three_state": false,
+              "pull": "none"
+            },
+            "radix": "binary"
+          }
+        },
+        {
+          "agent_id": "c-81910f69b44bb69e70f03494392a4cbf",
+          "kind": "pin",
+          "position": {
+            "x": 100,
+            "y": 410
+          },
+          "properties": {
+            "facing": "east",
+            "bits": 5,
+            "label": "Read address A",
+            "font": {
+              "family": "Dialog",
+              "size": 14,
+              "bold": false,
+              "italic": false
+            },
+            "color": [
+              51,
+              65,
+              85
+            ],
+            "color_alpha": 255,
+            "label_facing": "north",
+            "label_center": false,
+            "output": false,
+            "pin": {
+              "three_state": false,
+              "pull": "none"
+            },
+            "radix": "binary"
+          }
+        },
+        {
+          "agent_id": "c-bc96516876a47e3830fa3f3b9c4c0ece",
+          "kind": "probe",
+          "position": {
+            "x": 500,
+            "y": 250
+          },
+          "properties": {
+            "facing": "east",
+            "bits": 1,
+            "label": "Read A",
+            "font": {
+              "family": "Dialog",
+              "size": 14,
+              "bold": false,
+              "italic": false
+            },
+            "color": [
+              51,
+              65,
+              85
+            ],
+            "color_alpha": 255,
+            "label_facing": "north",
+            "label_center": false,
+            "radix": "hex"
+          }
+        },
+        {
+          "agent_id": "c-40824a6030e8e4a0446c4d086f1a090e",
+          "kind": "power",
+          "position": {
+            "x": 100,
+            "y": 440
+          },
+          "properties": {
+            "facing": "north",
+            "bits": 1,
+            "label": "",
+            "font": {
+              "family": "Dialog",
+              "size": 14,
+              "bold": false,
+              "italic": false
+            },
+            "color": [
+              51,
+              65,
+              85
+            ],
+            "color_alpha": 255,
+            "label_facing": "north",
+            "label_center": false
+          }
+        },
+        {
+          "agent_id": "c-8ba3622898a182fceb7d455c710a4eaf",
+          "kind": "clock",
+          "position": {
+            "x": 100,
+            "y": 380
+          },
+          "properties": {
+            "facing": "east",
+            "bits": 1,
+            "label": "Clock",
+            "font": {
+              "family": "Dialog",
+              "size": 14,
+              "bold": false,
+              "italic": false
+            },
+            "color": [
+              51,
+              65,
+              85
+            ],
+            "color_alpha": 255,
+            "label_facing": "west",
+            "label_center": false,
+            "sequential": {
+              "trigger": "rising",
+              "random_seed": 0,
+              "controls": "above_below",
+              "negate_controls": false,
+              "new_layout": true,
+              "select_high": false,
+              "high_ticks": 1,
+              "low_ticks": 1,
+              "counter_max": 255,
+              "counter_overflow": "wrap",
+              "counter_old": false
+            }
+          }
+        }
+      ],
+      "wires": [
+        {
+          "agent_id": "w-0d0f41c47389778a0d15109e68f1e22d",
+          "from": {
+            "x": 100,
+            "y": 290
+          },
+          "to": {
+            "x": 190,
+            "y": 290
+          }
+        },
+        {
+          "agent_id": "w-9b82c29d5fee0651187fdb2f8a9ac61f",
+          "from": {
+            "x": 100,
+            "y": 340
+          },
+          "to": {
+            "x": 260,
+            "y": 340
+          }
+        },
+        {
+          "agent_id": "w-9f30beb404591792ffd74a5bb997cae6",
+          "from": {
+            "x": 260,
+            "y": 340
+          },
+          "to": {
+            "x": 260,
+            "y": 390
+          }
+        },
+        {
+          "agent_id": "w-2aa7f5c871eef149b79adf9dd17761d9",
+          "from": {
+            "x": 100,
+            "y": 410
+          },
+          "to": {
+            "x": 300,
+            "y": 410
+          }
+        },
+        {
+          "agent_id": "w-2cfeeba561b1ec4e462568ed77f16ba1",
+          "from": {
+            "x": 300,
+            "y": 390
+          },
+          "to": {
+            "x": 300,
+            "y": 410
+          }
+        },
+        {
+          "agent_id": "w-4cf3c323018a8cdb739da62d17489f8a",
+          "from": {
+            "x": 100,
+            "y": 440
+          },
+          "to": {
+            "x": 230,
+            "y": 440
+          }
+        },
+        {
+          "agent_id": "w-00fcd0a187760b3f985ec10f54ddb8e7",
+          "from": {
+            "x": 230,
+            "y": 390
+          },
+          "to": {
+            "x": 230,
+            "y": 440
+          }
+        },
+        {
+          "agent_id": "w-3b751d45e095c874ad83c185510ead2b",
+          "from": {
+            "x": 100,
+            "y": 380
+          },
+          "to": {
+            "x": 190,
+            "y": 380
+          }
+        },
+        {
+          "agent_id": "w-aded74a67fb412d216a0ff2ee36030d4",
+          "from": {
+            "x": 350,
+            "y": 250
+          },
+          "to": {
+            "x": 500,
+            "y": 250
+          }
+        }
+      ]
+    }
+  ],
+  "plugin_sources": [
+    {
+      "plugin": "org.logisim-rs.course",
+      "version": "1.0.0",
+      "path": "../../plugins/course/course.wasm",
+      "fallback": ""
+    }
+  ]
+}

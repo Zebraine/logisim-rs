@@ -1,0 +1,381 @@
+{
+  "format": "logisim-rs-project",
+  "version": 1,
+  "main": "k-2f2a94fc6abf590ce26e0c14e647ecb2",
+  "circuits": [
+    {
+      "display_order": 0,
+      "agent_id": "k-2f2a94fc6abf590ce26e0c14e647ecb2",
+      "name": "Counter",
+      "label": {
+        "text": "",
+        "font": {
+          "family": "Dialog",
+          "size": 12,
+          "bold": false,
+          "italic": false
+        },
+        "up": "east",
+        "color": [
+          0,
+          0,
+          0
+        ]
+      },
+      "appearance": null,
+      "components": [
+        {
+          "agent_id": "c-418d7f98d78887b9d17dc5f9dff90412",
+          "kind": "clock",
+          "position": {
+            "x": 100,
+            "y": 100
+          },
+          "properties": {
+            "facing": "east",
+            "bits": 1,
+            "label": "Clock",
+            "font": {
+              "family": "Dialog",
+              "size": 14,
+              "bold": false,
+              "italic": false
+            },
+            "color": [
+              51,
+              65,
+              85
+            ],
+            "color_alpha": 255,
+            "label_facing": "west",
+            "label_center": false,
+            "sequential": {
+              "trigger": "rising",
+              "random_seed": 0,
+              "controls": "above_below",
+              "negate_controls": false,
+              "new_layout": true,
+              "select_high": false,
+              "high_ticks": 1,
+              "low_ticks": 1,
+              "counter_max": 255,
+              "counter_overflow": "wrap",
+              "counter_old": false
+            }
+          }
+        },
+        {
+          "agent_id": "c-67d3bd49a930e451039e36971628768c",
+          "kind": "counter",
+          "position": {
+            "x": 300,
+            "y": 100
+          },
+          "properties": {
+            "facing": "east",
+            "bits": 4,
+            "label": "Count",
+            "font": {
+              "family": "Dialog",
+              "size": 14,
+              "bold": false,
+              "italic": false
+            },
+            "color": [
+              51,
+              65,
+              85
+            ],
+            "color_alpha": 255,
+            "label_facing": "north",
+            "label_center": false,
+            "sequential": {
+              "trigger": "rising",
+              "random_seed": 0,
+              "controls": "above_below",
+              "negate_controls": false,
+              "new_layout": true,
+              "select_high": false,
+              "high_ticks": 1,
+              "low_ticks": 1,
+              "counter_max": 15,
+              "counter_overflow": "wrap",
+              "counter_old": false
+            }
+          }
+        },
+        {
+          "agent_id": "c-499acd9e7cbe194354bd60c5258b56aa",
+          "kind": "probe",
+          "position": {
+            "x": 450,
+            "y": 100
+          },
+          "properties": {
+            "facing": "east",
+            "bits": 1,
+            "label": "Count",
+            "font": {
+              "family": "Dialog",
+              "size": 14,
+              "bold": false,
+              "italic": false
+            },
+            "color": [
+              51,
+              65,
+              85
+            ],
+            "color_alpha": 255,
+            "label_facing": "north",
+            "label_center": false,
+            "radix": "hex"
+          }
+        },
+        {
+          "agent_id": "c-75a0654c4a9187e59f8179a91fb67619",
+          "kind": "power",
+          "position": {
+            "x": 180,
+            "y": 300
+          },
+          "properties": {
+            "facing": "north",
+            "bits": 1,
+            "label": "",
+            "font": {
+              "family": "Dialog",
+              "size": 14,
+              "bold": false,
+              "italic": false
+            },
+            "color": [
+              51,
+              65,
+              85
+            ],
+            "color_alpha": 255,
+            "label_facing": "north",
+            "label_center": false
+          }
+        },
+        {
+          "agent_id": "c-487564ccf6cafda2e923a8dac7f3016c",
+          "kind": "ground",
+          "position": {
+            "x": 200,
+            "y": 20
+          },
+          "properties": {
+            "facing": "south",
+            "bits": 1,
+            "label": "",
+            "font": {
+              "family": "Dialog",
+              "size": 14,
+              "bold": false,
+              "italic": false
+            },
+            "color": [
+              51,
+              65,
+              85
+            ],
+            "color_alpha": 255,
+            "label_facing": "north",
+            "label_center": false
+          }
+        },
+        {
+          "agent_id": "c-5017c4d78bf7ea7299659fd9d1b7dc07",
+          "kind": "ground",
+          "position": {
+            "x": 350,
+            "y": 200
+          },
+          "properties": {
+            "facing": "south",
+            "bits": 1,
+            "label": "",
+            "font": {
+              "family": "Dialog",
+              "size": 14,
+              "bold": false,
+              "italic": false
+            },
+            "color": [
+              51,
+              65,
+              85
+            ],
+            "color_alpha": 255,
+            "label_facing": "north",
+            "label_center": false
+          }
+        },
+        {
+          "agent_id": "c-2360d13426767a96d5b99d548d846f92",
+          "kind": "ground",
+          "position": {
+            "x": 100,
+            "y": 320
+          },
+          "properties": {
+            "facing": "south",
+            "bits": 1,
+            "label": "",
+            "font": {
+              "family": "Dialog",
+              "size": 14,
+              "bold": false,
+              "italic": false
+            },
+            "color": [
+              51,
+              65,
+              85
+            ],
+            "color_alpha": 255,
+            "label_facing": "north",
+            "label_center": false
+          }
+        }
+      ],
+      "wires": [
+        {
+          "agent_id": "w-f4407aeac9bb7047d6dbf710716a2b9c",
+          "from": {
+            "x": 100,
+            "y": 100
+          },
+          "to": {
+            "x": 100,
+            "y": 120
+          }
+        },
+        {
+          "agent_id": "w-dfd7329b2b58e5e93b10788ab47958b9",
+          "from": {
+            "x": 100,
+            "y": 120
+          },
+          "to": {
+            "x": 280,
+            "y": 120
+          }
+        },
+        {
+          "agent_id": "w-36cf1dff56f2d4828b08eccbdfac8f42",
+          "from": {
+            "x": 300,
+            "y": 100
+          },
+          "to": {
+            "x": 450,
+            "y": 100
+          }
+        },
+        {
+          "agent_id": "w-bb7d0623c50861ad55b163ed386fae6e",
+          "from": {
+            "x": 180,
+            "y": 80
+          },
+          "to": {
+            "x": 180,
+            "y": 300
+          }
+        },
+        {
+          "agent_id": "w-f38e5bba5b5f0a0b5f6f3929950b43e8",
+          "from": {
+            "x": 180,
+            "y": 80
+          },
+          "to": {
+            "x": 280,
+            "y": 80
+          }
+        },
+        {
+          "agent_id": "w-78579d13daa74c858f65f90e03437887",
+          "from": {
+            "x": 200,
+            "y": 20
+          },
+          "to": {
+            "x": 270,
+            "y": 20
+          }
+        },
+        {
+          "agent_id": "w-27833bc115185f747b465a4503ba01ac",
+          "from": {
+            "x": 270,
+            "y": 20
+          },
+          "to": {
+            "x": 270,
+            "y": 90
+          }
+        },
+        {
+          "agent_id": "w-d04f44f97550421bfc334309a334d269",
+          "from": {
+            "x": 290,
+            "y": 200
+          },
+          "to": {
+            "x": 350,
+            "y": 200
+          }
+        },
+        {
+          "agent_id": "w-d9c0ca6900f27ade6ebc874477c0cdea",
+          "from": {
+            "x": 290,
+            "y": 120
+          },
+          "to": {
+            "x": 290,
+            "y": 200
+          }
+        },
+        {
+          "agent_id": "w-d0779947d56c25d5492713c52730d7bd",
+          "from": {
+            "x": 290,
+            "y": 80
+          },
+          "to": {
+            "x": 290,
+            "y": 120
+          }
+        },
+        {
+          "agent_id": "w-a4ea0e5cc29fc5a3b63ed5f8e07027a0",
+          "from": {
+            "x": 100,
+            "y": 320
+          },
+          "to": {
+            "x": 270,
+            "y": 320
+          }
+        },
+        {
+          "agent_id": "w-f10e97ef2f661d45c814d148e3a19289",
+          "from": {
+            "x": 270,
+            "y": 110
+          },
+          "to": {
+            "x": 270,
+            "y": 320
+          }
+        }
+      ]
+    }
+  ],
+  "plugin_sources": []
+}
