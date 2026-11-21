@@ -28,7 +28,7 @@ git diff --check
 
 在仓库根目录执行 `cargo build -p logisim-bench --release --locked --offline`，再执行 `target/release/logisim-bench single-cycle --runs 20`。负载可选 `wide`（独立 32 位加法器，每步改变一路）、`deep`（串联 NOT）、`single-cycle`（课程 CPU）或 `plugin`（课程寄存器文件）。用同一逻辑核顺序运行，每个负载至少三个独立进程；保存每次 stdout JSON、提交、工具链、CPU 和模块哈希。
 
-每个进程记录一次从载入到首次收敛的 `cold_ms`，含模块载入、同步和 stable 计划编译；`plugin_instance_ms` 是另取一个已载入模块的实例化样本。每轮从复位开始；预热 3 轮后计时。两条时钟轨迹分别为 128 和 512 个 tick，组合负载每轮施加 512 次输入。寄存器文件每个 tick 先收敛新写入数据，再推进时钟并收敛。每次收敛及完整迭代分别计算最近秩 p50/p95，吞吐按有效迭代总数除以累计执行时间。时钟负载看 `ticks_per_s`，组合负载看 `iterations_per_s`。状态读取、四态轨迹校验、复位和 JSON 输出均在热计时区间外。步数、tick 数、插件读出/采样调用按单轮报告。跨进程吞吐极差除以中位数的目标为 ≤5%，基准耗时不作 CI 断言。
+每个进程记录一次从载入到首次收敛的 `cold_ms`，含模块载入、同步和 stable 计划编译；`plugin_instance_ms` 是另取一个已载入模块的实例化样本。每轮从复位开始；预热 3 轮后计时。两条时钟轨迹分别为 128 和 512 个 tick，组合负载每轮施加 512 次输入。寄存器文件每个 tick 先收敛新写入数据，再推进时钟并收敛。每次收敛及完整迭代分别计算最近秩 p50/p95；时钟负载另按奇偶 tick 分组，以区分两个边沿的开销。吞吐按有效迭代总数除以累计执行时间。时钟负载看 `ticks_per_s`，组合负载看 `iterations_per_s`。状态读取、四态轨迹校验、复位和 JSON 输出均在热计时区间外。步数、tick 数、插件读出/采样调用按单轮报告。跨进程吞吐极差除以中位数的目标为 ≤5%，基准耗时不作 CI 断言。
 
 桌面快照构造可独立运行 `cargo test --release --locked --offline -p logisim-rs single_cycle_snapshot_cost -- --ignored --nocapture`；它使用真实视图适配器，不启动窗口。
 

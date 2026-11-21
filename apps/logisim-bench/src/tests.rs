@@ -79,3 +79,33 @@ fn register_file_rising_edge_trace_matches_readback() -> Result<()> {
     assert!(sample.trace.work.plugin_samples > 0 && sample.trace.work.plugin_outputs > 0);
     Ok(())
 }
+
+#[test]
+fn cpu_event_reference_matches_settled_pin_trace() -> Result<()> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let f = Fixture::load("single-cycle", &root)?;
+    let workload::Stimulus::Cpu { reset } = f.stimulus else {
+        unreachable!()
+    };
+    let mut sim = ProjectSimulator::default();
+    sim.set_plugins(f.plugins);
+    sim.synchronize(&f.project, f.project.main);
+    sim.advance(4096);
+    for pressed in [true, false] {
+        sim.set_button(&[], reset, pressed);
+        sim.advance(4096);
+    }
+    let mut digest = 0xcbf29ce484222325;
+    for _ in 0..f.stimulus.iterations() {
+        assert!(sim.tick());
+        sim.advance(4096);
+        assert_eq!(sim.pending_count(), 0);
+        assert!(sim.diagnostics(&[]).is_empty());
+        let view = sim.view(&[]).unwrap();
+        for &id in &f.probes {
+            measure::hash_value(&mut digest, view.port_value(id, 0).unwrap());
+        }
+    }
+    assert_eq!(digest, f.stimulus.expected_digest());
+    Ok(())
+}

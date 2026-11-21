@@ -92,6 +92,28 @@ fn benchmark(name: &str, runs: usize) -> Result<Value> {
             iterations.extend(sample.iterations);
         }
     }
+    // A 50/50 mixture of short and long edges can move its median between modes.
+    // Split chronological samples before computing the pooled quantiles in place.
+    let phases: &[&str] = match fixture.stimulus {
+        workload::Stimulus::Plugin { .. } => &[
+            "data_before_odd_tick",
+            "odd_tick",
+            "data_before_even_tick",
+            "even_tick",
+        ],
+        workload::Stimulus::Cpu { .. } => &["odd_tick", "even_tick"],
+        _ => &[],
+    };
+    let mut phase_times = serde_json::Map::new();
+    for (offset, &phase) in phases.iter().enumerate() {
+        let mut samples = settles
+            .iter()
+            .skip(offset)
+            .step_by(phases.len())
+            .copied()
+            .collect::<Vec<_>>();
+        phase_times.insert(phase.into(), json!(distribution(&mut samples)));
+    }
     let elapsed: Duration = iterations.iter().sum();
     let rate = iterations.len() as f64 / elapsed.as_secs_f64();
     Ok(json!({
@@ -109,6 +131,7 @@ fn benchmark(name: &str, runs: usize) -> Result<Value> {
         "first_settle_ms": first_settle_ms,
         "compiled_nodes": plan.compiled_nodes,
         "settle_ms": distribution(&mut settles),
+        "phase_settle_ms": phase_times,
         "iteration_ms": distribution(&mut iterations),
         "settles_per_run": settles.len() / runs,
         "iterations_per_run": iterations.len() / runs,
