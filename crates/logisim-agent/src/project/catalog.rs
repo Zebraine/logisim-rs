@@ -4,13 +4,7 @@ use crate::Result;
 use logisim_core::{Gate, Kind, Parity};
 use serde_json::{Value, json};
 
-const READ_ONLY: [Kind; 5] = [
-    Kind::Plugin,
-    Kind::Slider,
-    Kind::Joystick,
-    Kind::Keyboard,
-    Kind::Tty,
-];
+const READ_ONLY: [Kind; 1] = [Kind::Plugin];
 
 pub(super) struct Entry {
     pub kind: Kind,

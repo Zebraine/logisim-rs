@@ -75,6 +75,28 @@ field!(
     Rule::Integer(1, 65_535),
     sequential.low_ticks
 );
+field!(
+    SLIDER_REVERSE,
+    "slider_reverse",
+    Rule::Boolean,
+    io.slider_reverse
+);
+field!(SLIDER_VALUE, "slider_value", U32, io.slider_value);
+field!(JOYSTICK_BITS, "bits", Rule::Integer(2, 5), bits);
+field!(CHAR_BITS, "bits", Rule::IntegerEnum(&[7, 16]), bits);
+field!(
+    BUFFER_LEN,
+    "buffer_len",
+    Rule::Integer(1, 256),
+    terminal.buffer_len
+);
+field!(TERM_ROWS, "rows", Rule::Integer(1, 48), terminal.rows);
+field!(
+    TERM_COLUMNS,
+    "columns",
+    Rule::Integer(1, 120),
+    terminal.columns
+);
 field!(TEXT, "text", Rule::Label, label);
 field!(IN_WIDTH, "in_width", WIDTH, input_bits);
 field!(OUT_WIDTH, "out_width", WIDTH, bits);
@@ -245,8 +267,26 @@ enum_field!(OVERFLOW, "counter_overflow", sequential.counter_overflow,
      CounterOverflow::Continue => "continue", CounterOverflow::Load => "load"]);
 
 // Use the same typed readers and writers with the narrower codec vocabulary for each kind.
+const EDGE_CODES: [(Trigger, &str); 2] =
+    [(Trigger::Rising, "rising"), (Trigger::Falling, "falling")];
+const TERMINAL_TRIGGER: Field = Field {
+    name: "trigger",
+    rule: EDGE_TRIGGER.rule,
+    read: |c| {
+        EDGE_CODES
+            .iter()
+            .find(|(edge, _)| *edge == c.terminal.trigger)
+            .expect("validated terminal trigger")
+            .1
+            .into()
+    },
+    write: |c, v| {
+        c.terminal.trigger = choice("trigger", v, EDGE_CODES)?;
+        Ok(())
+    },
+};
 const EDGE_TRIGGER: Field = Field {
-    rule: Rule::Enum(|| vec!["rising", "falling"]),
+    rule: Rule::Enum(|| EDGE_CODES.map(|(_, s)| s).to_vec()),
     ..TRIGGER
 };
 const LEVEL_TRIGGER: Field = Field {
@@ -273,6 +313,25 @@ const LATCH_FIELDS: &[Field] = &[LATCH_TRIGGER, CONTROLS, NEGATE_CONTROLS, NEW_L
 // (Core kind, optional short name, component-specific fields). Core names are always accepted.
 type Entry = (Kind, Option<&'static str>, &'static [Field]);
 const CATALOG: &[Entry] = &[
+    (Kind::Joystick, None, &[JOYSTICK_BITS]),
+    (
+        Kind::Keyboard,
+        None,
+        &[CHAR_BITS, TERMINAL_TRIGGER, BUFFER_LEN],
+    ),
+    (
+        Kind::Tty,
+        None,
+        &[
+            CHAR_BITS,
+            TERMINAL_TRIGGER,
+            TERM_ROWS,
+            TERM_COLUMNS,
+            ON,
+            BACKGROUND,
+        ],
+    ),
+    (Kind::Slider, None, &[BITS, SLIDER_REVERSE, SLIDER_VALUE]),
     (Kind::PlaRom, None, &[PLA_SELECT]),
     (Kind::Rom, None, &[BITS, ADDRESS_BITS, MEMORY_SELECT]),
     (

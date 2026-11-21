@@ -297,12 +297,25 @@ fn replacement_symlinks_are_preserved_on_save_conflict() {
 }
 
 #[test]
-fn only_unique_item_ids_work_without_an_owner_and_complex_components_are_read_only() {
-    let xml = SOURCE.replace(
-        "</project>",
-        r##"<lib name="io" desc="#I/O"/><circuit name="other"><comp lib="io" name="Slider" loc="(0,0)"/></circuit></project>"##,
-    );
-    let mut f = Fixture::new(&xml);
+fn only_unique_item_ids_work_without_an_owner_and_plugin_instances_are_read_only() {
+    let mut fixture =
+        logisim_file::parse(&SOURCE.replace("</project>", r#"<circuit name="other"/></project>"#))
+            .unwrap()
+            .document;
+    let course = logisim_file::parse(include_str!(
+        "../../../../examples/course/single-cycle.circ"
+    ))
+    .unwrap()
+    .document;
+    let plugin = course
+        .circuits
+        .into_iter()
+        .flat_map(|d| d.circuit.components)
+        .find(|c| c.kind == logisim_core::Kind::Plugin)
+        .unwrap();
+    fixture.circuits[0].circuit.wires.clear();
+    fixture.circuits[1].circuit.add_component(plugin);
+    let mut f = Fixture::new(&logisim_file::serialize(&fixture).unwrap());
     let orig = f.snapshot();
     for (op, code) in [
         (json!({"op":"remove_component","id":1}), "ambiguous_id"),
@@ -438,6 +451,7 @@ fn concurrent_sessions_cannot_overwrite_a_new_source_or_its_backup() {
 mod builtins;
 mod catalog;
 mod instances;
+mod io;
 mod memory;
 mod pla;
 mod sequential;

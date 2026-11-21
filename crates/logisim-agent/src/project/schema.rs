@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 pub(super) enum Rule {
     Boolean,
     Integer(i64, i64),
+    IntegerEnum(&'static [i64]),
     Enum(fn() -> Vec<&'static str>),
     Label,
     Font,
@@ -35,7 +36,7 @@ impl Rule {
     pub fn type_name(self) -> &'static str {
         match self {
             Self::Boolean => "boolean",
-            Self::Integer(..) => "integer",
+            Self::Integer(..) | Self::IntegerEnum(_) => "integer",
             Self::Enum(_) | Self::Label | Self::FontFamily => "string",
             Self::Font => "object",
             Self::Rgba { .. }
@@ -50,6 +51,7 @@ impl Rule {
         let ty = self.type_name();
         match self {
             Self::Boolean => json!({"type":ty}),
+            Self::IntegerEnum(values) => json!({"type":ty,"enum":values}),
             Self::Integer(min, max) => json!({"type":ty,"minimum":min,"maximum":max}),
             Self::Enum(codes) => json!({"type":ty,"enum":codes()}),
             Self::Label => json!({"type":ty,"maxLength":LABEL_BYTES,"x-maxUtf8Bytes":LABEL_BYTES,
@@ -84,6 +86,7 @@ impl Rule {
     pub fn validate(self, key: &str, value: &Value) -> Result<()> {
         let valid = match self {
             Self::Boolean => value.is_boolean(),
+            Self::IntegerEnum(values) => value.as_i64().is_some_and(|n| values.contains(&n)),
             Self::Integer(min, max) => value.as_i64().is_some_and(|n| (min..=max).contains(&n)),
             Self::Enum(codes) => value
                 .as_str()

@@ -111,6 +111,11 @@ pub(super) fn property_schema(kind: Kind, fields: &[(&'static str, Rule)]) -> Va
         Kind::Counter => {
             schema["counter_max"]["description"] = "Must fit the final bits width.".into()
         }
+        Kind::Slider => {
+            schema["slider_value"]["description"] =
+                "Unsigned slider value. Must fit the final bits width.".into();
+            schema["slider_value"]["x-wordBits"] = "bits".into();
+        }
         Kind::Constant => {
             schema["value"]["description"] =
                 "Unsigned document constant. Must fit the final bits width.".into()

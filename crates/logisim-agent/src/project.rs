@@ -9,7 +9,7 @@ mod properties;
 mod save;
 mod schema;
 use crate::{Error, Result, digest, io};
-use logisim_core::{Component, Interface, Point, Project};
+use logisim_core::{Component, Interface, Kind, Point, Project};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 
@@ -116,9 +116,12 @@ fn interface_ports(interface: &Interface) -> Value {
     }).collect()
 }
 fn component(c: &Component) -> Result<Value> {
-    let mut data = json!({"id":c.id,"kind":c.kind.name(),"position":point(c.position),"facing":c.facing.name(),"bits":c.bits,
-        "label":c.label,"font":{"family":c.font.family,"size":c.font.size,"bold":c.font.bold,"italic":c.font.italic},
-        "color":[c.color[0],c.color[1],c.color[2],c.color_alpha]});
+    let mut data = json!({"id":c.id,"kind":c.kind.name(),"position":point(c.position),"facing":c.facing.name(),"bits":c.bits});
+    if !matches!(c.kind, Kind::Joystick | Kind::Keyboard | Kind::Tty) {
+        data["label"] = json!(c.label);
+        data["font"] = json!({"family":c.font.family,"size":c.font.size,"bold":c.font.bold,"italic":c.font.italic});
+        data["color"] = json!([c.color[0], c.color[1], c.color[2], c.color_alpha]);
+    }
     let ports: Vec<_> = c
         .ports()
         .into_iter()
@@ -131,7 +134,7 @@ fn component(c: &Component) -> Result<Value> {
         .collect();
     data["ports"] = ports.into();
     properties::describe(c, &mut data);
-    if c.kind == logisim_core::Kind::Rom {
+    if c.kind == Kind::Rom {
         data["contents"] = memory::snapshot(c)?;
     }
     if let Some(plugin) = &c.plugin {
@@ -150,31 +153,24 @@ mod tests {
     }
 
     #[test]
-    fn plugins_and_deferred_io_remain_read_only_in_project_patches() {
+    fn plugin_instances_remain_read_only_in_project_patches() {
+        let kind = Kind::Plugin;
         let catalog = catalog::catalog();
-        for kind in [
-            Kind::Plugin,
-            Kind::Slider,
-            Kind::Joystick,
-            Kind::Keyboard,
-            Kind::Tty,
-        ] {
-            let snapshot = component(&Component::new(kind, Point::ZERO));
-            assert_eq!(snapshot["patchable_properties"], json!([]), "{kind:?}");
-            assert_eq!(snapshot["property_types"], json!({}), "{kind:?}");
-            let entry = catalog["kinds"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .find(|k| k["name"] == kind.name())
-                .unwrap();
-            assert_eq!(entry["properties"], json!({}), "{kind:?}");
-            assert_eq!(snapshot["property_schema"], entry["properties"], "{kind:?}");
-            assert_eq!(
-                edit::require_supported(kind).unwrap_err().code,
-                "unsupported_component"
-            );
-        }
+        let snapshot = component(&Component::new(kind, Point::ZERO));
+        assert_eq!(snapshot["patchable_properties"], json!([]));
+        assert_eq!(snapshot["property_types"], json!({}));
+        let entry = catalog["kinds"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|k| k["name"] == kind.name())
+            .unwrap();
+        assert_eq!(entry["properties"], json!({}));
+        assert_eq!(snapshot["property_schema"], entry["properties"]);
+        assert_eq!(
+            edit::require_supported(kind).unwrap_err().code,
+            "unsupported_component"
+        );
     }
 
     #[test]

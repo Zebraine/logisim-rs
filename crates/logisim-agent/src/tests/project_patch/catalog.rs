@@ -41,10 +41,7 @@ fn catalog_names_are_unique_and_all_editable_kinds_can_be_placed_by_name_or_alia
             }
         }
     }
-    assert_eq!(
-        read_only,
-        BTreeSet::from(["Plugin component", "Slider", "Joystick", "Keyboard", "TTY"])
-    );
+    assert_eq!(read_only, BTreeSet::from(["Plugin component"]));
     assert!(
         names.contains("jk flip-flop")
             && names.contains("sr latch")
