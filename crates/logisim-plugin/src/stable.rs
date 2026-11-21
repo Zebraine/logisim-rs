@@ -11,16 +11,21 @@ impl Plugin {
     /// ABI 1 modules never receive the new messages. None is an explicit opt-out,
     /// while malformed declarations/traps are errors, never silent fallbacks.
     pub fn instantiate_stable(&self, component: &Component) -> Result<Option<StableInstance>> {
+        #[cfg(feature = "plugin-metrics")]
+        let _span = metrics::timer("instantiate_stable");
         self.check_component(component)?;
         if self.manifest.abi == LEGACY_ABI_VERSION {
             return Ok(None);
         }
-        let response =
-            self.instantiate(component)?
-                .call(&Request::StableContract(StableConfig {
-                    tool: component.tool.id.clone(),
-                    properties: component.properties.clone(),
-                }))?;
+        let mut query = self.instantiate(component)?;
+        let response = timed!(
+            "contract_query",
+            query.call(&Request::StableContract(StableConfig {
+                tool: component.tool.id.clone(),
+                properties: component.properties.clone(),
+            }))
+        )?;
+        drop(query);
         let Response::StableContract(contract) = response else {
             return Err("Plugin did not return a stable-state contract.".into());
         };
@@ -61,6 +66,8 @@ impl StableInstance {
     }
     pub fn reset(&mut self, inputs: &[Signal]) -> Result<Update> {
         let result = (|| {
+            #[cfg(feature = "plugin-metrics")]
+            metrics::count("stable_reset_vm");
             self.instance = self.plugin.instantiate(&self.component)?;
             self.instance.bind_frame(&self.component)?;
             let update = self.instance.evaluate(
@@ -80,8 +87,8 @@ impl StableInstance {
         self.finish(result)
     }
     pub fn outputs(&mut self, inputs: &[Signal], state: &[u8]) -> Result<StableOutputs> {
-        let result = (|| {
-            self.validate(inputs, state)?;
+        let mut run = || {
+            timed!("validate", self.validate(inputs, state))?;
             if self.instance.frame.is_some() {
                 let frame::Output::Outputs(update) =
                     self.instance
@@ -89,18 +96,39 @@ impl StableInstance {
                 else {
                     return Err("Plugin did not return stable-state outputs.".into());
                 };
-                self.component.tool.validate_stable_outputs(&update)?;
+                timed!(
+                    "validate",
+                    self.component.tool.validate_stable_outputs(&update)
+                )?;
                 return Ok(update);
             }
-            let request = self.request(inputs, state);
+            let request = timed!("request_copy", self.request(inputs, state));
             let Response::StableOutputs(update) =
                 self.instance.call(&Request::StableOutputs(request))?
             else {
                 return Err("Plugin did not return stable-state outputs.".into());
             };
-            self.component.tool.validate_stable_outputs(&update)?;
+            timed!(
+                "validate",
+                self.component.tool.validate_stable_outputs(&update)
+            )?;
             Ok(update)
-        })();
+        };
+        #[cfg(feature = "plugin-metrics")]
+        let result = metrics::operation(
+            metrics::Operation::Outputs,
+            inputs.len(),
+            state.len(),
+            || {
+                let result = run();
+                if let Ok(result) = &result {
+                    metrics::on_call(|c| c.output_signals += result.outputs.len());
+                }
+                result
+            },
+        );
+        #[cfg(not(feature = "plugin-metrics"))]
+        let result = run();
         self.finish(result)
     }
     pub fn sample(&mut self, inputs: &[Signal], state: &[u8]) -> Result<Vec<u8>> {
@@ -109,8 +137,8 @@ impl StableInstance {
     /// Sample without committing. ABI 2 results conservatively invalidate both phase
     /// caches; only ABI 3 receives the request for explicit transition promises.
     pub fn transition(&mut self, inputs: &[Signal], state: &[u8]) -> Result<StateTransition> {
-        let result = (|| {
-            self.validate(inputs, state)?;
+        let mut run = || {
+            timed!("validate", self.validate(inputs, state))?;
             if self.contract.state_inputs.is_none() {
                 return Ok(StateTransition {
                     state: vec![],
@@ -125,10 +153,10 @@ impl StableInstance {
                 else {
                     return Err("Plugin did not return a stable-state transition.".into());
                 };
-                self.contract.validate_state(&next.state)?;
+                timed!("validate", self.contract.validate_state(&next.state))?;
                 return Ok(next);
             }
-            let request = self.request(inputs, state);
+            let request = timed!("request_copy", self.request(inputs, state));
             let next = if self.plugin.manifest.abi == STABLE_ABI_VERSION {
                 let Response::StableState(next) =
                     self.instance.call(&Request::StableSample(request))?
@@ -144,9 +172,24 @@ impl StableInstance {
                 };
                 next
             };
-            self.contract.validate_state(&next.state)?;
+            timed!("validate", self.contract.validate_state(&next.state))?;
             Ok(next)
-        })();
+        };
+        #[cfg(feature = "plugin-metrics")]
+        let result = metrics::operation(
+            metrics::Operation::Transition,
+            inputs.len(),
+            state.len(),
+            || {
+                let result = run();
+                if let Ok(result) = &result {
+                    metrics::on_call(|c| c.returned_state_bytes += result.state.len());
+                }
+                result
+            },
+        );
+        #[cfg(not(feature = "plugin-metrics"))]
+        let result = run();
         self.finish(result)
     }
     fn validate(&self, inputs: &[Signal], state: &[u8]) -> Result<()> {

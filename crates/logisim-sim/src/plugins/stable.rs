@@ -5,6 +5,8 @@ use super::*;
 use crate::combinational::Port;
 use crate::stable::Failure;
 use logisim_plugin::StableInstance;
+#[cfg(feature = "plugin-metrics")]
+use logisim_plugin::metrics;
 use std::collections::{BTreeMap, BTreeSet};
 
 pub(crate) struct Plan {
@@ -112,6 +114,8 @@ impl Simulator {
     /// Resolve pure outputs against committed explicit state. Drives remain pending
     /// so later plugins in this pass cannot observe earlier plugins' new outputs.
     pub(crate) fn stable_plugin_outputs(&mut self) -> Result<usize, Failure> {
+        #[cfg(feature = "plugin-metrics")]
+        let _span = metrics::timer("output_schedule");
         let plan = self.stable_plan.as_mut().unwrap().as_mut().unwrap();
         let mut evaluated = 0;
         let mut drives = vec![];
@@ -126,6 +130,8 @@ impl Simulator {
                 entry,
                 &self.values,
             ) {
+                #[cfg(feature = "plugin-metrics")]
+                metrics::count("output_cache_hit");
                 continue;
             }
             let inputs: Vec<_> = entry.values(&self.values).map(Into::into).collect();
@@ -167,6 +173,8 @@ impl Simulator {
     /// Stage all plugin state transitions without changing any explicit state or drive.
     /// The project coordinator calls this on every instance before built-in sampling.
     pub(crate) fn stage_stable_plugins(&mut self) -> Result<usize, Failure> {
+        #[cfg(feature = "plugin-metrics")]
+        let _span = metrics::timer("transition_schedule");
         let plan = self.stable_plan.as_mut().unwrap().as_mut().unwrap();
         let mut sampled = 0;
         let mut fault = None;
@@ -174,9 +182,13 @@ impl Simulator {
             let id = self.circuit.components[entry.component].id;
             let phase = plan.plugins.get_mut(&id).unwrap();
             let Some(ports) = &phase.sample_ports else {
+                #[cfg(feature = "plugin-metrics")]
+                metrics::count("stateless_skip");
                 continue;
             };
             if unchanged(&phase.sample_inputs, ports, entry, &self.values) {
+                #[cfg(feature = "plugin-metrics")]
+                metrics::count("transition_cache_hit");
                 continue;
             }
             let state = self.plugin_states.get_mut(&id).unwrap();
@@ -218,10 +230,14 @@ impl Simulator {
         }
     }
     pub(crate) fn commit_stable_plugins(&mut self) -> bool {
+        #[cfg(feature = "plugin-metrics")]
+        let _span = metrics::timer("commit_schedule");
         let plan = self.stable_plan.as_mut().unwrap().as_mut().unwrap();
         let mut changed = false;
         for (&id, phase) in &mut plan.plugins {
             if let Some(next) = phase.next_state.take() {
+                #[cfg(feature = "plugin-metrics")]
+                metrics::count("state_commits");
                 let state = self.plugin_states.get_mut(&id).unwrap();
                 state.state = next.state;
                 state.event_dirty = true;

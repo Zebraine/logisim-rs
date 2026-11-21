@@ -74,9 +74,17 @@ pub struct Trial {
 }
 
 pub fn trial(f: &Fixture, sim: &mut ProjectSimulator) -> Result<Trial> {
+    reset(f, sim)?;
+    trace(f, sim)
+}
+
+pub fn reset(f: &Fixture, sim: &mut ProjectSimulator) -> Result<()> {
     sim.reset();
     sim.settle_compiled()?;
-    f.stimulus.reset_inputs(sim)?;
+    f.stimulus.reset_inputs(sim)
+}
+
+pub fn trace(f: &Fixture, sim: &mut ProjectSimulator) -> Result<Trial> {
     let steps_at_start = sim.steps();
     let count = f.stimulus.iterations();
     let mut iterations = Vec::with_capacity(count);

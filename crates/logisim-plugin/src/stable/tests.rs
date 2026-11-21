@@ -481,3 +481,36 @@ fn linear_memory_faults_are_sticky_and_bad_ranges_flags_and_responses_fail() {
     let p = frame_module(&exports);
     assert!(p.instantiate_stable(&p.manifest().components()[0]).is_err());
 }
+
+#[test]
+#[cfg(feature = "plugin-metrics")]
+fn json_transport_accounts_for_messages_and_preserves_reset_faults() {
+    let p = load(
+        Response::StableContract(Some(contract())),
+        Response::StableOutputs(outputs()),
+        Response::StableState(vec![42]),
+        "",
+    );
+    let mut vm = p
+        .instantiate_stable(&p.manifest().components()[0])
+        .unwrap()
+        .unwrap();
+    assert!(metrics::replace(Some(metrics::Recording::default())).is_none());
+    vm.reset(&[signal()]).unwrap();
+    assert_eq!(vm.outputs(&[signal()], &[]).unwrap(), outputs());
+    assert_eq!(vm.sample(&[signal()], &[]).unwrap(), vec![42]);
+    let r = metrics::replace(None).unwrap();
+    assert_eq!(r.spans["stable_reset_vm"].count, 1);
+    for call in [&r.outputs, &r.transition] {
+        assert_eq!(
+            (call.json_calls, call.frame_calls, call.input_signals),
+            (1, 0, 1)
+        );
+        assert!(call.request_bytes > 0 && call.response_bytes > 0);
+        assert_eq!(call.spans["guest_dispatch"].count, 1);
+    }
+    assert_eq!(
+        (r.outputs.output_signals, r.transition.returned_state_bytes),
+        (1, 1)
+    );
+}

@@ -109,3 +109,49 @@ fn cpu_event_reference_matches_settled_pin_trace() -> Result<()> {
     assert_eq!(digest, f.stimulus.expected_digest());
     Ok(())
 }
+
+#[test]
+#[cfg(feature = "plugin-metrics")]
+fn stable_call_intervals_partition_real_frame_settles() -> Result<()> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let fixture = Fixture::load("plugin", &root)?;
+    let mut sim = ProjectSimulator::default();
+    sim.set_plugins(fixture.plugins.clone());
+    sim.synchronize(&fixture.project, fixture.project.main);
+    let mut intervals = phases::Intervals::default();
+    intervals.setup(|| measure::reset(&fixture, &mut sim))?;
+    let sample = intervals.hot(|| measure::trace(&fixture, &mut sim))?;
+    let work = &sample.trace.work;
+    let hot = phases::hot(
+        &mut intervals.hot,
+        sample.settles.iter().sum::<Duration>().as_nanos() as u64,
+        work.plugin_outputs,
+        work.plugin_samples,
+    )?;
+    assert_eq!(hot["outputs"]["calls"], 256);
+    assert_eq!(hot["transition"]["calls"], 1024);
+    for name in ["outputs", "transition"] {
+        let c = &hot[name];
+        assert_eq!(c["frame_calls"], c["calls"]);
+        assert_eq!(c["json_calls"], 0);
+        assert_eq!(
+            c["input_signals"].as_u64().unwrap(),
+            c["calls"].as_u64().unwrap() * 8
+        );
+        assert!(c["first_ns"].is_number() && c["latency_ms"]["p95"].is_number());
+        assert!(
+            c["request_bytes"].as_u64().unwrap() > 0 && c["response_bytes"].as_u64().unwrap() > 0
+        );
+        assert_eq!(c["spans"]["guest_dispatch"]["count"], c["calls"]);
+    }
+    assert_eq!(hot["transition"]["output_signals"], 0);
+    assert_eq!(
+        hot["outputs"]["output_signals"],
+        hot["outputs"]["input_signals"]
+    );
+    assert!(hot["spans"]["state_commits"]["count"].as_u64().unwrap() > 0);
+    assert!(hot["spans"]["output_cache_hit"]["count"].as_u64().unwrap() > 0);
+    assert!(intervals.setup.spans["vm_new"].count > 0);
+    assert_eq!(sample.trace.digest, fixture.stimulus.expected_digest());
+    Ok(())
+}

@@ -76,12 +76,13 @@ impl Instance {
             .frame
             .as_ref()
             .ok_or("Plugin has no linear-memory interface.")?;
-        let length = frame::request_len(signals, state)?;
+        let length = timed!("encode", frame::request_len(signals, state))?;
         self.store.set_fuel(FUEL).map_err(error)?;
-        let offset = self
-            .buffer
-            .call(&mut self.store, length as u32)
-            .map_err(error)? as usize;
+        let offset = timed!(
+            "guest_buffer",
+            self.buffer.call(&mut self.store, length as u32)
+        )
+        .map_err(error)? as usize;
         let end = offset
             .checked_add(length)
             .ok_or("Invalid plugin input range.")?;
@@ -90,11 +91,23 @@ impl Instance {
             .data_mut(&mut self.store)
             .get_mut(offset..end)
             .ok_or("Invalid plugin input range.")?;
-        frame::write_request(input, operation, signals, state)?;
-        let packed = api
-            .call
-            .call(&mut self.store, length as u32)
-            .map_err(error)?;
+        timed!(
+            "encode",
+            frame::write_request(input, operation, signals, state)
+        )?;
+        let packed = timed!(
+            "guest_dispatch",
+            api.call.call(&mut self.store, length as u32)
+        )
+        .map_err(error)?;
+        #[cfg(feature = "plugin-metrics")]
+        metrics::on_call(|c| {
+            c.frame_calls += 1;
+            c.request_bytes += length;
+            c.response_bytes += (packed >> 32) as usize;
+        });
+        #[cfg(feature = "plugin-metrics")]
+        let _decode = metrics::timer("decode");
         let length = (packed >> 32) as usize;
         if length > MAX_MESSAGE {
             return Err("Plugin response exceeds message limit.".into());

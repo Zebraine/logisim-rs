@@ -1,5 +1,7 @@
 //! Run from the workspace root. See CONTRIBUTING.md for sampling and counter units.
 mod measure;
+#[cfg(feature = "plugin-metrics")]
+mod phases;
 #[cfg(test)]
 mod tests;
 mod workload;
@@ -32,20 +34,38 @@ fn options(mut args: impl Iterator<Item = String>) -> Result<(String, usize)> {
 }
 
 fn benchmark(name: &str, runs: usize) -> Result<Value> {
-    let start = Instant::now();
-    let fixture = Fixture::load(name, std::path::Path::new("."))?;
-    let mut sim = ProjectSimulator::default();
-    sim.set_plugins(fixture.plugins.clone());
-    let syncing = Instant::now();
-    sim.synchronize(&fixture.project, fixture.project.main);
-    let sync_ms = ms(syncing.elapsed());
-    let compiling = Instant::now();
-    let plan = sim.prepare_compiled()?;
-    let compile_ms = ms(compiling.elapsed());
-    let initial = Instant::now();
-    sim.settle_compiled()?;
-    let first_settle_ms = ms(initial.elapsed());
-    let cold_ms = ms(start.elapsed());
+    let initialize = || -> Result<_> {
+        let start = Instant::now();
+        let fixture = Fixture::load(name, std::path::Path::new("."))?;
+        let mut sim = ProjectSimulator::default();
+        sim.set_plugins(fixture.plugins.clone());
+        let syncing = Instant::now();
+        sim.synchronize(&fixture.project, fixture.project.main);
+        let sync_ms = ms(syncing.elapsed());
+        let compiling = Instant::now();
+        let plan = sim.prepare_compiled()?;
+        let compile_ms = ms(compiling.elapsed());
+        let initial = Instant::now();
+        sim.settle_compiled()?;
+        let first_settle_ms = ms(initial.elapsed());
+        let cold_ms = ms(start.elapsed());
+        Ok((
+            fixture,
+            sim,
+            sync_ms,
+            compile_ms,
+            plan,
+            first_settle_ms,
+            cold_ms,
+        ))
+    };
+    #[cfg(feature = "plugin-metrics")]
+    let mut cold = logisim_plugin::metrics::Recording::default();
+    #[cfg(feature = "plugin-metrics")]
+    let initial = phases::capture(&mut cold, initialize);
+    #[cfg(not(feature = "plugin-metrics"))]
+    let initial = initialize();
+    let (fixture, mut sim, sync_ms, compile_ms, plan, first_settle_ms, cold_ms) = initial?;
     // Isolate a single stable VM instantiation on the already loaded module.
     // Synchronization and plan preparation above include their real runtime instance costs.
     let instance_ms = fixture
@@ -76,7 +96,17 @@ fn benchmark(name: &str, runs: usize) -> Result<Value> {
     let mut settles = Vec::new();
     let mut iterations = Vec::new();
     let mut per_run_rates = Vec::with_capacity(runs);
+    #[cfg(feature = "plugin-metrics")]
+    let mut periods = phases::Intervals::default();
     for i in 1..WARMUP + runs {
+        #[cfg(feature = "plugin-metrics")]
+        let sample = if i >= WARMUP {
+            periods.setup(|| measure::reset(&fixture, &mut sim))?;
+            periods.hot(|| measure::trace(&fixture, &mut sim))?
+        } else {
+            trial(&fixture, &mut sim)?
+        };
+        #[cfg(not(feature = "plugin-metrics"))]
         let sample = trial(&fixture, &mut sim)?;
         if sample.trace != reference {
             return Err(format!(
@@ -116,7 +146,17 @@ fn benchmark(name: &str, runs: usize) -> Result<Value> {
     }
     let elapsed: Duration = iterations.iter().sum();
     let rate = iterations.len() as f64 / elapsed.as_secs_f64();
+    #[cfg(feature = "plugin-metrics")]
+    let plugin_phases = json!({
+        "schema": 1, "enabled": true, "cold": phases::report(&mut cold),
+        "reset": phases::report(&mut periods.setup),
+        "hot": phases::hot(&mut periods.hot, settles.iter().sum::<Duration>().as_nanos() as u64,
+                           reference.work.plugin_outputs * runs, reference.work.plugin_samples * runs)?
+    });
+    #[cfg(not(feature = "plugin-metrics"))]
+    let plugin_phases = json!({"schema": 1, "enabled": false});
     Ok(json!({
+        "plugin_phases": plugin_phases,
         "schema": 1,
         "workload": name,
         "engine": "stable",

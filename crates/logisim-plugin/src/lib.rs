@@ -1,4 +1,14 @@
 //! Sandboxed module loading. No filesystem access or implicit plugin discovery.
+#[cfg(feature = "plugin-metrics")]
+pub mod metrics;
+// With metrics disabled the expansion contains only the original expression.
+macro_rules! timed {
+    ($name:literal, $value:expr) => {{
+        #[cfg(feature = "plugin-metrics")]
+        let _span = crate::metrics::timer($name);
+        $value
+    }};
+}
 mod frame;
 mod interaction;
 mod metadata;
@@ -39,7 +49,7 @@ impl Plugin {
         let mut config = Config::default();
         config.consume_fuel(true);
         let engine = Engine::new(&config);
-        let module = Module::new(&engine, bytes).map_err(error)?;
+        let module = timed!("module_compile", Module::new(&engine, bytes)).map_err(error)?;
         if module.imports().next().is_some() {
             return Err("Plugin imports are not supported (including WASI).".into());
         }
@@ -74,6 +84,8 @@ impl Plugin {
         version: &str,
         components: impl IntoIterator<Item = &'a Component>,
     ) -> Result<Self> {
+        #[cfg(feature = "plugin-metrics")]
+        let _span = metrics::timer("load_dependency");
         let plugin = Self::load(bytes)?;
         if plugin.manifest.id != id || plugin.manifest.version != version {
             return Err("Plugin identity or version does not match the circuit.".into());
@@ -94,6 +106,8 @@ impl Plugin {
         &self.manifest
     }
     pub fn instantiate(&self, component: &Component) -> Result<Instance> {
+        #[cfg(feature = "plugin-metrics")]
+        let _span = metrics::timer("instantiate");
         self.check_component(component)?;
         let mut instance = Instance::new(&self.module)?;
         instance.bind_raster(component)?;
@@ -124,6 +138,8 @@ pub struct Instance {
 }
 impl Instance {
     fn new(module: &Module) -> Result<Self> {
+        #[cfg(feature = "plugin-metrics")]
+        let _span = metrics::timer("vm_new");
         let limits = StoreLimitsBuilder::new()
             .memory_size(16 * 1024 * 1024)
             .memories(1)
@@ -178,26 +194,38 @@ impl Instance {
         })
     }
     fn call(&mut self, request: &Request) -> Result<Response> {
-        let bytes = serde_json::to_vec(request).map_err(error)?;
+        let bytes = timed!("encode", serde_json::to_vec(request)).map_err(error)?;
         if bytes.len() > MAX_MESSAGE {
             return Err("Plugin request exceeds message limit.".into());
         }
         self.store.set_fuel(FUEL).map_err(error)?;
-        let offset = self
-            .buffer
-            .call(&mut self.store, bytes.len() as u32)
-            .map_err(error)?;
-        self.memory
-            .write(&mut self.store, offset as usize, &bytes)
-            .map_err(error)?;
-        let packed = self
-            .call
-            .call(&mut self.store, bytes.len() as u32)
-            .map_err(error)?;
+        let offset = timed!(
+            "guest_buffer",
+            self.buffer.call(&mut self.store, bytes.len() as u32)
+        )
+        .map_err(error)?;
+        timed!(
+            "encode",
+            self.memory.write(&mut self.store, offset as usize, &bytes)
+        )
+        .map_err(error)?;
+        let packed = timed!(
+            "guest_dispatch",
+            self.call.call(&mut self.store, bytes.len() as u32)
+        )
+        .map_err(error)?;
         let length = (packed >> 32) as usize;
         if length > MAX_MESSAGE {
             return Err("Plugin response exceeds message limit.".into());
         }
+        #[cfg(feature = "plugin-metrics")]
+        metrics::on_call(|c| {
+            c.json_calls += 1;
+            c.request_bytes += bytes.len();
+            c.response_bytes += length;
+        });
+        #[cfg(feature = "plugin-metrics")]
+        let _decode = metrics::timer("decode");
         let mut output = vec![0; length];
         self.memory
             .read(&self.store, packed as u32 as usize, &mut output)

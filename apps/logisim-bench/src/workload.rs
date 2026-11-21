@@ -86,7 +86,16 @@ impl Fixture {
                 } else {
                     "examples/course/single-cycle.circ"
                 });
-                let import = logisim_file::parse(&fs::read_to_string(&path)?)?;
+                #[cfg(feature = "plugin-metrics")]
+                let read = logisim_plugin::metrics::timer("project_read");
+                let xml = fs::read_to_string(&path)?;
+                #[cfg(feature = "plugin-metrics")]
+                drop(read);
+                #[cfg(feature = "plugin-metrics")]
+                let parse = logisim_plugin::metrics::timer("project_parse");
+                let import = logisim_file::parse(&xml)?;
+                #[cfg(feature = "plugin-metrics")]
+                drop(parse);
                 if import.partial || !import.warnings.is_empty() {
                     return Err(format!(
                         "Incomplete fixture {}: {:?}",
@@ -104,7 +113,11 @@ impl Fixture {
                         .flat_map(|d| &d.circuit.components)
                         .filter_map(|c| c.plugin.as_ref())
                         .filter(|p| p.plugin == source.plugin && p.version == source.version);
+                    #[cfg(feature = "plugin-metrics")]
+                    let read = logisim_plugin::metrics::timer("module_read");
                     let bytes = fs::read(path.parent().unwrap().join(&source.path))?;
+                    #[cfg(feature = "plugin-metrics")]
+                    drop(read);
                     plugins.insert(Plugin::load_dependency(
                         &bytes,
                         &source.plugin,

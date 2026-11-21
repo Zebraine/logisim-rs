@@ -7,6 +7,9 @@ rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[features]
+plugin-metrics = ["logisim-plugin/plugin-metrics"]
+
 [dependencies]
 logisim-core.workspace = true
 logisim-plugin.workspace = true
