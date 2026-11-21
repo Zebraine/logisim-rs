@@ -176,7 +176,11 @@ fn missing_and_untitled_sources_recover_without_a_destination_or_history_entry()
         files.startup(None, &mut w, &mut sim);
         let prompt = files.dialog.take().unwrap();
         files.respond(prompt, Response::Recover, &ctx, &mut w, &mut sim);
-        assert!(files.present(&w).dirty && files.present(&w).untitled);
+        assert!(
+            files.present(&w).dirty && files.present(&w).untitled,
+            "source previously named: {named}, recovery: {:?}",
+            files.autosave.view()
+        );
         assert!(w.recent().is_empty());
         assert_eq!(w.project(), &dirty_project());
         files.request(FileAction::Save, &ctx, &mut w, &mut sim);

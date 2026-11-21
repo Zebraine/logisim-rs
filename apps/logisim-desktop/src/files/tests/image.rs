@@ -54,30 +54,6 @@ fn dropped_renderer_callback_reports_error_without_replacing_existing_file() {
     assert!(!h.files.present(&h.ws).dirty);
 }
 
-fn click_in(h: &mut Harness, size: egui::Vec2, label: &str) {
-    let labels = h.frame_at(vec![], size);
-    let pos = labels
-        .iter()
-        .rev()
-        .find(|(s, _)| s == label)
-        .unwrap_or_else(|| panic!("missing {label}"))
-        .1;
-    for pressed in [true, false] {
-        h.frame_at(
-            vec![
-                Event::PointerMoved(pos),
-                Event::PointerButton {
-                    pos,
-                    pressed,
-                    button: PointerButton::Primary,
-                    modifiers: Modifiers::NONE,
-                },
-            ],
-            size,
-        );
-    }
-}
-
 #[test]
 fn png_picker_filters_extends_and_rejects_names_and_localizes_the_controls() {
     use logisim_ui::{Language, ThemeMode, i18n::with_language};

@@ -310,3 +310,55 @@ fn save_as_can_confirm_an_externally_modified_or_deleted_current_path() {
         .unwrap();
     assert!(!storage.dirty(&c));
 }
+
+#[test]
+fn selected_codec_mismatch_partial_conversion_and_loss_leave_the_target_untouched() {
+    use logisim_file::ProjectFormat::{Circ, Lrs};
+    let dir = Temp::new();
+    let native = dir.path("protected.lrs");
+    let legacy = dir.path("compatible.circ");
+    let mut disk = Storage::new();
+    let mut p = circuit();
+    fs::write(&legacy, b"previous target").unwrap();
+    assert!(
+        disk.save(
+            &p,
+            &legacy,
+            SaveMode::Selected(Lrs, Some(b"previous target")),
+            true
+        )
+        .is_err()
+    );
+    let mut joystick = Component::new(Kind::Joystick, Point::ZERO);
+    joystick.font.size = 24;
+    p.main_circuit_mut().circuit.add_component(joystick);
+    let err = disk
+        .save(
+            &p,
+            &legacy,
+            SaveMode::Selected(Circ, Some(b"previous target")),
+            true,
+        )
+        .unwrap_err();
+    assert!(err.contains("component c-"), "{err}");
+    assert!(disk.path.is_none());
+    assert_eq!(fs::read(&legacy).unwrap(), b"previous target");
+    assert!(
+        !dir.path("compatible.circ.bak").exists() && !dir.path("compatible.circ.lock").exists()
+    );
+
+    let xml = logisim_file::serialize(&circuit())
+        .unwrap()
+        .replace("</circuit>", "<unknown/></circuit>");
+    fs::write(&legacy, &xml).unwrap();
+    let (subset, warnings) = disk.load(&legacy).unwrap();
+    assert!(!warnings.is_empty());
+    assert!(
+        disk.save(&subset, &native, SaveMode::Selected(Lrs, None), false)
+            .unwrap_err()
+            .contains(&warnings[0])
+    );
+    assert_eq!(disk.protected.as_ref(), Some(&legacy));
+    assert_eq!(fs::read(&legacy).unwrap(), xml.as_bytes());
+    assert!(!native.exists());
+}

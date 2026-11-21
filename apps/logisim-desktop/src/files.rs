@@ -143,7 +143,7 @@ impl Files {
             self.dialog = Some(Dialog::Message {
                 title: "Imported supported content only".into(),
                 body: tf!(
-                    "The original file is protected. Use Save As to write the supported project subset to a different file.\n\n{}",
+                    "The original file is protected. To keep the imported subset, use Save As and choose Legacy Logisim (*.circ) for a separate file.\n\n{}",
                     warnings.join("\n")
                 ),
             });

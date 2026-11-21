@@ -112,6 +112,30 @@ impl Harness {
     }
 }
 
+fn click_in(h: &mut Harness, size: egui::Vec2, label: &str) {
+    let labels = h.frame_at(vec![], size);
+    let pos = labels
+        .iter()
+        .rev()
+        .find(|(s, _)| s == label)
+        .unwrap_or_else(|| panic!("missing {label}"))
+        .1;
+    for pressed in [true, false] {
+        h.frame_at(
+            vec![
+                Event::PointerMoved(pos),
+                Event::PointerButton {
+                    pos,
+                    pressed,
+                    button: PointerButton::Primary,
+                    modifiers: Modifiers::NONE,
+                },
+            ],
+            size,
+        );
+    }
+}
+
 #[test]
 fn file_picker_scrolls_independently_of_its_path_and_footer() {
     use logisim_ui::{Density, Language, Settings, i18n::with_language};
@@ -167,6 +191,74 @@ fn file_picker_scrolls_independently_of_its_path_and_footer() {
                 assert!(at(&labels, "circuit-39.circ").y < cancel.y);
                 assert_eq!(at(&labels, footer), cancel);
             }
+        }
+    }
+}
+
+#[test]
+fn save_picker_filters_by_selected_type_and_rejects_a_conflicting_extension() {
+    use logisim_ui::{Language, Settings, i18n::with_language};
+    let dir = crate::tests::support::Temp::new();
+    std::fs::write(dir.path("shown.LRS"), []).unwrap();
+    std::fs::write(dir.path("other.circ"), b"original").unwrap();
+    for language in Language::ALL {
+        for size in [egui::vec2(720., 480.), egui::vec2(1200., 820.)] {
+            let mut h = Harness::default();
+            h.files.directory.clone_from(&dir.0);
+            h.ws.apply_settings(Settings {
+                language,
+                ..Default::default()
+            });
+            h.files
+                .request(FileAction::SaveAs, &h.ctx, &mut h.ws, &mut h.sim);
+            let t = |key| with_language(language, || tr(key));
+            for _ in 0..3 {
+                h.frame_at(vec![], size);
+            }
+            let labels = h.frame_at(vec![], size);
+            for key in [
+                t("Logisim-rs Project (*.lrs)"),
+                "Untitled.lrs",
+                "shown.LRS",
+                t("Save"),
+                t("Cancel"),
+            ] {
+                assert!(
+                    labels
+                        .iter()
+                        .any(|(s, pos)| s == key
+                            && Rect::from_min_size(Pos2::ZERO, size).contains(*pos)),
+                    "{key}: {labels:?}"
+                );
+            }
+            assert!(!labels.iter().any(|(s, _)| s == "other.circ"));
+            h.frame_at(
+                vec![
+                    Event::Key {
+                        key: egui::Key::A,
+                        physical_key: None,
+                        pressed: true,
+                        repeat: false,
+                        modifiers: Modifiers::COMMAND,
+                    },
+                    Event::Text("other.circ".into()),
+                ],
+                size,
+            );
+            click_in(&mut h, size, t("Save"));
+            assert!(
+                h.frame_at(vec![], size)
+                    .iter()
+                    .any(|(s, _)| s == t("Choose a project file with the indicated extension."))
+            );
+            click_in(&mut h, size, t("Logisim-rs Project (*.lrs)"));
+            click_in(&mut h, size, t("Legacy Logisim (*.circ)"));
+            let labels = h.frame_at(vec![], size);
+            assert!(labels.iter().any(|(s,_)| s == t("For older tools. Saving stops and lists any data the legacy format cannot preserve.")));
+            assert!(!labels.iter().any(|(s, _)| s == "shown.LRS"));
+            click_in(&mut h, size, t("Cancel"));
+            assert!(h.files.storage.path.is_none() && h.ws.recent().is_empty());
+            assert_eq!(std::fs::read(dir.path("other.circ")).unwrap(), b"original");
         }
     }
 }

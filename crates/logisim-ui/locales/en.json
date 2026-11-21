@@ -909,7 +909,7 @@
     "The memory dimensions are not supported.": "The memory dimensions are not supported.",
     "The memory image is not valid UTF-8 text.": "The memory image is not valid UTF-8 text.",
     "The memory target changed. Open its contents editor and try again.": "The memory target changed. Open its contents editor and try again.",
-    "The original file is protected. Use Save As to write the supported project subset to a different file.\n\n{}": "The original file is protected. Use Save As to write the supported project subset to a different file.\n\n{}",
+    "The original file is protected. To keep the imported subset, use Save As and choose Legacy Logisim (*.circ) for a separate file.\n\n{}": "The original file is protected. To keep the imported subset, use Save As and choose Legacy Logisim (*.circ) for a separate file.\n\n{}",
     "The plugin target changed. Select it and try again.": "The plugin target changed. Select it and try again.",
     "The recovery circuit contains unsupported content.": "The recovery circuit contains unsupported content.",
     "The recovery file is invalid or too large.": "The recovery file is invalid or too large.",

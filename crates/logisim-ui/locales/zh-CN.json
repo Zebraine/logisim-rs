@@ -909,7 +909,7 @@
     "The memory dimensions are not supported.": "不支持此存储器的地址或数据位宽。",
     "The memory image is not valid UTF-8 text.": "存储器映像不是有效的 UTF-8 文本。",
     "The memory target changed. Open its contents editor and try again.": "目标存储器已改变，请重新打开其内容编辑器后重试。",
-    "The original file is protected. Use Save As to write the supported project subset to a different file.\n\n{}": "原文件已受保护。请使用“另存为”将已支持的项目内容保存到其他文件。\n\n{}",
+    "The original file is protected. To keep the imported subset, use Save As and choose Legacy Logisim (*.circ) for a separate file.\n\n{}": "原文件已受保护。要保留已导入的部分，请在“另存为”中选择“旧版 Logisim (*.circ)”并保存到其他文件。\n\n{}",
     "The plugin target changed. Select it and try again.": "插件目标已更改，请重新选择后再试。",
     "The recovery circuit contains unsupported content.": "恢复电路包含不支持的内容。",
     "The recovery file is invalid or too large.": "恢复文件无效或过大。",

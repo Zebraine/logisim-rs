@@ -97,7 +97,7 @@ logisim-rs 使用带版本号的 Wasm 插件 ABI 提供外部元件。插件可�
 
 Logisim-ITA 兼容范围已冻结，新功能以 logisim-rs 自身规格为准。`.circ` 作为旧工程迁移格式，已支持的子集继续读写。导入时报告未知或未支持的内容，并保护源文件。导入的库仍为可编辑快照，Wasm 元件需要对应的模块。外部编辑器重存工程时可能丢弃 `agent-id` 等扩展属性。
 
-“打开”支持 legacy `.circ` 和原生 `.lrs` v1（UTF-8 JSON）。“保存”按当前文件的格式写回。新工程与“另存为”仍默认使用 `.circ`。
+新工程首次保存和“另存为”默认使用原生 `.lrs` v1（UTF-8 JSON）。打开旧 `.circ` 后，“保存”仍写回原 XML 文件。用“另存为”可切换当前文件。要另存为 XML，请选择“旧版 Logisim (*.circ)”并确认，文件扩展名须与所选类型一致。崩溃恢复沿用原文档格式。
 
 在“文件”菜单选择“转换为 .lrs…”或“导出 .circ…”可写出单独副本，并继续编辑原工程。只有完整导入的工程可以转换。导出 `.circ` 前会回读并核对文档，报告旧格式无法保留的属性。如需编辑副本，请打开新文件。原生文档为电路、元件和导线保存持久 ID，子电路实例与外观端口通过持久 ID 引用对象。导线端点保留画布坐标，Wasm 模块仍是外部依赖。
 
@@ -202,7 +202,7 @@ MCP 按到达顺序执行同一工程会话的请求。独立会话可并行执�
 {"tool":"project_save","arguments":{"session":"ID_FROM_OPEN","expected_sha256":"SHA_FROM_OPEN_OR_LAST_SAVE","backup":true}}
 ```
 
-在当前会话调用 `project_convert`，传入 `session` 和 `output`，即可写出独立的 `.lrs` 或 `.circ` 副本。CLI 行协议的等效命令为 `project convert --session ID --output board.lrs`。目标存在时须提供目标原始字节的 `expected_output_sha256`（CLI 参数为 `--expected-output-sha256`），默认保留一代备份。成功响应返回副本的 `path`、`format` 和 `sha256`。后续 `project_save` 仍写回原会话绑定的文件和格式。
+在当前会话调用 `project_convert`，传入 `session` 和 `output`，即可写出独立的 `.lrs` 或 `.circ` 副本。CLI 行协议的等效命令为 `project convert --session ID --output board.lrs`。目标存在时须提供目标原始字节的 `expected_output_sha256`（CLI 参数为 `--expected-output-sha256`），默认保留一代备份。成功响应返回副本的 `path`、`format` 和 `sha256`。在 CLI 和 MCP 中，`project_save` 始终写回会话打开的路径与格式。打开的是 `.circ`，保存的仍是 XML。
 
 请使用快照中的真实 ID。核对预演结果后，将同一补丁的 `dry_run` 改为 `false`，应用后再保存。`project_patch` 的输入 schema 列出电路、导线和元件操作，包括用于 Wasm 实例的 `add_plugin` 和 `update_plugin`。端口坐标使用画布坐标，颜色使用 RGBA，Splitter 映射使用从零开始的分支索引，断开位用 null。多个电路内有相同的元件或导线数字 ID 时须传 `circuit`。导线遵循编辑器的重布线和合并、分段规则。
 
