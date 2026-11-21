@@ -1,5 +1,13 @@
 # Wasm 引擎契约与启动成本
 
+## Stage 12 决策
+
+ABI 4 是受支持的显式插件契约。SDK 的普通出口继续生成 ABI 3，只有声明引擎集合的模块使用 ABI 4。计量单位属于所选引擎，宿主为每次请求补充 10M fuel，保留既有批次提交、暂停、Reset 和资源上限。
+
+六个随附模块使用 ABI 4 / both，并保留插件身份、组件版本、工具定义和主模块相对路径。工程绑定的是路径、插件身份、版本和工具定义；实际加载的 Wasm 决定 ABI。包中另存六份原版 ABI 3 模块，供固定旧计量或旧宿主使用。选择 Wasmtime 时，加载旧模块的桌面会显示实际使用 wasmi 及原因。ABI 4 引擎不匹配时拒绝加载。
+
+Linux x86-64 发布配方显式编入 Wasmtime 和私有缓存，运行时选择仍须确认并重启。普通 Cargo 构建、Windows/macOS 发布配方及独立 Agent 使用 wasmi；Agent 的状态报告实际引擎。接受显式选择时约半秒的首次编译成本。缓存仅用于符合信任检查的 Linux 应用私有目录；不可写或失效时从源 Wasm 编译。Windows/macOS 的 Wasmtime 与缓存产品化另行验收。
+
 ## 实验 B 的 ABI 4 契约
 
 SDK 的 `export_plugin!(execution = Both, …)` 生成版本化入口和 Describe 响应。也可选 `Wasmi` 或 `Wasmtime`。wire manifest 使用 `"abi":4,"execution":{"fuel":"engine-specific","engines":"both"}`，引擎集合允许 `wasmi`、`wasmtime`、`both` 三个值。预算由宿主决定。未知字段、枚举、缺少声明和静态入口冲突均拒绝。已有 ABI 1–3 的 Wasm 和 manifest 保持原样；用新版 Rust API 构造旧 manifest 时填写 `execution: None`，序列化时省略此字段。
