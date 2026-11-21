@@ -94,11 +94,14 @@ impl ProjectSimulator {
         self.progress.restart();
         self.limited = false;
     }
-    pub fn plugin_action(&mut self, path: &[Id], id: Id, action: String, argument: String) {
+    pub fn plugin_action(&mut self, path: &[Id], id: Id, action: String, argument: String) -> bool {
         if let Some(instance) = self.states.get_mut(path) {
-            instance.sim.plugin_action(id, action, argument);
+            let changed = instance.sim.plugin_action(id, action, argument);
             self.progress.restart();
             self.limited = false;
+            changed
+        } else {
+            false
         }
     }
     pub fn synchronize(&mut self, project: &Project, root: Id) -> bool {

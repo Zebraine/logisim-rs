@@ -110,6 +110,14 @@ pub enum Request {
     SimulationState {
         session: String,
     },
+    SimulationPluginAction {
+        session: String,
+        id: Option<logisim_core::Id>,
+        agent_id: Option<String>,
+        action: String,
+        #[serde(default)]
+        argument: String,
+    },
     SimulationSetInput {
         session: String,
         id: logisim_core::Id,
@@ -309,6 +317,24 @@ impl Service {
                 state["opened"] = true.into();
                 state["created"] = created.into();
                 Ok(state)
+            }
+            Request::SimulationPluginAction {
+                session,
+                id,
+                agent_id,
+                action,
+                argument,
+            } => {
+                let target = project::reference::Reference::from_ids(id, agent_id)
+                    .map_err(Error::invalid)?;
+                self.control(
+                    &session,
+                    Action::Plugin {
+                        target,
+                        action,
+                        argument,
+                    },
+                )
             }
             Request::SimulationSetInput {
                 session,

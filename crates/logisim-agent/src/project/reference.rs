@@ -1,4 +1,4 @@
-//! Patch targets use either a circuit-local number or a project-wide typed document ID.
+//! Object references use either a circuit-local number or a project-wide typed document ID.
 use crate::{Error, Result};
 use logisim_core::{AgentIdKind, Id, Project};
 use serde::{Deserialize, Serialize};
@@ -22,17 +22,24 @@ impl TryFrom<Fields> for Reference {
     type Error = &'static str;
 
     fn try_from(fields: Fields) -> std::result::Result<Self, Self::Error> {
-        match (fields.id, fields.agent_id) {
+        Self::from_ids(fields.id, fields.agent_id)
+    }
+}
+
+impl Reference {
+    pub(crate) fn from_ids(
+        id: Option<Id>,
+        agent_id: Option<String>,
+    ) -> std::result::Result<Self, &'static str> {
+        match (id, agent_id) {
             (Some(id), None) => Ok(Self::Id(id)),
             (None, Some(id)) => Ok(Self::AgentId(id)),
             _ => Err("Supply exactly one of id and agent_id."),
         }
     }
-}
 
-impl Reference {
     /// The pair is (owner circuit, target). A circuit is its own scope.
-    pub(super) fn resolve(
+    pub(crate) fn resolve(
         &self,
         project: &Project,
         kind: AgentIdKind,

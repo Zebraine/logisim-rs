@@ -42,6 +42,7 @@ pub(crate) struct Runtime {
     mode: SimulationMode,
     engine: Engine,
     plugins: Vec<Value>,
+    registry: logisim_plugin::Registry,
     failure: Option<String>,
     step_origin: u64,
 }
@@ -51,7 +52,7 @@ impl Runtime {
         let (registry, plugins) =
             load_dependencies(project, path.parent().expect("absolute project file"));
         let mut sim = ProjectSimulator::default();
-        sim.set_plugins(registry);
+        sim.set_plugins(registry.clone());
         sim.synchronize(project, project.main);
         let mut runtime = Self {
             sim,
@@ -61,6 +62,7 @@ impl Runtime {
                 SimulationMode::Stable | SimulationMode::Auto => Engine::Stable,
             },
             plugins,
+            registry,
             failure: None,
             step_origin: 0,
         };

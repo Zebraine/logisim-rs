@@ -1,7 +1,7 @@
 //! Explicit stimuli and propagation boundaries for a single headless session.
 use super::Runtime;
-use crate::{Error, Result};
-use logisim_core::{Bit, Id, Kind, Project, Value as Signal};
+use crate::{Error, Result, project::reference::Reference};
+use logisim_core::{AgentIdKind, Bit, Id, Kind, Project, Value as Signal};
 use serde_json::{Value, json};
 
 #[derive(Clone, Copy)]
@@ -12,6 +12,11 @@ pub(crate) enum Input {
 
 pub(crate) enum Action {
     SetInput(Id, Input),
+    Plugin {
+        target: Reference,
+        action: String,
+        argument: String,
+    },
     Settle,
     Step,
     Tick,
@@ -80,6 +85,78 @@ impl Runtime {
         Ok(target != current || propagated)
     }
 
+    fn plugin_action(
+        &mut self,
+        project: &Project,
+        session: &str,
+        target: Reference,
+        action: String,
+        argument: String,
+    ) -> Result<bool> {
+        let invalid_target = || {
+            Error::new(
+                "invalid_plugin_target",
+                "Expected a plugin component in the root circuit.",
+            )
+        };
+        let (_, id) = target
+            .resolve(project, AgentIdKind::Component, Some(project.main))
+            .map_err(|_| invalid_target())?;
+        let definition = project
+            .main_circuit()
+            .circuit
+            .component(id)
+            .filter(|c| c.kind == Kind::Plugin)
+            .and_then(|c| c.plugin.as_ref())
+            .ok_or_else(invalid_target)?;
+        let declared = definition
+            .tool
+            .actions
+            .iter()
+            .find(|a| a.id == action)
+            .ok_or_else(|| {
+                Error::new("invalid_action", "The tool does not declare this action.")
+            })?;
+        if argument.len() > 1024 || (declared.argument.is_none() && !argument.is_empty()) {
+            return Err(Error::new(
+                "invalid_argument",
+                if declared.argument.is_none() {
+                    "This action accepts only an empty argument."
+                } else {
+                    "Action arguments must fit in 1024 UTF-8 bytes."
+                },
+            ));
+        }
+        // An unavailable module has a saved tool definition, but no executable instance.
+        let root = self.sim.view(&[]).ok_or_else(invalid_target)?;
+        if let Some((_, reason)) = root.plugin_errors().find(|(component, _)| *component == id) {
+            return Err(Error::new("plugin_error", reason));
+        }
+        if self
+            .registry
+            .keyboard(definition)
+            .is_some_and(|binding| binding.action == action)
+        {
+            return Err(Error::new(
+                "invalid_action",
+                "This action is reserved for interactive keyboard input.",
+            ));
+        }
+
+        let changed = self.sim.plugin_action(&[], id, action, argument);
+        self.check_execution();
+        let propagate = self.sim.enabled() && (changed || self.sim.pending_count() != 0);
+        if propagate {
+            self.propagate();
+        }
+        if let Some(reason) = self.sim.runtime_plugin_failure() {
+            let mut error = Error::new("plugin_error", reason);
+            error.details["state"] = self.state(project, session);
+            return Err(error);
+        }
+        Ok(changed || propagate)
+    }
+
     pub(crate) fn control(
         &mut self,
         project: &Project,
@@ -93,9 +170,18 @@ impl Runtime {
             _ => self.require_ready()?,
         }
 
+        let pausing = matches!(action, Action::SetEnabled(false));
         let mut reason = None;
         let mut before_reset = None;
         let (name, changed) = match action {
+            Action::Plugin {
+                target,
+                action,
+                argument,
+            } => (
+                "plugin_action",
+                self.plugin_action(project, session, target, action, argument)?,
+            ),
             Action::SetInput(id, input) => ("set_input", self.set_input(project, id, input)?),
             Action::Settle => ("settle", self.settle_pending()),
             Action::Step => {
@@ -143,9 +229,7 @@ impl Runtime {
             }
         };
         let state = self.state(project, session);
-        if !matches!(action, Action::SetEnabled(false))
-            && let Err(mut error) = self.require_ready()
-        {
+        if !pausing && let Err(mut error) = self.require_ready() {
             error.details["state"] = state;
             return Err(error);
         }

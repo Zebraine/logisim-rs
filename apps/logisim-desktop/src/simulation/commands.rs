@@ -11,7 +11,7 @@ pub fn apply_project(
             id,
             action,
             argument,
-        } => sim.plugin_action(path, id, action, argument),
+        } => { sim.plugin_action(path, id, action, argument); }
         SimulationAction::PressButton { id } => sim.set_button(path, id, true),
         SimulationAction::SetJoystick { id, offset } => sim.set_joystick(path, id, offset),
         SimulationAction::ReleaseJoysticks => sim.release_joysticks(),

@@ -41,14 +41,15 @@ impl State {
             event_dirty: false,
         }
     }
-    fn evaluate(&mut self, inputs: Vec<api::Signal>, event: Event) {
+    fn evaluate(&mut self, inputs: Vec<api::Signal>, event: Event) -> bool {
         if self.error.is_some()
             || (matches!(event, Event::Propagate)
                 && !self.event_dirty
                 && self.inputs.as_ref() == Some(&inputs))
         {
-            return;
+            return false;
         }
+        let action = matches!(event, Event::Action { .. });
         if matches!(event, Event::Reset) {
             self.raster = None;
         }
@@ -68,6 +69,12 @@ impl State {
             .evaluate(&self.definition, request);
         match result {
             Ok(update) => {
+                // Only explicit actions need a change result. Include opaque state even
+                // when the addressed register or other storage is not driving a port.
+                let changed = action
+                    && (self.state != update.state
+                        || self.outputs != update.outputs
+                        || self.graphics != update.graphics);
                 self.state = update.state;
                 self.outputs = update.outputs;
                 self.graphics = update.graphics;
@@ -77,11 +84,23 @@ impl State {
                     .expect("valid plugin instance")
                     .raster(&self.definition, &self.state, self.raster.as_ref())
                 {
-                    Ok(image) => self.raster = image,
-                    Err(error) => self.fail(error),
+                    Ok(image) => {
+                        let raster_changed = action
+                            && self.raster.as_ref().map(|i| i.revision)
+                                != image.as_ref().map(|i| i.revision);
+                        self.raster = image;
+                        changed || raster_changed
+                    }
+                    Err(error) => {
+                        self.fail(error);
+                        true
+                    }
                 }
             }
-            Err(error) => self.fail(error),
+            Err(error) => {
+                self.fail(error);
+                true
+            }
         }
     }
     fn fail(&mut self, error: String) {
@@ -150,7 +169,7 @@ impl Simulator {
         &mut self,
         action: Option<(Id, Event)>,
         changed: Option<&crate::work::WorkSet>,
-    ) {
+    ) -> bool {
         let samples: Vec<_> = self
             .plan
             .plugins
@@ -165,6 +184,7 @@ impl Simulator {
                 (c.id, values)
             })
             .collect();
+        let mut action_changed = false;
         for (id, inputs) in samples {
             let Some(state) = self.plugin_states.get_mut(&id) else {
                 continue;
@@ -177,22 +197,23 @@ impl Simulator {
                     .filter(|(target, _)| *target == id)
                     .map_or(Event::Propagate, |(_, event)| event.clone())
             };
-            state.evaluate(inputs, event);
+            action_changed |= state.evaluate(inputs, event);
             let drives: Vec<_> = state.drives().collect();
             for (i, v) in drives {
                 self.drive_port((id, i), v);
             }
         }
+        action_changed
     }
-    pub fn plugin_action(&mut self, id: Id, action: String, argument: String) {
+    pub fn plugin_action(&mut self, id: Id, action: String, argument: String) -> bool {
         let Some(state) = self.plugin_states.get(&id) else {
-            return;
+            return false;
         };
         if argument.len() > 1024 || !state.definition.tool.actions.iter().any(|a| a.id == action) {
-            return;
+            return false;
         }
         self.invalidate_stable_values();
-        self.schedule_plugins(
+        let changed = self.schedule_plugins(
             Some((
                 id,
                 Event::Action {
@@ -204,6 +225,7 @@ impl Simulator {
         );
         self.progress.restart();
         self.limited = false;
+        changed
     }
     pub fn plugin_raster(&self, id: Id) -> Option<&Arc<api::raster::Image>> {
         self.plugin_states.get(&id).and_then(|s| s.raster.as_ref())

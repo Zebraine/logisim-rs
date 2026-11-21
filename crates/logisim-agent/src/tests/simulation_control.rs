@@ -277,3 +277,7 @@ fn hierarchy_initialization_error_preserves_requested_mode_and_rejects_controls(
     }
     assert_eq!(session.state()["ticks"], 0);
 }
+
+#[path = "support/action_project.rs"]
+mod action_project;
+mod plugin_actions;
