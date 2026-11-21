@@ -6,9 +6,6 @@ rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 [features]
-# Previous experiment build names. Both aliases use the same implementation.
-wasmtime-experimental = ["wasmtime-abi4"]
-wasmtime-cache-experiment = ["wasmtime-cache"]
 wasmtime-abi4 = ["dep:wasmtime"]
 wasmtime-cache = ["wasmtime-abi4", "wasmtime/cache", "dep:sha2", "dep:libc"]
 compare-wasmtime = ["wasmtime-abi4", "wasmtime/cache"]

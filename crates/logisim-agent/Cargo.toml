@@ -7,10 +7,6 @@ rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
-[features]
-# Retain the old build flag for callers. Agent execution always uses wasmi.
-wasmtime-experimental = []
-
 [dependencies]
 logisim-preferences.workspace = true
 logisim-core.workspace = true

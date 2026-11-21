@@ -18,6 +18,26 @@ mod window;
 use window::WindowGeometry as _;
 
 fn main() -> eframe::Result {
+    if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--print-plugin-engines"))
+    {
+        // Packaging queries the actual executable before any preferences or window are opened.
+        use logisim_plugin::WasmEngine;
+        let engines: Vec<_> = [WasmEngine::Wasmi, WasmEngine::Wasmtime]
+            .into_iter()
+            .filter(|engine| engine.available())
+            .map(WasmEngine::code)
+            .collect();
+        println!(
+            "{}",
+            serde_json::json!({
+                "default": WasmEngine::default().code(),
+                "available": engines,
+                "cache_feature": cfg!(feature = "wasmtime-cache"),
+                "private_disk_cache": cfg!(all(feature = "wasmtime-cache", target_os = "linux")),
+            })
+        );
+        return Ok(());
+    }
     let mut workspace = logisim_ui::Workspace::default();
     let preferences = preferences::Preferences::load(&mut workspace);
     let window = preferences.initial_window(&workspace);

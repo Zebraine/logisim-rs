@@ -77,6 +77,17 @@ def archive_member(info):
     return info
 
 
+def desktop_engines(executable, target):
+    info = json.loads(subprocess.check_output(
+        [executable, "--print-plugin-engines"], text=True, encoding="utf-8", timeout=15,
+    ))
+    required = {"available": ["wasmi", "wasmtime"], "default": "wasmi",
+                "cache_feature": True, "private_disk_cache": target == TARGETS[0]}
+    if info != required:
+        raise ValueError(f"Official desktop package requires both engines and the cache feature: {info}")
+    return info
+
+
 def package(target, plugins):
     release = version()
     windows = "windows" in target
@@ -100,6 +111,9 @@ def package(target, plugins):
     with tempfile.TemporaryDirectory(prefix="logisim-package-") as temporary:
         staging = Path(temporary) / name
         staging.mkdir()
+        (staging / "desktop-engines.json").write_text(
+            json.dumps(desktop_engines(executable, target), indent=2) + "\n", encoding="utf-8",
+        )
         for document in ("README.md", "README.zh-CN.md", "LICENSE"):
             shutil.copyfile(ROOT / document, staging / document)
         shutil.copytree(ROOT / "assets", staging / "assets")

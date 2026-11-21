@@ -2,6 +2,7 @@
 
 import argparse
 import hashlib
+import json
 import os
 from pathlib import Path
 import runpy
@@ -48,10 +49,19 @@ def check_inventory(root, package, names):
             raise ValueError(f"Packaged ABI 3 module differs from original: {legacy}")
     if package.name.endswith("-apple-darwin"):
         contents = Path("Logisim rs.app/Contents")
-        expected.update({contents / "MacOS/logisim-rs", contents / "Info.plist", Path("logisim-agent")})
+        desktop = contents / "MacOS/logisim-rs"
+        expected.update({desktop, contents / "Info.plist", Path("logisim-agent")})
     else:
         suffix = ".exe" if os.name == "nt" else ""
-        expected.update(Path(program + suffix) for program in ("logisim-rs", "logisim-agent"))
+        desktop = Path("logisim-rs" + suffix)
+        expected.update({desktop, Path("logisim-agent" + suffix)})
+    report = Path("desktop-engines.json")
+    expected.add(report)
+    actual_engines = json.loads(subprocess.check_output(
+        [package / desktop, "--print-plugin-engines"], text=True, encoding="utf-8", timeout=15,
+    ))
+    if actual_engines != json.loads((package / report).read_bytes()):
+        raise ValueError("Packaged desktop engine record differs from the executable")
     directories = {parent for rel in expected for parent in rel.parents if parent != Path(".")}
     actual = {p.relative_to(package) for p in package.rglob("*")}
     if actual != expected | directories:
