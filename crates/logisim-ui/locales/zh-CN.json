@@ -5,6 +5,7 @@
     "Convert to .lrs…": "转换为 .lrs…",
     "Export .circ…": "导出 .circ…",
     "Project files (.circ, .lrs)": "工程文件（.circ、.lrs）",
+    "Both recovery project files exist. Preserve both before choosing a recovery copy.": "发现两个恢复工程文件。请先保留两份文件，再选择要恢复的副本。",
     "Save as type": "保存类型",
     "Logisim-rs Project (*.lrs)": "Logisim-rs 工程 (*.lrs)",
     "Legacy Logisim (*.circ)": "旧版 Logisim (*.circ)",

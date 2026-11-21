@@ -5,6 +5,7 @@
     "Convert to .lrs…": "Convert to .lrs…",
     "Export .circ…": "Export .circ…",
     "Project files (.circ, .lrs)": "Project files (.circ, .lrs)",
+    "Both recovery project files exist. Preserve both before choosing a recovery copy.": "Both recovery project files exist. Preserve both before choosing a recovery copy.",
     "Save as type": "Save as type",
     "Logisim-rs Project (*.lrs)": "Logisim-rs Project (*.lrs)",
     "Legacy Logisim (*.circ)": "Legacy Logisim (*.circ)",

@@ -19,7 +19,7 @@ fn failed_commit_preserves_previous_pair_and_interrupted_commit_is_detected() {
         }
         let previous = Pair::read(&dir).unwrap();
         assert!(
-            pair.replace(&dir, b"next".to_vec(), Vec::new(), |_, _, _| Err(
+            pair.replace(&dir, b"next".to_vec(), Vec::new(), false, |_, _, _| Err(
                 "write failed".into()
             ))
             .is_err()

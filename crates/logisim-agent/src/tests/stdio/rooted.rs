@@ -265,6 +265,23 @@ fn conversion_checks_the_target_and_keeps_each_session_bound_to_its_format() {
         snap["result"]["structuredContent"]["data"]["path"],
         root.join("top.circ").to_str().unwrap()
     );
+    let copy_before_save = fs::read(root.join("board.lrs")).unwrap();
+    let saved = mcp.tool("project_save", json!({"session":session}));
+    assert_eq!(saved["result"]["isError"], false, "{saved}");
+    assert_eq!(
+        fs::read_to_string(root.join("top.circ.bak")).unwrap(),
+        PROJECT
+    );
+    let xml = fs::read_to_string(root.join("top.circ")).unwrap();
+    assert!(
+        logisim_file::parse(&xml)
+            .unwrap()
+            .document
+            .circuits
+            .iter()
+            .any(|c| c.name == "extra")
+    );
+    assert_eq!(fs::read(root.join("board.lrs")).unwrap(), copy_before_save);
     let opened = mcp.tool("project_open", json!({"path":"board.lrs"}));
     let native = &opened["result"]["structuredContent"]["data"]["session_id"];
     assert_eq!(

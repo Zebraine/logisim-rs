@@ -166,7 +166,7 @@ impl Autosave {
             let base = dir.canonicalize().unwrap_or_else(|_| dir.clone());
             path == base.with_file_name(slot::LOCK)
                 || path == base.with_file_name(slot::OWNER)
-                || [slot::DATA, slot::META]
+                || [slot::DATA, slot::NATIVE_DATA, slot::META]
                     .iter()
                     .any(|name| path == base.join(name))
         })

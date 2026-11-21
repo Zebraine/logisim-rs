@@ -11,6 +11,7 @@ use std::{
 pub(crate) const CHANGED: &str = "The recovery snapshot changed in another window.";
 
 pub(super) const DATA: &str = "current.circ";
+pub(super) const NATIVE_DATA: &str = "current.lrs";
 pub(super) const META: &str = "current.json";
 pub(super) const LOCK: &str = ".recovery.lock";
 pub(super) const OWNER: &str = ".recovery.owner";
@@ -115,6 +116,7 @@ impl Entry {
 }
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(super) struct Pair {
+    native_filename: bool,
     data: Entry,
     meta: Entry,
 }
@@ -126,8 +128,20 @@ impl Pair {
             Ok(m) if !m.is_dir() => return Err("Cannot access the recovery directory.".into()),
             Ok(_) => {}
         }
+        let native = Entry::read(&dir.join(NATIVE_DATA), logisim_file::MAX_BYTES)?;
+        let native_filename = native != Entry::Missing;
+        let data = if native_filename {
+            match fs::symlink_metadata(dir.join(DATA)) {
+                Ok(_) => return Err(logisim_ui::i18n::tr("Both recovery project files exist. Preserve both before choosing a recovery copy.").into()),
+                Err(e) if e.kind() == ErrorKind::NotFound => native,
+                Err(e) => return Err(e.to_string()),
+            }
+        } else {
+            Entry::read(&dir.join(DATA), logisim_file::MAX_BYTES)?
+        };
         Ok(Self {
-            data: Entry::read(&dir.join(DATA), logisim_file::MAX_BYTES)?,
+            native_filename,
+            data,
             meta: Entry::read(&dir.join(META), 64 * 1024)?,
         })
     }
@@ -166,6 +180,7 @@ impl Pair {
                 .map_err(|_| "Invalid recovery metadata.")?;
         let data = self.data.bytes()?.ok_or("Recovery circuit is missing.")?;
         if meta.format != 1
+            || (self.native_filename && !meta.native)
             || meta
                 .source
                 .as_ref()
@@ -217,7 +232,7 @@ impl Pair {
         if record.len() > 64 * 1024 {
             return Err("Recovery metadata is too large.".into());
         }
-        self.replace(dir, payload, record, storage::atomic_write)?;
+        self.replace(dir, payload, record, meta.native, storage::atomic_write)?;
         Ok(meta)
     }
     fn replace(
@@ -225,6 +240,7 @@ impl Pair {
         dir: &Path,
         payload: Vec<u8>,
         record: Vec<u8>,
+        native_filename: bool,
         write_record: impl FnOnce(&Path, &[u8], Option<&[u8]>) -> Result<()>,
     ) -> Result<()> {
         let _lock = Self::lock(dir)?;
@@ -233,9 +249,18 @@ impl Pair {
         if !current.empty() && current != *self {
             return Err(CHANGED.into());
         }
-        let data = dir.join(DATA);
+        let data = dir.join(if native_filename { NATIVE_DATA } else { DATA });
         let old_data = current.data.bytes()?;
         let old_meta = current.meta.bytes()?;
+        if old_data.is_some() && current.native_filename != native_filename {
+            // Stage 6 stored native payloads under current.circ. Rename the verified
+            // payload under the lease; the old commit record still matches its bytes.
+            if current.native_filename || !current.metadata()?.native {
+                return Err(CHANGED.into());
+            }
+            fs::rename(dir.join(DATA), &data).map_err(|e| e.to_string())?;
+            self.native_filename = true;
+        }
         storage::atomic_write(&data, &payload, old_data)?;
         if let Err(e) = write_record(&dir.join(META), &record, old_meta) {
             let rollback = match old_data {
@@ -246,6 +271,7 @@ impl Pair {
             return Err(e);
         }
         *self = Self {
+            native_filename,
             data: Entry::Bytes(payload),
             meta: Entry::Bytes(record),
         };
@@ -262,7 +288,11 @@ impl Pair {
             return Err(CHANGED.into());
         }
         let meta = dir.join(META);
-        let data = dir.join(DATA);
+        let data = dir.join(if current.native_filename {
+            NATIVE_DATA
+        } else {
+            DATA
+        });
         match (&current.meta, &current.data) {
             (Entry::Missing, _) => remove(&data)?,
             (_, Entry::Missing) => remove(&meta)?,

@@ -347,7 +347,7 @@ fn closing_after_returning_to_the_clean_baseline_removes_the_old_checkpoint() {
     let baseline = w.project().clone();
     w.replace_project(dirty_project());
     checkpoint(&mut files, &w);
-    assert!(dir.join("current.circ").is_file());
+    assert!(dir.join("current.lrs").is_file());
     w.replace_project(baseline);
     assert!(!files.present(&w).dirty);
     files.request(
@@ -383,7 +383,7 @@ fn clear_failure_rolls_back_only_the_disclosed_setting_and_allows_retry() {
         let view = files.autosave.view();
         assert!(view.owned && view.error.as_deref() == Some("Recovery storage is busy."));
         assert_eq!(view.directory.unwrap(), dir.to_str().unwrap());
-        assert!(dir.join("current.circ").is_file() && dir.join("current.json").is_file());
+        assert!(dir.join("current.lrs").is_file() && dir.join("current.json").is_file());
         assert_eq!(w.preferences().files.autosave, previously_on);
         assert!(!files.busy() && files.present(&w).dirty);
         drop(lock);

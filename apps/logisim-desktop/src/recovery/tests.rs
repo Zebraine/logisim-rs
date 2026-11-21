@@ -254,6 +254,7 @@ fn recovery_files_and_both_locks_are_reserved_project_destinations() {
     let auto = Autosave::at(Some(dir.clone()));
     for path in [
         dir.join(slot::DATA),
+        dir.join(slot::NATIVE_DATA),
         dir.join(slot::META),
         temp.path(slot::LOCK),
         temp.path(slot::OWNER),
@@ -280,8 +281,10 @@ fn unchanged_checkpoints_keep_both_mtimes_and_failed_edits_retry() {
             project,
         )
     };
-    let mtimes =
-        || [slot::DATA, slot::META].map(|f| fs::metadata(dir.join(f)).unwrap().modified().unwrap());
+    let mtimes = || {
+        [slot::NATIVE_DATA, slot::META]
+            .map(|f| fs::metadata(dir.join(f)).unwrap().modified().unwrap())
+    };
     let old = mtimes();
     for s in [600, 900] {
         tick(&mut owner, s, &project);
@@ -441,7 +444,7 @@ fn unreadable_data_can_be_cleared_without_rereading_its_contents() {
     let mut owner = Autosave::at(Some(dir.clone()));
     write_checkpoint(&mut owner, &Project::default());
     let mut observer = Autosave::at(Some(dir.clone()));
-    let data = dir.join(slot::DATA);
+    let data = dir.join(slot::NATIVE_DATA);
     fs::set_permissions(&data, fs::Permissions::from_mode(0o000)).unwrap();
     if fs::read(&data).is_ok() {
         // A privileged test process bypasses Unix read permissions.
@@ -541,4 +544,55 @@ fn native_checkpoint_survives_source_removal_and_a_second_crash() {
         .is_err()
     );
     assert!(!export.exists());
+}
+
+#[test]
+fn stage6_native_slot_reopens_and_uses_native_filename_on_next_checkpoint() {
+    let tmp = Temp::new();
+    let dir = tmp.path("recovery");
+    let original = tagged_project();
+    let mut writer = Autosave::at(Some(dir.clone()));
+    write_checkpoint(&mut writer, &original);
+    drop(writer);
+    let legacy_slot = dir.join(slot::DATA);
+    let native_slot = dir.join(slot::NATIVE_DATA);
+    assert_eq!(
+        logisim_file::parse_native(&fs::read(&native_slot).unwrap()).unwrap(),
+        original
+    );
+    fs::rename(&native_slot, &legacy_slot).unwrap(); // Stage 6 journal layout.
+    let mut reader = Autosave::at(Some(dir.clone()));
+    let mut disk = Storage::new();
+    let mut edited = reader.recover(&mut disk).unwrap();
+    assert_eq!(edited, original);
+    assert_eq!(disk.bound_format(), logisim_file::ProjectFormat::Lrs);
+    edited.main_circuit_mut().name = "edited".into();
+    let now = Instant::now();
+    for at in [now, now + Duration::from_secs(300)] {
+        reader.update(at, FileSettings::default(), true, &disk, &edited);
+    }
+    assert!(!legacy_slot.exists());
+    assert_eq!(
+        logisim_file::parse_native(&fs::read(&native_slot).unwrap()).unwrap(),
+        edited
+    );
+    drop(reader);
+    let mut next = Autosave::at(Some(dir));
+    assert_eq!(next.recover(&mut disk).unwrap(), edited);
+    next.clear_owned().unwrap();
+    assert!(!native_slot.exists());
+}
+
+#[test]
+fn ambiguous_recovery_payloads_are_preserved() {
+    let tmp = Temp::new();
+    let dir = tmp.path("recovery");
+    fs::create_dir(&dir).unwrap();
+    fs::write(dir.join(slot::DATA), b"xml").unwrap();
+    fs::write(dir.join(slot::NATIVE_DATA), b"json").unwrap();
+    let mut auto = Autosave::at(Some(dir.clone()));
+    assert!(auto.view().error.is_some());
+    assert!(auto.clear_from_settings().is_err());
+    assert_eq!(fs::read(dir.join(slot::DATA)).unwrap(), b"xml");
+    assert_eq!(fs::read(dir.join(slot::NATIVE_DATA)).unwrap(), b"json");
 }
