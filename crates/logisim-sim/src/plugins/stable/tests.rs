@@ -6,6 +6,16 @@ use logisim_plugin::Plugin;
 /// A standalone Wasm test tool with a conservative input dependency, explicit
 /// state and optional faults. No native callback stands in for plugin execution.
 fn module(id: &str, abi: u32, contract: Option<api::StableContract>, fault: &str) -> Plugin {
+    module_with_engine(logisim_plugin::WasmEngine::Wasmi, id, abi, contract, fault)
+}
+
+fn module_with_engine(
+    engine: logisim_plugin::WasmEngine,
+    id: &str,
+    abi: u32,
+    contract: Option<api::StableContract>,
+    fault: &str,
+) -> Plugin {
     use api::*;
     let manifest = Manifest {
         abi,
@@ -133,7 +143,7 @@ fn module(id: &str, abi: u32, contract: Option<api::StableContract>, fault: &str
         end))"#
     ))
     .unwrap();
-    Plugin::load(&bytes).unwrap()
+    Plugin::load_with_engine(&bytes, engine).unwrap()
 }
 fn contract(combinational: bool, state: bool) -> Option<api::StableContract> {
     Some(api::StableContract {
@@ -540,6 +550,16 @@ fn raster_fault_after_state_commit_publishes_error_and_stops_stable_execution() 
 
 #[test]
 fn exhausted_phase_returns_before_state_commit_and_retries_the_same_fault() {
+    use logisim_plugin::WasmEngine;
+    for runtime in [WasmEngine::Wasmi, WasmEngine::Wasmtime]
+        .into_iter()
+        .filter(|e| e.available())
+    {
+        check_batch_rollback(runtime);
+    }
+}
+
+fn check_batch_rollback(runtime: logisim_plugin::WasmEngine) {
     for phase in ["fuel-output", "fuel-transition"] {
         let mut p = Project::default();
         let mut registry = Registry::default();
@@ -547,12 +567,12 @@ fn exhausted_phase_returns_before_state_commit_and_retries_the_same_fault() {
         let good = library(
             circuit,
             &mut registry,
-            module("good", 3, contract(false, true), ""),
+            module_with_engine(runtime, "good", 3, contract(false, true), ""),
         );
         let bad = library(
             circuit,
             &mut registry,
-            module("limited", 3, contract(false, true), phase),
+            module_with_engine(runtime, "limited", 3, contract(false, true), phase),
         );
         let mut sim = ProjectSimulator::default();
         sim.set_plugins(registry);

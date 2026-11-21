@@ -8,6 +8,7 @@ mod phases;
 mod tests;
 mod workload;
 
+use logisim_plugin::WasmEngine;
 use logisim_sim::ProjectSimulator;
 use measure::{distribution, ms, trial};
 use serde_json::{Value, json};
@@ -67,9 +68,15 @@ fn open(fixture: Result<Fixture>) -> Result<Open> {
     })
 }
 
-fn benchmark(name: &str, runs: usize) -> Result<Value> {
+fn benchmark(name: &str, runs: usize, engine: WasmEngine) -> Result<Value> {
     let start = Instant::now();
-    let initialize = || open(Fixture::load(name, std::path::Path::new(".")));
+    let initialize = || {
+        open(Fixture::load_with(
+            name,
+            std::path::Path::new("."),
+            |bytes| logisim_plugin::Plugin::load_with_engine(bytes, engine),
+        ))
+    };
     #[cfg(feature = "plugin-metrics")]
     let mut cold = logisim_plugin::metrics::Recording::default();
     #[cfg(feature = "plugin-metrics")]
@@ -180,7 +187,7 @@ fn benchmark(name: &str, runs: usize) -> Result<Value> {
         "schema": 1,
         "workload": name,
         "engine": "stable",
-        "wasm_engine": if cfg!(feature = "compare-wasmtime") { "wasmtime-36.0.20" } else { "wasmi-1.1.0" },
+        "wasm_engine": match engine { WasmEngine::Wasmi => "wasmi-1.1.0", WasmEngine::Wasmtime => "wasmtime-36.0.20" },
         "threads": 1,
         "runs": runs,
         "warmup": WARMUP,
@@ -208,13 +215,31 @@ fn benchmark(name: &str, runs: usize) -> Result<Value> {
 }
 
 fn main() -> ExitCode {
-    let mut args = std::env::args().skip(1).peekable();
+    print_result(run(std::env::args().skip(1)))
+}
+
+fn run(args: impl Iterator<Item = String>) -> Result<Value> {
+    let mut args = args.peekable();
+    let engine = if args.peek().is_some_and(|a| a == "--wasm-engine") {
+        args.next();
+        match args.next().as_deref() {
+            Some("wasmi") => WasmEngine::Wasmi,
+            Some("wasmtime") if WasmEngine::Wasmtime.available() => WasmEngine::Wasmtime,
+            Some("wasmtime") => {
+                return Err("Wasmtime requires the wasmtime-experimental feature".into());
+            }
+            _ => return Err("Expected --wasm-engine wasmi or wasmtime".into()),
+        }
+    } else {
+        WasmEngine::Wasmi
+    };
     #[cfg(feature = "engine-study")]
     if args.peek().is_some_and(|arg| arg == "engine-study") {
         args.next();
-        return print_result(engine_study::run(args));
+        return engine_study::run(args, engine);
     }
-    print_result(options(args.by_ref()).and_then(|(name, runs)| benchmark(&name, runs)))
+    let (name, runs) = options(args)?;
+    benchmark(&name, runs, engine)
 }
 
 fn print_result(result: Result<Value>) -> ExitCode {

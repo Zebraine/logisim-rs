@@ -75,6 +75,8 @@ logisim-rs uses a versioned Wasm plugin ABI for externally supplied components. 
 
 Optional example modules and their source are kept under `plugins/` in the source repository and in release packages; they are examples, not a requirement for using the editor.
 
+The desktop uses wasmi by default. A build made with `cargo build --release -p logisim-rs --features wasmtime-experimental` also offers **Settings → Advanced → Wasm plugin engine**. Confirm Wasmtime and restart the desktop to use it. The panel shows the engine running in this process. Initial module compilation can be substantially slower. With the same 10M fuel budget a plugin may finish in wasmi and pause in Wasmtime. The desktop compiles from Wasm without a persistent native cache. Windows and macOS execution of this option has not been verified.
+
 ## Examples
 
 The repository includes optional course CPU examples under [`examples/course/`](examples/course/). They share the course Wasm module and are intended as teaching material rather than a fixed benchmark suite.
@@ -145,7 +147,9 @@ Choose an existing directory managed by trusted local processes. With `--root`, 
 
 MCP negotiates `2024-11-05`, `2025-03-26`, `2025-06-18` and `2025-11-25`. It returns the requested revision when supported and offers `2025-11-25` otherwise. In `tools/call`, read `result.isError` for the tool outcome. Both `structuredContent` and the JSON text in `content[0].text` carry the CLI envelope, including the error code and details on failure. Malformed requests, unknown tools and handshake errors use top-level JSON-RPC errors. A one-shot CLI command prints a top-level `ok:false` envelope and exits unsuccessfully on failure.
 
-An edits file such as `{"ops":[{"key":"appearance.theme","value":"dark"}]}` changes portable v16 preferences. Set `expected_sha256` to the `source_sha256` from the get response to require that exact revision. Use `--apply` to commit. The desktop and agent coordinate atomic updates using a sibling `.lock` file. Recent files, window geometry, panel layout and the local plugin directory stay in the host configuration.
+An edits file such as `{"ops":[{"key":"appearance.theme","value":"dark"}]}` changes portable v17 preferences. Set `expected_sha256` to the `source_sha256` from the get response to require that exact revision. Use `--apply` to commit. The desktop and agent coordinate atomic updates using a sibling `.lock` file. Recent files, window geometry, panel layout and the local plugin directory stay in the host configuration.
+
+`plugins.wasm_engine` stores the desktop preference (`wasmi` or `wasmtime`). The Agent always executes plugins using wasmi, including in experimental builds. `simulation_state.wasm_engine` identifies the plugin runtime, and `engine` identifies circuit propagation. Settings responses also report `agent_wasm_engine`.
 
 For a circuit, run `logisim-agent cli` and send one JSON object per line in the same process. Each process can hold 64 open project sessions. At the limit, `project_open` returns `session_limit`. Use `project_close` to free a slot.
 

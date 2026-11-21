@@ -196,6 +196,6 @@ impl Runtime {
             diagnostics.push(json!({"problem":"plugin_error","instance_path":path,"components":[id],"wires":[],"message":message}));
         }
         json!({"session_id":session,"main":project.main,"enabled":sim.enabled(),"limited":sim.limited(),"steps":sim.steps() - self.step_origin,"ticks":sim.ticks(),
-        "pending_count":sim.pending_count(),"mode":self.mode,"error":self.failure,"engine":engine,"fallback_reason":fallback,"components":components,"wires":wires,"pins":pins,"probes":probes,"inputs":inputs,"diagnostics":diagnostics,"plugins":self.plugins})
+        "pending_count":sim.pending_count(),"mode":self.mode,"error":self.failure,"engine":engine,"wasm_engine":crate::plugins::ENGINE.code(),"fallback_reason":fallback,"components":components,"wires":wires,"pins":pins,"probes":probes,"inputs":inputs,"diagnostics":diagnostics,"plugins":self.plugins})
     }
 }

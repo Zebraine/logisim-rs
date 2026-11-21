@@ -2,7 +2,7 @@ use super::super::*;
 use logisim_core::{Component, Point, plugin::api};
 use logisim_plugin::Plugin;
 
-fn module(fail: bool, sample_code: &str) -> Plugin {
+fn module(runtime: logisim_plugin::WasmEngine, fail: bool, sample_code: &str) -> Plugin {
     let manifest = api::Manifest {
         abi: 3,
         id: "test.worker".into(),
@@ -83,7 +83,7 @@ fn module(fail: bool, sample_code: &str) -> Plugin {
             end))"#
     ))
     .unwrap();
-    Plugin::load(&wasm).unwrap()
+    Plugin::load_with_engine(&wasm, runtime).unwrap()
 }
 
 #[test]
@@ -97,7 +97,21 @@ fn exhausted_transition_pauses_the_worker_without_publishing_state() {
 }
 
 fn assert_worker_recovery(sample_code: &str, expected_error: &str) {
-    let plugin = module(true, sample_code);
+    use logisim_plugin::WasmEngine;
+    for runtime in [WasmEngine::Wasmi, WasmEngine::Wasmtime]
+        .into_iter()
+        .filter(|e| e.available())
+    {
+        assert_worker_fault(runtime, sample_code, expected_error);
+    }
+}
+
+fn assert_worker_fault(
+    runtime: logisim_plugin::WasmEngine,
+    sample_code: &str,
+    expected_error: &str,
+) {
+    let plugin = module(runtime, true, sample_code);
     let mut project = Project::default();
     let id = project
         .main_circuit_mut()
@@ -137,7 +151,7 @@ fn assert_worker_recovery(sample_code: &str, expected_error: &str) {
     assert!(!engine.sim.enabled());
     assert_eq!(engine.propagation, Propagation::Compiled);
     let mut plugins = Registry::default();
-    plugins.insert(module(false, "")).unwrap();
+    plugins.insert(module(runtime, false, "")).unwrap();
     context.plugins = plugins;
     engine.command(Command::Configure(context));
     engine.command(Command::Action(1, SimulationAction::ToggleEnabled));

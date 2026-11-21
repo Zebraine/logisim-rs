@@ -73,6 +73,7 @@ fn named(c: &Circuit, kind: Kind, label: &str) -> Result<Id> {
 }
 
 impl Fixture {
+    #[cfg(test)]
     pub fn load(name: &str, root: &Path) -> Result<Self> {
         Self::load_with(name, root, Plugin::load)
     }

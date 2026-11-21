@@ -1,6 +1,8 @@
 # Stage 2 · Wasm 引擎契约与启动成本
 
-**决定：旧 ABI 继续使用 wasmi 1.1.0。** Wasmtime 36.0.20 可以在显式对照构建中执行同一插件。对旧插件开放运行时切换会改变部分有限计算的完成、暂停和状态提交结果。Stage 3 保留生产引擎。若产品选择为长时间仿真引入另一种计量契约，再考虑新 ABI。
+**阶段 2 决定：旧 ABI 继续使用 wasmi 1.1.0。** Wasmtime 36.0.20 可以在显式对照构建中执行同一插件。对旧插件开放运行时切换会改变部分有限计算的完成、暂停和状态提交结果。Stage 3 保留生产引擎。若产品选择为长时间仿真引入另一种计量契约，再考虑新 ABI。
+
+阶段 3 在显式构建的桌面应用中增加了需确认、重启后生效的实验选项。旧插件使用 Wasmtime 时接受下表的计量差异。默认桌面和 Agent 仍使用 wasmi；磁盘缓存仅用于基准实验。
 
 ## 可观察的资源契约
 
@@ -72,6 +74,19 @@ Linux x86-64，i5-12600KF 的逻辑核 15，Rust 1.99.0 release；寄存器文�
 | B 新 ABI 和显式能力 | 新 ABI 的 manifest 声明可接受的计量模型及版本，loader 在执行用户行为前检查能力。旧 ABI 强制 wasmi。规范需定义预算重置范围、超限分类、阶段提交及 reset；不支持声明时报告原因。 | 若要提供面向用户的加速，先批准此契约，再实现及测试 loader/SDK。 |
 | C 全量切换 | 需产品明确接受旧作业完成与暂停边界变化，定义错误兼容级别，满足首次打开预算，在三平台完成构建、实测与回退演练。回退只能发生在实例创建前。 | 暂不采用。热态收益无法解决语义差异。 |
 
+## 阶段 3 双引擎复核
+
+Linux x86-64，固定逻辑核 15。对同一 release 基准二进制分别传入 `--wasm-engine wasmi` 和 `--wasm-engine wasmtime`。每种组合启动三个进程，每个进程预热 3 轮、测量 20 轮。下表取三个进程的中位数。首开从读取工程到首次收敛，系统文件页可以已在内存中；热 settle 列取各进程的相应分位数。桌面不启用原生磁盘缓存。
+
+| 负载 | 引擎 | 首开 ms | 热 settle p50 / p95，ms | tick/s |
+| --- | --- | ---: | ---: | ---: |
+| 寄存器文件 | wasmi | 9.65 | 0.1166 / 0.3240 | 2,993 |
+| 寄存器文件 | Wasmtime | 462.26 | 0.0095 / 0.0276 | 35,306 |
+| 课程 CPU | wasmi | 26.43 | 0.1496 / 0.9080 | 2,239 |
+| 课程 CPU | Wasmtime | 474.12 | 0.0415 / 0.2689 | 8,081 |
+
+寄存器文件的 512 tick 得到 `a2689cffb70ff825`，课程 CPU 的 128 tick 得到 `73171884c0465aad`。两个引擎的 steps、插件工作量和四态摘要逐项一致，诊断为零。研究用私有磁盘缓存单独复核：每个工程用独立空目录打开四次，各一次 miss、三次 hit。随后新进程四次全部命中，首次打开寄存器文件 8.68 ms、CPU 26.95 ms。这些命中耗时仅适用于实验缓存。
+
 ## 复测
 
 从仓库根目录在 Linux release 下运行。首次准备可选依赖后可离线重放。选择可用的独占逻辑核，将下面的 15 替换成该核编号。
@@ -89,4 +104,4 @@ cargo test --release --locked --offline -p logisim-plugin --features engine-stud
 cargo test --release --locked --offline -p logisim-plugin --features engine-study,compare-wasmtime -- --nocapture
 ```
 
-`FUEL` 记录包括 10M、20M、40M、80M 的逐次读数；`LIMIT` 记录保留原错误。基准原始 JSON 内 `opens[].spans`、`first_settle_ms` 及 `plugin_phases.hot` 分别给出装载/实例化/契约查询、首次收敛及两个热相位。Runner 核验默认依赖树、二进制引擎、轨迹和工作量，并记录环境和输入 SHA-256。工作区的 all-features 矩阵会显式选择实验后端；默认桌面与 Agent release 构建不启用该特性。原生缓存的上游说明见 [Wasmtime cache](https://docs.wasmtime.dev/cli-cache.html)。
+`FUEL` 记录包括 10M、20M、40M、80M 的逐次读数；`LIMIT` 记录保留原错误。基准原始 JSON 内 `opens[].spans`、`first_settle_ms` 及 `plugin_phases.hot` 分别给出装载/实例化/契约查询、首次收敛及两个热相位。Runner 核验默认依赖树、二进制引擎、轨迹和工作量，并记录环境和输入 SHA-256。工作区的 all-features 矩阵在同一进程内测试两种后端；普通插件加载入口使用 wasmi。原生缓存的上游说明见 [Wasmtime cache](https://docs.wasmtime.dev/cli-cache.html)。

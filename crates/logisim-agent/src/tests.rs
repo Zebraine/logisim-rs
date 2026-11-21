@@ -234,6 +234,7 @@ fn course_modules_are_loaded_only_from_recorded_and_matching_paths() {
                 session: session.clone(),
             })
             .unwrap();
+        assert_eq!(initial["wasm_engine"], "wasmi");
         assert_eq!(initial["plugins"][0]["status"], expected);
         let data = service.call(Request::SimulationState { session }).unwrap();
         if expected == "missing" {

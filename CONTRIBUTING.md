@@ -40,7 +40,7 @@ JSON 的 `plugin_phases` 分为 cold、reset 和 hot。reset 累计计时轮次�
 
 ### 复现 Wasm 引擎对照
 
-默认桌面、Agent 与基准使用 wasmi。阶段 2 的[引擎契约记录](apps/logisim-bench/comparisons/engine-contract.md)给出两个 release 构建、固定核心、fuel 矩阵和冷启动复测命令。仅在对照构建显式启用 `compare-wasmtime`。阶段 1 的[原始对照补丁](apps/logisim-bench/comparisons/wasmtime-36.patch)对应历史提交 `cc5cee9`。
+默认桌面、Agent 与基准使用 wasmi。阶段 2 的[引擎契约记录](apps/logisim-bench/comparisons/engine-contract.md)给出两个 release 构建、固定核心、fuel 矩阵和冷启动复测命令。桌面与基准的双引擎构建使用 `wasmtime-experimental`；Agent 即使启用同一 feature 也固定运行 wasmi。基准可在负载前加 `--wasm-engine wasmi` 或 `--wasm-engine wasmtime`。只有研究用的 `compare-wasmtime` 增加私有磁盘缓存实验。阶段 1 的[原始对照补丁](apps/logisim-bench/comparisons/wasmtime-36.patch)对应历史提交 `cc5cee9`。
 
 ## 修改与提交
 

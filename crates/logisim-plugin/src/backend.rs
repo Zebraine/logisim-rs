@@ -87,9 +87,21 @@ pub(super) fn wasmtime_config() -> wasmtime::Config {
 }
 
 pub(super) enum Store {
-    Wasmi(wasmi::Store<wasmi::StoreLimits>),
+    Wasmi(Box<wasmi::Store<wasmi::StoreLimits>>),
     #[cfg(feature = "wasmtime-experimental")]
     Wasmtime(wasmtime::Store<wasmtime::StoreLimits>),
+}
+
+impl From<wasmi::Store<wasmi::StoreLimits>> for Store {
+    fn from(store: wasmi::Store<wasmi::StoreLimits>) -> Self {
+        Self::Wasmi(Box::new(store))
+    }
+}
+#[cfg(feature = "wasmtime-experimental")]
+impl From<wasmtime::Store<wasmtime::StoreLimits>> for Store {
+    fn from(store: wasmtime::Store<wasmtime::StoreLimits>) -> Self {
+        Self::Wasmtime(store)
+    }
 }
 
 impl Store {
@@ -144,7 +156,7 @@ impl Module {
                 let instance = $runtime::Linker::new(module.engine())
                     .$start(&mut store, module)
                     .map_err(error)?;
-                Ok((Instance::$variant(instance), Store::$variant(store)))
+                Ok((Instance::$variant(instance), Store::from(store)))
             }};
         }
         match self {
@@ -157,9 +169,12 @@ impl Module {
 
 // Handles stay private to the VM that created them. The only callers get the store from that VM.
 macro_rules! dispatch {
-    ($handle:expr, $store:expr, |$h:ident, $s:ident| $body:expr) => {
+    ($handle:expr, $store:expr, $borrow:ident, |$h:ident, $s:ident| $body:expr) => {
         match ($handle, $store) {
-            (Self::Wasmi($h), Store::Wasmi($s)) => $body,
+            (Self::Wasmi($h), Store::Wasmi(boxed)) => {
+                let $s = boxed.$borrow();
+                $body
+            }
             #[cfg(feature = "wasmtime-experimental")]
             (Self::Wasmtime($h), Store::Wasmtime($s)) => $body,
             #[cfg(feature = "wasmtime-experimental")]
@@ -170,12 +185,12 @@ macro_rules! dispatch {
 
 impl Instance {
     pub(super) fn has_export(&self, store: &mut Store, name: &str) -> bool {
-        dispatch!(self, store, |i, s| i.get_export(s, name).is_some())
+        dispatch!(self, store, as_mut, |i, s| i.get_export(s, name).is_some())
     }
 
     pub(super) fn memory(&self, store: &mut Store, name: &str) -> Option<Memory> {
         match (self, store) {
-            (Self::Wasmi(i), Store::Wasmi(s)) => i.get_memory(s, name).map(Memory::Wasmi),
+            (Self::Wasmi(i), Store::Wasmi(s)) => i.get_memory(s.as_mut(), name).map(Memory::Wasmi),
             #[cfg(feature = "wasmtime-experimental")]
             (Self::Wasmtime(i), Store::Wasmtime(s)) => i.get_memory(s, name).map(Memory::Wasmtime),
             #[cfg(feature = "wasmtime-experimental")]
@@ -202,16 +217,20 @@ pub(super) enum Memory {
 }
 impl Memory {
     pub(super) fn data<'a>(&self, store: &'a Store) -> &'a [u8] {
-        dispatch!(self, store, |m, s| m.data(s))
+        dispatch!(self, store, as_ref, |m, s| m.data(s))
     }
     pub(super) fn data_mut<'a>(&self, store: &'a mut Store) -> &'a mut [u8] {
-        dispatch!(self, store, |m, s| m.data_mut(s))
+        dispatch!(self, store, as_mut, |m, s| m.data_mut(s))
     }
     pub(super) fn read(&self, store: &Store, offset: usize, bytes: &mut [u8]) -> Result<()> {
-        dispatch!(self, store, |m, s| m.read(s, offset, bytes).map_err(error))
+        dispatch!(self, store, as_ref, |m, s| m
+            .read(s, offset, bytes)
+            .map_err(error))
     }
     pub(super) fn write(&self, store: &mut Store, offset: usize, bytes: &[u8]) -> Result<()> {
-        dispatch!(self, store, |m, s| m.write(s, offset, bytes).map_err(error))
+        dispatch!(self, store, as_mut, |m, s| m
+            .write(s, offset, bytes)
+            .map_err(error))
     }
 }
 
@@ -230,9 +249,10 @@ macro_rules! signature {
         impl Export for TypedFunc<$params, $result> {
             fn load(instance: &Instance, store: &mut Store, name: &str) -> Result<Self> {
                 match (instance, store) {
-                    (Instance::Wasmi(i), Store::Wasmi(s)) => {
-                        i.get_typed_func(s, name).map(Self::Wasmi).map_err(error)
-                    }
+                    (Instance::Wasmi(i), Store::Wasmi(s)) => i
+                        .get_typed_func(s.as_mut(), name)
+                        .map(Self::Wasmi)
+                        .map_err(error),
                     #[cfg(feature = "wasmtime-experimental")]
                     (Instance::Wasmtime(i), Store::Wasmtime(s)) => {
                         i.get_typed_func(s, name).map(Self::Wasmtime).map_err(error)
@@ -244,7 +264,7 @@ macro_rules! signature {
         }
         impl TypedFunc<$params, $result> {
             pub(super) fn call(&self, store: &mut Store, params: $params) -> Result<$result> {
-                dispatch!(self, store, |f, s| f.call(s, params).map_err(error))
+                dispatch!(self, store, as_mut, |f, s| f.call(s, params).map_err(error))
             }
         }
     };

@@ -3,7 +3,7 @@ use super::*;
 use logisim_plugin::study::{Loader, Reuse, with_multiplier};
 use std::path::Path;
 
-pub fn run(mut args: impl Iterator<Item = String>) -> Result<Value> {
+pub fn run(mut args: impl Iterator<Item = String>, engine: WasmEngine) -> Result<Value> {
     let action = args.next().ok_or("Expected trace or opens")?;
     let name = args.next().ok_or("Expected plugin or single-cycle")?;
     if !matches!(name.as_str(), "plugin" | "single-cycle") {
@@ -16,7 +16,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<Value> {
     match action.as_str() {
         "trace" => {
             let multiple = mode.parse()?;
-            let mut report = with_multiplier(multiple, || benchmark(&name, runs))??;
+            let mut report = with_multiplier(multiple, || benchmark(&name, runs, engine))??;
             report["fuel_per_request"] = json!(multiple * 10_000_000);
             Ok(report)
         }
@@ -35,7 +35,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<Value> {
                 }
                 _ => return Err("Unknown module reuse policy".into()),
             };
-            let mut loader = Loader::new(reuse);
+            let mut loader = Loader::with_engine(reuse, engine);
             let mut rows = Vec::new();
             for _ in 0..=runs {
                 let mut recording = logisim_plugin::metrics::Recording::default();

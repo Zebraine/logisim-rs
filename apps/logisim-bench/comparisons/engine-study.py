@@ -21,6 +21,7 @@ def fuel_matrix(cpu, directory):
         # libtest may prefix the first line with the name of the running test.
         rows = [json.loads(line.split("FUEL ", 1)[1]) for line in output.splitlines()
                 if "FUEL {" in line]
+        rows = [r for r in rows if r["engine"] == engine]
         results[engine] = {(r["iterations"], r["phase"], r["budget"]): r for r in rows}
         if set(results[engine]) != set(cases) or len(rows) != len(cases):
             raise ValueError(f"Incomplete {engine} fuel matrix")
@@ -71,7 +72,7 @@ def main():
         if directory is not None:
             env["LOGISIM_BENCH_PRIVATE_CACHE"] = str(directory)
         report = json.loads(subprocess.check_output(
-            ["taskset", "-c", str(args.cpu), binaries[engine], "engine-study", action,
+            ["taskset", "-c", str(args.cpu), binaries[engine], "--wasm-engine", engine, "engine-study", action,
              workload, str(mode), "--runs", "20"], env=env))
         label = mode if not populated else "disk-reopen"
         write(f"{engine}-{action}-{workload}-{label}-{rep}", report)

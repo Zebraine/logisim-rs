@@ -246,15 +246,19 @@ fn instance_enforces_memory_table_and_response_limits() {
         ))
         .unwrap()
     };
-    assert!(Plugin::load(&module(256, 10_000, json.len())).is_ok());
-    assert!(Plugin::load(&module(257, 10_000, json.len())).is_err());
-    assert!(Plugin::load(&module(256, 10_001, json.len())).is_err());
-    assert_eq!(
-        Plugin::load(&module(1, 1, MAX_MESSAGE + 1))
-            .err()
-            .as_deref(),
-        Some("Plugin response exceeds message limit.")
-    );
+    for engine in [WasmEngine::Wasmi, WasmEngine::Wasmtime]
+        .into_iter()
+        .filter(|e| e.available())
+    {
+        let load = |bytes: &[u8]| Plugin::load_with_engine(bytes, engine);
+        assert!(load(&module(256, 10_000, json.len())).is_ok());
+        assert!(load(&module(257, 10_000, json.len())).is_err());
+        assert!(load(&module(256, 10_001, json.len())).is_err());
+        assert_eq!(
+            load(&module(1, 1, MAX_MESSAGE + 1)).err().as_deref(),
+            Some("Plugin response exceeds message limit.")
+        );
+    }
 }
 
 #[cfg(feature = "engine-study")]

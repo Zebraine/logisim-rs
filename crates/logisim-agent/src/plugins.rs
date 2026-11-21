@@ -4,12 +4,14 @@ use logisim_core::{
     Project,
     plugin::{PluginSource, api},
 };
-use logisim_plugin::{MAX_MODULE, Plugin, Registry};
+use logisim_plugin::{MAX_MODULE, Plugin, Registry, WasmEngine};
 use serde_json::{Map, Value, json};
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
 };
+
+pub(crate) const ENGINE: WasmEngine = WasmEngine::Wasmi;
 
 pub(crate) fn unavailable(message: impl ToString) -> Error {
     Error::new("plugin_unavailable", message)
@@ -36,7 +38,13 @@ pub(crate) fn resolve<'a>(
         let loaded = io::read_limited(&path, MAX_MODULE)
             .map_err(|e| e.message)
             .and_then(|bytes| {
-                Plugin::load_dependency(&bytes, &source.plugin, &source.version, components.clone())
+                Plugin::load_dependency_with_engine(
+                    &bytes,
+                    &source.plugin,
+                    &source.version,
+                    components.clone(),
+                    ENGINE,
+                )
             });
         match loaded {
             Ok(plugin) => return Ok((plugin, path)),
@@ -87,7 +95,7 @@ fn tool_metadata(tool: &api::Tool) -> Value {
 }
 pub(crate) fn catalog(path: &Path) -> Result<Value> {
     let bytes = io::read_limited(path, MAX_MODULE)?;
-    let plugin = Plugin::load(&bytes).map_err(unavailable)?;
+    let plugin = Plugin::load_with_engine(&bytes, ENGINE).map_err(unavailable)?;
     let manifest = plugin.manifest();
     Ok(
         json!({"id":manifest.id,"version":manifest.version,"name":manifest.name,

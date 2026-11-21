@@ -57,7 +57,7 @@ pub fn catalog() -> Value {
                 "editor.default_gate_size" => choices(json!(["narrow", "medium", "wide"])),
                 "editor.default_font_family" => choices(json!(["dialog", "monospace", "serif"])),
                 "plugins.wasm_engine" => {
-                    json!({"type":"enum", "values":["wasmi","wasmtime"], "scope":"desktop","requires_restart":true,"agent_wasm_engine":"wasmi"})
+                    json!({"type":"enum", "values":["wasmi","wasmtime"], "scope":"desktop","requires_restart":true,"agent_wasm_engine":crate::plugins::ENGINE.code()})
                 }
                 "simulation.mode" => choices(json!(["stable", "event"])),
                 "simulation.tick_hz" => range(1, MAX_TICK_HZ),
@@ -89,7 +89,7 @@ fn range(min: u32, max: u32) -> Value {
 pub fn get(path: &Path) -> Result<Value> {
     let bytes = io::read(path)?;
     Ok(
-        json!({"path":path,"version":CONFIG_VERSION,"source_sha256":sha256(&bytes),"agent_wasm_engine":"wasmi","settings":decode(&bytes)?.1,"warnings":[]}),
+        json!({"path":path,"version":CONFIG_VERSION,"source_sha256":sha256(&bytes),"agent_wasm_engine":crate::plugins::ENGINE.code(),"settings":decode(&bytes)?.1,"warnings":[]}),
     )
 }
 
@@ -163,6 +163,6 @@ pub fn patch(
     };
     Ok(
         json!({"path":path,"version":CONFIG_VERSION,"dry_run":dry_run,"changed":changed,
-        "source_sha256":if dry_run {&before_hash}else{&result_hash},"previous_sha256":before_hash,"result_sha256":result_hash,"agent_wasm_engine":"wasmi","settings":after,"warnings":[]}),
+        "source_sha256":if dry_run {&before_hash}else{&result_hash},"previous_sha256":before_hash,"result_sha256":result_hash,"agent_wasm_engine":crate::plugins::ENGINE.code(),"settings":after,"warnings":[]}),
     )
 }

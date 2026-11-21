@@ -75,6 +75,8 @@ logisim-rs 使用带版本号的 Wasm 插件 ABI 提供外部元件。插件可�
 
 源码仓库和发布包在 `plugins/` 下附带可选的示例模块及源码；它们是示例，不是使用编辑器的前提。
 
+桌面默认使用 wasmi。用 `cargo build --release -p logisim-rs --features wasmtime-experimental` 构建后，可在**设置 → 高级 → Wasm 插件引擎**中确认选择实验性 Wasmtime。重启桌面后生效，设置页显示本次进程实际使用的引擎。Wasmtime 首次编译模块可能明显更慢。在同一 10M fuel 预算下，wasmi 能完成的请求可能在 Wasmtime 中暂停。桌面直接从 Wasm 编译，本阶段没有持久化机器码缓存。Windows 和 macOS 尚未实机验证该选项。
+
 ## 示例
 
 仓库在 [`examples/course/`](examples/course/) 中提供可选的课程 CPU 示例。它们共用课程 Wasm 模块，定位是教学材料，而不是固定基准套件。
@@ -145,7 +147,9 @@ logisim-agent settings patch --config /path/to/preferences.json --ops edits.json
 
 MCP 支持 `2024-11-05`、`2025-03-26`、`2025-06-18` 和 `2025-11-25`。握手时原样返回支持的版本，对其他版本返回 `2025-11-25`。调用 `tools/call` 后，客户端可读取 `result.isError` 判断执行结果。`structuredContent` 与 `content[0].text` 中的 JSON 携带相同的 CLI 响应，失败时保留错误码和详情。请求格式、未知工具与握手错误通过 JSON-RPC 顶层错误返回。单次 CLI 命令失败时输出顶层 `ok:false` 并以非零状态退出。
 
-例如，`{"ops":[{"key":"appearance.theme","value":"dark"}]}` 修改 v16 便携偏好。可在同一 JSON 对象中将 `expected_sha256` 设为读取时返回的 `source_sha256`，要求原文件仍为该版本。确认预演结果后，用 `--apply` 写入。桌面端与 Agent 通过同目录的 `.lock` 文件协调原子更新，保留最近工程、窗口几何、面板布局和本机插件目录。
+例如，`{"ops":[{"key":"appearance.theme","value":"dark"}]}` 修改 v17 便携偏好。可在同一 JSON 对象中将 `expected_sha256` 设为读取时返回的 `source_sha256`，要求原文件仍为该版本。确认预演结果后，用 `--apply` 写入。桌面端与 Agent 通过同目录的 `.lock` 文件协调原子更新，保留最近工程、窗口几何、面板布局和本机插件目录。
+
+`plugins.wasm_engine` 保存桌面偏好（`wasmi` 或 `wasmtime`）。Agent 在包括实验构建在内的所有构建中均使用 wasmi。`simulation_state` 的 `wasm_engine` 标出插件运行时，`engine` 表示电路传播引擎。设置响应也会返回 `agent_wasm_engine`。
 
 读取电路时，启动 `logisim-agent cli`，在同一个进程内逐行发送 JSON。每个进程最多同时打开 64 个工程会话，达到上限时 `project_open` 返回 `session_limit`。使用 `project_close` 可释放名额。
 
