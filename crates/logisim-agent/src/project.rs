@@ -4,6 +4,7 @@ pub(crate) mod catalog;
 mod edit;
 mod memory;
 pub(crate) mod patch;
+mod pla;
 mod properties;
 mod save;
 mod schema;
@@ -152,7 +153,6 @@ mod tests {
     fn plugins_and_deferred_io_remain_read_only_in_project_patches() {
         let catalog = catalog::catalog();
         for kind in [
-            Kind::PlaRom,
             Kind::Plugin,
             Kind::Slider,
             Kind::Joystick,

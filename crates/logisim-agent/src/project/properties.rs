@@ -80,6 +80,9 @@ pub(super) fn fields(kind: Kind) -> Vec<(&'static str, Rule)> {
             fields.extend(extra.iter().map(|f| (f.name, f.rule)));
         }
     }
+    if kind == Kind::PlaRom {
+        fields.extend(super::pla::FIELDS);
+    }
     if kind == Kind::Rom {
         fields.push(("contents", Rule::RomRuns));
     }
@@ -152,6 +155,7 @@ pub(super) fn describe(c: &Component, data: &mut Value) {
         data[field.name] = (field.read)(c);
     }
     match c.kind {
+        Kind::PlaRom => super::pla::describe(&c.pla, data),
         Kind::Pin => {
             data["output"] = c.output.into();
             data["three_state"] = c.pin.three_state.into();

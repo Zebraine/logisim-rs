@@ -439,4 +439,5 @@ mod builtins;
 mod catalog;
 mod instances;
 mod memory;
+mod pla;
 mod sequential;

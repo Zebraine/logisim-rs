@@ -56,6 +56,9 @@ pub(super) fn apply(c: &mut Component, properties: &Map<String, Value>) -> Resul
             )));
         };
         rule.validate(key, v)?;
+        if c.kind == Kind::PlaRom && super::pla::FIELDS.iter().any(|(name, _)| *name == key) {
+            continue;
+        }
         if let Some(field) = super::builtins::fields(c.kind)
             .iter()
             .find(|f| f.name == key)
@@ -132,6 +135,9 @@ pub(super) fn apply(c: &mut Component, properties: &Map<String, Value>) -> Resul
         } else {
             c.gate_options.negated = mask as u8;
         }
+    }
+    if c.kind == Kind::PlaRom {
+        super::pla::update(&mut c.pla, properties)?;
     }
     if c.kind == Kind::Rom {
         super::memory::update(c, properties.get("contents"), old_memory)?;

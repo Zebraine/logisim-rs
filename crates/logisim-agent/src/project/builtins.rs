@@ -59,6 +59,7 @@ field!(
     Rule::Boolean,
     memory.select_high
 );
+field!(PLA_SELECT, "select_high", Rule::Boolean, pla.select_high);
 field!(SIMPLE, "simple", Rule::Boolean, memory.simple);
 enum_field!(INTERFACE,"interface", memory.interface, [MemoryInterface::SharedSync => "shared_sync", MemoryInterface::SharedAsync => "shared_async", MemoryInterface::Separate => "separate"]);
 field!(VALUE, "value", U32, constant);
@@ -272,6 +273,7 @@ const LATCH_FIELDS: &[Field] = &[LATCH_TRIGGER, CONTROLS, NEGATE_CONTROLS, NEW_L
 // (Core kind, optional short name, component-specific fields). Core names are always accepted.
 type Entry = (Kind, Option<&'static str>, &'static [Field]);
 const CATALOG: &[Entry] = &[
+    (Kind::PlaRom, None, &[PLA_SELECT]),
     (Kind::Rom, None, &[BITS, ADDRESS_BITS, MEMORY_SELECT]),
     (
         Kind::Ram,

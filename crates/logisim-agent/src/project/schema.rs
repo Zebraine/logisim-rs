@@ -14,6 +14,7 @@ pub(super) enum Rule {
     Position,
     Mapping,
     RomRuns,
+    PlaPlane(super::pla::Plane),
 }
 
 pub(super) const WIDTH: Rule = Rule::Integer(1, 32);
@@ -37,7 +38,11 @@ impl Rule {
             Self::Integer(..) => "integer",
             Self::Enum(_) | Self::Label | Self::FontFamily => "string",
             Self::Font => "object",
-            Self::Rgba { .. } | Self::Position | Self::Mapping | Self::RomRuns => "array",
+            Self::Rgba { .. }
+            | Self::Position
+            | Self::Mapping
+            | Self::RomRuns
+            | Self::PlaPlane(_) => "array",
         }
     }
 
@@ -62,6 +67,7 @@ impl Rule {
                 schema
             }
             Self::Position => json!({"type":ty,"minItems":2,"maxItems":2,"items":COORD.json()}),
+            Self::PlaPlane(plane) => plane.schema(),
             Self::RomRuns => json!({
                 "type":ty,"minItems":0,"maxItems":super::memory::MAX_RUNS,
                 "items":{"type":"array","minItems":2,"maxItems":2,"items":U32.json(),
@@ -112,6 +118,8 @@ impl Rule {
             Self::Position => value
                 .as_array()
                 .is_some_and(|a| a.len() == 2 && a.iter().all(|v| COORD.validate(key, v).is_ok())),
+            // Complete plane shape and cell types are checked after resolving dimensions.
+            Self::PlaPlane(_) => value.is_array(),
             // Individual pairs are decoded against the final dimensions in memory::update.
             Self::RomRuns => value
                 .as_array()
