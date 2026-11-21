@@ -273,6 +273,9 @@ impl ProjectOp {
                     .add_wire(point(*from)?, point(*to)?)
                     .ok_or_else(|| invalid("A wire requires distinct orthogonal endpoints."))?;
                 ids.add_item(circuit, AgentIdKind::Wire, id, &mut change);
+                // The owner itself may be removed before final normalization.
+                change["wire_ids"] = json!([]);
+                change["wire_agent_ids"] = json!([]);
             }
             RemoveWire {
                 circuit: scope,

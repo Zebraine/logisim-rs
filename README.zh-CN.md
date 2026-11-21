@@ -234,7 +234,7 @@ PLA 的两个平面均以项为行。输入单元取 `disconnected`、`direct` �
 
 `project_snapshot` 为每个电路、组件和导线同时返回 numeric `id` 和持久 `agent_id`。例如，Pin 快照包含 `{"id":3,"agent_id":"c-0123456789abcdef0123456789abcdef","kind":"Pin"}`。移动、更新或删除组件，删除导线，更新插件实例，以及重命名、删除电路或设置主电路时，`id` 和 `agent_id` 必须且只能传一个。跨会话编辑推荐直接传入已保存的 `agent_id`。若同时传入 `circuit`，它必须与对象所属电路一致。新快照可用于查询每个持久 ID 对应的当前数字 ID。
 
-例如，即使重开后 Pin 的数字 ID 已变化，`{"op":"update_component","agent_id":"c-0123456789abcdef0123456789abcdef","properties":{"label":"DATA"}}` 仍会更新该 Pin。每次添加对象都会在对应的 change 中返回两种 ID。导线归一化后，`wire_ids` 与 `wire_agent_ids` 按相同顺序列出存活线段，首对即为主线段的 `id` 和 `agent_id`。在相同会话状态下重复预演或应用同一批操作，得到的 ID 一致。
+例如，即使重开后 Pin 的数字 ID 已变化，`{"op":"update_component","agent_id":"c-0123456789abcdef0123456789abcdef","properties":{"label":"DATA"}}` 仍会更新该 Pin。每次添加对象都会在对应的 change 中返回两种 ID。导线归一化后，`wire_ids` 与 `wire_agent_ids` 按相同顺序列出存活线段，首对即为主线段的 `id` 和 `agent_id`。若同一批操作随后删除这条导线或其所属电路，添加结果会保留创建时的两种 ID，存活线段列表为空。在相同会话状态下重复预演或应用同一批操作，得到的 ID 一致。
 
 可选 XML 属性 `agent-id` 是 logisim-rs 文档扩展。电路、组件和导线分别用 `k-`、`c-` 和 `w-` 前缀，后接 128 位随机数的 32 个小写十六进制字符。打开旧文件时在内存中分配缺失标识，下次显式保存时写入工程，复制已保存的文件会保留标识。备份仍是保存前的原始字节。导线分段时新增线段取得新标识，合并时保留一个存续标识。
 

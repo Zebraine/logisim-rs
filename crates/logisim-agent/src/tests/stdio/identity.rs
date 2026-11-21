@@ -175,3 +175,78 @@ fn cli_save_and_mcp_open_copy_share_persistent_ids_even_after_numeric_reassignme
     );
     fs::remove_dir_all(tmp).unwrap();
 }
+
+#[test]
+fn saved_ids_target_the_same_objects_through_cli_ops_files_and_mcp_after_reopen() {
+    use super::Client;
+    use serde_json::json;
+    let dir = std::env::temp_dir().join(format!("agent-refs-{:016x}", getrandom::u64().unwrap()));
+    fs::create_dir(&dir).unwrap();
+    let path = dir.join("test.circ");
+    let source = r##"<project version="1.0" source="logisim-rs-plugin-v1"><lib name="w" desc="#Wiring"/><main name="main"/><circuit name="main"><comp lib="w" loc="(0,0)" name="Pin"/><wire from="(0,0)" to="(50,0)"/></circuit></project>"##;
+    fs::write(&path, source).unwrap();
+    let root = dir.to_str().unwrap();
+    let mut first = Client::start(&["--root", root, "project", "open", "--path", "test.circ"]);
+    let opened = first.read();
+    assert_eq!(opened["data"]["partial"], false, "{opened}");
+    let first_id = opened["data"]["session_id"].clone();
+    first.send(json!(["project", "snapshot", "--session", first_id]));
+    let initial = first.read()["data"]["circuits"][0].clone();
+    let pin = &initial["components"][0];
+    let wire = &initial["wires"][0];
+    first.send(json!(["project", "save", "--session", first_id]));
+    assert_eq!(first.read()["ok"], true);
+    first.finish();
+
+    let ops = json!([{"op":"remove_wire","agent_id":wire["agent_id"]},
+        {"op":"move_component","agent_id":pin["agent_id"],"position":[100,50]},
+        {"op":"update_component","agent_id":pin["agent_id"],"properties":{"label":"saved pin"}}]);
+    fs::write(dir.join("edits.json"), json!({"ops":ops}).to_string()).unwrap();
+    let saved = fs::read(&path).unwrap();
+    let mut cli = Client::start(&["--root", root, "project", "open", "--path", "test.circ"]);
+    let session = cli.read()["data"]["session_id"].clone();
+    cli.send(json!([
+        "project",
+        "patch",
+        "--session",
+        session,
+        "--ops",
+        "edits.json",
+        "--dry-run"
+    ]));
+    let preview = cli.read()["data"]["changes"].clone();
+    assert_eq!(preview[1]["agent_id"], pin["agent_id"]);
+    assert_ne!(preview[1]["id"], pin["id"]);
+    cli.finish();
+
+    let mut mcp = Client::start(&["--root", root, "mcp"]);
+    mcp.initialize("2025-11-25");
+    let open = mcp.tool("project_open", json!({"path":"test.circ"}));
+    let session = &open["result"]["structuredContent"]["data"]["session_id"];
+    let patch = mcp.tool(
+        "project_patch",
+        json!({"session":session,"ops":ops,"dry_run":false}),
+    );
+    assert_eq!(patch["result"]["isError"], false);
+    assert_eq!(
+        patch["result"]["structuredContent"]["data"]["changes"],
+        preview
+    );
+    assert_eq!(fs::read(&path).unwrap(), saved);
+    assert_eq!(
+        mcp.tool("project_save", json!({"session":session}))["result"]["isError"],
+        false
+    );
+    mcp.finish();
+    assert_eq!(fs::read(path.with_extension("circ.bak")).unwrap(), saved);
+    let mut last = Client::start(&["--root", root, "project", "open", "--path", "test.circ"]);
+    let session = last.read()["data"]["session_id"].clone();
+    last.send(json!(["project", "snapshot", "--session", session]));
+    let circuit = last.read()["data"]["circuits"][0].clone();
+    assert_eq!(circuit["wires"], json!([]));
+    assert_eq!(circuit["components"][0]["label"], "saved pin");
+    assert_eq!(circuit["components"][0]["position"], json!([100, 50]));
+    assert_eq!(circuit["components"][0]["agent_id"], pin["agent_id"]);
+    last.finish();
+    fs::remove_dir_all(dir).unwrap();
+}
