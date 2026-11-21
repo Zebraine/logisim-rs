@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "apps/logisim-desktop",
     "apps/logisim-bench",
+    "apps/logisim-jit-spike",
     "crates/logisim-agent",
     "crates/logisim-preferences",
     "crates/logisim-core",
