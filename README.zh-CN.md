@@ -158,7 +158,7 @@ MCP 支持 `2024-11-05`、`2025-03-26`、`2025-06-18` 和 `2025-11-25`。握手�
 {"tool":"project_close","arguments":{"session":"ID_FROM_OPEN"}}
 ```
 
-后续请求使用打开工程时返回的 `data.session_id`。CLI 和 MCP 提供相同的 19 项操作。工程快照覆盖全部电路定义，仿真状态包含根实例的信号、时钟与传播计数、诊断和插件状态。
+后续请求使用打开工程时返回的 `data.session_id`。CLI 和 MCP 提供相同的 19 项操作。MCP 握手后可用 `tools/list` 查询工具名及输入 schema。工程快照覆盖全部电路定义，仿真状态包含根实例的信号、时钟与传播计数、诊断和插件状态。
 
 ### 控制仿真
 
@@ -183,7 +183,7 @@ MCP 支持 `2024-11-05`、`2025-03-26`、`2025-06-18` 和 `2025-11-25`。握手�
 ["simulation","plugin-action","--session","ID_FROM_OPEN","--agent-id","COMPONENT_AGENT_ID","--action","write","--argument","1 DEADBEEF"]
 ```
 
-参数为按原样传递的 UTF-8 文本，最多 1024 字节，省略时取空字符串。没有参数说明的动作只接受空字符串。键盘输入绑定保留给交互界面。成功响应包含 `action:"plugin_action"`、`changed` 和完整仿真状态。即使输出引脚读数相同，插件内部状态发生变化也会计入 `changed`。暂停时动作仍会执行，待传播的信号计入 `pending_count`，可手动传播或恢复运行。动作保留当前 tick 和工程文件内容。目标、动作或参数校验失败时，仿真状态保持原值。插件执行故障返回 `plugin_error`，`error.details.state` 包含暂停后的状态，可用 `simulation_reset` 恢复。
+参数为按原样传递的 UTF-8 文本，最多 1024 字节，省略时取空字符串。没有参数说明的动作只接受空字符串。动作在 Agent 会话自己的仿真实例中执行，与已打开的桌面窗口相互独立。键盘绑定和 `InputEvent` 事件派发仅在交互式编辑器内可用。成功响应包含 `action:"plugin_action"`、`changed` 和完整仿真状态。即使输出引脚读数相同，插件内部状态发生变化也会计入 `changed`。暂停时动作仍会执行，待传播的信号计入 `pending_count`，可手动传播或恢复运行。动作保留当前 tick 和工程文件内容。目标、动作或参数校验失败时，仿真状态保持原值。插件执行故障返回 `plugin_error`，`error.details.state` 包含暂停后的状态，可用 `simulation_reset` 恢复。
 
 ### 编辑工程会话
 
@@ -195,7 +195,7 @@ MCP 支持 `2024-11-05`、`2025-03-26`、`2025-06-18` 和 `2025-11-25`。握手�
 {"tool":"project_save","arguments":{"session":"ID_FROM_OPEN","expected_sha256":"SHA_FROM_OPEN_OR_LAST_SAVE","backup":true}}
 ```
 
-请使用快照中的真实 ID。核对预演结果后，将同一补丁的 `dry_run` 改为 `false`，应用后再保存。支持元件添加、移动、更新、删除，导线添加、删除，以及电路添加、重命名、删除和设置主电路。端口坐标使用画布坐标，颜色使用 RGBA，Splitter 映射使用从零开始的分支索引，断开位用 null。多个电路内有相同的元件或导线数字 ID 时须传 `circuit`。导线遵循编辑器的重布线和合并、分段规则。
+请使用快照中的真实 ID。核对预演结果后，将同一补丁的 `dry_run` 改为 `false`，应用后再保存。`project_patch` 的输入 schema 列出电路、导线和元件操作，包括用于 Wasm 实例的 `add_plugin` 和 `update_plugin`。端口坐标使用画布坐标，颜色使用 RGBA，Splitter 映射使用从零开始的分支索引，断开位用 null。多个电路内有相同的元件或导线数字 ID 时须传 `circuit`。导线遵循编辑器的重布线和合并、分段规则。
 
 打开工程前即可运行 `logisim-agent project catalog`，或无参数调用 MCP 工具 `project_catalog`。`data.kinds` 列出 Core 规范名、可用别名，以及 `addable`、`editable` 和 `requires_circuit_id` 标志。仅子电路实例需要目标电路 ID。插件条目标有 `requires_plugin_source:true`，其属性由选定模块和工具决定。
 
@@ -244,7 +244,7 @@ PLA 的两个平面均以项为行。输入单元取 `disconnected`、`direct` �
 
 例如，即使重开后 Pin 的数字 ID 已变化，`{"op":"update_component","agent_id":"c-0123456789abcdef0123456789abcdef","properties":{"label":"DATA"}}` 仍会更新该 Pin。每次添加对象都会在对应的 change 中返回两种 ID。导线归一化后，`wire_ids` 与 `wire_agent_ids` 按相同顺序列出存活线段，首对即为主线段的 `id` 和 `agent_id`。若同一批操作随后删除这条导线或其所属电路，添加结果会保留创建时的两种 ID，存活线段列表为空。在相同会话状态下重复预演或应用同一批操作，得到的 ID 一致。
 
-可选 XML 属性 `agent-id` 是 logisim-rs 文档扩展。电路、组件和导线分别用 `k-`、`c-` 和 `w-` 前缀，后接 128 位随机数的 32 个小写十六进制字符。打开旧文件时在内存中分配缺失标识，下次显式保存时写入工程，复制已保存的文件会保留标识。备份仍是保存前的原始字节。导线分段时新增线段取得新标识，合并时保留一个存续标识。
+可选 XML 属性 `agent-id` 是 logisim-rs 文档扩展。电路、组件和导线分别用 `k-`、`c-` 和 `w-` 前缀，后接 32 个小写十六进制字符。打开旧文件时在内存中分配缺失标识，下次显式保存时写入工程，复制已保存的文件会保留标识。备份仍是保存前的原始字节。导线分段时新增线段取得新标识，合并时保留一个存续标识。
 
 无效标识或重复项会产生警告。保留首次出现的合法标识，受影响的对象获得新标识。若导入时没有内容省略，可以保存修复结果。外部工具可能忽略此属性，也可能在保存时丢弃它。Logisim-ITA 对该属性的处理尚未验证。
 

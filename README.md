@@ -158,7 +158,7 @@ For a circuit, run `logisim-agent cli` and send one JSON object per line in the 
 {"tool":"project_close","arguments":{"session":"ID_FROM_OPEN"}}
 ```
 
-Use the returned `data.session_id` in subsequent requests. CLI and MCP expose the same 19 operations. The project snapshot covers every circuit definition. Simulation state includes signals from the active root instance, clock and propagation counters, diagnostics and plugin status.
+Use the returned `data.session_id` in subsequent requests. CLI and MCP expose the same 19 operations. After the MCP handshake, use `tools/list` to get their names and input schemas. The project snapshot covers every circuit definition. Simulation state includes signals from the active root instance, clock and propagation counters, diagnostics and plugin status.
 
 ### Controlling a simulation
 
@@ -183,7 +183,7 @@ For a root plugin instance, read the action ID, label and argument hint from `to
 ["simulation","plugin-action","--session","ID_FROM_OPEN","--agent-id","COMPONENT_AGENT_ID","--action","write","--argument","1 DEADBEEF"]
 ```
 
-The optional argument is literal UTF-8 text of at most 1024 bytes and defaults to an empty string. Actions without an argument hint accept only the empty string. Keyboard input bindings are reserved for interactive use. A successful call returns `action:"plugin_action"`, `changed` and the full simulation state. A change to private plugin state counts even when the output pins hold the same values. While paused, the action executes and queued signals remain in `pending_count` until an explicit propagation or resume. The tick count and project bytes stay intact. Invalid targets, actions or arguments leave the simulation as it was. A plugin execution fault returns `plugin_error` with the paused state in `error.details.state`. Use `simulation_reset` to recover.
+The optional argument is literal UTF-8 text of at most 1024 bytes and defaults to an empty string. Actions without an argument hint accept only the empty string. Actions run in the agent session’s own simulation, independently of any open desktop window. Keyboard bindings and `InputEvent` delivery are available only in the interactive editor. A successful call returns `action:"plugin_action"`, `changed` and the full simulation state. A change to private plugin state counts even when the output pins hold the same values. While paused, the action executes and queued signals remain in `pending_count` until an explicit propagation or resume. The tick count and project bytes stay intact. Invalid targets, actions or arguments leave the simulation as it was. A plugin execution fault returns `plugin_error` with the paused state in `error.details.state`. Use `simulation_reset` to recover.
 
 ### Editing a project session
 
@@ -195,7 +195,7 @@ Pass `project_patch` a `session`, an explicit `dry_run` boolean, and an ordered 
 {"tool":"project_save","arguments":{"session":"ID_FROM_OPEN","expected_sha256":"SHA_FROM_OPEN_OR_LAST_SAVE","backup":true}}
 ```
 
-Use IDs from your snapshot. After reviewing the preview, repeat the patch with `dry_run:false`, then save. Supported operations are `add_component`, `move_component`, `update_component`, `remove_component`, `add_wire`, `remove_wire`, `add_circuit`, `rename_circuit`, `remove_circuit` and `set_main_circuit`. Port positions use canvas coordinates, colors use RGBA and Splitter mappings use zero-based branch indices or null. Include `circuit` when a numeric item ID occurs in multiple circuits. Wire edits use the editor's routing and normalization rules.
+Use IDs from your snapshot. After reviewing the preview, repeat the patch with `dry_run:false`, then save. The `project_patch` input schema describes the operations for circuits, wires and components, including `add_plugin` and `update_plugin` for Wasm instances. Port positions use canvas coordinates, colors use RGBA and Splitter mappings use zero-based branch indices or null. Include `circuit` when a numeric item ID occurs in multiple circuits. Wire edits use the editor's routing and normalization rules.
 
 Run `logisim-agent project catalog` or call the MCP tool `project_catalog` with no arguments to discover component kinds before opening a file. The response’s `data.kinds` lists core names, accepted aliases, and the `addable`, `editable` and `requires_circuit_id` flags. Only subcircuit instances need a target circuit ID. The plugin entry has `requires_plugin_source:true` and takes its properties from the selected module and tool.
 
@@ -244,7 +244,7 @@ Each circuit, component and wire in `project_snapshot` has a persistent `agent_i
 
 For example, `{"op":"update_component","agent_id":"c-0123456789abcdef0123456789abcdef","properties":{"label":"DATA"}}` updates that Pin even if its numeric ID changed on reopen. Each addition returns both IDs in its change. After wire normalization, `wire_ids` and `wire_agent_ids` list surviving segments in matching order. The first pair is the primary `id` and `agent_id`. If the same batch removes the wire or its circuit, the addition reports its creation IDs and empty segment lists. Repeating a dry-run or applying the same batch to the same session state gives the same IDs.
 
-The optional XML attribute `agent-id` is a logisim-rs extension. Its value has a type prefix (`k-` circuit, `c-` component, `w-` wire) and 32 lowercase hex digits from 128 random bits. Opening an older file allocates missing IDs in memory. The next explicit save writes them to the project, and a copy of that file carries the same IDs. The backup contains the original bytes. New split segments get fresh IDs, and a merged wire retains one surviving identity.
+The optional XML attribute `agent-id` is a logisim-rs extension. Its value has a type prefix (`k-` circuit, `c-` component, `w-` wire) followed by 32 lowercase hexadecimal digits. Opening an older file allocates missing IDs in memory. The next explicit save writes them to the project, and a copy of that file carries the same IDs. The backup contains the original bytes. New split segments get fresh IDs, and a merged wire retains one surviving identity.
 
 An invalid ID or a repeated occurrence produces a warning. The first valid occurrence is retained, and the agent assigns fresh IDs to the affected objects. These repairs can be saved when the import has no omissions. External tools may ignore or discard the attribute, including on resave. Its handling by Logisim-ITA has not been verified.
 
