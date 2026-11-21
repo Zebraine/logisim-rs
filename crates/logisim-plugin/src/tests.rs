@@ -259,3 +259,28 @@ fn instance_enforces_memory_table_and_response_limits() {
 
 #[cfg(feature = "engine-study")]
 mod engine_contract;
+
+#[test]
+fn loading_pins_the_engine_per_module_and_implicit_load_stays_wasmi() {
+    let manifest = manifest();
+    let bytes = wasm(&Response::Manifest(manifest.clone()), 1, "");
+    let default = Plugin::load(&bytes).unwrap();
+    assert_eq!(default.engine(), WasmEngine::Wasmi);
+    let explicit = Plugin::load_dependency_with_engine(
+        &bytes,
+        &manifest.id,
+        &manifest.version,
+        &manifest.components(),
+        WasmEngine::Wasmtime,
+    );
+    if WasmEngine::Wasmtime.available() {
+        let native = explicit.unwrap();
+        assert_eq!(native.engine(), WasmEngine::Wasmtime);
+        assert_eq!(native.manifest(), default.manifest());
+        for module in [default, native] {
+            module.instantiate(&manifest.components()[0]).unwrap();
+        }
+    } else {
+        assert!(explicit.err().unwrap().contains("does not include"));
+    }
+}

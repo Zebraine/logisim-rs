@@ -8,28 +8,22 @@ pub(super) struct RasterApi {
     call: TypedFunc<u32, u64>,
 }
 impl RasterApi {
-    pub(super) fn load(
-        instance: &backend::Instance,
-        store: &mut Store<StoreLimits>,
-    ) -> Result<Option<Self>> {
-        if instance
-            .get_export(store.as_context_mut(), "logisim_raster_version")
-            .is_none()
-        {
+    pub(super) fn load(instance: &backend::Instance, store: &mut Store) -> Result<Option<Self>> {
+        if !instance.has_export(store, "logisim_raster_version") {
             return Ok(None);
         }
         let version = instance
-            .get_typed_func::<(), u32>(store.as_context_mut(), "logisim_raster_version")
+            .get_typed_func::<(), u32>(store, "logisim_raster_version")
             .map_err(error)?;
         if version.call(&mut *store, ()).map_err(error)? != raster::VERSION {
             return Ok(None);
         }
         Ok(Some(Self {
             configure: instance
-                .get_typed_func(store.as_context_mut(), "logisim_raster_config")
+                .get_typed_func(store, "logisim_raster_config")
                 .map_err(error)?,
             call: instance
-                .get_typed_func(store.as_context_mut(), "logisim_raster_call")
+                .get_typed_func(store, "logisim_raster_call")
                 .map_err(error)?,
         }))
     }

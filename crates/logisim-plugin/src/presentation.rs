@@ -2,7 +2,7 @@ use super::*;
 use logisim_plugin_api::presentation::{self, Presentation};
 pub(super) fn load(
     instance: &backend::Instance,
-    store: &mut Store<StoreLimits>,
+    store: &mut Store,
 ) -> Result<Option<TypedFunc<(), u64>>> {
     metadata::load(
         instance,

@@ -27,6 +27,15 @@ fn fixture(iterations: Option<u32>) -> Vec<u8> {
 
 #[test]
 fn phase_fuel_contract_matrix() {
+    for engine in [WasmEngine::Wasmi, WasmEngine::Wasmtime]
+        .into_iter()
+        .filter(|e| e.available())
+    {
+        measure_engine(engine);
+    }
+}
+
+fn measure_engine(engine: WasmEngine) {
     for count in [
         Some(1000),
         Some(10_000),
@@ -38,7 +47,7 @@ fn phase_fuel_contract_matrix() {
     ] {
         let bytes = fixture(count);
         let sha256 = format!("{:x}", Sha256::digest(&bytes));
-        let plugin = Plugin::load(&bytes).unwrap();
+        let plugin = Plugin::load_with_engine(&bytes, engine).unwrap();
         let component = &plugin.manifest().components()[0];
         for multiple in [1, 2, 4, 8] {
             study::with_multiplier(multiple, || {
@@ -76,7 +85,7 @@ fn phase_fuel_contract_matrix() {
                     // This particular two-million-iteration trace is the ABI decision boundary.
                     let completes = count.is_some_and(|n| {
                         multiple > 1
-                            || if cfg!(feature = "compare-wasmtime") {
+                            || if engine == WasmEngine::Wasmtime {
                                 n < 2_000_000
                             } else {
                                 n < 3_600_000
@@ -94,7 +103,7 @@ fn phase_fuel_contract_matrix() {
                     let budget = multiple * 10_000_000;
                     println!(
                         "FUEL {}",
-                        json!({"sha256":sha256,"iterations":count,"phase":phase,"budget":budget,
+                        json!({"engine":engine.code(),"sha256":sha256,"iterations":count,"phase":phase,"budget":budget,
                         "remaining":fuel.remaining_fuel[0],"consumed":budget-fuel.remaining_fuel[0],
                         "phase_return":result.as_ref().ok(),"error":result.as_ref().err(),
                         "dispatches_including_retry":fuel.remaining_fuel.len(),

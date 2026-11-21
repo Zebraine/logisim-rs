@@ -25,7 +25,7 @@ pub fn with_multiplier<T>(multiple: u64, run: impl FnOnce() -> T) -> Result<T> {
 }
 
 // Buffer allocation and dispatch share one refill. Sample before propagating a dispatch trap.
-pub(super) fn record_remaining(store: &Store<StoreLimits>) -> Result<()> {
+pub(super) fn record_remaining(store: &Store) -> Result<()> {
     let left = store.get_fuel().map_err(error)?;
     metrics::on_call(|calls| calls.remaining_fuel.push(left));
     Ok(())
@@ -41,13 +41,14 @@ pub enum Reuse {
 }
 
 pub struct Loader {
+    choice: WasmEngine,
     reuse: Reuse,
     engine: Option<Engine>,
     // One bounded entry. Exact source bytes avoid hash collisions. The engine, build and
     // target are fixed for the lifetime of the entry. No native bytes cross a trust boundary.
     entry: Option<(Vec<u8>, Module)>,
     #[cfg(feature = "compare-wasmtime")]
-    disk: Option<backend::Cache>,
+    disk: Option<wasmtime::Cache>,
     #[cfg(feature = "compare-wasmtime")]
     disk_error: Option<String>,
     pub hits: usize,
@@ -55,7 +56,16 @@ pub struct Loader {
 }
 impl Loader {
     pub fn new(reuse: Reuse) -> Self {
+        #[cfg(feature = "compare-wasmtime")]
+        if matches!(&reuse, Reuse::Disk(_)) {
+            return Self::with_engine(reuse, WasmEngine::Wasmtime);
+        }
+        Self::with_engine(reuse, WasmEngine::Wasmi)
+    }
+
+    pub fn with_engine(reuse: Reuse, choice: WasmEngine) -> Self {
         Self {
+            choice,
             reuse,
             engine: None,
             entry: None,
@@ -83,17 +93,20 @@ impl Loader {
         }
         #[cfg(feature = "compare-wasmtime")]
         if let Reuse::Disk(path) = &self.reuse {
+            if self.choice != WasmEngine::Wasmtime {
+                return Err("Disk cache requires Wasmtime.".into());
+            }
             if self.disk.is_none() && self.disk_error.is_none() {
                 match disk::open(path) {
                     Ok(cache) => self.disk = Some(cache),
                     Err(e) => self.disk_error = Some(e),
                 }
             }
-            let mut settings = config();
+            let mut settings = backend::wasmtime_config();
             settings.cache(self.disk.clone());
-            let engine = Engine::new(&settings).map_err(error)?;
+            let engine = Engine::Wasmtime(wasmtime::Engine::new(&settings).map_err(error)?);
             let hits = self.disk.as_ref().map_or(0, |c| c.cache_hits());
-            let module = compile(&engine, bytes)?;
+            let module = engine.compile(bytes)?;
             if self.disk.as_ref().is_some_and(|c| c.cache_hits() > hits) {
                 self.hits += 1;
             } else {
@@ -103,12 +116,16 @@ impl Loader {
         }
         self.misses += 1;
         if self.reuse == Reuse::None {
-            return Plugin::load(bytes);
+            return Plugin::load_with_engine(bytes, self.choice);
         }
         if self.engine.is_none() {
-            self.engine = Some(new_engine()?);
+            self.engine = Some(Engine::new(self.choice)?);
         }
-        let module = compile(self.engine.as_ref().expect("initialized engine"), bytes)?;
+        let module = self
+            .engine
+            .as_ref()
+            .expect("initialized engine")
+            .compile(bytes)?;
         let plugin = Plugin::from_module(module.clone())?;
         if self.reuse == Reuse::Module {
             self.entry = Some((bytes.to_vec(), module));

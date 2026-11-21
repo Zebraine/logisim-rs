@@ -4,7 +4,7 @@ use super::*;
 use std::path::Path;
 
 #[cfg(target_os = "linux")]
-pub(super) fn open(path: &Path) -> Result<backend::Cache> {
+pub(super) fn open(path: &Path) -> Result<wasmtime::Cache> {
     use std::{fs, os::unix::fs::MetadataExt};
     let owner = fs::metadata("/proc/self").map_err(error)?.uid();
     let mount_owner = fs::metadata("/").map_err(error)?.uid();
@@ -28,12 +28,12 @@ pub(super) fn open(path: &Path) -> Result<backend::Cache> {
             );
         }
     }
-    let mut options = backend::CacheConfig::new();
+    let mut options = wasmtime::CacheConfig::new();
     options.with_directory(path);
-    backend::Cache::new(options).map_err(error)
+    wasmtime::Cache::new(options).map_err(error)
 }
 
 #[cfg(not(target_os = "linux"))]
-pub(super) fn open(_: &Path) -> Result<backend::Cache> {
+pub(super) fn open(_: &Path) -> Result<wasmtime::Cache> {
     Err("The private disk-cache experiment has been qualified only on Linux".into())
 }

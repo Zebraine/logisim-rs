@@ -9,6 +9,7 @@ macro_rules! timed {
         $value
     }};
 }
+mod backend;
 mod frame;
 mod interaction;
 mod metadata;
@@ -20,69 +21,24 @@ mod stable;
 pub mod study;
 #[cfg(test)]
 mod tests;
-use backend::{
-    AsContextMut, Config, Engine, Linker, Memory, Module, Store, StoreLimits, StoreLimitsBuilder,
-    TypedFunc,
-};
+pub use backend::WasmEngine;
+use backend::{Engine, Memory, Module, Store, TypedFunc};
 use logisim_plugin_api::{
     Component, Evaluation, MAX_MESSAGE, Manifest, Request, Response, Update, supports_abi,
 };
 pub use stable::StableInstance;
 use std::{collections::BTreeMap, sync::Arc};
-#[cfg(not(feature = "compare-wasmtime"))]
-use wasmi as backend;
-#[cfg(feature = "compare-wasmtime")]
-use wasmtime as backend;
 pub const MAX_MODULE: usize = 4 * 1024 * 1024;
 const FUEL: u64 = 10_000_000;
 type Result<T> = std::result::Result<T, String>;
 fn error(e: impl std::fmt::Display) -> String {
-    #[cfg(feature = "compare-wasmtime")]
-    {
-        format!("{e:#}")
-    } // Wasmtime attaches the trap cause below a Wasm backtrace.
-    #[cfg(not(feature = "compare-wasmtime"))]
-    {
-        e.to_string()
-    }
+    format!("{e:#}")
 }
-
 fn check_binary(bytes: &[u8]) -> Result<()> {
     if bytes.len() > MAX_MODULE || !bytes.starts_with(b"\0asm") {
         return Err("Choose a WebAssembly binary within the 4 MiB limit.".into());
     }
     Ok(())
-}
-
-fn config() -> Config {
-    let mut config = Config::default();
-    config.consume_fuel(true);
-    config
-}
-
-fn new_engine() -> Result<Engine> {
-    #[cfg(not(feature = "compare-wasmtime"))]
-    {
-        Ok(Engine::new(&config()))
-    }
-    #[cfg(feature = "compare-wasmtime")]
-    {
-        Engine::new(&config()).map_err(error)
-    }
-}
-
-fn compile(engine: &Engine, bytes: &[u8]) -> Result<Module> {
-    #[cfg(feature = "compare-wasmtime")]
-    timed!(
-        "admission_validation",
-        wasmi::Module::validate(&wasmi::Engine::default(), bytes)
-    )
-    .map_err(error)?;
-    let module = timed!("module_compile", Module::new(engine, bytes)).map_err(error)?;
-    if module.imports().next().is_some() {
-        return Err("Plugin imports are not supported (including WASI).".into());
-    }
-    Ok(module)
 }
 
 #[inline]
@@ -107,8 +63,16 @@ pub struct Plugin {
 }
 impl Plugin {
     pub fn load(bytes: &[u8]) -> Result<Self> {
+        Self::load_with_engine(bytes, WasmEngine::Wasmi)
+    }
+
+    pub fn load_with_engine(bytes: &[u8], engine: WasmEngine) -> Result<Self> {
         check_binary(bytes)?;
-        Self::from_module(compile(&new_engine()?, bytes)?)
+        Self::from_module(Engine::new(engine)?.compile(bytes)?)
+    }
+
+    pub fn engine(&self) -> WasmEngine {
+        self.module.engine_choice()
     }
 
     fn from_module(module: Module) -> Result<Self> {
@@ -149,9 +113,19 @@ impl Plugin {
         version: &str,
         components: impl IntoIterator<Item = &'a Component>,
     ) -> Result<Self> {
+        Self::load_dependency_with_engine(bytes, id, version, components, WasmEngine::Wasmi)
+    }
+
+    pub fn load_dependency_with_engine<'a>(
+        bytes: &[u8],
+        id: &str,
+        version: &str,
+        components: impl IntoIterator<Item = &'a Component>,
+        engine: WasmEngine,
+    ) -> Result<Self> {
         #[cfg(feature = "plugin-metrics")]
         let _span = metrics::timer("load_dependency");
-        let plugin = Self::load(bytes)?;
+        let plugin = Self::load_with_engine(bytes, engine)?;
         plugin.check_dependency(id, version, components)?;
         Ok(plugin)
     }
@@ -207,7 +181,7 @@ pub struct Instance {
     frame: Option<frame::FrameApi>,
     raster: Option<raster::RasterApi>,
     abi: u32,
-    store: Store<StoreLimits>,
+    store: Store,
     memory: Memory,
     buffer: TypedFunc<u32, u32>,
     call: TypedFunc<u32, u64>,
@@ -216,27 +190,9 @@ impl Instance {
     fn new(module: &Module) -> Result<Self> {
         #[cfg(feature = "plugin-metrics")]
         let _span = metrics::timer("vm_new");
-        let limits = StoreLimitsBuilder::new()
-            .memory_size(16 * 1024 * 1024)
-            .memories(1)
-            .tables(1)
-            .table_elements(10_000)
-            .instances(1)
-            .trap_on_grow_failure(true)
-            .build();
-        let mut store = Store::new(module.engine(), limits);
-        store.limiter(|s| s);
-        store.set_fuel(fuel_budget()).map_err(error)?;
-        #[cfg(feature = "compare-wasmtime")]
-        let instance = Linker::<StoreLimits>::new(module.engine())
-            .instantiate(&mut store, module)
-            .map_err(error)?;
-        #[cfg(not(feature = "compare-wasmtime"))]
-        let instance = Linker::<StoreLimits>::new(module.engine())
-            .instantiate_and_start(&mut store, module)
-            .map_err(error)?;
+        let (instance, mut store) = module.instantiate()?;
         let abi = instance
-            .get_typed_func::<(), u32>(store.as_context_mut(), "logisim_abi")
+            .get_typed_func::<(), u32>(&mut store, "logisim_abi")
             .map_err(error)?;
         let abi = abi.call(&mut store, ()).map_err(error)?;
         if !supports_abi(abi) {
@@ -263,13 +219,13 @@ impl Instance {
             frame,
             abi,
             memory: instance
-                .get_memory(store.as_context_mut(), "memory")
+                .memory(&mut store, "memory")
                 .ok_or("Plugin has no exported memory.")?,
             buffer: instance
-                .get_typed_func(store.as_context_mut(), "logisim_buffer")
+                .get_typed_func(&mut store, "logisim_buffer")
                 .map_err(error)?,
             call: instance
-                .get_typed_func(store.as_context_mut(), "logisim_call")
+                .get_typed_func(&mut store, "logisim_call")
                 .map_err(error)?,
             store,
         })

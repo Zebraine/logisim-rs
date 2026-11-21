@@ -2,30 +2,27 @@
 use super::*;
 pub(super) fn load(
     instance: &backend::Instance,
-    store: &mut Store<StoreLimits>,
+    store: &mut Store,
     version_export: &str,
     data_export: &str,
     supported: u32,
 ) -> Result<Option<TypedFunc<(), u64>>> {
-    if instance
-        .get_export(store.as_context_mut(), version_export)
-        .is_none()
-    {
+    if !instance.has_export(store, version_export) {
         return Ok(None);
     }
     let version = instance
-        .get_typed_func::<(), u32>(store.as_context_mut(), version_export)
+        .get_typed_func::<(), u32>(store, version_export)
         .map_err(error)?;
     if version.call(&mut *store, ()).map_err(error)? != supported {
         return Ok(None);
     }
     instance
-        .get_typed_func(store.as_context_mut(), data_export)
+        .get_typed_func(store, data_export)
         .map(Some)
         .map_err(error)
 }
 pub(super) fn read<T: serde::de::DeserializeOwned + Default>(
-    store: &mut Store<StoreLimits>,
+    store: &mut Store,
     memory: &Memory,
     call: Option<&TypedFunc<(), u64>>,
 ) -> Result<T> {

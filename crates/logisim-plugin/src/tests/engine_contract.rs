@@ -27,6 +27,15 @@ fn compiled_entry_requires_identical_bytes_and_rechecks_saved_definitions() {
 
 #[test]
 fn engine_admission_and_fault_messages() {
+    for engine in [WasmEngine::Wasmi, WasmEngine::Wasmtime]
+        .into_iter()
+        .filter(|e| e.available())
+    {
+        check_faults(engine);
+    }
+}
+
+fn check_faults(engine: WasmEngine) {
     let m = Response::Manifest(manifest());
     let cases = [
         ("guest_trap", wasm(&m, 1, "unreachable")),
@@ -56,11 +65,14 @@ fn engine_admission_and_fault_messages() {
         ),
     ];
     for (name, bytes) in cases {
-        let e = Plugin::load(&bytes).err().expect(name);
+        let e = Plugin::load_with_engine(&bytes, engine).err().expect(name);
         assert!(!e.is_empty());
-        println!("LIMIT {}", serde_json::json!({"case":name,"error":e}));
+        println!(
+            "LIMIT {}",
+            serde_json::json!({"engine":engine.code(),"case":name,"error":e})
+        );
     }
-    let vm = Plugin::load(&wasm(&m, 1, "")).unwrap();
+    let vm = Plugin::load_with_engine(&wasm(&m, 1, ""), engine).unwrap();
     let c = vm.manifest.components().remove(0);
     let mut instance = vm.instantiate(&c).unwrap();
     let request = Request::Evaluate(Evaluation {
@@ -111,16 +123,16 @@ fn trusted_cache_recovers_from_misses_changed_compiler_and_unavailable_storage()
     assert_eq!(reopen(&path), (1, 0, false));
 
     // Change the compiler flags for identical Wasm. Keep the same directory and engine version.
-    let mut options = backend::CacheConfig::new();
+    let mut options = wasmtime::CacheConfig::new();
     options.with_directory(&path);
-    let cache = backend::Cache::new(options).unwrap();
-    let mut cfg = config();
+    let cache = wasmtime::Cache::new(options).unwrap();
+    let mut cfg = backend::wasmtime_config();
     cfg.cache(Some(cache.clone()))
-        .cranelift_opt_level(backend::OptLevel::None);
-    let engine = Engine::new(&cfg).unwrap();
-    compile(&engine, &bytes).unwrap();
+        .cranelift_opt_level(wasmtime::OptLevel::None);
+    let engine = Engine::Wasmtime(wasmtime::Engine::new(&cfg).unwrap());
+    engine.compile(&bytes).unwrap();
     assert_eq!((cache.cache_hits(), cache.cache_misses()), (0, 1));
-    compile(&engine, &bytes).unwrap();
+    engine.compile(&bytes).unwrap();
     assert_eq!(cache.cache_hits(), 1);
 
     // A broken compression envelope must cause recompilation from the original Wasm.
