@@ -25,7 +25,15 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<Value> {
                 "none" => Reuse::None,
                 "engine" => Reuse::Engine,
                 "module" => Reuse::Module,
-                _ => return Err("Expected none, engine or module".into()),
+                #[cfg(feature = "compare-wasmtime")]
+                "private-disk" => {
+                    // Only the comparison runner provisions this disposable, trusted directory.
+                    let path = std::env::var_os("LOGISIM_BENCH_PRIVATE_CACHE").ok_or(
+                        "Set LOGISIM_BENCH_PRIVATE_CACHE to a fresh private experiment directory",
+                    )?;
+                    Reuse::Disk(path.into())
+                }
+                _ => return Err("Unknown module reuse policy".into()),
             };
             let mut loader = Loader::new(reuse);
             let mut rows = Vec::new();
@@ -49,7 +57,13 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<Value> {
                     "ticks":trace.ticks,"steps":trace.steps}),
                 );
             }
-            Ok(json!({"schema":1,"workload":name,"reuse":mode,"opens":rows}))
+            #[cfg(feature = "compare-wasmtime")]
+            let disk_error = loader.cache_error();
+            #[cfg(not(feature = "compare-wasmtime"))]
+            let disk_error: Option<&str> = None;
+            Ok(
+                json!({"schema":1,"workload":name,"reuse":mode,"opens":rows,"cache_error":disk_error}),
+            )
         }
         _ => Err("Expected trace or opens".into()),
     }

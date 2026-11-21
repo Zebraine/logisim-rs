@@ -20,19 +20,31 @@ mod stable;
 pub mod study;
 #[cfg(test)]
 mod tests;
+use backend::{
+    AsContextMut, Config, Engine, Linker, Memory, Module, Store, StoreLimits, StoreLimitsBuilder,
+    TypedFunc,
+};
 use logisim_plugin_api::{
     Component, Evaluation, MAX_MESSAGE, Manifest, Request, Response, Update, supports_abi,
 };
 pub use stable::StableInstance;
 use std::{collections::BTreeMap, sync::Arc};
-use wasmi::{
-    Config, Engine, Linker, Memory, Module, Store, StoreLimits, StoreLimitsBuilder, TypedFunc,
-};
+#[cfg(not(feature = "compare-wasmtime"))]
+use wasmi as backend;
+#[cfg(feature = "compare-wasmtime")]
+use wasmtime as backend;
 pub const MAX_MODULE: usize = 4 * 1024 * 1024;
 const FUEL: u64 = 10_000_000;
 type Result<T> = std::result::Result<T, String>;
 fn error(e: impl std::fmt::Display) -> String {
-    e.to_string()
+    #[cfg(feature = "compare-wasmtime")]
+    {
+        format!("{e:#}")
+    } // Wasmtime attaches the trap cause below a Wasm backtrace.
+    #[cfg(not(feature = "compare-wasmtime"))]
+    {
+        e.to_string()
+    }
 }
 
 fn check_binary(bytes: &[u8]) -> Result<()> {
@@ -42,13 +54,30 @@ fn check_binary(bytes: &[u8]) -> Result<()> {
     Ok(())
 }
 
-fn new_engine() -> Result<Engine> {
+fn config() -> Config {
     let mut config = Config::default();
     config.consume_fuel(true);
-    Ok(Engine::new(&config))
+    config
+}
+
+fn new_engine() -> Result<Engine> {
+    #[cfg(not(feature = "compare-wasmtime"))]
+    {
+        Ok(Engine::new(&config()))
+    }
+    #[cfg(feature = "compare-wasmtime")]
+    {
+        Engine::new(&config()).map_err(error)
+    }
 }
 
 fn compile(engine: &Engine, bytes: &[u8]) -> Result<Module> {
+    #[cfg(feature = "compare-wasmtime")]
+    timed!(
+        "admission_validation",
+        wasmi::Module::validate(&wasmi::Engine::default(), bytes)
+    )
+    .map_err(error)?;
     let module = timed!("module_compile", Module::new(engine, bytes)).map_err(error)?;
     if module.imports().next().is_some() {
         return Err("Plugin imports are not supported (including WASI).".into());
@@ -93,11 +122,17 @@ impl Plugin {
         }
         let presentation = instance.presentation()?;
         presentation.validate(&manifest)?;
-        let reconfiguration: logisim_plugin_api::reconfiguration::Policy =
-            instance.metadata(instance.reconfiguration)?;
+        let reconfiguration: logisim_plugin_api::reconfiguration::Policy = metadata::read(
+            &mut instance.store,
+            &instance.memory,
+            instance.reconfiguration.as_ref(),
+        )?;
         reconfiguration.validate(&manifest)?;
-        let interaction: logisim_plugin_api::interaction::Interaction =
-            instance.metadata(instance.interaction)?;
+        let interaction: logisim_plugin_api::interaction::Interaction = metadata::read(
+            &mut instance.store,
+            &instance.memory,
+            instance.interaction.as_ref(),
+        )?;
         interaction.validate(&manifest)?;
         Ok(Self {
             module,
@@ -192,11 +227,16 @@ impl Instance {
         let mut store = Store::new(module.engine(), limits);
         store.limiter(|s| s);
         store.set_fuel(fuel_budget()).map_err(error)?;
+        #[cfg(feature = "compare-wasmtime")]
+        let instance = Linker::<StoreLimits>::new(module.engine())
+            .instantiate(&mut store, module)
+            .map_err(error)?;
+        #[cfg(not(feature = "compare-wasmtime"))]
         let instance = Linker::<StoreLimits>::new(module.engine())
             .instantiate_and_start(&mut store, module)
             .map_err(error)?;
         let abi = instance
-            .get_typed_func::<(), u32>(&store, "logisim_abi")
+            .get_typed_func::<(), u32>(store.as_context_mut(), "logisim_abi")
             .map_err(error)?;
         let abi = abi.call(&mut store, ()).map_err(error)?;
         if !supports_abi(abi) {
@@ -223,13 +263,13 @@ impl Instance {
             frame,
             abi,
             memory: instance
-                .get_memory(&store, "memory")
+                .get_memory(store.as_context_mut(), "memory")
                 .ok_or("Plugin has no exported memory.")?,
             buffer: instance
-                .get_typed_func(&store, "logisim_buffer")
+                .get_typed_func(store.as_context_mut(), "logisim_buffer")
                 .map_err(error)?,
             call: instance
-                .get_typed_func(&store, "logisim_call")
+                .get_typed_func(store.as_context_mut(), "logisim_call")
                 .map_err(error)?,
             store,
         })

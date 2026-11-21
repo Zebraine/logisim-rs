@@ -8,29 +8,29 @@ pub(super) struct FrameApi {
 }
 impl FrameApi {
     pub(super) fn load(
-        instance: &wasmi::Instance,
+        instance: &backend::Instance,
         store: &mut Store<StoreLimits>,
         abi: u32,
     ) -> Result<Option<Self>> {
         if abi < ABI_VERSION
             || instance
-                .get_export(&*store, "logisim_frame_version")
+                .get_export(store.as_context_mut(), "logisim_frame_version")
                 .is_none()
         {
             return Ok(None);
         }
         let version = instance
-            .get_typed_func::<(), u32>(&*store, "logisim_frame_version")
+            .get_typed_func::<(), u32>(store.as_context_mut(), "logisim_frame_version")
             .map_err(error)?;
         if version.call(&mut *store, ()).map_err(error)? != frame::VERSION {
             return Ok(None); // Unsupported optional transport: retain the JSON interface.
         }
         Ok(Some(Self {
             configure: instance
-                .get_typed_func(&*store, "logisim_frame_config")
+                .get_typed_func(store.as_context_mut(), "logisim_frame_config")
                 .map_err(error)?,
             call: instance
-                .get_typed_func(&*store, "logisim_frame_call")
+                .get_typed_func(store.as_context_mut(), "logisim_frame_call")
                 .map_err(error)?,
         }))
     }

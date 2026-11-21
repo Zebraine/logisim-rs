@@ -1,6 +1,8 @@
 //! Isolated benchmark controls. Each open still constructs fresh stores and validates metadata.
 use super::*;
 use std::cell::Cell;
+#[cfg(feature = "compare-wasmtime")]
+mod disk;
 
 thread_local! { static BUDGET: Cell<u64> = const { Cell::new(FUEL) }; }
 
@@ -29,11 +31,13 @@ pub(super) fn record_remaining(store: &Store<StoreLimits>) -> Result<()> {
     Ok(())
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub enum Reuse {
     None,
     Engine,
     Module,
+    #[cfg(feature = "compare-wasmtime")]
+    Disk(std::path::PathBuf),
 }
 
 pub struct Loader {
@@ -42,6 +46,10 @@ pub struct Loader {
     // One bounded entry. Exact source bytes avoid hash collisions. The engine, build and
     // target are fixed for the lifetime of the entry. No native bytes cross a trust boundary.
     entry: Option<(Vec<u8>, Module)>,
+    #[cfg(feature = "compare-wasmtime")]
+    disk: Option<backend::Cache>,
+    #[cfg(feature = "compare-wasmtime")]
+    disk_error: Option<String>,
     pub hits: usize,
     pub misses: usize,
 }
@@ -51,9 +59,18 @@ impl Loader {
             reuse,
             engine: None,
             entry: None,
+            #[cfg(feature = "compare-wasmtime")]
+            disk: None,
+            #[cfg(feature = "compare-wasmtime")]
+            disk_error: None,
             hits: 0,
             misses: 0,
         }
+    }
+
+    #[cfg(feature = "compare-wasmtime")]
+    pub fn cache_error(&self) -> Option<&str> {
+        self.disk_error.as_deref()
     }
 
     pub fn load(&mut self, bytes: &[u8]) -> Result<Plugin> {
@@ -63,6 +80,26 @@ impl Loader {
         {
             self.hits += 1;
             return Plugin::from_module(module.clone());
+        }
+        #[cfg(feature = "compare-wasmtime")]
+        if let Reuse::Disk(path) = &self.reuse {
+            if self.disk.is_none() && self.disk_error.is_none() {
+                match disk::open(path) {
+                    Ok(cache) => self.disk = Some(cache),
+                    Err(e) => self.disk_error = Some(e),
+                }
+            }
+            let mut settings = config();
+            settings.cache(self.disk.clone());
+            let engine = Engine::new(&settings).map_err(error)?;
+            let hits = self.disk.as_ref().map_or(0, |c| c.cache_hits());
+            let module = compile(&engine, bytes)?;
+            if self.disk.as_ref().is_some_and(|c| c.cache_hits() > hits) {
+                self.hits += 1;
+            } else {
+                self.misses += 1;
+            }
+            return Plugin::from_module(module);
         }
         self.misses += 1;
         if self.reuse == Reuse::None {

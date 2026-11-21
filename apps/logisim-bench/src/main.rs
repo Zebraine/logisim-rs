@@ -180,6 +180,7 @@ fn benchmark(name: &str, runs: usize) -> Result<Value> {
         "schema": 1,
         "workload": name,
         "engine": "stable",
+        "wasm_engine": if cfg!(feature = "compare-wasmtime") { "wasmtime-36.0.20" } else { "wasmi-1.1.0" },
         "threads": 1,
         "runs": runs,
         "warmup": WARMUP,
