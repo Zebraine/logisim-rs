@@ -9,7 +9,7 @@ use logisim_ui::i18n::tr;
 mod tests;
 use std::{
     collections::BTreeMap,
-    path::{Component, Path, PathBuf},
+    path::{Path, PathBuf},
 };
 
 pub(crate) struct Row {
@@ -41,27 +41,6 @@ fn absolute(path: &Path, base: &Path) -> PathBuf {
         base.join(path)
     }
 }
-fn relative(path: &Path, base: &Path) -> Option<PathBuf> {
-    let path: Vec<_> = path.components().collect();
-    let base: Vec<_> = base.components().collect();
-    if path.first() != base.first()
-        || path
-            .iter()
-            .chain(&base)
-            .any(|p| matches!(p, Component::ParentDir))
-    {
-        return None;
-    }
-    let shared = path.iter().zip(&base).take_while(|(a, b)| a == b).count();
-    let mut result = PathBuf::new();
-    for _ in shared..base.len() {
-        result.push("..");
-    }
-    for part in &path[shared..] {
-        result.push(part.as_os_str());
-    }
-    Some(result)
-}
 pub(crate) fn located(plugin: &str, version: &str, path: &Path, base: &Path) -> PluginSource {
     let full = absolute(path, base);
     PluginSource {
@@ -92,26 +71,7 @@ pub(crate) fn absolutize(project: &mut Project, base: &Path) {
         }
     }
 }
-/// Preserve dependencies when importing a library or saving into another directory.
-pub(crate) fn rebase(project: &mut Project, from: &Path, to: &Path) {
-    for source in &mut project.plugin_sources {
-        if !source.path.is_empty() {
-            let full = absolute(Path::new(&source.path), from);
-            source.path = relative(&full, to)
-                .unwrap_or_else(|| full.clone())
-                .to_string_lossy()
-                .into_owned();
-            if source.fallback.is_empty() {
-                source.fallback = full.to_string_lossy().into_owned();
-            }
-        }
-        if !source.fallback.is_empty() {
-            source.fallback = absolute(Path::new(&source.fallback), from)
-                .to_string_lossy()
-                .into_owned();
-        }
-    }
-}
+pub(crate) use logisim_file::rebase_plugin_sources as rebase;
 impl Row {
     fn candidates(&self, base: &Path, directory: Option<&Path>) -> Vec<(PathBuf, bool)> {
         // Never mask a bad location explicitly entered in the repair dialog.

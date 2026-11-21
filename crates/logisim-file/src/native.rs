@@ -306,3 +306,58 @@ pub fn serialize_native(project: &Project) -> Result<Vec<u8>> {
     }
     Ok(out)
 }
+
+mod identities;
+pub use identities::IdentityAssignments;
+
+/// Compare persistent identities and typed document fields independent of local IDs.
+/// Legacy normalization may reorder or reverse segments with identical endpoints.
+pub(super) fn verify_export(expected: &Project, reopened: &Project) -> Result<()> {
+    let expected = Native::encode(expected)?;
+    let actual = Native::encode(reopened)?;
+    if expected.main != actual.main
+        || expected.plugin_sources != actual.plugin_sources
+        || expected.circuits.len() != actual.circuits.len()
+    {
+        return Err(Error(
+            "Legacy export changes main, circuit list or plugin sources".into(),
+        ));
+    }
+    let mut lost = vec![];
+    for (e, a) in expected.circuits.iter().zip(actual.circuits.iter()) {
+        if e.agent_id != a.agent_id
+            || e.name != a.name
+            || e.label != a.label
+            || e.appearance != a.appearance
+        {
+            lost.push(format!("{} ({}) label or appearance", e.name, e.agent_id));
+        }
+        if e.components.len() != a.components.len() {
+            lost.push(format!("{} component count", e.name));
+        }
+        for (left, right) in e.components.iter().zip(&a.components) {
+            if left != right {
+                lost.push(format!("{} component {}", e.name, left.agent_id));
+            }
+        }
+        let segments = |c: &Definition| {
+            c.wires
+                .iter()
+                .map(|w| (w.agent_id.clone(), (w.from.min(w.to), w.from.max(w.to))))
+                .collect::<BTreeMap<_, _>>()
+        };
+        if segments(e) != segments(a) {
+            lost.push(format!(
+                "{} ({}) wire geometry or identities",
+                e.name, e.agent_id
+            ));
+        }
+    }
+    if !lost.is_empty() {
+        return Err(Error(format!(
+            "Legacy export cannot represent: {}",
+            lost.join(", ")
+        )));
+    }
+    Ok(())
+}

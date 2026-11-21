@@ -194,3 +194,38 @@ pub fn write_backup(
     };
     replace_checked(backup, original, previous.as_deref(), Some(permissions))
 }
+
+/// Write an explicitly selected project copy. The caller supplies the bytes
+/// confirmed for replacement, or None for create-only. Hold the sibling lock
+/// through comparison, optional backup and the checked target rename.
+pub fn write_project_copy(
+    target: &Path,
+    bytes: &[u8],
+    expected: Option<&[u8]>,
+    backup: bool,
+    max_bytes: usize,
+) -> std::result::Result<(), WriteError> {
+    let _lock = lock_target(target)?;
+    if let Some(old) = expected {
+        let metadata = fs::symlink_metadata(target)?;
+        if !metadata.is_file() || metadata.permissions().readonly() {
+            return Err(WriteError::Io(
+                "Destination must be a writable regular file.".into(),
+            ));
+        }
+        let mut actual = Vec::new();
+        fs::File::open(target)?
+            .take(old.len() as u64 + 1)
+            .read_to_end(&mut actual)?;
+        if actual != old {
+            return Err(WriteError::Conflict);
+        }
+        if backup {
+            let mut name = target.as_os_str().to_owned();
+            name.push(".bak");
+            write_backup(target, Path::new(&name), old, max_bytes)
+                .map_err(|e| WriteError::Io(format!("Backup failed: {e}")))?;
+        }
+    }
+    replace_checked(target, bytes, expected, None)
+}

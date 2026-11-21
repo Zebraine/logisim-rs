@@ -64,3 +64,39 @@ fn persistent_targets_survive_reordering_and_reject_bad_references() {
         );
     }
 }
+
+#[test]
+fn course_and_plugin_projects_survive_both_codecs() {
+    for xml in [
+        include_str!("../../../../examples/course/single-cycle.circ"),
+        include_str!("../../../../examples/agent/register-file.circ"),
+    ] {
+        let mut import = crate::parse(xml).unwrap();
+        assert!(!import.partial, "{:?}", import.warnings);
+        IdentityAssignments::default()
+            .complete(&mut import.document)
+            .unwrap();
+        let bytes = serialize_native(&import.document).unwrap();
+        let restored = parse_native(&bytes).unwrap();
+        assert_eq!(serialize_native(&restored).unwrap(), bytes);
+        crate::ProjectFormat::Circ.export(&restored).unwrap();
+    }
+}
+
+#[test]
+fn legacy_export_reports_native_only_font() {
+    let mut p = Project::default();
+    let mut stick = logisim_core::Component::new(logisim_core::Kind::Joystick, Point::ZERO);
+    stick.font.size = 24;
+    p.main_circuit_mut().circuit.add_component(stick);
+    IdentityAssignments::default().complete(&mut p).unwrap();
+    let restored = parse_native(&serialize_native(&p).unwrap()).unwrap();
+    assert_eq!(restored.main_circuit().circuit.components[0].font.size, 24);
+    assert!(
+        crate::ProjectFormat::Circ
+            .export(&restored)
+            .unwrap_err()
+            .0
+            .contains("component c-")
+    );
+}

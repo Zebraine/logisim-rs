@@ -15,7 +15,9 @@ mod latches;
 #[cfg(test)]
 mod tests;
 
+mod format;
 pub mod native;
+pub use format::{ProjectFormat, rebase_plugin_sources};
 pub use native::{parse_native, serialize_native};
 mod memory;
 mod parity;
