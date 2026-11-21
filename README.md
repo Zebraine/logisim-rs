@@ -153,6 +153,8 @@ An edits file such as `{"ops":[{"key":"appearance.theme","value":"dark"}]}` chan
 
 For a circuit, run `logisim-agent cli` and send one JSON object per line in the same process. Each process can hold 64 open project sessions. At the limit, `project_open` returns `session_limit`. Use `project_close` to free a slot.
 
+MCP executes requests in arrival order within each project session. Independent sessions can run concurrently. Match replies by JSON-RPC ID. Settings operations and CLI line requests execute sequentially.
+
 ```jsonl
 {"tool":"project_open","arguments":{"path":"examples/course/single-cycle.circ"}}
 {"tool":"project_snapshot","arguments":{"session":"ID_FROM_OPEN"}}

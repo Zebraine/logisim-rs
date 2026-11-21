@@ -42,7 +42,11 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 pub fn envelope(result: Result<Value>) -> Value {
     match result {
-        Ok(data) => json!({"ok":true,"protocol":PROTOCOL,"data":data}),
+        Ok(data) => {
+            let mut result = json!({"ok":true,"protocol":PROTOCOL});
+            result["data"] = data;
+            result
+        }
         Err(error) => json!({"ok":false,"protocol":PROTOCOL,"error":error}),
     }
 }

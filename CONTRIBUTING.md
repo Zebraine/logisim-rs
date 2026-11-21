@@ -38,6 +38,12 @@ JSON 的 `plugin_phases` 分为 cold、reset 和 hot。reset 累计计时轮次�
 
 桌面快照构造可独立运行 `cargo test --release --locked --offline -p logisim-rs single_cycle_snapshot_cost -- --ignored --nocapture`；它使用真实视图适配器，不启动窗口。
 
+### 复现 Agent 多会话测量
+
+Linux 上先用 `cargo build --release --locked --offline -p logisim-agent` 构建，再运行 `python3 apps/logisim-bench/comparisons/agent-sessions.py`。脚本用课程 CPU 工程副本，以单连接运行 1、2、4 个 MCP 会话，各重复五次。每个会话交替发送 32 对 tick/state 请求，每次等待完整响应。工程打开与含插件加载的仿真初始化单独计时。检查两个 MCP 响应表示，并用顺序 CLI 的完整轨迹校验摘要，校验在热计时区间结束后进行。
+
+可用 `--agent-cpus` 指定收发线程核集、`--worker-cpus` 为四个会话各指定一个逻辑核，并用 `taskset` 将客户端绑定到另一物理核。JSON 含每轮吞吐、各会话 p50/p95、服务进程峰值 RSS 和 worker 调度时间。汇总按五轮取中位数，尾延迟取每轮最慢会话的 p95。
+
 ### 复现 Wasm 引擎对照
 
 默认桌面、Agent 与基准使用 wasmi。阶段 2 的[引擎契约记录](apps/logisim-bench/comparisons/engine-contract.md)给出两个 release 构建、固定核心、fuel 矩阵和冷启动复测命令。桌面与基准的双引擎构建使用 `wasmtime-experimental`；Agent 即使启用同一 feature 也固定运行 wasmi。基准可在负载前加 `--wasm-engine wasmi` 或 `--wasm-engine wasmtime`。只有研究用的 `compare-wasmtime` 增加私有磁盘缓存实验。阶段 1 的[原始对照补丁](apps/logisim-bench/comparisons/wasmtime-36.patch)对应历史提交 `cc5cee9`。

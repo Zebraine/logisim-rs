@@ -145,3 +145,74 @@ fn rooted_mcp_returns_domain_errors_and_preserves_the_source() {
     assert!(!root.join("partial.circ.lock").exists());
     mcp.finish();
 }
+
+#[test]
+fn two_sessions_saving_one_source_keep_the_winning_project_and_original_backup() {
+    let fixture = Fixture::new();
+    let root = fixture.0.join("work");
+    let mut c = Client::start(&["--root", root.to_str().unwrap(), "mcp"]);
+    c.initialize("2025-11-25");
+    let sessions:Vec<_> = ["first","second"].into_iter().map(|name| {
+        let opened = c.tool("project_open",json!({"path":"top.circ"}));
+        let session = opened["result"]["structuredContent"]["data"]["session_id"].clone();
+        assert_eq!(c.tool("project_patch",json!({"session":session,"dry_run":false,"ops":[{"op":"add_circuit","name":name}]}))["result"]["isError"],false);
+        session
+    }).collect();
+    for (id, session) in sessions.iter().enumerate() {
+        c.send(json!({"id":id,"jsonrpc":"2.0","method":"tools/call","params":{"name":"project_save","arguments":{"session":session}}}));
+    }
+    let mut winner = None;
+    let mut loser = None;
+    for _ in 0..2 {
+        let r = c.read();
+        let id = r["id"].as_u64().unwrap() as usize;
+        if r["result"]["isError"] == true {
+            assert_eq!(tool_error(&r)["code"], "conflict");
+            loser = Some(id);
+        } else {
+            assert_eq!(
+                r["result"]["structuredContent"]["data"]["session_id"],
+                sessions[id]
+            );
+            winner = Some(id);
+        }
+    }
+    let names = ["first", "second"];
+    let saved = fs::read_to_string(root.join("top.circ")).unwrap();
+    assert!(saved.contains(names[winner.unwrap()]));
+    assert!(!saved.contains(names[loser.unwrap()]));
+    assert_eq!(
+        fs::read(root.join("top.circ.bak")).unwrap(),
+        PROJECT.as_bytes()
+    );
+    assert!(logisim_preferences::storage::lock_target(&root.join("top.circ")).is_ok());
+    c.finish();
+}
+
+#[test]
+fn pipelined_settings_writes_and_read_share_one_ordered_disk_revision() {
+    let fixture = Fixture::new();
+    let root = fixture.0.join("work");
+    let mut c = Client::start(&["--root", root.to_str().unwrap(), "mcp"]);
+    c.initialize("2025-11-25");
+    let before = c.tool("settings_get", json!({"config":"prefs.json"}));
+    let hash = &before["result"]["structuredContent"]["data"]["source_sha256"];
+    for (id, theme) in [(0, "dark"), (1, "light")] {
+        c.send(json!({"id":id,"jsonrpc":"2.0","method":"tools/call","params":{"name":"settings_patch",
+            "arguments":{"config":"prefs.json","dry_run":false,"expected_sha256":hash,"ops":[{"key":"appearance.theme","value":theme}]}}}));
+    }
+    c.send(json!({"id":2,"jsonrpc":"2.0","method":"tools/call","params":{"name":"settings_get","arguments":{"config":"prefs.json"}}}));
+    let applied = c.read();
+    assert_eq!(applied["id"], 0);
+    assert_eq!(applied["result"]["isError"], false);
+    let stale = c.read();
+    assert_eq!(stale["id"], 1);
+    assert_eq!(tool_error(&stale)["code"], "conflict");
+    let current = c.read();
+    assert_eq!(current["id"], 2);
+    assert_eq!(
+        current["result"]["structuredContent"]["data"]["settings"]["appearance"]["theme"],
+        "dark"
+    );
+    c.finish();
+}

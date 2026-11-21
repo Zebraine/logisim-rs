@@ -17,7 +17,7 @@ logisim-file.workspace = true
 logisim-sim.workspace = true
 logisim-plugin.workspace = true
 serde.workspace = true
-serde_json.workspace = true
+serde_json = { workspace = true, features = ["raw_value"] }
 getrandom = "=0.4.3"
 
 [lints]

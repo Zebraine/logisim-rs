@@ -153,6 +153,8 @@ MCP 支持 `2024-11-05`、`2025-03-26`、`2025-06-18` 和 `2025-11-25`。握手�
 
 读取电路时，启动 `logisim-agent cli`，在同一个进程内逐行发送 JSON。每个进程最多同时打开 64 个工程会话，达到上限时 `project_open` 返回 `session_limit`。使用 `project_close` 可释放名额。
 
+MCP 按到达顺序执行同一工程会话的请求。独立会话可并行执行，请用 JSON-RPC ID 匹配响应。设置操作和 CLI 行协议仍按顺序执行。
+
 ```jsonl
 {"tool":"project_open","arguments":{"path":"examples/course/single-cycle.circ"}}
 {"tool":"project_snapshot","arguments":{"session":"ID_FROM_OPEN"}}

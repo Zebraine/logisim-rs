@@ -9,6 +9,8 @@ const BIN: &str = env!("CARGO_BIN_EXE_logisim-agent");
 
 #[path = "stdio/identity.rs"]
 mod identity;
+#[path = "stdio/parallel.rs"]
+mod parallel;
 #[path = "stdio/rooted.rs"]
 mod rooted;
 

@@ -315,7 +315,7 @@ fn tool_frame(id: &Value, outcome: crate::Result<Value>) -> Vec<u8> {
     struct ToolResult<'a> {
         content: [Text<'a>; 1],
         is_error: bool,
-        structured_content: &'a Value,
+        structured_content: &'a serde_json::value::RawValue,
     }
     #[derive(serde::Serialize)]
     struct Response<'a> {
@@ -325,15 +325,16 @@ fn tool_frame(id: &Value, outcome: crate::Result<Value>) -> Vec<u8> {
     }
 
     let is_error = outcome.is_err();
-    let structured = envelope(outcome);
-    let text = structured.to_string();
+    // Both MCP representations carry exactly the same serialized envelope.
+    let structured = serde_json::value::to_raw_value(&envelope(outcome))
+        .expect("JSON values serialize to memory");
     let response = Response {
         id,
         jsonrpc: "2.0",
         result: ToolResult {
             content: [Text {
                 r#type: "text",
-                text: &text,
+                text: structured.get(),
             }],
             is_error,
             structured_content: &structured,
@@ -342,6 +343,12 @@ fn tool_frame(id: &Value, outcome: crate::Result<Value>) -> Vec<u8> {
     let mut bytes = serde_json::to_vec(&response).expect("JSON values serialize to memory");
     bytes.push(b'\n');
     bytes
+}
+
+enum Dispatch {
+    Write(Vec<u8>),
+    Pending,
+    Notification,
 }
 
 struct Connection {
@@ -423,14 +430,14 @@ impl Connection {
         message: Value,
         router: &mut Router,
         notify: impl Fn(router::Completion) + Send + 'static,
-    ) -> Option<Vec<u8>> {
+    ) -> Dispatch {
         let id = message.get("id");
         let method = message["method"].as_str();
         if message["jsonrpc"] != "2.0"
             || method.is_none()
             || id.is_some_and(|id| !(id.is_string() || id.is_i64() || id.is_u64()))
         {
-            return Some(frame(
+            return Dispatch::Write(frame(
                 &Failure(
                     -32600,
                     Error::new("invalid_request", "Invalid JSON-RPC 2.0 request."),
@@ -443,7 +450,7 @@ impl Connection {
             if method == "notifications/initialized" && self.phase == Phase::Negotiated {
                 self.phase = Phase::Ready;
             }
-            return None;
+            return Dispatch::Notification;
         };
         let result = if message.get("params").is_some_and(|p| !p.is_object()) {
             Err(Failure::invalid_params(
@@ -454,11 +461,17 @@ impl Connection {
         };
         match result {
             Ok(Reply::Rpc(result)) => {
-                Some(frame(&json!({"jsonrpc":"2.0","id":id,"result":result})))
+                Dispatch::Write(frame(&json!({"jsonrpc":"2.0","id":id,"result":result})))
             }
-            Ok(Reply::Tool(Ok(request))) => router.submit(id, request, notify),
-            Ok(Reply::Tool(Err(error))) => Some(tool_frame(id, Err(error))),
-            Err(error) => Some(frame(&error.response(id.clone()))),
+            Ok(Reply::Tool(request)) => router
+                .submit(
+                    id,
+                    request,
+                    message["params"]["arguments"]["session"].as_str(),
+                    notify,
+                )
+                .map_or(Dispatch::Pending, Dispatch::Write),
+            Err(error) => Dispatch::Write(frame(&error.response(id.clone()))),
         }
     }
 }
@@ -517,17 +530,16 @@ pub fn run(
     while eof.is_none() || pending != 0 {
         let frames = match inbox.recv().expect("connection event channel") {
             Event::Line(Ok(message)) => {
-                let has_id = message.get("id").is_some();
                 let replies = events.clone();
                 match connection.receive(message, &mut router, move |done| {
                     let _ = replies.send(Event::Done(done));
                 }) {
-                    Some(frame) => vec![frame],
-                    None if has_id => {
+                    Dispatch::Write(frame) => vec![frame],
+                    Dispatch::Pending => {
                         pending += 1;
                         continue;
                     }
-                    None => {
+                    Dispatch::Notification => {
                         let _ = credits.send(());
                         continue;
                     }

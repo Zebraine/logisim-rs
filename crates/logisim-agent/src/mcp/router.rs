@@ -23,7 +23,7 @@ enum State {
 
 struct Job {
     id: Value,
-    request: Request,
+    request: crate::Result<Request>,
 }
 
 struct Worker {
@@ -43,40 +43,13 @@ impl Worker {
 
 pub(super) struct Completion {
     session: String,
-    frame: Vec<u8>,
-    end: Option<End>,
+    outcome: Outcome,
 }
 
-#[derive(Clone, Copy)]
-enum End {
-    Closed,
-    Failed,
-}
-
-fn deliver(
-    session: &str,
-    id: &Value,
-    operation: State,
-    call: impl FnOnce() -> crate::Result<Value>,
-    notify: &impl Fn(Completion),
-) -> bool {
-    let response = catch_unwind(AssertUnwindSafe(|| {
-        let result = call();
-        let end = match operation {
-            State::Opening if result.is_err() => Some(End::Failed),
-            State::Closing => Some(End::Closed),
-            _ => None,
-        };
-        (tool_frame(id, result), end)
-    }));
-    let (frame, end) =
-        response.unwrap_or_else(|_| (tool_frame(id, Err(stopped())), Some(End::Failed)));
-    notify(Completion {
-        session: session.to_owned(),
-        frame,
-        end,
-    });
-    end.is_none()
+enum Outcome {
+    Reply(Vec<u8>),
+    Last(Vec<u8>),
+    Stopped,
 }
 
 pub(super) struct Router {
@@ -96,6 +69,7 @@ impl Router {
         &mut self,
         id: &Value,
         path: std::path::PathBuf,
+        mut execute: impl FnMut(&mut Service, Request) -> crate::Result<Value> + Send + 'static,
         notify: impl Fn(Completion) + Send + 'static,
     ) -> crate::Result<()> {
         let key = new_session_id(&self.workers)?;
@@ -106,36 +80,43 @@ impl Router {
         let thread = thread::Builder::new()
             .name(format!("session-{}", &key[..8]))
             .spawn(move || {
-                // The synchronous dispatcher holds exactly this worker's document.
-                // It uses the same root checks, save, patch and sim paths as the CLI.
-                let mut service = Service {
-                    root,
-                    ..Service::default()
+                let report = |outcome| {
+                    notify(Completion {
+                        session: session.clone(),
+                        outcome,
+                    })
                 };
-                if !deliver(
-                    &session,
-                    &open_id,
-                    State::Opening,
-                    || service.open_session(session.clone(), &path),
-                    &notify,
-                ) {
-                    return;
-                }
-                for job in mailbox {
-                    let operation = if matches!(job.request, Request::ProjectClose { .. }) {
-                        State::Closing
-                    } else {
-                        State::Ready
+                let run = || {
+                    // The worker exclusively owns this one document. Use the CLI's
+                    // dispatcher for root checks, saves, edits and simulation.
+                    let mut service = Service {
+                        root,
+                        ..Service::default()
                     };
-                    if !deliver(
-                        &session,
-                        &job.id,
-                        operation,
-                        || service.call(job.request),
-                        &notify,
-                    ) {
-                        break;
+                    let opened = service.open_session(session.clone(), &path);
+                    let ready = opened.is_ok();
+                    let frame = tool_frame(&open_id, opened);
+                    if !ready {
+                        return Some(frame);
                     }
+                    report(Outcome::Reply(frame));
+                    for job in mailbox {
+                        let closing = matches!(job.request, Ok(Request::ProjectClose { .. }));
+                        let result = job
+                            .request
+                            .and_then(|request| execute(&mut service, request));
+                        let frame = tool_frame(&job.id, result);
+                        if closing {
+                            return Some(frame);
+                        }
+                        report(Outcome::Reply(frame));
+                    }
+                    None
+                };
+                match catch_unwind(AssertUnwindSafe(run)) {
+                    Ok(Some(last)) => report(Outcome::Last(last)),
+                    Err(_) => report(Outcome::Stopped),
+                    Ok(None) => {} // Router shutdown disconnected the mailbox.
                 }
             })
             .map_err(|e| Error::new("worker_stopped", e))?;
@@ -155,28 +136,32 @@ impl Router {
     pub fn submit(
         &mut self,
         id: &Value,
-        request: Request,
+        request: crate::Result<Request>,
+        session_hint: Option<&str>,
         notify: impl Fn(Completion) + Send + 'static,
     ) -> Option<Vec<u8>> {
-        if let Request::ProjectOpen { path } = request {
+        if let Ok(Request::ProjectOpen { path }) = request {
             return self
-                .open(id, path, notify)
+                .open(id, path, Service::call, notify)
                 .err()
                 .map(|error| tool_frame(id, Err(error)));
         }
-        let Some(key) = request.session() else {
-            return Some(tool_frame(id, self.service.call(request)));
+        // Even a rejected tool argument follows earlier commands for that session.
+        let key = match &request {
+            Ok(request) => request.session(),
+            Err(_) => session_hint,
         };
-        let Some(worker) = self
-            .workers
-            .get_mut(key)
+        let Some(worker) = key
+            .and_then(|key| self.workers.get_mut(key))
             .filter(|w| w.state != State::Opening)
         else {
-            return Some(tool_frame(id, Err(unknown_session())));
+            // The connection dispatcher has no sessions. It retains the CLI's
+            // validation order for unknown sessions and handles global tools.
+            return Some(tool_frame(id, request.and_then(|r| self.service.call(r))));
         };
         worker.pending.push_back(id.clone());
         if worker.state != State::Closing {
-            if matches!(request, Request::ProjectClose { .. }) {
+            if matches!(request, Ok(Request::ProjectClose { .. })) {
                 worker.state = State::Closing;
             }
             // A disconnected receiver has already posted a terminal completion.
@@ -190,28 +175,33 @@ impl Router {
     }
 
     pub fn finish(&mut self, done: Completion) -> Vec<Vec<u8>> {
-        let worker = self
-            .workers
-            .get_mut(&done.session)
-            .expect("registered worker completion");
-        worker.pending.pop_front();
-        let mut frames = vec![done.frame];
-        if let Some(end) = done.end {
-            let mut worker = self
+        if let Outcome::Reply(frame) = done.outcome {
+            let worker = self
                 .workers
-                .remove(&done.session)
-                .expect("completed worker");
-            for id in worker.pending.drain(..) {
-                let error = match end {
-                    End::Closed => unknown_session(),
-                    End::Failed => stopped(),
-                };
-                frames.push(tool_frame(&id, Err(error)));
+                .get_mut(&done.session)
+                .expect("registered worker");
+            worker.pending.pop_front();
+            if worker.state == State::Opening {
+                worker.state = State::Ready;
             }
-            worker.join();
-        } else if worker.state == State::Opening {
-            worker.state = State::Ready;
+            return vec![frame];
         }
+        let mut worker = self.workers.remove(&done.session).expect("terminal worker");
+        let mut frames = Vec::with_capacity(worker.pending.len());
+        let error = if let Outcome::Last(frame) = done.outcome {
+            worker.pending.pop_front();
+            frames.push(frame);
+            unknown_session
+        } else {
+            stopped
+        };
+        frames.extend(
+            worker
+                .pending
+                .drain(..)
+                .map(|id| tool_frame(&id, Err(error()))),
+        );
+        worker.join();
         frames
     }
 }
@@ -222,3 +212,6 @@ impl Drop for Router {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;
