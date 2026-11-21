@@ -300,7 +300,7 @@ fn replacement_symlinks_are_preserved_on_save_conflict() {
 fn only_unique_item_ids_work_without_an_owner_and_complex_components_are_read_only() {
     let xml = SOURCE.replace(
         "</project>",
-        r#"<circuit name="other"><comp lib="w" name="Transistor" loc="(0,0)"/></circuit></project>"#,
+        r##"<lib name="io" desc="#I/O"/><circuit name="other"><comp lib="io" name="Slider" loc="(0,0)"/></circuit></project>"##,
     );
     let mut f = Fixture::new(&xml);
     let orig = f.snapshot();

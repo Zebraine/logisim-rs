@@ -30,6 +30,37 @@ fn cases() -> Vec<(&'static str, Value)> {
             json!({"in_width":3,"out_width":21,"type":"input"}),
         ),
         ("Shifter", json!({"bits":12,"shift":"arithmetic_right"})),
+        ("Subtractor", json!({"bits":13})),
+        ("Multiplier", json!({"bits":19})),
+        ("Divider", json!({"bits":9})),
+        ("Negator", json!({"bits":32})),
+        ("BitAdder", json!({"bits":4,"bit_inputs":17})),
+        ("BitFinder", json!({"bits":18,"search":"highest_zero"})),
+        (
+            "Priority Encoder",
+            json!({"select_bits":5,"disabled_zero":true,"no_input_zero":true}),
+        ),
+        (
+            "Bit Selector",
+            json!({"bits":24,"group_bits":4,"top_right":true}),
+        ),
+        ("7-Segment Display Decoder", json!({"multibit":false})),
+        (
+            "Controlled Buffer",
+            json!({"bits":6,"control_left":true,"negate_control":true,"label":"drive"}),
+        ),
+        (
+            "Controlled Inverter",
+            json!({"bits":3,"size":"wide","control_left":true}),
+        ),
+        (
+            "Transistor",
+            json!({"bits":4,"transistor_type":"n","gate_bottom_right":true}),
+        ),
+        (
+            "Transmission Gate",
+            json!({"bits":12,"gate_bottom_right":true}),
+        ),
         ("Adder", json!({"bits":23})),
         ("Comparator", json!({"bits":31,"signed":false})),
         (
@@ -80,7 +111,15 @@ fn common_builtins_round_trip_typed_properties_ports_and_positions() {
         let c = &edited["circuits"][0]["components"][i + 2];
         for (key, v) in props.as_object().unwrap() {
             assert_eq!(&c[key], v, "{kind}.{key}");
-            assert!(c["property_types"][key].is_string(), "{kind}.{key}");
+            let hint = match v {
+                Value::Bool(_) => "boolean",
+                Value::String(_) => "string",
+                Value::Number(_) => "integer",
+                Value::Object(_) => "object",
+                Value::Array(_) => "array",
+                Value::Null => panic!("unexpected null fixture"),
+            };
+            assert_eq!(c["property_types"][key], hint, "{kind}.{key}");
             assert!(
                 c["patchable_properties"]
                     .as_array()
@@ -91,7 +130,17 @@ fn common_builtins_round_trip_typed_properties_ports_and_positions() {
         assert_eq!(c["position"], json!([100 * i, 200]));
         if matches!(
             *kind,
-            "Bit Extender" | "Multiplexer" | "RGBLED" | "DotMatrix" | "Adder"
+            "Bit Extender"
+                | "Multiplexer"
+                | "RGBLED"
+                | "DotMatrix"
+                | "Adder"
+                | "BitAdder"
+                | "Bit Selector"
+                | "Priority Encoder"
+                | "7-Segment Display Decoder"
+                | "Controlled Inverter"
+                | "Transmission Gate"
         ) {
             assert_ne!(
                 c["ports"],
@@ -136,6 +185,16 @@ fn invalid_common_properties_roll_back_the_entire_batch_at_the_failing_index() {
     let mut f = Fixture::new(SOURCE);
     let before = f.snapshot();
     for (kind, props) in [
+        ("BitAdder", json!({"bit_inputs":0})),
+        ("BitFinder", json!({"search":"first"})),
+        ("Priority Encoder", json!({"enable":true})),
+        ("Bit Selector", json!({"group_bits":33})),
+        ("7-Segment Display Decoder", json!({"bits":8})),
+        ("Controlled Buffer", json!({"size":"wide"})),
+        ("Controlled Inverter", json!({"size":"medium"})),
+        ("Controlled Inverter", json!({"pull":"1"})),
+        ("Transistor", json!({"transistor_type":"npn"})),
+        ("Transmission Gate", json!({"transistor_type":"n"})),
         ("Clock", json!({"frequency":10})),
         ("Clock", json!({"high_ticks":65536})),
         ("Constant", json!({"bits":3,"value":8})),

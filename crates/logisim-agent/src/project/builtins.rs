@@ -3,8 +3,8 @@
 use super::edit::{choice, decode};
 use crate::Result;
 use logisim_core::{
-    Arithmetic, Component, Extension, Facing, HorizontalAlign, Kind, MatrixInput, Plexer, Pull,
-    Shift, VerticalAlign,
+    Arithmetic, BitSearch, Component, Extension, Facing, GateSize, HorizontalAlign, Kind,
+    MatrixInput, Plexer, Pull, Shift, TransistorType, VerticalAlign,
 };
 use serde_json::{Value, json};
 
@@ -54,6 +54,24 @@ field!(ENABLE, "enable", plexing.enable);
 field!(TOP_RIGHT, "top_right", plexing.top_right);
 field!(DISABLED_ZERO, "disabled_zero", plexing.disabled_zero);
 field!(THREE_STATE, "three_state", plexing.three_state);
+field!(BIT_INPUTS, "bit_inputs", arithmetic.bit_inputs);
+field!(NO_INPUT_ZERO, "no_input_zero", plexing.no_input_zero);
+field!(GROUP_BITS, "group_bits", plexing.group_bits);
+field!(DISPLAY_MULTIBIT, "multibit", plexing.multibit);
+field!(CONTROL_LEFT, "control_left", bus.control_left);
+field!(NEGATE_CONTROL, "negate_control", bus.negate_control);
+field!(
+    GATE_BOTTOM_RIGHT,
+    "gate_bottom_right",
+    transistor.gate_bottom_right
+);
+enum_field!(SEARCH, "search", arithmetic.search, [BitSearch::LowestOne => "lowest_one",
+    BitSearch::HighestOne => "highest_one", BitSearch::LowestZero => "lowest_zero",
+    BitSearch::HighestZero => "highest_zero"]);
+enum_field!(CONTROLLED_SIZE, "size", bus.size, [GateSize::Narrow => "narrow",
+    GateSize::Medium => "medium", GateSize::Wide => "wide"]);
+enum_field!(TRANSISTOR_TYPE, "transistor_type", transistor.transistor_type,
+    [TransistorType::P => "p", TransistorType::N => "n"]);
 field!(SWITCH_COUNT, "switch_count", io.switch_count);
 field!(ON, "on_color", io.on_color);
 field!(OFF, "off_color", io.off_color);
@@ -148,6 +166,51 @@ const CATALOG: &[Entry] = &[
         None,
         &[SELECT_BITS, ENABLE, TOP_RIGHT, DISABLED_ZERO, THREE_STATE],
     ),
+    (Kind::Arithmetic(Arithmetic::Subtractor), None, &[BITS]),
+    (Kind::Arithmetic(Arithmetic::Multiplier), None, &[BITS]),
+    (Kind::Arithmetic(Arithmetic::Divider), None, &[BITS]),
+    (Kind::Arithmetic(Arithmetic::Negator), None, &[BITS]),
+    (
+        Kind::Arithmetic(Arithmetic::BitAdder),
+        Some("BitAdder"),
+        &[BITS, BIT_INPUTS],
+    ),
+    (
+        Kind::Arithmetic(Arithmetic::BitFinder),
+        Some("BitFinder"),
+        &[BITS, SEARCH],
+    ),
+    (
+        Kind::Plexer(Plexer::PriorityEncoder),
+        None,
+        &[SELECT_BITS, DISABLED_ZERO, NO_INPUT_ZERO],
+    ),
+    (
+        Kind::Plexer(Plexer::BitSelector),
+        Some("BitSelector"),
+        &[BITS, GROUP_BITS, TOP_RIGHT],
+    ),
+    (
+        Kind::Plexer(Plexer::DisplayDecoder),
+        Some("DisplayDecoder"),
+        &[DISPLAY_MULTIBIT],
+    ),
+    (
+        Kind::ControlledBuffer,
+        None,
+        &[BITS, CONTROL_LEFT, NEGATE_CONTROL],
+    ),
+    (
+        Kind::ControlledInverter,
+        None,
+        &[BITS, CONTROL_LEFT, NEGATE_CONTROL, CONTROLLED_SIZE],
+    ),
+    (
+        Kind::Transistor,
+        None,
+        &[BITS, GATE_BOTTOM_RIGHT, TRANSISTOR_TYPE],
+    ),
+    (Kind::TransmissionGate, None, &[BITS, GATE_BOTTOM_RIGHT]),
     (Kind::Led, None, &[ON, OFF, ACTIVE_HIGH, LABEL_FACING]),
     (
         Kind::SevenSegment,
