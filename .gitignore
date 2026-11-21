@@ -38,6 +38,8 @@
 !/apps/logisim-bench/comparisons/wasmtime-36.patch
 !/apps/logisim-bench/comparisons/engine-contract.md
 !/apps/logisim-bench/comparisons/evaluator-hotpath.md
+!/apps/logisim-bench/comparisons/circuit-jit.md
+!/apps/logisim-bench/comparisons/circuit-jit.py
 !/apps/logisim-bench/comparisons/module-cache.py
 !/apps/logisim-bench/comparisons/abi4.py
 !/apps/logisim-bench/comparisons/engine-study.py
