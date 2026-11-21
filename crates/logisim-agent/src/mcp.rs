@@ -1,5 +1,7 @@
 //! MCP stdio transport. Only requests with a JSON-RPC ID can perform an operation.
-use logisim_agent::{Error, Request, Service, envelope, io};
+mod router;
+use crate::{Error, Request, Service, envelope, io};
+use router::Router;
 use serde_json::{Value, json};
 use std::io::{BufRead, Write};
 
@@ -189,7 +191,7 @@ fn project_operations() -> Value {
     let source = json!({"type":"object","additionalProperties":false,"required":["plugin","version","path"],
         "properties":{"plugin":identity,"version":identity,"path":path,"fallback":path},
         "anyOf":[{"properties":{"path":{"minLength":1}}},{"required":["fallback"],"properties":{"fallback":{"minLength":1}}}]});
-    let mut plugin_fields = logisim_agent::ProjectOp::plugin_document_schema();
+    let mut plugin_fields = crate::ProjectOp::plugin_document_schema();
     plugin_fields["properties"] = json!({"type":"object","additionalProperties":{"type":"string","maxLength":1024},
         "description":"String values keyed by property ID. Use plugin_catalog or the instance property_schema."});
     plugin_fields["circuit"] = id.clone();
@@ -291,14 +293,34 @@ impl Failure {
         json!({"jsonrpc":"2.0","id":id,"error":{"code":self.0,"message":self.1.message,"data":self.1}})
     }
 }
+enum Reply {
+    Rpc(Value),
+    Tool(crate::Result<Request>),
+}
+
+fn frame(value: &Value) -> Vec<u8> {
+    let mut bytes = value.to_string().into_bytes();
+    bytes.push(b'\n');
+    bytes
+}
+
+fn tool_frame(id: &Value, outcome: crate::Result<Value>) -> Vec<u8> {
+    let is_error = outcome.is_err();
+    let structured = envelope(outcome);
+    let text = structured.to_string();
+    frame(&json!({"id":id,"jsonrpc":"2.0","result":{
+        "content":[{"type":"text","text":text}],
+        "structuredContent":structured,"isError":is_error
+    }}))
+}
+
 struct Connection {
     phase: Phase,
-    service: Service,
 }
 impl Connection {
-    fn dispatch(&mut self, method: &str, params: &Value) -> Result<Value, Failure> {
+    fn dispatch(&mut self, method: &str, params: &Value) -> Result<Reply, Failure> {
         if method == "ping" {
-            return Ok(json!({}));
+            return Ok(Reply::Rpc(json!({})));
         }
         if method == "initialize" {
             if self.phase != Phase::New {
@@ -324,9 +346,9 @@ impl Connection {
             } else {
                 REVISION
             };
-            return Ok(
+            return Ok(Reply::Rpc(
                 json!({"protocolVersion":version,"capabilities":{"tools":{}},"serverInfo":{"name":"logisim-agent","version":env!("CARGO_PKG_VERSION")}}),
-            );
+            ));
         }
         if self.phase != Phase::Ready {
             return Err(Failure(
@@ -338,7 +360,7 @@ impl Connection {
             ));
         }
         match method {
-            "tools/list" => Ok(tool_list()),
+            "tools/list" => Ok(Reply::Rpc(tool_list())),
             "tools/call" => {
                 let name = params["name"]
                     .as_str()
@@ -356,14 +378,9 @@ impl Connection {
                 if !arguments.is_object() {
                     return Err(Failure::invalid_params("Expected a tool arguments object."));
                 }
-                let outcome = Request::from_json(json!({"tool":name,"arguments":arguments}))
-                    .and_then(|request| self.service.call(request));
-                let is_error = outcome.is_err();
-                let result = envelope(outcome);
-                Ok(
-                    json!({"content":[{"type":"text","text":result.to_string()}],
-                    "structuredContent":result,"isError":is_error}),
-                )
+                Ok(Reply::Tool(Request::from_json(
+                    json!({"tool":name,"arguments":arguments}),
+                )))
             }
             _ => Err(Failure(
                 -32601,
@@ -371,20 +388,25 @@ impl Connection {
             )),
         }
     }
-    fn receive(&mut self, message: Value) -> Option<Value> {
+    fn receive(
+        &mut self,
+        message: Value,
+        router: &mut Router,
+        notify: impl Fn(router::Completion) + Send + 'static,
+    ) -> Option<Vec<u8>> {
         let id = message.get("id");
         let method = message["method"].as_str();
         if message["jsonrpc"] != "2.0"
             || method.is_none()
             || id.is_some_and(|id| !(id.is_string() || id.is_i64() || id.is_u64()))
         {
-            return Some(
-                Failure(
+            return Some(frame(
+                &Failure(
                     -32600,
                     Error::new("invalid_request", "Invalid JSON-RPC 2.0 request."),
                 )
                 .response(Value::Null),
-            );
+            ));
         }
         let method = method.unwrap();
         let Some(id) = id else {
@@ -400,34 +422,55 @@ impl Connection {
         } else {
             self.dispatch(method, &message["params"])
         };
-        Some(match result {
-            Ok(result) => json!({"jsonrpc":"2.0","id":id,"result":result}),
-            Err(error) => error.response(id.clone()),
-        })
+        match result {
+            Ok(Reply::Rpc(result)) => {
+                Some(frame(&json!({"jsonrpc":"2.0","id":id,"result":result})))
+            }
+            Ok(Reply::Tool(Ok(request))) => router.submit(id, request, notify),
+            Ok(Reply::Tool(Err(error))) => Some(tool_frame(id, Err(error))),
+            Err(error) => Some(frame(&error.response(id.clone()))),
+        }
     }
 }
+
+fn input_error(e: Error) -> Vec<u8> {
+    frame(
+        &Failure(
+            if e.code == "invalid_json" {
+                -32700
+            } else {
+                -32600
+            },
+            e,
+        )
+        .response(Value::Null),
+    )
+}
+
 pub fn run(service: Service, input: impl BufRead, mut out: impl Write) -> std::io::Result<()> {
-    let mut connection = Connection {
-        phase: Phase::New,
-        service,
-    };
+    let mut connection = Connection { phase: Phase::New };
+    let mut router = Router::new(service);
+    let (done, completions) = std::sync::mpsc::channel();
     io::lines(input, |line| {
-        let reply = match line {
-            Ok(message) => connection.receive(message),
-            Err(e) => Some(
-                Failure(
-                    if e.code == "invalid_json" {
-                        -32700
-                    } else {
-                        -32600
-                    },
-                    e,
-                )
-                .response(Value::Null),
-            ),
+        let response = match line {
+            Ok(message) => {
+                let has_id = message.get("id").is_some();
+                let done = done.clone();
+                match connection.receive(message, &mut router, move |result| {
+                    let _ = done.send(result);
+                }) {
+                    Some(frame) => Some(frame),
+                    None if has_id => router
+                        .finish(completions.recv().expect("worker reply"))
+                        .pop(),
+                    None => None,
+                }
+            }
+            Err(error) => Some(input_error(error)),
         };
-        if let Some(reply) = reply {
-            io::write(&mut out, &reply)?;
+        if let Some(frame) = response {
+            out.write_all(&frame)?;
+            out.flush()?;
         }
         Ok(())
     })

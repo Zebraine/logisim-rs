@@ -8,6 +8,7 @@ use std::{
 
 mod digest;
 pub mod io;
+pub mod mcp;
 mod paths;
 mod plugins;
 mod project;
@@ -189,6 +190,30 @@ impl<T: serde::de::DeserializeOwned> Patch<T> {
     }
 }
 impl Request {
+    fn session(&self) -> Option<&str> {
+        match self {
+            Self::ProjectSnapshot { session }
+            | Self::ProjectPatch { session, .. }
+            | Self::ProjectSave { session, .. }
+            | Self::ProjectClose { session }
+            | Self::SimulationOpen { session, .. }
+            | Self::SimulationState { session }
+            | Self::SimulationPluginAction { session, .. }
+            | Self::SimulationSetInput { session, .. }
+            | Self::SimulationSettle { session }
+            | Self::SimulationStep { session }
+            | Self::SimulationTick { session }
+            | Self::SimulationReset { session }
+            | Self::SimulationSetEnabled { session, .. } => Some(session),
+            Self::ProjectOpen { .. }
+            | Self::SettingsCatalog {}
+            | Self::SettingsGet { .. }
+            | Self::SettingsPatch { .. }
+            | Self::ProjectCatalog {}
+            | Self::PluginCatalog { .. } => None,
+        }
+    }
+
     pub fn from_json(value: Value) -> Result<Self> {
         check_arguments(&value["arguments"])?;
         Self::deserialize(&value).map_err(|e| {
@@ -224,6 +249,13 @@ impl Service {
         }
     }
 
+    fn open_session(&mut self, id: String, path: &Path) -> Result<Value> {
+        let session = Session::open(&self.resolve_path(path)?)?;
+        let data = session.summary(&id);
+        self.sessions.insert(id, session);
+        Ok(data)
+    }
+
     fn control(&mut self, session: &str, action: Action) -> Result<Value> {
         let doc = self.sessions.get_mut(session).ok_or_else(unknown_session)?;
         let runtime = doc.simulation.as_mut().ok_or_else(simulation_not_open)?;
@@ -248,21 +280,8 @@ impl Service {
                 settings::patch(&config, expected_sha256.as_deref(), ops, dry_run)
             }
             Request::ProjectOpen { path } => {
-                if self.sessions.len() >= MAX_SESSIONS {
-                    return Err(Error::new(
-                        "session_limit",
-                        format!(
-                            "At most {MAX_SESSIONS} project sessions may be open. Close a session before opening another."
-                        ),
-                    ));
-                }
-                let session = Session::open(&self.resolve_path(&path)?)?;
-                let mut random = [0; 16];
-                getrandom::fill(&mut random).map_err(|e| Error::new("unavailable", e))?;
-                let id = format!("{:032x}", u128::from_be_bytes(random));
-                let data = session.summary(&id);
-                self.sessions.insert(id, session);
-                Ok(data)
+                let id = new_session_id(&self.sessions)?;
+                self.open_session(id, &path)
             }
             Request::ProjectPatch {
                 session,
@@ -365,6 +384,25 @@ impl Service {
                 let runtime = doc.simulation.as_ref().ok_or_else(simulation_not_open)?;
                 Ok(runtime.state(&doc.project, &session))
             }
+        }
+    }
+}
+
+fn new_session_id<T>(sessions: &HashMap<String, T>) -> Result<String> {
+    if sessions.len() >= MAX_SESSIONS {
+        return Err(Error::new(
+            "session_limit",
+            format!(
+                "At most {MAX_SESSIONS} project sessions may be open. Close a session before opening another."
+            ),
+        ));
+    }
+    loop {
+        let mut bytes = [0; 16];
+        getrandom::fill(&mut bytes).map_err(|e| Error::new("unavailable", e))?;
+        let id = format!("{:032x}", u128::from_be_bytes(bytes));
+        if !sessions.contains_key(&id) {
+            return Ok(id);
         }
     }
 }

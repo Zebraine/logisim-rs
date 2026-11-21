@@ -1,4 +1,4 @@
-mod mcp;
+use logisim_agent::mcp;
 use logisim_agent::{Error, Patch, ProjectOp, Request, Result, Service, envelope, io};
 use std::{ffi::OsString, path::Path, process::ExitCode};
 

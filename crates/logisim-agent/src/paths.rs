@@ -6,6 +6,7 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
+#[derive(Clone)]
 pub(crate) struct Root {
     requested: PathBuf,
     canonical: PathBuf,
