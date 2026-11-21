@@ -1,10 +1,6 @@
 mod mcp;
 use logisim_agent::{Error, Patch, ProjectOp, Request, Result, Service, envelope, io};
-use std::{
-    ffi::OsString,
-    path::{Path, PathBuf},
-    process::ExitCode,
-};
+use std::{ffi::OsString, path::Path, process::ExitCode};
 
 fn simulation_request(command: &std::ffi::OsStr, options: &[OsString]) -> Result<Request> {
     let tool = match command.to_str() {
@@ -48,7 +44,7 @@ fn simulation_request(command: &std::ffi::OsStr, options: &[OsString]) -> Result
     Request::from_json(serde_json::json!({"tool":tool, "arguments":arguments}))
 }
 
-fn parse(args: &[OsString]) -> Result<Request> {
+fn parse(args: &[OsString], service: &Service) -> Result<Request> {
     let [group, command, options @ ..] = args else {
         return Err(Error::invalid("Expected a group and command."));
     };
@@ -86,12 +82,12 @@ fn parse(args: &[OsString]) -> Result<Request> {
             config: take("--config")?.into(),
         },
         (Some("settings"), Some("patch")) => {
-            let config = PathBuf::from(take("--config")?);
-            let path = Path::new(take("--ops")?);
+            let config = service.resolve_path(Path::new(take("--config")?))?;
+            let path = service.resolve_path(Path::new(take("--ops")?))?;
             let dry_run = mode
                 .take()
                 .ok_or_else(|| Error::invalid("Specify --dry-run or --apply."))?;
-            let patch = Patch::from_bytes(&io::read(path)?)?;
+            let patch = Patch::from_bytes(&io::read(&path)?)?;
             Request::SettingsPatch {
                 config,
                 dry_run,
@@ -110,11 +106,11 @@ fn parse(args: &[OsString]) -> Result<Request> {
                 .to_owned();
             match (group, action) {
                 ("project", "patch") => {
-                    let path = Path::new(take("--ops")?);
+                    let path = service.resolve_path(Path::new(take("--ops")?))?;
                     let dry_run = mode
                         .take()
                         .ok_or_else(|| Error::invalid("Specify --dry-run or --apply."))?;
-                    let edits = Patch::<ProjectOp>::from_bytes(&io::read(path)?)?;
+                    let edits = Patch::<ProjectOp>::from_bytes(&io::read(&path)?)?;
                     Request::ProjectPatch {
                         session,
                         dry_run,
@@ -150,16 +146,33 @@ fn parse(args: &[OsString]) -> Result<Request> {
     Ok(req)
 }
 
+fn startup(args: &[OsString]) -> Result<(Service, &[OsString])> {
+    if args.first().is_some_and(|word| word == "--root") {
+        let [_, directory, rest @ ..] = args else {
+            return Err(Error::invalid("--root requires an existing directory."));
+        };
+        Ok((Service::with_root(Path::new(directory))?, rest))
+    } else {
+        Ok((Service::default(), args))
+    }
+}
+
 fn run() -> std::io::Result<bool> {
-    let args: Vec<_> = std::env::args_os().skip(1).collect();
+    let words: Vec<_> = std::env::args_os().skip(1).collect();
+    let mut out = std::io::stdout().lock();
+    let (mut service, args) = match startup(&words) {
+        Ok(startup) => startup,
+        Err(e) => {
+            io::write(&mut out, &envelope(Err(e)))?;
+            return Ok(false);
+        }
+    };
     if args == [OsString::from("mcp")] {
-        mcp::run(std::io::stdin().lock(), std::io::stdout().lock())?;
+        mcp::run(service, std::io::stdin().lock(), out)?;
         return Ok(true);
     }
-    let mut service = Service::default();
-    let mut out = std::io::stdout().lock();
     if args != [OsString::from("cli")] {
-        let req = parse(&args);
+        let req = parse(args, &service);
         let stays_open = matches!(req, Ok(Request::ProjectOpen { .. }));
         let result = req.and_then(|r| service.call(r));
         let ok = result.is_ok();
@@ -175,7 +188,7 @@ fn run() -> std::io::Result<bool> {
                     let words: Vec<String> =
                         serde_json::from_value(value).map_err(Error::invalid)?;
                     let args: Vec<_> = words.into_iter().map(OsString::from).collect();
-                    parse(&args)
+                    parse(&args, &service)
                 } else {
                     Request::from_json(value)
                 }

@@ -336,3 +336,5 @@ fn repeat_open_and_save_retain_the_initialized_engine_and_observations() {
     assert_eq!(call("simulation_state", json!({})), observed);
 }
 mod simulation_control;
+
+mod safety;

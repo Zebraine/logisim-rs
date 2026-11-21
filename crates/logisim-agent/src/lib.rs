@@ -1,10 +1,14 @@
 //! Local agent protocol. A service owns its sessions for the lifetime of one transport.
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 mod digest;
 pub mod io;
+mod paths;
 mod project;
 mod settings;
 mod simulation;
@@ -185,11 +189,29 @@ impl Request {
     }
 }
 
+const MAX_SESSIONS: usize = 64;
+
 #[derive(Default)]
 pub struct Service {
+    root: Option<paths::Root>,
     sessions: HashMap<String, Session>,
 }
 impl Service {
+    pub fn with_root(directory: &Path) -> Result<Self> {
+        Ok(Self {
+            root: Some(paths::Root::new(directory)?),
+            ..Self::default()
+        })
+    }
+
+    /// Check a caller-supplied path, including CLI patch files read before dispatch.
+    pub fn resolve_path(&self, path: &Path) -> Result<PathBuf> {
+        match &self.root {
+            Some(root) => root.resolve(path),
+            None => Ok(path.to_owned()),
+        }
+    }
+
     fn control(&mut self, session: &str, action: Action) -> Result<Value> {
         let doc = self.sessions.get_mut(session).ok_or_else(unknown_session)?;
         let runtime = doc.simulation.as_mut().ok_or_else(simulation_not_open)?;
@@ -199,15 +221,29 @@ impl Service {
         match request {
             Request::ProjectCatalog {} => Ok(project::catalog::catalog()),
             Request::SettingsCatalog {} => Ok(settings::catalog()),
-            Request::SettingsGet { config } => settings::get(&config),
+            Request::SettingsGet { config } => settings::get(&self.resolve_path(&config)?),
             Request::SettingsPatch {
                 config,
                 expected_sha256,
                 ops,
                 dry_run,
-            } => settings::patch(&config, expected_sha256.as_deref(), ops, dry_run),
+            } => {
+                let config = self.resolve_path(&config)?;
+                if !dry_run && let Some(root) = &self.root {
+                    root.check_sidecars(&config, false)?;
+                }
+                settings::patch(&config, expected_sha256.as_deref(), ops, dry_run)
+            }
             Request::ProjectOpen { path } => {
-                let session = Session::open(&path)?;
+                if self.sessions.len() >= MAX_SESSIONS {
+                    return Err(Error::new(
+                        "session_limit",
+                        format!(
+                            "At most {MAX_SESSIONS} project sessions may be open. Close a session before opening another."
+                        ),
+                    ));
+                }
+                let session = Session::open(&self.resolve_path(&path)?)?;
                 let mut random = [0; 16];
                 getrandom::fill(&mut random).map_err(|e| Error::new("unavailable", e))?;
                 let id = format!("{:032x}", u128::from_be_bytes(random));
@@ -229,11 +265,17 @@ impl Service {
                 session,
                 expected_sha256,
                 backup,
-            } => self
-                .sessions
-                .get_mut(&session)
-                .ok_or_else(unknown_session)?
-                .save(&session, expected_sha256.as_deref(), backup),
+            } => {
+                let doc = self
+                    .sessions
+                    .get_mut(&session)
+                    .ok_or_else(unknown_session)?;
+                if let Some(root) = &self.root {
+                    root.resolve(&doc.path)?;
+                    root.check_sidecars(&doc.path, backup)?;
+                }
+                doc.save(&session, expected_sha256.as_deref(), backup)
+            }
             Request::ProjectClose { session } => {
                 self.sessions.remove(&session).ok_or_else(unknown_session)?;
                 Ok(json!({"session_id":session,"closed":true}))

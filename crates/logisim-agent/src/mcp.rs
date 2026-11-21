@@ -229,7 +229,6 @@ impl Failure {
         json!({"jsonrpc":"2.0","id":id,"error":{"code":self.0,"message":self.1.message,"data":self.1}})
     }
 }
-#[derive(Default)]
 struct Connection {
     phase: Phase,
     service: Service,
@@ -345,8 +344,11 @@ impl Connection {
         })
     }
 }
-pub fn run(input: impl BufRead, mut out: impl Write) -> std::io::Result<()> {
-    let mut connection = Connection::default();
+pub fn run(service: Service, input: impl BufRead, mut out: impl Write) -> std::io::Result<()> {
+    let mut connection = Connection {
+        phase: Phase::New,
+        service,
+    };
     io::lines(input, |line| {
         let reply = match line {
             Ok(message) => connection.receive(message),
