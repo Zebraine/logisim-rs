@@ -35,6 +35,8 @@
 !/apps/**/build.rs
 !/apps/**/src/**/*.rs
 !/apps/logisim-bench/comparisons/wasmtime-36.patch
+!/apps/logisim-bench/comparisons/engine-contract.md
+!/apps/logisim-bench/comparisons/engine-study.py
 !/crates/
 !/crates/**/
 !/crates/**/Cargo.toml

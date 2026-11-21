@@ -38,24 +38,9 @@ JSON 的 `plugin_phases` 分为 cold、reset 和 hot。reset 累计计时轮次�
 
 桌面快照构造可独立运行 `cargo test --release --locked --offline -p logisim-rs single_cycle_snapshot_cost -- --ignored --nocapture`；它使用真实视图适配器，不启动窗口。
 
-### 复现隔离的 Wasmtime 对照
+### 复现 Wasm 引擎对照
 
-[对照补丁](apps/logisim-bench/comparisons/wasmtime-36.patch) 固定 Wasmtime 36.0.20 和实验依赖锁，只用于阶段 1 的临时源码副本。常规工作区继续用 wasmi。以下命令从仓库根目录执行，首次准备实验依赖需要联网。
-
-```sh
-bench_copy=$(mktemp -d)
-git archive cc5cee9 | tar -x -C "$bench_copy"
-patch --batch --fuzz=0 -p1 -d "$bench_copy" < apps/logisim-bench/comparisons/wasmtime-36.patch
-(
-  cd "$bench_copy" || exit 1
-  cargo fetch --locked
-  cargo test --release --locked --offline -p logisim-bench -p logisim-plugin -p logisim-sim --features logisim-bench/compare-wasmtime
-  cargo build -p logisim-bench --release --locked --offline --features compare-wasmtime
-  target/release/logisim-bench plugin --runs 20
-)
-```
-
-实验共用现有宿主校验、调度、Wasm 和轨迹，直接编译模块字节。两引擎均设置 1,000 万 fuel，但同一个有限计算在 wasmi 可完成、在 Wasmtime 会暂停。因此保留对照材料，生产引擎维持 wasmi。复核此差异可在临时副本分别启用和关闭 `logisim-plugin/compare-wasmtime` 运行 `finite_calibration_job_at_production_fuel_budget`。
+默认桌面、Agent 与基准使用 wasmi。阶段 2 的[引擎契约记录](apps/logisim-bench/comparisons/engine-contract.md)给出两个 release 构建、固定核心、fuel 矩阵和冷启动复测命令。仅在对照构建显式启用 `compare-wasmtime`。阶段 1 的[原始对照补丁](apps/logisim-bench/comparisons/wasmtime-36.patch)对应历史提交 `cc5cee9`。
 
 ## 修改与提交
 
