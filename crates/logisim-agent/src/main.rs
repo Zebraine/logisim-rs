@@ -99,6 +99,7 @@ fn parse(args: &[OsString]) -> Result<Request> {
                 expected_sha256: patch.expected_sha256,
             }
         }
+        (Some("project"), Some("catalog")) => Request::ProjectCatalog {},
         (Some("project"), Some("open")) => Request::ProjectOpen {
             path: take("--path")?.into(),
         },

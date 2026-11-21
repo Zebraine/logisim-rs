@@ -133,6 +133,7 @@ cargo test --workspace --all-features --locked --offline
 用 `cargo build --release --locked -p logisim-agent` 构建独立程序。本地 MCP 客户端可将 `target/release/logisim-agent` 设为命令，参数为 `mcp`。也可以直接使用 JSON CLI。
 
 ```sh
+logisim-agent project catalog
 logisim-agent settings catalog
 logisim-agent settings get --config /path/to/preferences.json
 logisim-agent settings patch --config /path/to/preferences.json --ops edits.json --dry-run
@@ -150,7 +151,7 @@ logisim-agent settings patch --config /path/to/preferences.json --ops edits.json
 {"tool":"project_close","arguments":{"session":"ID_FROM_OPEN"}}
 ```
 
-后续请求使用打开工程时返回的 `data.session_id`。CLI 和 MCP 提供相同的 16 项操作。工程快照覆盖全部电路定义，仿真状态包含根实例的信号、时钟与传播计数、诊断和插件状态。
+后续请求使用打开工程时返回的 `data.session_id`。CLI 和 MCP 提供相同的 17 项操作。工程快照覆盖全部电路定义，仿真状态包含根实例的信号、时钟与传播计数、诊断和插件状态。
 
 ### 控制仿真
 
@@ -181,7 +182,9 @@ logisim-agent settings patch --config /path/to/preferences.json --ops edits.json
 
 请使用快照中的真实 ID。核对预演结果后，将同一补丁的 `dry_run` 改为 `false`，应用后再保存。支持元件添加、移动、更新、删除，导线添加、删除，以及电路添加、重命名、删除和设置主电路。端口坐标使用画布坐标，颜色使用 RGBA，Splitter 映射使用从零开始的分支索引，断开位用 null。多个电路内有相同元件或导线 ID 时须传 `circuit`。导线遵循编辑器的重布线和合并、分段规则，`add_wire` 的 `wire_ids` 列出保留下来的线段。
 
-元件快照的 `patchable_properties` 列出可写字段，`property_types` 给出 JSON 类型，同名字段给出当前值。添加和更新使用同一套属性。传入部分 `font` 字段只修改对应的字体属性。
+打开工程前即可运行 `logisim-agent project catalog`，或无参数调用 MCP 工具 `project_catalog`。`data.kinds` 列出 Core 规范名、可用别名，以及 `addable`、`editable` 和 `requires_circuit_id` 标志。仅子电路实例需要目标电路 ID。只读种类的 `properties` 为空对象。
+
+元件快照的 `property_schema` 与同种类目录条目的 `properties` 一致，给出枚举值、整数范围、RGBA 通道、允许分支为空的 Splitter 映射和可部分更新的字体对象。有字节长度限制的字符串通过 `x-maxUtf8Bytes` 给出 UTF-8 上限。最终元件还须满足字段间约束，例如 Counter 最大值须能用其位宽表示。快照保留 `patchable_properties`、`property_types` 以及同名字段中的当前值。添加和更新使用同一套属性。传入部分 `font` 字段只修改对应的字体属性。
 
 | 可编辑元件 | 主要属性 |
 | --- | --- |

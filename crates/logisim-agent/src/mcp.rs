@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 use std::io::{BufRead, Write};
 
 const REVISION: &str = "2025-11-25";
-const TOOLS: [(&str, &str); 16] = [
+const TOOLS: [(&str, &str); 17] = [
     (
         "settings_catalog",
         "List portable v16 preference keys, defaults and allowed values.",
@@ -16,6 +16,10 @@ const TOOLS: [(&str, &str); 16] = [
     (
         "settings_patch",
         "Validate a batch of portable preference edits. Set dry_run to false to commit.",
+    ),
+    (
+        "project_catalog",
+        "List component kinds, accepted aliases and writable property schemas. No session is required.",
     ),
     (
         "project_open",
@@ -74,7 +78,7 @@ const TOOLS: [(&str, &str); 16] = [
 fn project_operations() -> Value {
     let id = json!({"type":"integer","minimum":1});
     let point = json!({"type":"array","minItems":2,"maxItems":2,"items":{"type":"integer","minimum":-1000000,"maximum":1000000}});
-    let properties = json!({"type":"object","description":"Use the component snapshot's patchable_properties and property_types."});
+    let properties = json!({"type":"object","description":"Use project_catalog or the component snapshot's property_schema for allowed fields and values."});
     let mut variants = Vec::new();
     for (op, required, optional) in [
         (
@@ -124,7 +128,7 @@ fn tool_list() -> Value {
     let mut tools = Vec::with_capacity(TOOLS.len());
     for (name, description) in TOOLS {
         let (properties, required) = match name {
-            "settings_catalog" => (json!({}), json!([])),
+            "settings_catalog" | "project_catalog" => (json!({}), json!([])),
             "settings_get" => (json!({"config": string}), json!(["config"])),
             "settings_patch" => (
                 json!({

@@ -93,7 +93,7 @@ fn mcp_handshake_tools_errors_and_session_lifetime_match_cli() {
     assert_eq!(init["result"]["protocolVersion"], "2025-11-25");
     m.send(json!({"jsonrpc":"2.0","method":"notifications/initialized"}));
     let tools = m.call("tools/list", json!({}));
-    assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 16);
+    assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 17);
     assert_eq!(
         m.tool("settings_patch", json!({"config":"whatever","ops":[]}))["error"]["code"],
         -32602
@@ -146,6 +146,56 @@ fn mcp_handshake_tools_errors_and_session_lifetime_match_cli() {
         m.tool("simulation_state", args)["error"]["data"]["code"],
         "unknown_session"
     );
+    m.finish();
+}
+
+#[test]
+fn project_catalog_is_sessionless_and_byte_identical_over_cli_and_mcp() {
+    let cli = Command::new(BIN)
+        .args(["project", "catalog"])
+        .output()
+        .unwrap();
+    assert!(cli.status.success());
+    let cli_text = std::str::from_utf8(&cli.stdout)
+        .unwrap()
+        .strip_suffix('\n')
+        .unwrap();
+    let envelope: Value = serde_json::from_str(cli_text).unwrap();
+    assert_eq!(envelope["ok"], true);
+    assert_eq!(envelope["data"]["schema"], 1);
+    let mut m = Client::start(&["mcp"]);
+    m.call("initialize",json!({"protocolVersion":"2025-11-25","clientInfo":{"name":"catalog","version":"1"},"capabilities":{}}));
+    m.send(json!({"jsonrpc":"2.0","method":"notifications/initialized"}));
+    let tools = m.call("tools/list", json!({}));
+    let tool = tools["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["name"] == "project_catalog")
+        .unwrap();
+    assert_eq!(
+        tool["inputSchema"],
+        json!({"type":"object","properties":{},"required":[],"additionalProperties":false})
+    );
+    let result = m.call("tools/call", json!({"name":"project_catalog"}));
+    assert_eq!(result["result"]["structuredContent"], envelope);
+    assert_eq!(
+        result["result"]["content"][0]["text"].as_str(),
+        Some(cli_text)
+    );
+    for arg in ["session", "path", "config"] {
+        let cli = Command::new(BIN)
+            .args(["project", "catalog", &format!("--{arg}"), "unused"])
+            .output()
+            .unwrap();
+        assert!(!cli.status.success());
+        let error: Value = serde_json::from_slice(&cli.stdout).unwrap();
+        assert_eq!(error["error"]["code"], "invalid_arguments");
+        assert_eq!(
+            m.tool("project_catalog", json!({arg:"unused"}))["error"]["code"],
+            -32602
+        );
+    }
     m.finish();
 }
 

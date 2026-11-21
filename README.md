@@ -133,6 +133,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the development and release workflow.
 Build the separate binary with `cargo build --release --locked -p logisim-agent`. Point a local MCP client at `target/release/logisim-agent` with the single argument `mcp`, or use the JSON CLI directly.
 
 ```sh
+logisim-agent project catalog
 logisim-agent settings catalog
 logisim-agent settings get --config /path/to/preferences.json
 logisim-agent settings patch --config /path/to/preferences.json --ops edits.json --dry-run
@@ -150,7 +151,7 @@ For a circuit, run `logisim-agent cli` and send one JSON object per line in the 
 {"tool":"project_close","arguments":{"session":"ID_FROM_OPEN"}}
 ```
 
-Use the returned `data.session_id` in subsequent requests. CLI and MCP expose the same 16 operations. The project snapshot covers every circuit definition. Simulation state includes signals from the active root instance, clock and propagation counters, diagnostics and plugin status.
+Use the returned `data.session_id` in subsequent requests. CLI and MCP expose the same 17 operations. The project snapshot covers every circuit definition. Simulation state includes signals from the active root instance, clock and propagation counters, diagnostics and plugin status.
 
 ### Controlling a simulation
 
@@ -181,7 +182,9 @@ Pass `project_patch` a `session`, an explicit `dry_run` boolean, and an ordered 
 
 Use IDs from your snapshot. After reviewing the preview, repeat the patch with `dry_run:false`, then save. Supported operations are `add_component`, `move_component`, `update_component`, `remove_component`, `add_wire`, `remove_wire`, `add_circuit`, `rename_circuit`, `remove_circuit` and `set_main_circuit`. Port positions use canvas coordinates, colors use RGBA and Splitter mappings use zero-based branch indices or null. Include `circuit` when an item ID occurs in multiple circuits. Wire edits use the editor's routing and normalization rules. When normalization splits or merges the added wire, `wire_ids` lists its surviving segments.
 
-Each snapshot lists the component’s writable keys in `patchable_properties`, their JSON types in `property_types`, and their current values under those keys. Add and update accept the same properties. A partial `font` object changes only its supplied members.
+Run `logisim-agent project catalog` or call the MCP tool `project_catalog` with no arguments to discover component kinds before opening a file. The response’s `data.kinds` lists core names, accepted aliases, and the `addable`, `editable` and `requires_circuit_id` flags. Only subcircuit instances need a target circuit ID. Read-only kinds have an empty `properties` object.
+
+Each component’s `property_schema` in a snapshot matches its catalog entry’s `properties`. It describes enum codes, integer bounds, RGBA channels, nullable Splitter branches and partial font objects. String fields with a byte limit report it in `x-maxUtf8Bytes`. The completed component must also satisfy relationships between fields, such as a Counter maximum fitting its width. Snapshots retain `patchable_properties`, `property_types` and current values under their original keys. Add and update accept the same properties. A partial `font` object changes only its supplied members.
 
 | Editable family | Properties specific to the family |
 | --- | --- |
