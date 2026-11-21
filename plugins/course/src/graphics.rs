@@ -117,7 +117,12 @@ fn build_manifest() -> Manifest {
     })
     .collect();
     Manifest {
-        abi: ABI_VERSION,
+        execution: cfg!(feature = "execution-abi4").then_some(Execution::new(AllowedEngines::Both)),
+        abi: if cfg!(feature = "execution-abi4") {
+            EXECUTION_ABI_VERSION
+        } else {
+            ABI_VERSION
+        },
         id: "org.logisim-rs.course".into(),
         version: "1.0.0".into(),
         name: "Course (Wasm)".into(),

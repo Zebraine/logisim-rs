@@ -37,6 +37,7 @@ fn manifest() -> logisim_core::plugin::api::Manifest {
         }],
     };
     let manifest = api::Manifest {
+        execution: None,
         abi: 1,
         id: "test.graphics".into(),
         version: "1".into(),

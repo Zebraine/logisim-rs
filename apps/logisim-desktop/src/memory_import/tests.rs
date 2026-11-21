@@ -49,6 +49,7 @@ fn plugin_images_dispatch_once_only_after_file_and_target_validation() {
         plugin::api::{self, presentation::*},
     };
     let manifest = api::Manifest {
+        execution: None,
         abi: api::ABI_VERSION,
         id: "test.memory".into(),
         version: "1".into(),

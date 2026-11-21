@@ -3,6 +3,7 @@ use std::sync::OnceLock;
 pub(super) fn manifest() -> &'static Manifest {
     static VALUE: OnceLock<Manifest> = OnceLock::new();
     VALUE.get_or_init(|| Manifest {
+        execution: None,
         abi: ABI_VERSION,
         id: "org.logisim-rs.display".into(),
         version: "1.0.0".into(),

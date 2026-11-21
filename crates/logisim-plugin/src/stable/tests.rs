@@ -3,6 +3,7 @@ use logisim_plugin_api::{ABI_VERSION, MAX_STATE, OutputDependency, Port, Tool};
 
 fn manifest(abi: u32) -> Manifest {
     Manifest {
+        execution: None,
         abi,
         id: "test.stable".into(),
         version: "1.0".into(),

@@ -2,6 +2,7 @@ use super::*;
 use logisim_plugin_api::{Action, Tool};
 fn manifest() -> Manifest {
     Manifest {
+        execution: None,
         abi: 3,
         id: "ui.test".into(),
         version: "1".into(),

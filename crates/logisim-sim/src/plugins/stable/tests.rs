@@ -18,6 +18,7 @@ fn module_with_engine(
 ) -> Plugin {
     use api::*;
     let manifest = Manifest {
+        execution: None,
         abi,
         id: id.into(),
         version: "1".into(),

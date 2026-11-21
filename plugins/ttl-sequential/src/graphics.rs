@@ -77,6 +77,7 @@ pub fn drawing(state: Option<&State>) -> Vec<Shape> {
 pub fn manifest() -> &'static Manifest {
     static MANIFEST: OnceLock<Manifest> = OnceLock::new();
     MANIFEST.get_or_init(|| Manifest {
+        execution: None,
         abi: ABI_VERSION,
         id: "org.logisim-rs.ttl-sequential".into(),
         version: "1.0.0".into(),

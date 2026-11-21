@@ -5,6 +5,7 @@ use logisim_core::{
 
 pub(crate) fn fixture(id: &str, value: u32) -> (Project, Vec<u8>) {
     let manifest = api::Manifest {
+        execution: None,
         abi: 1,
         id: id.into(),
         version: "1.0".into(),

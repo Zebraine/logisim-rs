@@ -60,8 +60,35 @@ fn metadata(value: &impl serde::Serialize) -> u64 {
 /// instance is reused for simulation. Each component has independent module memory.
 #[macro_export]
 macro_rules! export_plugin {
+    (execution = Wasmi, $($body:tt)+) => {
+        $crate::export_plugin!(@entry "logisim_abi4_wasmi", $crate::api::EXECUTION_ABI_VERSION);
+        $crate::export_plugin_body!($($body)+);
+    };
+    (execution = Wasmtime, $($body:tt)+) => {
+        $crate::export_plugin!(@entry "logisim_abi4_wasmtime", $crate::api::EXECUTION_ABI_VERSION);
+        $crate::export_plugin_body!($($body)+);
+    };
+    (execution = Both, $($body:tt)+) => {
+        $crate::export_plugin!(@entry "logisim_abi4_both", $crate::api::EXECUTION_ABI_VERSION);
+        $crate::export_plugin_body!($($body)+);
+    };
+    (@entry $name:literal, $version:expr) => {
+        #[cfg(target_arch = "wasm32")]
+        #[allow(unsafe_code)]
+        #[unsafe(export_name = $name)]
+        pub extern "C" fn logisim_abi() -> u32 { $version }
+    };
+    ($($body:tt)+) => {
+        $crate::export_plugin!(@entry "logisim_abi", $crate::api::ABI_VERSION);
+        $crate::export_plugin_body!($($body)+);
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! export_plugin_body {
     ($handler:path $(, stable = $stable:path)? $(, presentation = $ui:path)? $(, reconfiguration = $policy:path)? $(, interaction = $input:path)?, raster = $raster:path) => {
-        $crate::export_plugin!($handler $(, stable = $stable)? $(, presentation = $ui)? $(, reconfiguration = $policy)? $(, interaction = $input)?);
+        $crate::export_plugin_body!($handler $(, stable = $stable)? $(, presentation = $ui)? $(, reconfiguration = $policy)? $(, interaction = $input)?);
         #[cfg(target_arch = "wasm32")]
         #[allow(unsafe_code)]
         #[unsafe(no_mangle)]
@@ -76,7 +103,7 @@ macro_rules! export_plugin {
         pub extern "C" fn logisim_raster_call(length: u32) -> u64 { $crate::raster::call(length, $raster) }
     };
     ($handler:path $(, stable = $stable:path)? $(, presentation = $ui:path)? $(, reconfiguration = $policy:path)?, interaction = $input:path) => {
-        $crate::export_plugin!($handler $(, stable = $stable)? $(, presentation = $ui)? $(, reconfiguration = $policy)?);
+        $crate::export_plugin_body!($handler $(, stable = $stable)? $(, presentation = $ui)? $(, reconfiguration = $policy)?);
         #[cfg(target_arch = "wasm32")]
         #[allow(unsafe_code)]
         #[unsafe(no_mangle)]
@@ -87,7 +114,7 @@ macro_rules! export_plugin {
         pub extern "C" fn logisim_interaction() -> u64 { $crate::interaction($input()) }
     };
     ($handler:path $(, stable = $stable:path)? $(, presentation = $ui:path)?, reconfiguration = $policy:path) => {
-        $crate::export_plugin!($handler $(, stable = $stable)? $(, presentation = $ui)?);
+        $crate::export_plugin_body!($handler $(, stable = $stable)? $(, presentation = $ui)?);
         #[cfg(target_arch = "wasm32")]
         #[allow(unsafe_code)]
         #[unsafe(no_mangle)]
@@ -102,12 +129,12 @@ macro_rules! export_plugin {
         }
     };
     ($handler:path, stable = $stable:path, presentation = $ui:path) => {
-        $crate::export_plugin!($handler, stable = $stable);
-        $crate::export_plugin!(@presentation $ui);
+        $crate::export_plugin_body!($handler, stable = $stable);
+        $crate::export_plugin_body!(@presentation $ui);
     };
     ($handler:path, presentation = $ui:path) => {
-        $crate::export_plugin!($handler);
-        $crate::export_plugin!(@presentation $ui);
+        $crate::export_plugin_body!($handler);
+        $crate::export_plugin_body!(@presentation $ui);
     };
     (@presentation $ui:path) => {
         #[cfg(target_arch = "wasm32")]
@@ -124,7 +151,7 @@ macro_rules! export_plugin {
         }
     };
     ($handler:path, stable = $stable:path) => {
-        $crate::export_plugin!($handler);
+        $crate::export_plugin_body!($handler);
         #[cfg(target_arch = "wasm32")]
         #[allow(unsafe_code)]
         #[unsafe(no_mangle)]
@@ -145,12 +172,6 @@ macro_rules! export_plugin {
         }
     };
     ($handler:path) => {
-        #[cfg(target_arch = "wasm32")]
-        #[allow(unsafe_code)]
-        #[unsafe(no_mangle)]
-        pub extern "C" fn logisim_abi() -> u32 {
-            $crate::api::ABI_VERSION
-        }
         #[cfg(target_arch = "wasm32")]
         #[allow(unsafe_code)]
         #[unsafe(no_mangle)]

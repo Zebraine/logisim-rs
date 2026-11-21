@@ -4,6 +4,7 @@ use logisim_plugin::Plugin;
 
 fn module(runtime: logisim_plugin::WasmEngine, fail: bool, sample_code: &str) -> Plugin {
     let manifest = api::Manifest {
+        execution: None,
         abi: 3,
         id: "test.worker".into(),
         version: "1".into(),

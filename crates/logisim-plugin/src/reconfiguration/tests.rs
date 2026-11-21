@@ -2,6 +2,7 @@ use super::*;
 use logisim_plugin_api::{Property, PropertyKind, Tool, reconfiguration::Policy};
 fn manifest() -> Manifest {
     Manifest {
+        execution: None,
         abi: 3,
         id: "policy.test".into(),
         version: "1".into(),

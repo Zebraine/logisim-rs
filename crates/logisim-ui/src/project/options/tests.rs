@@ -146,6 +146,7 @@ fn missing_dependency_opens_file_workflow_without_editing_the_project() {
     let source = &project.plugin_sources[0];
     app.set_plugin_catalogue(vec![
         Manifest {
+            execution: None,
             abi: 1,
             id: source.plugin.clone(),
             version: source.version.clone(),
@@ -242,6 +243,7 @@ fn overview_counts_definitions_and_reports_exact_manifest_matches_and_live_libra
         ["test.present", "test.other"]
             .map(|id| {
                 Manifest {
+                    execution: None,
                     abi: 1,
                     id: id.into(),
                     version: if id == "test.present" { "1" } else { "2" }.into(),

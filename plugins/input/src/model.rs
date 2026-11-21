@@ -44,6 +44,7 @@ pub(crate) fn manifest() -> &'static Manifest {
             },
         ]);
         Manifest {
+            execution: None,
             abi: ABI_VERSION,
             id: "org.logisim-rs.input".into(),
             version: "1.0.0".into(),

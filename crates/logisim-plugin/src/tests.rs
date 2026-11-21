@@ -20,6 +20,7 @@ fn wasm(response: &Response, abi: u32, call: &str) -> Vec<u8> {
 }
 fn manifest() -> Manifest {
     Manifest {
+        execution: None,
         abi: 1,
         id: "test.example".into(),
         version: "1.0".into(),

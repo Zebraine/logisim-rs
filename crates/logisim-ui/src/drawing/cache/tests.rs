@@ -356,6 +356,7 @@ fn custom_artwork_and_changing_plugin_graphics_survive_cached_frames() {
     subcircuit.interface.appearance = Some(appearance);
     c.add_component(subcircuit);
     let manifest = api::Manifest {
+        execution: None,
         abi: 1,
         id: "test.render".into(),
         version: "1".into(),

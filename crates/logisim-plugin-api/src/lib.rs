@@ -60,11 +60,57 @@ use serde::{Deserialize, Serialize};
 pub use stable::*;
 use std::collections::BTreeMap;
 
+/// Default SDK ABI. Version 4 requires an explicit engine contract.
 pub const ABI_VERSION: u32 = 3;
+pub const EXECUTION_ABI_VERSION: u32 = 4;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AllowedEngines {
+    Wasmi,
+    Wasmtime,
+    Both,
+}
+
+impl AllowedEngines {
+    /// Versioned entry point, identifiable before compiling or running a start function.
+    pub const fn entry(self) -> &'static str {
+        match self {
+            Self::Wasmi => "logisim_abi4_wasmi",
+            Self::Wasmtime => "logisim_abi4_wasmtime",
+            Self::Both => "logisim_abi4_both",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FuelMeter {
+    #[serde(rename = "engine-specific")]
+    EngineSpecific,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Execution {
+    pub fuel: FuelMeter,
+    pub engines: AllowedEngines,
+}
+
+impl Execution {
+    pub const fn new(engines: AllowedEngines) -> Self {
+        Self {
+            fuel: FuelMeter::EngineSpecific,
+            engines,
+        }
+    }
+}
 pub const STABLE_ABI_VERSION: u32 = 2;
 pub const LEGACY_ABI_VERSION: u32 = 1;
 pub fn supports_abi(abi: u32) -> bool {
-    matches!(abi, LEGACY_ABI_VERSION | STABLE_ABI_VERSION | ABI_VERSION)
+    matches!(
+        abi,
+        LEGACY_ABI_VERSION | STABLE_ABI_VERSION | ABI_VERSION | EXECUTION_ABI_VERSION
+    )
 }
 pub const MAX_MESSAGE: usize = 256 * 1024;
 pub const MAX_STATE: usize = 64 * 1024;
@@ -74,11 +120,23 @@ pub type Properties = BTreeMap<String, String>;
 #[serde(deny_unknown_fields)]
 pub struct Manifest {
     pub abi: u32,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "present_execution"
+    )]
+    pub execution: Option<Execution>,
     pub id: String,
     pub version: String,
     pub name: String,
     pub tools: Vec<Tool>,
 }
+fn present_execution<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> Result<Option<Execution>, D::Error> {
+    Execution::deserialize(d).map(Some)
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Tool {

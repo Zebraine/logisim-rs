@@ -13,6 +13,7 @@ use logisim_core::{
 fn setup_input() -> (egui::Context, Workspace, logisim_core::Id) {
     let (ctx, mut app) = setup();
     let manifest = api::Manifest {
+        execution: None,
         abi: 3,
         id: "test.input".into(),
         version: "1".into(),

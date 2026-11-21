@@ -1,6 +1,7 @@
 use super::*;
 fn module(version: u32, call: &str, bytes: &[u8]) -> Vec<u8> {
     let manifest = Manifest {
+        execution: None,
         abi: 3,
         id: "raster.test".into(),
         version: "1".into(),

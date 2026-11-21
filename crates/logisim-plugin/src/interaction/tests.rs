@@ -5,6 +5,7 @@ use logisim_plugin_api::{
 };
 fn manifest() -> Manifest {
     Manifest {
+        execution: None,
         abi: 3,
         id: "policy.test".into(),
         version: "1".into(),
