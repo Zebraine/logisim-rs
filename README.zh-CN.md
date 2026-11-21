@@ -158,7 +158,7 @@ MCP 支持 `2024-11-05`、`2025-03-26`、`2025-06-18` 和 `2025-11-25`。握手�
 {"tool":"project_close","arguments":{"session":"ID_FROM_OPEN"}}
 ```
 
-后续请求使用打开工程时返回的 `data.session_id`。CLI 和 MCP 提供相同的 18 项操作。工程快照覆盖全部电路定义，仿真状态包含根实例的信号、时钟与传播计数、诊断和插件状态。
+后续请求使用打开工程时返回的 `data.session_id`。CLI 和 MCP 提供相同的 19 项操作。工程快照覆盖全部电路定义，仿真状态包含根实例的信号、时钟与传播计数、诊断和插件状态。
 
 ### 控制仿真
 
@@ -176,6 +176,14 @@ MCP 支持 `2024-11-05`、`2025-03-26`、`2025-06-18` 和 `2025-11-25`。握手�
 ```
 
 从根电路快照取输入 ID。输入 Pin、Switch 和 DipSwitch 接受其控制位宽内的无符号数，三态输入 Pin 也支持 `--unknown`。启用时输入会传播至稳定，暂停时可用 `step` 推进一个事件批次、`settle` 完成传播，或用 `enable --enabled true` 恢复传播。网络稳定后，`tick` 推进一拍并完成传播。实例层级无时钟时返回 `no_clocks`，有待传播事件时返回 `not_settled`。时钟只由显式 tick 推进。Reset 恢复初始信号，重新收敛后显示的拍数与步数均为零。每个成功控制操作返回 `action`、`changed` 和操作后的 `state`。
+
+根电路插件实例的动作 ID、标签和参数说明可从 `project_snapshot` 的 `tool.actions` 读取。打开仿真后，调用 `simulation_plugin_action` 时传入组件的 `id` 或 `agent_id`，两者选一。例如，课程 Register File 的 `write` 接受十进制寄存器地址和十六进制数据。
+
+```jsonl
+["simulation","plugin-action","--session","ID_FROM_OPEN","--agent-id","COMPONENT_AGENT_ID","--action","write","--argument","1 DEADBEEF"]
+```
+
+参数为按原样传递的 UTF-8 文本，最多 1024 字节，省略时取空字符串。没有参数说明的动作只接受空字符串。键盘输入绑定保留给交互界面。成功响应包含 `action:"plugin_action"`、`changed` 和完整仿真状态。即使输出引脚读数相同，插件内部状态发生变化也会计入 `changed`。暂停时动作仍会执行，待传播的信号计入 `pending_count`，可手动传播或恢复运行。动作保留当前 tick 和工程文件内容。目标、动作或参数校验失败时，仿真状态保持原值。插件执行故障返回 `plugin_error`，`error.details.state` 包含暂停后的状态，可用 `simulation_reset` 恢复。
 
 ### 编辑工程会话
 
@@ -252,7 +260,7 @@ PLA 的两个平面均以项为行。输入单元取 `disconnected`、`direct` �
 
 再次放置同一依赖时，可以省略 `source`，在操作顶层指定已记录的 `plugin` 和 `version`。设置 `--root` 后，显式提交的主路径、备用路径及目录查询路径均须位于根目录内。工程原有依赖仍优先从工程目录解析相对路径，随后尝试绝对备用路径。为已记录的插件版本提供另一位置时，两处模块的目标工具定义必须一致，工程保留原来源。
 
-将返回的 ID 传给 `update_plugin` 可单独修改插件 `properties`，也可修改文档字段 `label`、`facing`、`font` 和不透明 RGBA `color`。使用 `move_component` 移动、`remove_component` 删除。删除最后一个实例后仍保留工程依赖。模块缺失或与已保存的定义不匹配时，快照包含 `plugin_error`，仍可读取已保存的属性值、移动或删除实例。补丁失败时整批回滚。此接口仅列出插件动作元数据。
+将返回的 ID 传给 `update_plugin` 可单独修改插件 `properties`，也可修改文档字段 `label`、`facing`、`font` 和不透明 RGBA `color`。使用 `move_component` 移动、`remove_component` 删除。删除最后一个实例后仍保留工程依赖。模块缺失或与已保存的定义不匹配时，快照包含 `plugin_error`，仍可读取已保存的属性值、移动或删除实例。补丁失败时整批回滚。根电路实例的运行时动作由 `simulation_plugin_action` 调用。
 
 ## 已知限制
 

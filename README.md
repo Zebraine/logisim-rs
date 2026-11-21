@@ -158,7 +158,7 @@ For a circuit, run `logisim-agent cli` and send one JSON object per line in the 
 {"tool":"project_close","arguments":{"session":"ID_FROM_OPEN"}}
 ```
 
-Use the returned `data.session_id` in subsequent requests. CLI and MCP expose the same 18 operations. The project snapshot covers every circuit definition. Simulation state includes signals from the active root instance, clock and propagation counters, diagnostics and plugin status.
+Use the returned `data.session_id` in subsequent requests. CLI and MCP expose the same 19 operations. The project snapshot covers every circuit definition. Simulation state includes signals from the active root instance, clock and propagation counters, diagnostics and plugin status.
 
 ### Controlling a simulation
 
@@ -176,6 +176,14 @@ Send these argument arrays on stdin to the same running `logisim-agent cli` proc
 ```
 
 Use an input ID from the root circuit. Input Pins, Switches and DipSwitches accept unsigned values within their control width. Three-state input Pins also accept `--unknown`. Enabled inputs propagate immediately. Pausing leaves pending work for a single event batch (`step`), full propagation (`settle`) or resumption (`enable --enabled true`). A tick requires a settled network and advances exactly once, including propagation. A clockless hierarchy returns `no_clocks`, and pending work returns `not_settled`. Only an explicit tick advances the clock. Reset restores initial signals and reports zero ticks and steps at the settled reset boundary. Each successful control returns `action`, `changed` and the resulting `state`.
+
+For a root plugin instance, read the action ID, label and argument hint from `tool.actions` in `project_snapshot`. With the simulation open, pass exactly one component reference (`id` or `agent_id`) to `simulation_plugin_action`. For example, the course Register File accepts the register address in decimal and the word in hexadecimal:
+
+```jsonl
+["simulation","plugin-action","--session","ID_FROM_OPEN","--agent-id","COMPONENT_AGENT_ID","--action","write","--argument","1 DEADBEEF"]
+```
+
+The optional argument is literal UTF-8 text of at most 1024 bytes and defaults to an empty string. Actions without an argument hint accept only the empty string. Keyboard input bindings are reserved for interactive use. A successful call returns `action:"plugin_action"`, `changed` and the full simulation state. A change to private plugin state counts even when the output pins hold the same values. While paused, the action executes and queued signals remain in `pending_count` until an explicit propagation or resume. The tick count and project bytes stay intact. Invalid targets, actions or arguments leave the simulation as it was. A plugin execution fault returns `plugin_error` with the paused state in `error.details.state`. Use `simulation_reset` to recover.
 
 ### Editing a project session
 
@@ -252,7 +260,7 @@ This batch places a keyboard in circuit 1, using a module path relative to the p
 
 For another instance of a recorded dependency, omit `source` and supply its top-level `plugin` and `version`. With `--root`, both caller-supplied source paths and the catalog path must stay inside the root. Previously recorded dependencies retain project-relative resolution with an absolute fallback. An alternate location for an already recorded identity must provide the same tool definition. The project keeps its original source.
 
-Pass the returned ID to `update_plugin` to edit individual `properties` or the document fields `label`, `facing`, `font` and opaque RGBA `color`. Use `move_component` and `remove_component` for placement and removal. Removing the last instance retains the project dependency. If a module is unavailable or disagrees with a saved definition, the snapshot includes `plugin_error`. Its saved property values remain readable and the instance can still be moved or removed. Failed patches roll back the whole batch. Plugin actions are metadata only in this interface.
+Pass the returned ID to `update_plugin` to edit individual `properties` or the document fields `label`, `facing`, `font` and opaque RGBA `color`. Use `move_component` and `remove_component` for placement and removal. Removing the last instance retains the project dependency. If a module is unavailable or disagrees with a saved definition, the snapshot includes `plugin_error`. Its saved property values remain readable and the instance can still be moved or removed. Failed patches roll back the whole batch. Use `simulation_plugin_action` to invoke a root instance’s runtime action.
 
 ## Known limitations
 
