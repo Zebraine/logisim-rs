@@ -1,6 +1,7 @@
 //! The patch catalog maps public keys directly to persistent core attributes.
 //! After typed decoding, the file codec validates the complete prospective component.
 use super::edit::{choice, decode};
+use super::schema::{Rule, U32, WIDTH};
 use crate::Result;
 use logisim_core::{
     Arithmetic, BitSearch, Component, ControlPosition, CounterOverflow, Extension, Facing,
@@ -11,15 +12,17 @@ use serde_json::{Value, json};
 
 pub(super) struct Field {
     pub name: &'static str,
+    pub rule: Rule,
     pub read: fn(&Component) -> Value,
     pub write: fn(&mut Component, &Value) -> Result<()>,
 }
 
 // Using the same member for reading and writing keeps the snapshot and edit vocabulary paired.
 macro_rules! field {
-    ($id:ident, $key:literal, $($member:ident).+) => {
+    ($id:ident, $key:literal, $rule:expr, $($member:ident).+) => {
         const $id: Field = Field {
             name: $key,
+            rule: $rule,
             read: |c| json!(c.$($member).+),
             write: |c, value| {
                 c.$($member).+ = decode($key, value)?;
@@ -33,6 +36,7 @@ macro_rules! enum_field {
     ($id:ident, $key:literal, $($member:ident).+, [$($variant:path => $name:literal),+]) => {
         const $id: Field = Field {
             name: $key,
+            rule: Rule::Enum(|| vec![$($name),+]),
             read: |c| match c.$($member).+ { $($variant => $name.into()),+ },
             write: |c, value| {
                 c.$($member).+ = choice($key, value, [$(($variant, $name)),+])?;
@@ -42,28 +46,74 @@ macro_rules! enum_field {
     };
 }
 
-field!(BITS, "bits", bits);
-field!(VALUE, "value", constant);
-field!(HIGH, "high_ticks", sequential.high_ticks);
-field!(LOW, "low_ticks", sequential.low_ticks);
-field!(TEXT, "text", label);
-field!(IN_WIDTH, "in_width", input_bits);
-field!(OUT_WIDTH, "out_width", bits);
-field!(SIGNED, "signed", arithmetic.signed);
-field!(SELECT_BITS, "select_bits", plexing.select_bits);
-field!(ENABLE, "enable", plexing.enable);
-field!(TOP_RIGHT, "top_right", plexing.top_right);
-field!(DISABLED_ZERO, "disabled_zero", plexing.disabled_zero);
-field!(THREE_STATE, "three_state", plexing.three_state);
-field!(BIT_INPUTS, "bit_inputs", arithmetic.bit_inputs);
-field!(NO_INPUT_ZERO, "no_input_zero", plexing.no_input_zero);
-field!(GROUP_BITS, "group_bits", plexing.group_bits);
-field!(DISPLAY_MULTIBIT, "multibit", plexing.multibit);
-field!(CONTROL_LEFT, "control_left", bus.control_left);
-field!(NEGATE_CONTROL, "negate_control", bus.negate_control);
+field!(BITS, "bits", WIDTH, bits);
+field!(VALUE, "value", U32, constant);
+field!(
+    HIGH,
+    "high_ticks",
+    Rule::Integer(1, 65_535),
+    sequential.high_ticks
+);
+field!(
+    LOW,
+    "low_ticks",
+    Rule::Integer(1, 65_535),
+    sequential.low_ticks
+);
+field!(TEXT, "text", Rule::Label, label);
+field!(IN_WIDTH, "in_width", WIDTH, input_bits);
+field!(OUT_WIDTH, "out_width", WIDTH, bits);
+field!(SIGNED, "signed", Rule::Boolean, arithmetic.signed);
+field!(
+    SELECT_BITS,
+    "select_bits",
+    Rule::Integer(1, 5),
+    plexing.select_bits
+);
+field!(ENABLE, "enable", Rule::Boolean, plexing.enable);
+field!(TOP_RIGHT, "top_right", Rule::Boolean, plexing.top_right);
+field!(
+    DISABLED_ZERO,
+    "disabled_zero",
+    Rule::Boolean,
+    plexing.disabled_zero
+);
+field!(
+    THREE_STATE,
+    "three_state",
+    Rule::Boolean,
+    plexing.three_state
+);
+field!(BIT_INPUTS, "bit_inputs", WIDTH, arithmetic.bit_inputs);
+field!(
+    NO_INPUT_ZERO,
+    "no_input_zero",
+    Rule::Boolean,
+    plexing.no_input_zero
+);
+field!(GROUP_BITS, "group_bits", WIDTH, plexing.group_bits);
+field!(
+    DISPLAY_MULTIBIT,
+    "multibit",
+    Rule::Boolean,
+    plexing.multibit
+);
+field!(
+    CONTROL_LEFT,
+    "control_left",
+    Rule::Boolean,
+    bus.control_left
+);
+field!(
+    NEGATE_CONTROL,
+    "negate_control",
+    Rule::Boolean,
+    bus.negate_control
+);
 field!(
     GATE_BOTTOM_RIGHT,
     "gate_bottom_right",
+    Rule::Boolean,
     transistor.gate_bottom_right
 );
 enum_field!(SEARCH, "search", arithmetic.search, [BitSearch::LowestOne => "lowest_one",
@@ -73,16 +123,31 @@ enum_field!(CONTROLLED_SIZE, "size", bus.size, [GateSize::Narrow => "narrow",
     GateSize::Medium => "medium", GateSize::Wide => "wide"]);
 enum_field!(TRANSISTOR_TYPE, "transistor_type", transistor.transistor_type,
     [TransistorType::P => "p", TransistorType::N => "n"]);
-field!(SWITCH_COUNT, "switch_count", io.switch_count);
-field!(ON, "on_color", io.on_color);
-field!(OFF, "off_color", io.off_color);
-field!(BACKGROUND, "background", io.background);
-field!(ACTIVE_HIGH, "active_high", io.active_high);
-field!(MULTIBIT, "multibit", io.rgb_multibit);
-field!(ROWS, "matrix_rows", io.matrix_rows);
-field!(COLUMNS, "matrix_columns", io.matrix_columns);
-field!(CIRCULAR, "matrix_circular", io.matrix_circular);
-field!(PERSISTENCE, "matrix_persistence", io.matrix_persistence);
+field!(SWITCH_COUNT, "switch_count", WIDTH, io.switch_count);
+field!(ON, "on_color", Rule::Rgba { opaque: false }, io.on_color);
+field!(OFF, "off_color", Rule::Rgba { opaque: false }, io.off_color);
+field!(
+    BACKGROUND,
+    "background",
+    Rule::Rgba { opaque: false },
+    io.background
+);
+field!(ACTIVE_HIGH, "active_high", Rule::Boolean, io.active_high);
+field!(MULTIBIT, "multibit", Rule::Boolean, io.rgb_multibit);
+field!(ROWS, "matrix_rows", WIDTH, io.matrix_rows);
+field!(COLUMNS, "matrix_columns", WIDTH, io.matrix_columns);
+field!(
+    CIRCULAR,
+    "matrix_circular",
+    Rule::Boolean,
+    io.matrix_circular
+);
+field!(
+    PERSISTENCE,
+    "matrix_persistence",
+    Rule::Integer(0, i32::MAX as i64),
+    io.matrix_persistence
+);
 
 enum_field!(PULL, "pull", bus.pull, [Pull::Zero => "0", Pull::One => "1", Pull::Error => "X"]);
 enum_field!(EXTENSION, "type", extension, [Extension::Zero => "zero", Extension::One => "one",
@@ -99,6 +164,7 @@ enum_field!(VALIGN, "valign", text_vertical, [VerticalAlign::Top => "top",
 
 const LABEL_FACING: Field = Field {
     name: "label_facing",
+    rule: Rule::Enum(|| Facing::ALL.map(|f| f.name()).to_vec()),
     read: |c| {
         if c.label_center {
             "center"
@@ -124,13 +190,34 @@ const LABEL_FACING: Field = Field {
 field!(
     NEGATE_CONTROLS,
     "negate_controls",
+    Rule::Boolean,
     sequential.negate_controls
 );
-field!(NEW_LAYOUT, "new_layout", sequential.new_layout);
-field!(SELECT_HIGH, "select_high", sequential.select_high);
-field!(COUNTER_MAX, "counter_max", sequential.counter_max);
-field!(COUNTER_OLD, "counter_old", sequential.counter_old);
-field!(RANDOM_SEED, "random_seed", sequential.random_seed);
+field!(
+    NEW_LAYOUT,
+    "new_layout",
+    Rule::Boolean,
+    sequential.new_layout
+);
+field!(
+    SELECT_HIGH,
+    "select_high",
+    Rule::Boolean,
+    sequential.select_high
+);
+field!(COUNTER_MAX, "counter_max", U32, sequential.counter_max);
+field!(
+    COUNTER_OLD,
+    "counter_old",
+    Rule::Boolean,
+    sequential.counter_old
+);
+field!(
+    RANDOM_SEED,
+    "random_seed",
+    Rule::Integer(i32::MIN as i64, i32::MAX as i64),
+    sequential.random_seed
+);
 
 enum_field!(TRIGGER, "trigger", sequential.trigger, [Trigger::Rising => "rising",
     Trigger::Falling => "falling", Trigger::High => "high", Trigger::Low => "low"]);
@@ -142,7 +229,30 @@ enum_field!(OVERFLOW, "counter_overflow", sequential.counter_overflow,
     [CounterOverflow::Wrap => "wrap", CounterOverflow::Stay => "stay",
      CounterOverflow::Continue => "continue", CounterOverflow::Load => "load"]);
 
-const FLIP_FLOP_FIELDS: &[Field] = &[TRIGGER, CONTROLS, NEGATE_CONTROLS, NEW_LAYOUT];
+// Use the same typed readers and writers with the narrower codec vocabulary for each kind.
+const EDGE_TRIGGER: Field = Field {
+    rule: Rule::Enum(|| vec!["rising", "falling"]),
+    ..TRIGGER
+};
+const LEVEL_TRIGGER: Field = Field {
+    rule: Rule::Enum(|| vec!["high", "low"]),
+    ..LATCH_TRIGGER
+};
+const INVERTER_SIZE: Field = Field {
+    rule: Rule::Enum(|| vec!["narrow", "wide"]),
+    ..CONTROLLED_SIZE
+};
+const BUTTON_LABEL_FACING: Field = Field {
+    rule: Rule::Enum(|| {
+        Facing::ALL
+            .into_iter()
+            .map(|f| f.name())
+            .chain(["center"])
+            .collect()
+    }),
+    ..LABEL_FACING
+};
+const FLIP_FLOP_FIELDS: &[Field] = &[EDGE_TRIGGER, CONTROLS, NEGATE_CONTROLS, NEW_LAYOUT];
 const LATCH_FIELDS: &[Field] = &[LATCH_TRIGGER, CONTROLS, NEGATE_CONTROLS, NEW_LAYOUT];
 
 // (Core kind, optional short name, component-specific fields). Core names are always accepted.
@@ -152,7 +262,7 @@ const CATALOG: &[Entry] = &[
     (Kind::Ground, None, &[BITS]),
     (Kind::Power, None, &[BITS]),
     (Kind::PullResistor, None, &[PULL]),
-    (Kind::Button, None, &[ON, LABEL_FACING]),
+    (Kind::Button, None, &[ON, BUTTON_LABEL_FACING]),
     (Kind::Switch, None, &[BITS, ON, LABEL_FACING]),
     (
         Kind::DipSwitch,
@@ -228,7 +338,7 @@ const CATALOG: &[Entry] = &[
     (
         Kind::ControlledInverter,
         None,
-        &[BITS, CONTROL_LEFT, NEGATE_CONTROL, CONTROLLED_SIZE],
+        &[BITS, CONTROL_LEFT, NEGATE_CONTROL, INVERTER_SIZE],
     ),
     (
         Kind::Transistor,
@@ -248,16 +358,28 @@ const CATALOG: &[Entry] = &[
         Some("SR Flip-Flop"),
         FLIP_FLOP_FIELDS,
     ),
-    (Kind::Latch(Latch::D), None, LATCH_FIELDS),
+    (
+        Kind::Latch(Latch::D),
+        None,
+        &[LEVEL_TRIGGER, CONTROLS, NEGATE_CONTROLS, NEW_LAYOUT],
+    ),
     (Kind::Latch(Latch::Sr), Some("SR Latch"), LATCH_FIELDS),
     (Kind::Register, None, &[BITS, TRIGGER, SELECT_HIGH]),
     (
         Kind::Counter,
         None,
-        &[BITS, TRIGGER, COUNTER_MAX, OVERFLOW, COUNTER_OLD],
+        &[BITS, EDGE_TRIGGER, COUNTER_MAX, OVERFLOW, COUNTER_OLD],
     ),
-    (Kind::ShiftRegister, Some("ShiftRegister"), &[BITS, TRIGGER]),
-    (Kind::Random, Some("Random"), &[BITS, TRIGGER, RANDOM_SEED]),
+    (
+        Kind::ShiftRegister,
+        Some("ShiftRegister"),
+        &[BITS, EDGE_TRIGGER],
+    ),
+    (
+        Kind::Random,
+        Some("Random"),
+        &[BITS, EDGE_TRIGGER, RANDOM_SEED],
+    ),
     (Kind::Led, None, &[ON, OFF, ACTIVE_HIGH, LABEL_FACING]),
     (
         Kind::SevenSegment,

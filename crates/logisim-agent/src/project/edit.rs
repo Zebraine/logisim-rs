@@ -1,7 +1,7 @@
 //! Apply named property edits to a core component before handing it back to the circuit.
 use super::properties::{PULL, RADIX, fields};
 use crate::{Error, Result};
-use logisim_core::{Component, Facing, Gate, GateSize, Kind, ParityOutput};
+use logisim_core::{Component, Facing, GateSize, Kind, ParityOutput};
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 
@@ -38,13 +38,6 @@ pub(super) fn choice<T: Copy>(
         .map(|(value, _)| value)
         .ok_or_else(|| invalid(format!("Invalid {key}: {text}.")))
 }
-fn count(key: &str, v: &Value, min: u8, max: u8) -> Result<u8> {
-    let n = decode(key, v)?;
-    if !(min..=max).contains(&n) {
-        return Err(invalid(format!("{key} must be within {min}..={max}.")));
-    }
-    Ok(n)
-}
 fn facing(key: &str, v: &Value) -> Result<Facing> {
     choice(key, v, Facing::ALL.map(|f| (f, f.name())))
 }
@@ -55,12 +48,13 @@ pub(super) fn apply(c: &mut Component, properties: &Map<String, Value>) -> Resul
     let old_split = (c.bits, c.splitter.fanout);
     for (k, v) in properties {
         let key = k.as_str();
-        if !writable.contains(&key) {
+        let Some((_, rule)) = writable.iter().find(|(name, _)| *name == key) else {
             return Err(invalid(format!(
                 "{} has no writable {key} property.",
                 c.kind.name()
             )));
-        }
+        };
+        rule.validate(key, v)?;
         if let Some(field) = super::builtins::fields(c.kind)
             .iter()
             .find(|f| f.name == key)
@@ -71,7 +65,7 @@ pub(super) fn apply(c: &mut Component, properties: &Map<String, Value>) -> Resul
         match key {
             "position" => c.position = super::patch::point(decode(key, v)?)?,
             "facing" => c.facing = facing(key, v)?,
-            "bits" | "input_bits" => c.bits = count(key, v, 1, 32)?,
+            "bits" | "input_bits" => c.bits = decode(key, v)?,
             "label" => c.label = decode(key, v)?,
             "font" => {
                 let font = v
@@ -80,7 +74,7 @@ pub(super) fn apply(c: &mut Component, properties: &Map<String, Value>) -> Resul
                 for (key, v) in font {
                     match key.as_str() {
                         "family" => c.font.family = decode(key, v)?,
-                        "size" => c.font.size = count(key, v, 1, 255)?,
+                        "size" => c.font.size = decode(key, v)?,
                         "bold" => c.font.bold = decode(key, v)?,
                         "italic" => c.font.italic = decode(key, v)?,
                         _ => return Err(invalid(format!("Unknown font field {key}."))),
@@ -89,9 +83,6 @@ pub(super) fn apply(c: &mut Component, properties: &Map<String, Value>) -> Resul
             }
             "color" => {
                 let [r, g, b, a]: [u8; 4] = decode(key, v)?;
-                if c.kind != Kind::Text && a != 255 {
-                    return Err(invalid("This component requires opaque RGBA color."));
-                }
                 c.color = [r, g, b];
                 c.color_alpha = a;
             }
@@ -101,19 +92,14 @@ pub(super) fn apply(c: &mut Component, properties: &Map<String, Value>) -> Resul
             "three_state" => c.pin.three_state = decode(key, v)?,
             "pull" => c.pin.pull = choice(key, v, PULL)?,
             "radix" => c.radix = choice(key, v, RADIX)?,
-            "inputs" if matches!(c.kind, Kind::Gate(_)) => {
-                c.gate_options.inputs = count(key, v, 2, Gate::MAX_INPUTS)?
-            }
-            "inputs" => c.parity.inputs = count(key, v, 2, 32)?,
+            "inputs" if matches!(c.kind, Kind::Gate(_)) => c.gate_options.inputs = decode(key, v)?,
+            "inputs" => c.parity.inputs = decode(key, v)?,
             "size" => {
                 let size = choice(
                     key,
                     v,
                     [GateSize::Narrow, GateSize::Medium, GateSize::Wide].map(|s| (s, s.name())),
                 )?;
-                if c.kind == Kind::Gate(Gate::Not) && size == GateSize::Medium {
-                    return Err(invalid("NOT Gate supports Narrow and Wide."));
-                }
                 if matches!(c.kind, Kind::Parity(_)) {
                     c.parity.size = size;
                 } else {
@@ -121,7 +107,7 @@ pub(super) fn apply(c: &mut Component, properties: &Map<String, Value>) -> Resul
                 }
             }
             "xor_odd" => c.gate_options.xor_odd = decode(key, v)?,
-            "fanout" => c.splitter.fanout = count(key, v, 1, 32)?,
+            "fanout" => c.splitter.fanout = decode(key, v)?,
             // Both depend on final dimensions, independent of JSON key order.
             "negation_mask" | "mapping" => {}
             _ => unreachable!("writable property without an editor"),

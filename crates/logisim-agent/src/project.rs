@@ -5,6 +5,7 @@ mod edit;
 pub(crate) mod patch;
 mod properties;
 mod save;
+mod schema;
 use crate::{Error, Result, digest, io};
 use logisim_core::{Component, Interface, Point, Project};
 use serde_json::{Value, json};
@@ -136,6 +137,7 @@ mod tests {
 
     #[test]
     fn memory_plugins_and_deferred_io_remain_read_only_in_project_patches() {
+        let catalog = catalog::catalog();
         for kind in [
             Kind::Rom,
             Kind::Ram,
@@ -149,6 +151,14 @@ mod tests {
             let snapshot = component(&Component::new(kind, Point::ZERO));
             assert_eq!(snapshot["patchable_properties"], json!([]), "{kind:?}");
             assert_eq!(snapshot["property_types"], json!({}), "{kind:?}");
+            let entry = catalog["kinds"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|k| k["name"] == kind.name())
+                .unwrap();
+            assert_eq!(entry["properties"], json!({}), "{kind:?}");
+            assert_eq!(snapshot["property_schema"], entry["properties"], "{kind:?}");
             assert_eq!(
                 edit::require_supported(kind).unwrap_err().code,
                 "unsupported_component"

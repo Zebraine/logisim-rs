@@ -1,51 +1,127 @@
 //! Public field names describe the editable subset of the existing component codecs.
-use logisim_core::{Component, Gate, Kind, PinPull, Radix};
+use super::schema::{self, Rule, U32, WIDTH};
+use logisim_core::{Component, Facing, Gate, GateSize, Kind, ParityOutput, PinPull, Radix};
 use serde_json::{Value, json};
 
-pub(super) fn fields(kind: Kind) -> Vec<&'static str> {
+const DIRECTION: Rule = Rule::Enum(|| Facing::ALL.map(|f| f.name()).to_vec());
+const SIZES: [GateSize; 3] = [GateSize::Narrow, GateSize::Medium, GateSize::Wide];
+const SIZE: Rule = Rule::Enum(|| SIZES.map(|s| s.name()).to_vec());
+
+pub(super) fn fields(kind: Kind) -> Vec<(&'static str, Rule)> {
     if matches!(kind, Kind::Subcircuit(_)) {
-        return vec!["label", "facing", "font", "position"];
+        return vec![
+            ("label", Rule::Label),
+            ("facing", DIRECTION),
+            ("font", Rule::Font),
+            ("position", Rule::Position),
+        ];
     }
-    let mut keys = Vec::new();
+    let mut fields = Vec::new();
     if kind.rotatable() {
-        keys.push("facing");
+        fields.push(("facing", DIRECTION));
     }
     match kind {
-        Kind::Pin => keys.extend(["bits", "output", "three_state", "pull", "label_facing"]),
+        Kind::Pin => fields.extend([
+            ("bits", WIDTH),
+            ("output", Rule::Boolean),
+            ("three_state", Rule::Boolean),
+            ("pull", Rule::Enum(|| PULL.map(|(_, s)| s).to_vec())),
+            ("label_facing", DIRECTION),
+        ]),
         Kind::Gate(g) => {
-            keys.push("bits");
+            fields.push(("bits", WIDTH));
             if !g.unary() {
-                keys.extend(["inputs", "negation_mask"]);
+                fields.extend([
+                    ("inputs", Rule::Integer(2, Gate::MAX_INPUTS as i64)),
+                    ("negation_mask", Rule::Integer(0, u8::MAX as i64)),
+                ]);
             }
-            if g != Gate::Buffer {
-                keys.push("size");
+            if g == Gate::Not {
+                fields.push((
+                    "size",
+                    Rule::Enum(|| {
+                        [GateSize::Narrow, GateSize::Wide]
+                            .map(|s| s.name())
+                            .to_vec()
+                    }),
+                ));
+            } else if g != Gate::Buffer {
+                fields.push(("size", SIZE));
             }
             if matches!(g, Gate::Xor | Gate::Xnor) {
-                keys.push("xor_odd");
+                fields.push(("xor_odd", Rule::Boolean));
             }
         }
-        Kind::Parity(_) => keys.extend(["bits", "size", "inputs", "output", "negation_mask"]),
-        Kind::Probe => keys.extend(["radix", "label_facing"]),
-        Kind::Tunnel => keys.push("bits"),
-        Kind::Splitter => keys.extend(["input_bits", "fanout", "mapping"]),
+        Kind::Parity(_) => fields.extend([
+            ("bits", WIDTH),
+            ("size", SIZE),
+            ("inputs", Rule::Integer(2, 32)),
+            (
+                "output",
+                Rule::Enum(|| ParityOutput::ALL.map(|p| p.name()).to_vec()),
+            ),
+            ("negation_mask", U32),
+        ]),
+        Kind::Probe => fields.extend([
+            ("radix", Rule::Enum(|| RADIX.map(|(_, s)| s).to_vec())),
+            ("label_facing", DIRECTION),
+        ]),
+        Kind::Tunnel => fields.push(("bits", WIDTH)),
+        Kind::Splitter => fields.extend([
+            ("input_bits", WIDTH),
+            ("fanout", WIDTH),
+            ("mapping", Rule::Mapping),
+        ]),
         _ => {
             let extra = super::builtins::fields(kind);
             if extra.is_empty() {
                 return vec![];
             }
-            keys.extend(extra.iter().map(|f| f.name));
+            fields.extend(extra.iter().map(|f| (f.name, f.rule)));
         }
     }
     if kind.has_label() {
         if kind != Kind::Text {
-            keys.push("label");
+            fields.push(("label", Rule::Label));
         }
-        keys.push("font");
+        fields.push(("font", Rule::Font));
         if kind != Kind::Tunnel {
-            keys.push("color");
+            fields.push((
+                "color",
+                Rule::Rgba {
+                    opaque: kind != Kind::Text,
+                },
+            ));
         }
     }
-    keys
+    fields
+}
+
+// The schema describes a kind independently of any current instance or partial patch.
+// These constraints also depend on sibling properties of the final component.
+pub(super) fn property_schema(kind: Kind, fields: &[(&'static str, Rule)]) -> Value {
+    let mut schema = schema::object(fields.iter().copied());
+    match kind {
+        Kind::Counter => {
+            schema["counter_max"]["description"] = "Must fit the final bits width.".into()
+        }
+        Kind::Constant => {
+            schema["value"]["description"] =
+                "Unsigned document constant. Must fit the final bits width.".into()
+        }
+        Kind::Gate(g) if !g.unary() => {
+            schema["negation_mask"]["description"] = "Only the low inputs bits may be set.".into()
+        }
+        Kind::Parity(_) => {
+            schema["negation_mask"]["description"] = "Only the low inputs bits may be set.".into()
+        }
+        Kind::FlipFlop(_) => {
+            schema["new_layout"]["description"] =
+                "A false value requires controls to be legacy.".into()
+        }
+        _ => {}
+    }
+    schema
 }
 
 pub(super) const PULL: [(PinPull, &str); 3] = [
@@ -109,18 +185,12 @@ pub(super) fn describe(c: &Component, data: &mut Value) {
         _ => {}
     }
     let writable = fields(c.kind);
-    let mut types = serde_json::Map::new();
-    for &key in &writable {
-        let hint = match &data[key] {
-            Value::Bool(_) => "boolean",
-            Value::Number(_) => "integer",
-            Value::String(_) => "string",
-            Value::Array(_) => "array",
-            Value::Object(_) => "object",
-            Value::Null => unreachable!("missing snapshot value for {key}"),
-        };
-        types.insert(key.into(), hint.into());
-    }
-    data["property_types"] = types.into();
-    data["patchable_properties"] = json!(writable);
+    data["property_schema"] = property_schema(c.kind, &writable);
+    data["property_types"] = Value::Object(
+        writable
+            .iter()
+            .map(|(key, rule)| ((*key).to_owned(), rule.type_name().into()))
+            .collect(),
+    );
+    data["patchable_properties"] = writable.iter().map(|(key, _)| Value::from(*key)).collect();
 }

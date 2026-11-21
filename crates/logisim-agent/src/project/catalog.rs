@@ -56,10 +56,20 @@ pub(super) fn placement(name: &str) -> Result<Entry> {
 pub(crate) fn catalog() -> Value {
     let mut kinds: Vec<_> = entries().collect();
     kinds.sort_unstable_by_key(|entry| entry.kind.name());
-    let kinds: Vec<_> = kinds.into_iter().map(|entry| {
-        let writable = !properties::fields(entry.kind).is_empty();
-        json!({"name":entry.kind.name(), "aliases":entry.alias.as_slice(),
-            "addable":writable, "editable":writable, "requires_circuit_id":entry.requires_circuit_id()})
-    }).collect();
+    let kinds: Vec<_> = kinds
+        .into_iter()
+        .map(|entry| {
+            let fields = properties::fields(entry.kind);
+            let writable = !fields.is_empty();
+            json!({
+                "name": entry.kind.name(),
+                "aliases": entry.alias.as_slice(),
+                "addable": writable,
+                "editable": writable,
+                "requires_circuit_id": entry.requires_circuit_id(),
+                "properties": properties::property_schema(entry.kind, &fields),
+            })
+        })
+        .collect();
     json!({"schema":1,"kinds":kinds})
 }

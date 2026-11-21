@@ -68,9 +68,10 @@ pub(crate) fn indexed(mut error: Error, index: usize) -> Error {
     error
 }
 pub(super) fn point([x, y]: [i32; 2]) -> Result<Point> {
+    use super::schema::COORD_LIMIT;
     if [x, y]
         .into_iter()
-        .any(|n| !(-1_000_000..=1_000_000).contains(&n))
+        .any(|n| !(-COORD_LIMIT..=COORD_LIMIT).contains(&n))
     {
         return Err(invalid("Coordinate outside the supported circuit bounds."));
     }
