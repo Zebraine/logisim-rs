@@ -174,7 +174,7 @@ fn run() -> std::io::Result<bool> {
         }
     };
     if args == [OsString::from("mcp")] {
-        mcp::run(service, std::io::stdin().lock(), out)?;
+        mcp::run(service, std::io::BufReader::new(std::io::stdin()), out)?;
         return Ok(true);
     }
     if args != [OsString::from("cli")] {

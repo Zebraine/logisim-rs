@@ -305,13 +305,43 @@ fn frame(value: &Value) -> Vec<u8> {
 }
 
 fn tool_frame(id: &Value, outcome: crate::Result<Value>) -> Vec<u8> {
+    #[derive(serde::Serialize)]
+    struct Text<'a> {
+        r#type: &'static str,
+        text: &'a str,
+    }
+    #[derive(serde::Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct ToolResult<'a> {
+        content: [Text<'a>; 1],
+        is_error: bool,
+        structured_content: &'a Value,
+    }
+    #[derive(serde::Serialize)]
+    struct Response<'a> {
+        id: &'a Value,
+        jsonrpc: &'static str,
+        result: ToolResult<'a>,
+    }
+
     let is_error = outcome.is_err();
     let structured = envelope(outcome);
     let text = structured.to_string();
-    frame(&json!({"id":id,"jsonrpc":"2.0","result":{
-        "content":[{"type":"text","text":text}],
-        "structuredContent":structured,"isError":is_error
-    }}))
+    let response = Response {
+        id,
+        jsonrpc: "2.0",
+        result: ToolResult {
+            content: [Text {
+                r#type: "text",
+                text: &text,
+            }],
+            is_error,
+            structured_content: &structured,
+        },
+    };
+    let mut bytes = serde_json::to_vec(&response).expect("JSON values serialize to memory");
+    bytes.push(b'\n');
+    bytes
 }
 
 struct Connection {
@@ -447,31 +477,81 @@ fn input_error(e: Error) -> Vec<u8> {
     )
 }
 
-pub fn run(service: Service, input: impl BufRead, mut out: impl Write) -> std::io::Result<()> {
+enum Event {
+    Line(crate::Result<Value>),
+    Done(router::Completion),
+    Eof(std::io::Result<()>),
+}
+
+/// The reader may block in stdin while the connection thread dispatches or writes.
+/// Credits bound accepted requests (including finished frames waiting for stdout).
+const REQUEST_WINDOW: usize = 64;
+
+pub fn run(
+    service: Service,
+    input: impl BufRead + Send + 'static,
+    mut out: impl Write,
+) -> std::io::Result<()> {
+    use std::{io::ErrorKind, sync::mpsc, thread};
     let mut connection = Connection { phase: Phase::New };
     let mut router = Router::new(service);
-    let (done, completions) = std::sync::mpsc::channel();
-    io::lines(input, |line| {
-        let response = match line {
-            Ok(message) => {
+    let (events, inbox) = mpsc::channel();
+    let (credits, permits) = mpsc::channel();
+    for _ in 0..REQUEST_WINDOW {
+        credits.send(()).expect("reader permit channel");
+    }
+    let input_events = events.clone();
+    let reader = thread::Builder::new()
+        .name("mcp-stdin".into())
+        .spawn(move || {
+            let result = io::lines(input, |line| {
+                permits.recv().map_err(|_| ErrorKind::BrokenPipe)?;
+                input_events
+                    .send(Event::Line(line))
+                    .map_err(|_| ErrorKind::BrokenPipe.into())
+            });
+            let _ = input_events.send(Event::Eof(result));
+        })?;
+    let mut eof = None;
+    let mut pending = 0;
+    while eof.is_none() || pending != 0 {
+        let frames = match inbox.recv().expect("connection event channel") {
+            Event::Line(Ok(message)) => {
                 let has_id = message.get("id").is_some();
-                let done = done.clone();
-                match connection.receive(message, &mut router, move |result| {
-                    let _ = done.send(result);
+                let replies = events.clone();
+                match connection.receive(message, &mut router, move |done| {
+                    let _ = replies.send(Event::Done(done));
                 }) {
-                    Some(frame) => Some(frame),
-                    None if has_id => router
-                        .finish(completions.recv().expect("worker reply"))
-                        .pop(),
-                    None => None,
+                    Some(frame) => vec![frame],
+                    None if has_id => {
+                        pending += 1;
+                        continue;
+                    }
+                    None => {
+                        let _ = credits.send(());
+                        continue;
+                    }
                 }
             }
-            Err(error) => Some(input_error(error)),
+            Event::Line(Err(error)) => vec![input_error(error)],
+            Event::Done(done) => {
+                let frames = router.finish(done);
+                pending -= frames.len();
+                frames
+            }
+            Event::Eof(result) => {
+                eof = Some(result);
+                continue;
+            }
         };
-        if let Some(frame) = response {
+        for frame in frames {
             out.write_all(&frame)?;
             out.flush()?;
+            let _ = credits.send(());
         }
-        Ok(())
-    })
+    }
+    reader
+        .join()
+        .map_err(|_| std::io::Error::other("MCP input reader stopped"))?;
+    eof.expect("input ended")
 }
