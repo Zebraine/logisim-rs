@@ -484,7 +484,7 @@ fn linear_memory_faults_are_sticky_and_bad_ranges_flags_and_responses_fail() {
 
 #[test]
 #[cfg(feature = "plugin-metrics")]
-fn json_transport_accounts_for_messages_and_preserves_reset_faults() {
+fn json_transport_accounts_for_messages_and_reset() {
     let p = load(
         Response::StableContract(Some(contract())),
         Response::StableOutputs(outputs()),

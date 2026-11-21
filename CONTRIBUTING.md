@@ -34,6 +34,8 @@ git diff --check
 
 JSON 的 `plugin_phases` 分为 cold、reset 和 hot。reset 累计计时轮次开始前的初始化与输入复位。hot 的 `plugin_schedule_ns` 包含 outputs、transition 和 commit 调度，`guest_ns` 是其中 guest 分配缓冲及分派调用的墙钟时间。每种操作各自报告时延、信号槽数、两种传输的调用数、实际线上字节和有效状态字节。帧状态复制时间是 encode/decode 的子项；冷态 load_dependency、instantiate_stable 也含子阶段。缺席的 span 表示零次。只相加同一层的非重叠区间。
 
+阶段 1 的课程寄存器文件对照使用同一 Wasm，保持每轮 512 tick、两次 settle/tick，以及四态摘要 `a2689cffb70ff825`。课程 CPU 对照为 128 tick，摘要 `73171884c0465aad`。宿主候选须达到插件吞吐提升 10% 或 outputs/transition 全调用 p95 降低 20%，且课程 CPU 稳定退化不超过 5%。在 i5-12600KF 上尝试合并同一输出帧的 UTF-8 文本校验，寄存器文件无埋点吞吐由 3,074 变为 3,072 tick/s，已撤回。
+
 桌面快照构造可独立运行 `cargo test --release --locked --offline -p logisim-rs single_cycle_snapshot_cost -- --ignored --nocapture`；它使用真实视图适配器，不启动窗口。
 
 ## 修改与提交

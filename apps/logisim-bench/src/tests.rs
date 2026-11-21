@@ -134,6 +134,14 @@ fn stable_call_intervals_partition_real_frame_settles() -> Result<()> {
         let c = &hot[name];
         assert_eq!(c["frame_calls"], c["calls"]);
         assert_eq!(c["json_calls"], 0);
+        assert_eq!(c["linear_memory_used"], true);
+        // LSF1 header + one 16-byte record per signal + explicit state.
+        assert_eq!(
+            c["request_bytes"].as_u64().unwrap(),
+            32 * c["calls"].as_u64().unwrap()
+                + 16 * c["input_signals"].as_u64().unwrap()
+                + c["input_state_bytes"].as_u64().unwrap()
+        );
         assert_eq!(
             c["input_signals"].as_u64().unwrap(),
             c["calls"].as_u64().unwrap() * 8
@@ -145,6 +153,12 @@ fn stable_call_intervals_partition_real_frame_settles() -> Result<()> {
         assert_eq!(c["spans"]["guest_dispatch"]["count"], c["calls"]);
     }
     assert_eq!(hot["transition"]["output_signals"], 0);
+    assert_eq!(hot["outputs"]["frame_state_copy_ns"]["within_decode"], 0);
+    let next = &hot["transition"];
+    assert_eq!(
+        next["response_bytes"].as_u64().unwrap(),
+        32 * next["calls"].as_u64().unwrap() + next["returned_state_bytes"].as_u64().unwrap()
+    );
     assert_eq!(
         hot["outputs"]["output_signals"],
         hot["outputs"]["input_signals"]
