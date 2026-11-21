@@ -6,7 +6,7 @@
 [![Total downloads](https://img.shields.io/github/downloads/Zebraine/logisim-rs/total?logo=github)](https://github.com/Zebraine/logisim-rs/releases)
 
 A cleanroom desktop digital logic editor and simulator built with Rust and egui.
-It aims for practical compatibility with Logisim-ITA v2.16.2.2 for the features it implements, without using Java or the original implementation.
+Legacy projects from the supported Logisim-ITA v2.16.2.2 subset can be opened and edited.
 
 <p align="center">
   <img src="assets/workbench-light.png" alt="Light workbench editing a pipelined CPU" width="49%">
@@ -91,15 +91,11 @@ The repository also contains a small [agent-built showcase](examples/agent/READM
 
 The examples illustrate the implemented behavior; they are not a compatibility test for every timing or exception detail. If you move an example, keep the relative layout between `examples/` and `plugins/`, or use the plugin locator.
 
-## Compatibility
+## Legacy projects
 
-This is a practical cleanroom implementation, not a byte-for-byte clone of Logisim-ITA.
+The Logisim-ITA compatibility scope is frozen. New features follow logisim-rs specifications. The supported `.circ` subset remains readable and writable for migration. Import reports unsupported content and protects the original against overwrite. Imported libraries remain editable snapshots. Wasm components require their matching modules. External editors may discard extension attributes such as `agent-id` when resaving.
 
-- The implemented `.circ` subset can be read and written. Unsupported content is reported and omitted, and the original source is protected against accidental overwrite.
-- Imported `.circ` libraries are editable snapshots; they do not silently link back to the source library.
-- Wasm components are a logisim-rs extension. Such circuits require this application and their plugin modules.
-- Propagation timing, feedback resolution, and some advanced component behavior can differ from the reference program. Compatibility claims apply only to the behavior covered by the repository's tests and experiments.
-- The host does not execute Java/JAR files.
+The planned native project format is `.lrs` (UTF-8 JSON). This version still saves `.circ`. Once the native format passes acceptance, Save and Save As will default to `.lrs`. Existing `.circ` files will remain readable and writing `.circ` will require an explicit format choice.
 
 ## Build from source
 

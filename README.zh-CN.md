@@ -6,7 +6,7 @@
 [![Total downloads](https://img.shields.io/github/downloads/Zebraine/logisim-rs/total?logo=github)](https://github.com/Zebraine/logisim-rs/releases)
 
 基于 Rust + egui 的桌面数字逻辑电路编辑与仿真工具。
-以 Logisim-ITA v2.16.2.2 的实际运行行为为参考，对已实现的功能追求实用兼容，不依赖 Java，也不使用原实现的源码。
+支持打开和编辑已实现子集内的 Logisim-ITA v2.16.2.2 旧工程。
 
 <p align="center">
   <img src="assets/workbench-light.png" alt="浅色工作台：编辑流水线 CPU" width="49%">
@@ -91,15 +91,11 @@ logisim-rs 使用带版本号的 Wasm 插件 ABI 提供外部元件。插件可�
 
 示例用于演示已实现行为，并不是所有时序或异常细节的兼容性证明。移动示例时请保留 `examples/` 与 `plugins/` 的相对目录，或使用插件补选功能。
 
-## 兼容范围
+## 旧工程与迁移
 
-这是一个实用的 Cleanroom 实现，不是逐字节复刻 Logisim-ITA。
+Logisim-ITA 兼容范围已冻结，新功能以 logisim-rs 自身规格为准。`.circ` 作为旧工程迁移格式，已支持的子集继续读写。导入时报告未知或未支持的内容，并保护源文件。导入的库仍为可编辑快照，Wasm 元件需要对应的模块。外部编辑器重存工程时可能丢弃 `agent-id` 等扩展属性。
 
-- 已实现的 `.circ` 子集可以读写；不支持的内容会报告并省略，同时保护原文件不被误覆盖。
-- 导入的 `.circ` 库是可编辑快照，不会静默回链到源库。
-- Wasm 元件是 logisim-rs 的扩展；这类电路需要本程序和对应插件模块。
-- 传播时序、反馈收敛和部分高级元件行为可能与参考程序不同。兼容性只覆盖仓库测试和实验实际验证过的范围。
-- 宿主不执行 Java/JAR 文件。
+计划中的原生格式为 `.lrs`（UTF-8 JSON），本版仍保存为 `.circ`。原生格式实现并通过验收后，保存与另存为将默认使用 `.lrs`；旧 `.circ` 仍可读取，写出 `.circ` 须显式选择该格式。
 
 ## 从源码构建
 
