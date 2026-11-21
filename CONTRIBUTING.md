@@ -38,6 +38,8 @@ JSON 的 `plugin_phases` 分为 cold、reset 和 hot。reset 累计计时轮次�
 
 桌面快照构造可独立运行 `cargo test --release --locked --offline -p logisim-rs single_cycle_snapshot_cost -- --ignored --nocapture`；它使用真实视图适配器，不启动窗口。
 
+[阶段 5 单线程热路径记录](apps/logisim-bench/comparisons/evaluator-hotpath.md)列出了 stable 与事件路径的热点、固定核交替测量方法，以及按负载区分的冷热结果。
+
 ### 复现 Agent 多会话测量
 
 Linux 上先用 `cargo build --release --locked --offline -p logisim-agent` 构建，再运行 `python3 apps/logisim-bench/comparisons/agent-sessions.py`。脚本用课程 CPU 工程副本，以单连接运行 1、2、4 个 MCP 会话，各重复五次。每个会话交替发送 32 对 tick/state 请求，每次等待完整响应。工程打开与含插件加载的仿真初始化单独计时。检查两个 MCP 响应表示，并用顺序 CLI 的完整轨迹校验摘要，校验在热计时区间结束后进行。

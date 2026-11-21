@@ -4,6 +4,49 @@ use logisim_core::{Circuit, Component, FlipFlop, Gate, Point};
 use super::support::*;
 
 #[test]
+fn compiled_boundary_drives_follow_topology_edits_and_reset() {
+    let mut circuit = Circuit::default();
+    let spare = add(&mut circuit, Kind::Pin, 8);
+    let pin = add(&mut circuit, Kind::Pin, 1);
+    let bus = add(&mut circuit, Kind::Pin, 4);
+    let single_output = chain(&mut circuit, pin, 1);
+    let bus_output = chain(&mut circuit, bus, 1);
+    let mixed = Value::from_bits([Bit::One, Bit::Unknown, Bit::Error, Bit::Zero].into_iter());
+    let mut stable = Simulator::default();
+    let mut event = Simulator::default();
+
+    for reindexed in [false, true] {
+        if reindexed {
+            circuit.remove(&[spare].into());
+            circuit.components.reverse();
+        }
+        for sim in [&mut stable, &mut event] {
+            assert!(sim.synchronize(&circuit));
+        }
+        for (one, four) in [(1, mixed), (0, Value::known(4, 10))] {
+            for sim in [&mut stable, &mut event] {
+                sim.set_input(pin, one);
+                sim.set_input_value(bus, four);
+            }
+            stable.settle_compiled().unwrap();
+            event.advance(32);
+            assert_eq!(stable.values, event.values);
+            assert_eq!(
+                stable.port_value(single_output, 0),
+                Some(Value::known(1, one))
+            );
+            assert_eq!(stable.port_value(bus_output, 0), Some(four));
+        }
+        stable.reset();
+        event.reset();
+        stable.settle_compiled().unwrap();
+        event.advance(32);
+        assert_eq!(stable.values, event.values);
+        assert_eq!(stable.port_value(bus_output, 0), Some(Value::known(4, 0)));
+    }
+}
+
+#[test]
 fn gate_family_edits_invalidate_compiled_behavior_and_geometry_separately() {
     use logisim_core::{GateSize, Parity, ParityOutput};
     for (kind, before, after) in [
