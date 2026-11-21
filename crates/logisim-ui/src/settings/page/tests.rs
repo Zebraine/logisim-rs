@@ -94,7 +94,7 @@ fn backup_search_toggle_and_resets_work_in_both_files_layouts() {
 fn registry_restores_each_field_without_changing_other_preferences() {
     let defaults = Settings::default();
     let alternative = Settings {
-        wasm_engine: defaults.wasm_engine,
+        wasm_engine: WasmEnginePreference::Wasmtime,
         shortcuts: Default::default(),
         files: FileSettings {
             autosave: false,
@@ -1862,8 +1862,13 @@ fn dark_artwork_toggle_and_resets_preserve_the_workspace_in_both_layouts() {
 }
 
 #[test]
-fn wasmtime_requires_confirmation_and_keeps_current_runtime() {
+fn engine_choice_is_a_searchable_simulation_row_with_a_deferred_restart() {
     use WasmEnginePreference::{Wasmi, Wasmtime};
+    let entry = REGISTRY
+        .iter()
+        .find(|e| e.key == "plugins.wasm_engine")
+        .unwrap();
+    assert_eq!(entry.category, Category::Simulation);
     for language in Language::ALL {
         let t = |label| crate::i18n::with_language(language, || tr(label));
         for (size, theme) in [
@@ -1881,32 +1886,72 @@ fn wasmtime_requires_confirmation_and_keeps_current_runtime() {
                 theme,
                 ..Default::default()
             });
-            w.settings_page.query = "plugins.wasm_engine".into();
-            let click = |w: &mut Workspace, label| {
-                let mut labels = vec![];
-                for _ in 0..3 {
-                    labels = frame_at_size(&ctx, w, vec![], size);
+            let render = |w: &mut Workspace| {
+                for _ in 0..2 {
+                    frame_at_size(&ctx, w, vec![], size);
                 }
-                let pos = labels
+                frame_at_size(&ctx, w, vec![], size)
+            };
+            let rect = |labels: &[(String, egui::Rect)], key| {
+                labels
                     .iter()
-                    .rfind(|(s, _)| s == t(label))
-                    .unwrap()
-                    .1
+                    .rfind(|(s, _)| s == t(key))
+                    .map(|(_, rect)| *rect)
+            };
+            let click = |w: &mut Workspace, key| {
+                let pos = rect(&render(w), key)
+                    .unwrap_or_else(|| panic!("missing {key}"))
                     .center();
                 tap(&ctx, size, w, pos);
             };
-            click(&mut w, "Wasmtime");
-            assert!(!w.settings_page.confirm_engine);
+            w.settings_page.select(Category::Advanced);
+            assert!(rect(&render(&mut w), entry.label).is_none());
             w.set_plugin_runtime(Wasmi, true);
+            w.settings_page.select(Category::Simulation);
+            let rows = render(&mut w);
+            let choice = rect(&rows, "wasmi (default)").unwrap();
+            let bounds = ctx
+                .memory(|m| m.area_rect(Id::unique("settings-window")))
+                .unwrap();
+            for key in [entry.label, entry.help] {
+                let left = rect(&rows, key).unwrap();
+                assert!(left.right() < choice.left() && bounds.contains_rect(left));
+            }
+            assert!(bounds.contains_rect(choice));
+            for q in ["plugins.wasm_engine", "wasmi", "Wasmtime"] {
+                w.settings_page.query = q.into();
+                assert!(rect(&render(&mut w), entry.label).is_some());
+            }
+
+            w.set_plugin_runtime(Wasmi, false);
+            assert!(rect(&render(&mut w), "This build does not include Wasmtime.").is_some());
+            click(&mut w, "wasmi (default)");
             click(&mut w, "Wasmtime");
             assert_eq!(w.preferences().wasm_engine, Wasmi);
-            assert!(w.settings_page.confirm_engine);
-            click(&mut w, "Cancel");
-            assert!(!w.settings_page.confirm_engine);
-            click(&mut w, "Wasmtime");
-            click(&mut w, "Confirm");
-            assert_eq!(w.preferences().wasm_engine, Wasmtime);
-            assert_eq!(w.settings_page.active_engine, Wasmi);
+            egui::Popup::close_all(&ctx);
+            w.set_plugin_runtime(Wasmi, true);
+            for restart in [false, true] {
+                assert!(rect(&render(&mut w), "Restart now").is_none());
+                click(&mut w, "wasmi (default)");
+                click(&mut w, "Wasmtime");
+                assert_eq!(w.preferences().wasm_engine, Wasmtime);
+                assert_eq!(w.settings_page.active_engine, Wasmi);
+                let rows = render(&mut w);
+                for key in ["Takes effect after restart.", "Restart now"] {
+                    assert!(bounds.contains_rect(rect(&rows, key).unwrap()));
+                }
+                if restart {
+                    click(&mut w, "Restart now");
+                    assert_eq!(w.take_file_actions(), [crate::FileAction::Restart]);
+                    assert!(!w.settings_open);
+                } else {
+                    click(&mut w, "Wasmtime");
+                    click(&mut w, "wasmi (default)");
+                    let rows = render(&mut w);
+                    assert!(rect(&rows, "Takes effect after restart.").is_none());
+                    assert!(w.take_file_actions().is_empty());
+                }
+            }
             assert!(!w.document.dirty && !w.editor.can_undo());
         }
     }

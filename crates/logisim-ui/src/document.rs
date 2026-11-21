@@ -32,6 +32,7 @@ pub enum FileAction {
     LoadPlugin,
     ResolvePlugins,
     Close,
+    Restart,
 }
 #[derive(Clone, Debug)]
 pub struct DocumentView {

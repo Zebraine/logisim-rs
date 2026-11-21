@@ -6,7 +6,7 @@ ABI 4 是受支持的显式插件契约。SDK 的普通出口继续生成 ABI 3�
 
 六个随附模块使用 ABI 4 / both，并保留插件身份、组件版本、工具定义和主模块相对路径。工程绑定的是路径、插件身份、版本和工具定义；实际加载的 Wasm 决定 ABI。包中另存六份原版 ABI 3 模块，供固定旧计量或旧宿主使用。选择 Wasmtime 时，加载旧模块的桌面会显示实际使用 wasmi 及原因。ABI 4 引擎不匹配时拒绝加载。
 
-Linux、Windows 和 macOS 的桌面打包配方均编入双引擎，默认使用 wasmi。启用 Wasmtime 需确认并重启。普通 Cargo 构建与独立 Agent 使用 wasmi。磁盘缓存目前只信任符合权限校验的 Linux 本地目录，其他平台从源 Wasm 编译。
+Linux、Windows 和 macOS 的桌面打包配方均编入双引擎，默认使用 wasmi。在仿真设置中选择 Wasmtime 后重启生效。默认桌面构建包含两个引擎，独立 Agent 固定使用 wasmi。磁盘缓存目前只信任符合权限校验的 Linux 本地目录，其他平台从源 Wasm 编译。
 
 Stage 13 在 Linux x86-64 上做了三轮独立进程复测。Register File 空缓存与命中缓存的首开中位数分别为 453.62 ms 和 9.68 ms，课程 CPU 分别为 467.37 ms 和 23.23 ms。两条轨迹的 digest 均与 wasmi 一致，诊断数均为零。X11 实窗在重启后显示 ABI 4 使用 Wasmtime，换回同一工程路径上的原版 ABI 3 模块后显示回退 wasmi 及原因。
 

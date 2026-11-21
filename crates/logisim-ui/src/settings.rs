@@ -133,6 +133,10 @@ impl Workspace {
                     .push(crate::FileAction::ChoosePluginFallback),
                 page::PageAction::ClearPluginFallback => self.plugin_fallback_directory = None,
                 page::PageAction::Retry => self.retry_settings = true,
+                page::PageAction::Restart => {
+                    self.settings_open = false;
+                    self.file_actions.push(crate::FileAction::Restart);
+                }
                 page::PageAction::OpenRecent(index) => {
                     self.settings_open = false;
                     self.file_actions.push(crate::FileAction::OpenRecent(index));

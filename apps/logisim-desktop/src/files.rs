@@ -27,6 +27,7 @@ pub(super) enum NextDocument {
     BrowseNative,
     Recent(PathBuf),
     Close,
+    Restart,
 }
 
 enum ResolutionReason {
@@ -45,6 +46,7 @@ pub(crate) struct Files {
     after_save: Option<NextDocument>,
     directory: PathBuf,
     pub allow_close: bool,
+    restart_pending: bool,
     recovery_page_open: bool,
 }
 impl Default for Files {
@@ -60,6 +62,7 @@ impl Default for Files {
             after_save: None,
             directory: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
             allow_close: false,
+            restart_pending: false,
             recovery_page_open: false,
         }
     }
@@ -311,6 +314,7 @@ impl Files {
             FileAction::ConvertNative => self.picker(Mode::Copy(logisim_file::ProjectFormat::Lrs)),
             FileAction::ExportCirc => self.picker(Mode::Copy(logisim_file::ProjectFormat::Circ)),
             FileAction::Open => self.navigate(NextDocument::Browse, ctx, workspace, sim),
+            FileAction::Restart => self.navigate(NextDocument::Restart, ctx, workspace, sim),
             FileAction::Close => self.navigate(NextDocument::Close, ctx, workspace, sim),
             FileAction::OpenRecent(i) => {
                 if let Some(path) = workspace.recent().get(i).map(PathBuf::from) {
@@ -423,6 +427,7 @@ impl Files {
             NextDocument::Recent(path) => {
                 self.load(&path, workspace, sim);
             }
+            NextDocument::Restart => self.restart_pending = true,
             NextDocument::Close => {
                 self.autosave.finish_document();
                 self.allow_close = true;

@@ -19,6 +19,7 @@ pub(super) struct PageInfo<'a> {
 }
 pub(super) enum PageAction {
     Retry,
+    Restart,
     OpenRecent(usize),
     ClearRecent,
     ClearRecovery { disabled_autosave: bool },
@@ -36,7 +37,6 @@ pub(crate) struct Page {
     pub(crate) requested_engine: WasmEnginePreference,
     active_engine: WasmEnginePreference,
     wasmtime_available: bool,
-    confirm_engine: bool,
     bindings: bindings::BindingEditor,
     confirm_clear: bool,
     recovery: RecoveryView,
@@ -54,55 +54,6 @@ impl Page {
         self.wasmtime_available = available;
     }
 
-    fn engine_card(&mut self, ui: &mut Ui, values: &mut Settings) {
-        use WasmEnginePreference::{Wasmi, Wasmtime};
-        const WARNING: &str = "After restart, the first course plugin load with an empty cache takes about 0.5 s. Fuel can pause execution at a different point. The Agent uses wasmi.";
-        let running = match self.active_engine {
-            Wasmi => "wasmi",
-            Wasmtime => "Wasmtime",
-        };
-        theme::card(ui, tr("Wasm plugin engine"), |ui| {
-            ui.label(tf!("Session engine preference: {}", running));
-            ui.label(tr("Plugin ABI 1–3: wasmi only."));
-            ui.push_id("plugins.wasm_engine", |ui| {
-                ui.horizontal_wrapped(|ui| {
-                    if ui
-                        .selectable_label(values.wasm_engine == Wasmi, tr("wasmi (default)"))
-                        .clicked()
-                    {
-                        values.wasm_engine = Wasmi;
-                        self.confirm_engine = false;
-                    }
-                    let wasmtime =
-                        egui::Button::selectable(values.wasm_engine == Wasmtime, tr("Wasmtime"));
-                    if ui.add_enabled(self.wasmtime_available, wasmtime).clicked()
-                        && values.wasm_engine != Wasmtime
-                    {
-                        self.confirm_engine = true;
-                    }
-                });
-            });
-            if !self.wasmtime_available {
-                ui.label(tr("This build does not include Wasmtime."));
-            }
-            ui.label(tr(WARNING));
-            if self.confirm_engine {
-                ui.label(tr("Use Wasmtime on the next desktop start?"));
-                ui.horizontal_wrapped(|ui| {
-                    if ui.button(tr("Confirm")).clicked() {
-                        values.wasm_engine = Wasmtime;
-                        self.confirm_engine = false;
-                    }
-                    if ui.button(tr("Cancel")).clicked() {
-                        self.confirm_engine = false;
-                    }
-                });
-            }
-            if values.wasm_engine != self.active_engine && self.wasmtime_available {
-                ui.label(tr("Restart the desktop application to apply this change."));
-            }
-        });
-    }
     pub(super) fn showing_files(&self) -> bool {
         self.category == Category::Files && self.query.trim().is_empty()
     }
@@ -117,7 +68,6 @@ impl Page {
         self.confirm_clear = false;
         self.query.clear();
         self.confirm_reset = false;
-        self.confirm_engine = false;
         self.frequency_draft = None;
     }
     pub(super) fn show(
@@ -287,7 +237,6 @@ impl Page {
         self.confirm_clear = false;
         self.query.clear();
         self.confirm_reset = false;
-        self.confirm_engine = false;
         self.frequency_draft = None;
     }
     fn content(
@@ -350,7 +299,6 @@ impl Page {
             });
             ui.add_space(f32::from(theme::metrics(ui.ctx()).gap));
             fallback_card(ui, info.plugin_fallback_directory, compact, action);
-            self.engine_card(ui, values);
             return;
         }
         let mut found = !q.is_empty()
@@ -364,20 +312,6 @@ impl Page {
         if found {
             fallback_card(ui, info.plugin_fallback_directory, compact, action);
             ui.add_space(f32::from(theme::metrics(ui.ctx()).gap));
-        }
-        if !q.is_empty()
-            && [
-                "plugins.wasm_engine",
-                "wasmi",
-                "wasmtime",
-                "Wasm plugin engine",
-                tr("Wasm plugin engine"),
-            ]
-            .iter()
-            .any(|s| s.to_lowercase().contains(&q))
-        {
-            self.engine_card(ui, values);
-            found = true;
         }
         let active = self.category;
         let files_page = self.showing_files();
@@ -407,7 +341,7 @@ impl Page {
                     if i > 0 {
                         ui.separator();
                     }
-                    ui.push_id(e.key, |ui| self.row(ui, e, values));
+                    ui.push_id(e.key, |ui| self.row(ui, e, values, action));
                 }
             });
             ui.add_space(f32::from(theme::metrics(ui.ctx()).gap));
@@ -511,7 +445,13 @@ impl Page {
             }
         });
     }
-    fn row(&mut self, ui: &mut Ui, e: &Entry, values: &mut Settings) {
+    fn row(
+        &mut self,
+        ui: &mut Ui,
+        e: &Entry,
+        values: &mut Settings,
+        action: &mut Option<PageAction>,
+    ) {
         let width = ui.available_width();
         let right = if matches!(
             e.control,
@@ -568,9 +508,26 @@ impl Page {
                 } else {
                     ui.add_space(theme::metrics(ui.ctx()).icon_button);
                 }
-                e.show(ui, values, &mut self.frequency_draft);
+                e.show(
+                    ui,
+                    values,
+                    &mut self.frequency_draft,
+                    self.wasmtime_available,
+                );
             });
         });
+        if matches!(e.control, super::registry::Control::WasmEngine) {
+            if !self.wasmtime_available {
+                ui.weak(tr("This build does not include Wasmtime."));
+            } else if values.wasm_engine != self.active_engine {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(tr("Takes effect after restart."));
+                    if ui.button(tr("Restart now")).clicked() {
+                        *action = Some(PageAction::Restart);
+                    }
+                });
+            }
+        }
         if matches!(e.control, super::registry::Control::Language)
             && !ui.fonts_mut(|fonts| {
                 fonts.has_glyphs(&egui::FontId::proportional(14.0), "简体中文设置")

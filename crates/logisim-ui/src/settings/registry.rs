@@ -52,6 +52,7 @@ pub(super) enum Control {
     Toggle(fn(&mut Settings) -> &mut bool),
     Zoom,
     Mode,
+    WasmEngine,
     Frequency,
     RecentLimit,
     AutosaveMinutes,
@@ -289,6 +290,13 @@ registry![
         Control::Mode
     ),
     (
+        "plugins.wasm_engine",
+        Simulation,
+        "Wasm plugin engine",
+        "ABI 1–3 plugins and the Agent use wasmi. Wasmtime can take about 0.5 s on first load with an empty cache. Fuel pause points can differ.",
+        Control::WasmEngine
+    ),
+    (
         "simulation.tick_hz",
         Simulation,
         "Tick frequency",
@@ -361,6 +369,7 @@ impl Entry {
             Control::FontSize => target.default_font_size = source.default_font_size,
             Control::GateSize => target.default_gate_size = source.default_gate_size,
             Control::Zoom => target.default_zoom = source.default_zoom,
+            Control::WasmEngine => target.wasm_engine = source.wasm_engine,
             Control::Mode => target.simulation_mode = source.simulation_mode,
             Control::AutosaveMinutes => {
                 target.files.autosave_minutes = source.files.autosave_minutes
@@ -387,7 +396,13 @@ impl Entry {
         self.copy(&mut one, current);
         baseline != one
     }
-    pub fn show(&self, ui: &mut Ui, values: &mut Settings, draft: &mut Option<u32>) {
+    pub fn show(
+        &self,
+        ui: &mut Ui,
+        values: &mut Settings,
+        draft: &mut Option<u32>,
+        wasmtime_available: bool,
+    ) {
         match self.control {
             Control::Language => choice(ui, &mut values.language, Language::ALL, |v| {
                 v.name().to_owned()
@@ -434,6 +449,20 @@ impl Entry {
                     DefaultZoom::Actual => "100%".into(),
                 },
             ),
+            Control::WasmEngine => {
+                use WasmEnginePreference::{Wasmi, Wasmtime};
+                choice_with_disabled(
+                    ui,
+                    &mut values.wasm_engine,
+                    [Wasmi, Wasmtime],
+                    |engine| match engine {
+                        Wasmi => tr("wasmi (default)").into(),
+                        Wasmtime => tr("Wasmtime").into(),
+                    },
+                    (!wasmtime_available)
+                        .then_some((Wasmtime, tr("This build does not include Wasmtime."))),
+                );
+            }
             Control::Mode => choice(ui, &mut values.simulation_mode, SimulationMode::ALL, |v| {
                 v.name().to_owned()
             }),
@@ -579,12 +608,30 @@ fn choice<T: Copy + PartialEq, const N: usize>(
     options: [T; N],
     label: impl Fn(T) -> String,
 ) {
+    choice_with_disabled(ui, current, options, label, None);
+}
+
+fn choice_with_disabled<T: Copy + PartialEq, const N: usize>(
+    ui: &mut Ui,
+    current: &mut T,
+    options: [T; N],
+    label: impl Fn(T) -> String,
+    disabled: Option<(T, &str)>,
+) {
     let r = egui::ComboBox::from_id_salt("choice")
         .width(ui.available_width().clamp(88.0, 156.0))
         .selected_text(label(*current))
         .show_ui(ui, |ui| {
             for value in options {
-                ui.selectable_value(current, value, label(value));
+                if let Some((_, reason)) = disabled.filter(|(option, _)| *option == value) {
+                    ui.add_enabled(
+                        false,
+                        egui::Button::selectable(*current == value, label(value)),
+                    )
+                    .on_disabled_hover_text(reason);
+                } else {
+                    ui.selectable_value(current, value, label(value));
+                }
             }
         })
         .response;

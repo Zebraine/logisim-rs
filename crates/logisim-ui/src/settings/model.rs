@@ -157,9 +157,6 @@ impl Settings {
                 .shortcuts
                 .with_changes(before.shortcuts, after.shortcuts)?;
         }
-        if before.wasm_engine != after.wasm_engine {
-            self.wasm_engine = after.wasm_engine;
-        }
         for entry in super::registry::REGISTRY {
             entry.merge(&mut self, before, after);
         }
