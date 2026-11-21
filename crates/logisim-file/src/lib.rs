@@ -1,5 +1,6 @@
 //! The supported .circ subset, independently specified from runtime-created files.
 //! No filesystem or simulator dependency; unsupported content is never silently saved.
+mod agent_ids;
 mod appearance;
 mod arithmetic;
 mod attributes;
@@ -34,7 +35,7 @@ pub use write::serialize;
 
 /// Check one prospective component edit against the same attribute codec used at save time.
 pub fn validate_component(component: &logisim_core::Component, document: &Document) -> Result<()> {
-    component::write(&mut String::new(), component, document)
+    component::write(&mut String::new(), component, document, "")
 }
 
 pub const MAX_BYTES: usize = 8 * 1024 * 1024;
@@ -45,7 +46,9 @@ const MAX_XML_NODES: u32 = 1_000_000;
 #[derive(Debug)]
 pub struct Import {
     pub document: Document,
-    /// Any omitted or approximated content requires saving to a different file.
+    /// Content was omitted or approximated. Identity-only diagnostics do not set this flag.
+    pub partial: bool,
+    /// Includes recoverable problems with optional agent-id attributes.
     pub warnings: Vec<String>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]

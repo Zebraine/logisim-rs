@@ -49,6 +49,8 @@ impl Project {
         }
         for source in &library.circuits {
             let mut circuit = source.circuit.clone();
+            // Import creates new definitions and items even when the same library is imported twice.
+            circuit.agent_ids = Default::default();
             for component in &mut circuit.components {
                 if let Kind::Subcircuit(id) = &mut component.kind {
                     *id = mapping[id];

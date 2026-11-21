@@ -1,5 +1,8 @@
 //! Circuit geometry and signal values. No GUI, file format or simulation runtime dependencies.
 
+mod agent_ids;
+pub use agent_ids::{AgentIdKind, AgentIds};
+
 pub mod generation;
 pub mod plugin;
 mod signal;

@@ -6,7 +6,12 @@ use crate::{
 use logisim_core::{Component, Gate, HorizontalAlign, Kind, Radix, SplitAppearance, VerticalAlign};
 use std::fmt::Write;
 
-pub(crate) fn write(out: &mut String, c: &Component, document: &Document) -> Result<()> {
+pub(crate) fn write(
+    out: &mut String,
+    c: &Component,
+    document: &Document,
+    agent_attribute: &str,
+) -> Result<()> {
     if !valid_point(c.position)
         || !(1..=32).contains(&c.bits)
         || c.font.size == 0
@@ -17,7 +22,7 @@ pub(crate) fn write(out: &mut String, c: &Component, document: &Document) -> Res
         return Err(Error(format!("Invalid {} attributes.", c.kind.name())));
     }
     if c.kind == Kind::Plugin {
-        return crate::plugin::write(out, c);
+        return crate::plugin::write(out, c, agent_attribute);
     }
     let lib = match c.kind {
         Kind::Plexer(_) => 4,
@@ -56,14 +61,14 @@ pub(crate) fn write(out: &mut String, c: &Component, document: &Document) -> Res
         )?;
         writeln!(
             out,
-            "    <comp loc=\"({},{})\" name=\"{name}\">",
+            "    <comp loc=\"({},{})\" name=\"{name}\"{agent_attribute}>",
             c.position.x, c.position.y
         )
         .unwrap();
     } else {
         writeln!(
             out,
-            "    <comp lib=\"{lib}\" loc=\"({},{})\" name=\"{}\">",
+            "    <comp lib=\"{lib}\" loc=\"({},{})\" name=\"{}\"{agent_attribute}>",
             c.position.x,
             c.position.y,
             if let Kind::Arithmetic(a) = c.kind {

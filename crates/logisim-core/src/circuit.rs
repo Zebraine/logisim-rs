@@ -8,6 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Circuit {
+    pub agent_ids: crate::AgentIds,
     pub label: CircuitLabel,
     pub appearance: Option<Appearance>,
     pub components: Vec<Component>,
@@ -35,9 +36,18 @@ impl Circuit {
             .chain(self.wires.iter().map(|w| w.id))
             .collect()
     }
+    pub(crate) fn retain_agent_ids(&mut self) {
+        if !self.agent_ids.items.is_empty() {
+            let live = self.ids();
+            self.agent_ids.items.retain(|id, _| live.contains(id));
+        }
+    }
     pub fn remove(&mut self, ids: &BTreeSet<Id>) {
         self.components.retain(|c| !ids.contains(&c.id));
         self.wires.retain(|w| !ids.contains(&w.id));
+        for id in ids {
+            self.agent_ids.items.remove(id);
+        }
     }
     pub fn add_wire(&mut self, a: Point, b: Point) -> Option<Id> {
         if a == b || (a.x != b.x && a.y != b.y) {

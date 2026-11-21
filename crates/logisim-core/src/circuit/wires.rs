@@ -102,7 +102,23 @@ impl Circuit {
             }
         }
         result.sort_by_key(|w| w.id);
+        // A merge can retain a new numeric ID (e.g. a route extended to the left).
+        // Prefer a surviving segment's own tag, then carry an absorbed wire's tag to
+        // an untagged survivor. Never copy one identity onto multiple split segments.
+        if !self.agent_ids.items.is_empty() {
+            for (old, survivors) in &mapped {
+                if !used.contains(old)
+                    && let Some(tag) = self.agent_ids.items.remove(old)
+                    && let Some(id) = survivors
+                        .iter()
+                        .find(|id| !self.agent_ids.items.contains_key(id))
+                {
+                    self.agent_ids.items.insert(*id, tag);
+                }
+            }
+        }
         self.wires = result;
+        self.retain_agent_ids();
         mapped
     }
 

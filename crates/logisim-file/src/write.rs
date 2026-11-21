@@ -2,6 +2,7 @@
 use crate::{
     Document, Error, MAX_BYTES, MAX_CIRCUIT_ITEMS, MAX_ITEMS, Result, valid_point, xml::escape,
 };
+use logisim_core::AgentIdKind;
 use std::fmt::Write;
 
 pub fn serialize(document: &Document) -> Result<String> {
@@ -31,10 +32,12 @@ pub fn serialize(document: &Document) -> Result<String> {
     crate::plugin::declaration(document, &mut out)?;
     writeln!(out, "  <main name=\"{name}\"/>").unwrap();
     out.push_str("  <options>\n    <a name=\"gateUndefined\" val=\"ignore\"/>\n    <a name=\"simlimit\" val=\"1000\"/>\n    <a name=\"simrand\" val=\"0\"/>\n  </options>\n  <mappings>\n    <tool lib=\"2\" map=\"Button2\" name=\"Poke Tool\"/>\n    <tool lib=\"2\" map=\"Button3\" name=\"Menu Tool\"/>\n    <tool lib=\"2\" map=\"Ctrl Button1\" name=\"Menu Tool\"/>\n  </mappings>\n  <toolbar>\n    <tool lib=\"2\" name=\"Poke Tool\"/>\n    <tool lib=\"2\" name=\"Edit Tool\"/>\n    <sep/>\n    <tool lib=\"2\" name=\"Text Tool\"/>\n    <tool lib=\"0\" name=\"Pin\"><a name=\"tristate\" val=\"false\"/></tool>\n    <tool lib=\"0\" name=\"Pin\"><a name=\"output\" val=\"true\"/><a name=\"facing\" val=\"west\"/></tool>\n    <tool lib=\"1\" name=\"NOT Gate\"/>\n    <tool lib=\"1\" name=\"AND Gate\"/>\n    <tool lib=\"1\" name=\"OR Gate\"/>\n  </toolbar>\n");
+    let mut ids = crate::agent_ids::Ids::default();
     for definition in &document.circuits {
         let circuit = &definition.circuit;
         let name = escape(&definition.name)?;
-        writeln!(out, "  <circuit name=\"{name}\">").unwrap();
+        let attribute = ids.attribute(AgentIdKind::Circuit, circuit.agent_ids.circuit)?;
+        writeln!(out, "  <circuit name=\"{name}\"{attribute}>").unwrap();
         crate::fonts::write_label(&mut out, &circuit.label)?;
         for w in &circuit.wires {
             if !valid_point(w.a)
@@ -44,15 +47,23 @@ pub fn serialize(document: &Document) -> Result<String> {
             {
                 return Err(Error("Invalid wire coordinates.".into()));
             }
+            let attribute = ids.attribute(
+                AgentIdKind::Wire,
+                circuit.agent_ids.items.get(&w.id).copied(),
+            )?;
             writeln!(
                 out,
-                "    <wire from=\"({},{})\" to=\"({},{})\"/>",
+                "    <wire from=\"({},{})\" to=\"({},{})\"{attribute}/>",
                 w.a.x, w.a.y, w.b.x, w.b.y
             )
             .unwrap();
         }
         for c in &circuit.components {
-            crate::component::write(&mut out, c, document)?;
+            let attribute = ids.attribute(
+                AgentIdKind::Component,
+                circuit.agent_ids.items.get(&c.id).copied(),
+            )?;
+            crate::component::write(&mut out, c, document, &attribute)?;
         }
         if let Some(appearance) = &circuit.appearance {
             crate::appearance::write(&mut out, appearance, circuit)?;

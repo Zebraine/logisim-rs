@@ -3,7 +3,7 @@ use crate::{
     Document, Error, Import, MAX_BYTES, MAX_CIRCUIT_ITEMS, MAX_ITEMS, MAX_XML_NODES, Result,
     xml::{attr, attributes, point},
 };
-use logisim_core::{Circuit, Kind};
+use logisim_core::{AgentIdKind, Circuit, Kind};
 use roxmltree::Node;
 use std::collections::BTreeMap;
 
@@ -134,9 +134,13 @@ pub fn parse(xml: &str) -> Result<Import> {
             tag => warn(&mut warnings, format!("Project <{tag}> was omitted.")),
         }
     }
+    let mut ids = crate::agent_ids::Ids::default();
+    let mut id_warnings = crate::diagnostics::Warnings::default();
     for selected in circuits {
         let name = attr(selected, "name")?;
         let mut circuit = Circuit::default();
+        circuit.agent_ids.circuit =
+            ids.read(selected, AgentIdKind::Circuit, name, &mut id_warnings);
         for n in selected.children().filter(Node::is_element) {
             match n.tag_name().name() {
                 "wire" => {
@@ -148,7 +152,13 @@ pub fn parse(xml: &str) -> Result<Import> {
                                 .into(),
                         ));
                     }
-                    circuit.add_wire(a, b);
+                    let id = circuit.add_wire(a, b).expect("validated wire");
+                    if let Some(value) = ids.read(n, AgentIdKind::Wire, name, &mut id_warnings) {
+                        match circuit.agent_ids.items.entry(id) {
+                            std::collections::btree_map::Entry::Vacant(slot) => {slot.insert(value);}
+                            std::collections::btree_map::Entry::Occupied(_) => id_warnings.add(format!("Circuit '{name}': coincident wires share one segment; retained its first agent-id.")),
+                        }
+                    }
                 }
                 "comp" => match crate::component::read(n, &libraries, &names) {
                     Ok((c, notes)) => {
@@ -161,7 +171,12 @@ pub fn parse(xml: &str) -> Result<Import> {
                                 false,
                             );
                         }
-                        circuit.add_component(c);
+                        let id = circuit.add_component(c);
+                        if let Some(value) =
+                            ids.read(n, AgentIdKind::Component, name, &mut id_warnings)
+                        {
+                            circuit.agent_ids.items.insert(id, value);
+                        }
                     }
                     Err(e) => warnings.component(
                         name,
@@ -268,7 +283,14 @@ pub fn parse(xml: &str) -> Result<Import> {
     document.validate().map_err(Error)?;
     document.refresh_interfaces(false);
     for definition in &mut document.circuits {
+        let tagged = definition.circuit.agent_ids.items.len();
         definition.circuit.normalize_wires();
+        if definition.circuit.agent_ids.items.len() < tagged {
+            id_warnings.add(format!(
+                "Circuit '{}': normalization removed redundant items and their agent-ids.",
+                definition.name
+            ));
+        }
         if definition.circuit.components.len() + definition.circuit.wires.len() > MAX_CIRCUIT_ITEMS
         {
             return Err(Error(format!(
@@ -288,8 +310,12 @@ pub fn parse(xml: &str) -> Result<Import> {
             "Project exceeds item limit after preserving wire junctions.".into(),
         ));
     }
+    let mut warnings = warnings.finish();
+    let partial = !warnings.is_empty();
+    warnings.extend(id_warnings.finish());
     Ok(Import {
         document,
-        warnings: warnings.finish(),
+        partial,
+        warnings,
     })
 }

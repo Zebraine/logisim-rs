@@ -124,6 +124,7 @@ impl RebuildTarget {
             }
             result.appearance = Some(appearance);
         }
+        result.retain_agent_ids();
         Ok(result)
     }
 }

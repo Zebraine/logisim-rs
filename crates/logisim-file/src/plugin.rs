@@ -54,7 +54,7 @@ pub(crate) fn read(n: roxmltree::Node<'_, '_>) -> Result<Component> {
     }
     Ok(c)
 }
-pub(crate) fn write(out: &mut String, c: &Component) -> Result<()> {
+pub(crate) fn write(out: &mut String, c: &Component, agent_attribute: &str) -> Result<()> {
     let definition = c
         .plugin
         .as_ref()
@@ -75,7 +75,7 @@ pub(crate) fn write(out: &mut String, c: &Component) -> Result<()> {
     }
     writeln!(
         out,
-        "    <comp lib=\"rs-plugin-v1\" name=\"{}\" loc=\"({},{})\">",
+        "    <comp lib=\"rs-plugin-v1\" name=\"{}\" loc=\"({},{})\"{agent_attribute}>",
         definition.tool.id, c.position.x, c.position.y
     )
     .unwrap();
