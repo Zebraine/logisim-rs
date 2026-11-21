@@ -40,6 +40,8 @@ Download a package for your platform and its `.sha256` checksum from [Releases](
 
 The Windows and macOS packages are not signed or notarized. UI validation for this release was performed on Linux X11; the other packages are built by the same release workflow but have not been manually UI-tested on their platforms.
 
+Native binary `.lrs` support is available in this source tree and its candidate packages. The published v0.4.0 desktop and Agent use `.circ`.
+
 Simplified Chinese text uses system fonts; install a CJK font such as Noto Sans CJK SC if needed.
 
 ### First circuit
@@ -73,7 +75,7 @@ logisim-rs uses a versioned Wasm plugin ABI for externally supplied components. 
 - Plugin paths and definitions are validated before use. Missing or mismatched modules remain visibly unavailable instead of being silently replaced.
 - The host does not execute Java or inspect JAR files.
 
-Optional example modules and their source are kept under `plugins/` in the source repository and in release packages; they are examples, not a requirement for using the editor.
+Packages include six optional Wasm modules under `plugins/`. The source repository also contains their Rust implementations.
 
 The desktop uses wasmi by default. A build made with `cargo build --release -p logisim-rs --features wasmtime-experimental` also offers **Settings → Advanced → Wasm plugin engine**. Confirm Wasmtime and restart the desktop to use it. The panel shows the engine running in this process. Initial module compilation can be substantially slower. With the same 10M fuel budget a plugin may finish in wasmi and pause in Wasmtime. The desktop compiles from Wasm without a persistent native cache. Windows and macOS execution of this option has not been verified.
 
@@ -157,7 +159,7 @@ An edits file such as `{"ops":[{"key":"appearance.theme","value":"dark"}]}` chan
 
 For a circuit, run `logisim-agent cli` and send one JSON object per line in the same process. Each process can hold 64 open project sessions. At the limit, `project_open` returns `session_limit`. Use `project_close` to free a slot.
 
-MCP executes requests in arrival order within each project session. Independent sessions can run concurrently. Match replies by JSON-RPC ID. Settings operations and CLI line requests execute sequentially.
+MCP executes requests in arrival order within each project session. Independent sessions can run concurrently. Simulation within each circuit remains single-threaded. Match replies by JSON-RPC ID. Settings operations and CLI line requests execute sequentially.
 
 ```jsonl
 {"tool":"project_open","arguments":{"path":"examples/agent/counter.lrs"}}

@@ -40,6 +40,8 @@
 
 Windows/macOS 包未签名或公证。本版本的界面实机验证在 Linux X11 上完成；其他平台包由同一发布流程构建，但尚未在对应系统上人工验证界面。
 
+二进制原生 `.lrs` 可在本分支源码和候选包中使用。已发布的 v0.4.0 桌面和 Agent 使用 `.circ`。
+
 中文显示依赖系统字体；如有缺字，可安装 Noto Sans CJK SC 等 CJK 字体。
 
 ### 第一个电路
@@ -73,7 +75,7 @@ logisim-rs 使用带版本号的 Wasm 插件 ABI 提供外部元件。插件可�
 - 使用前会校验插件路径和元件定义；缺失或不匹配的模块会明确保留为不可用状态，不会被静默替换。
 - 宿主不执行 Java，也不读取 JAR 内部实现。
 
-源码仓库和发布包在 `plugins/` 下附带可选的示例模块及源码；它们是示例，不是使用编辑器的前提。
+包内的 `plugins/` 附带六个可选 Wasm 模块。相应的 Rust 源码可在仓库中找到。
 
 桌面默认使用 wasmi。用 `cargo build --release -p logisim-rs --features wasmtime-experimental` 构建后，可在**设置 → 高级 → Wasm 插件引擎**中确认选择实验性 Wasmtime。重启桌面后生效，设置页显示本次进程实际使用的引擎。Wasmtime 首次编译模块可能明显更慢。在同一 10M fuel 预算下，wasmi 能完成的请求可能在 Wasmtime 中暂停。桌面直接从 Wasm 编译，本阶段没有持久化机器码缓存。Windows 和 macOS 尚未实机验证该选项。
 
@@ -157,7 +159,7 @@ MCP 支持 `2024-11-05`、`2025-03-26`、`2025-06-18` 和 `2025-11-25`。握手�
 
 读取电路时，启动 `logisim-agent cli`，在同一个进程内逐行发送 JSON。每个进程最多同时打开 64 个工程会话，达到上限时 `project_open` 返回 `session_limit`。使用 `project_close` 可释放名额。
 
-MCP 按到达顺序执行同一工程会话的请求。独立会话可并行执行，请用 JSON-RPC ID 匹配响应。设置操作和 CLI 行协议仍按顺序执行。
+MCP 按到达顺序执行同一工程会话的请求。独立会话可并行执行，单个电路的仿真保持单线程。请用 JSON-RPC ID 匹配响应。设置操作和 CLI 行协议仍按顺序执行。
 
 ```jsonl
 {"tool":"project_open","arguments":{"path":"examples/agent/counter.lrs"}}

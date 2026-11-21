@@ -36,7 +36,7 @@ git diff --check
 
 恢复路径改动先用 `cargo test -p logisim-rs --bin logisim-rs recovery --locked --offline` 检查两种格式的恢复与锁交接。持锁窗口应排除其他写入者，释放后即使子进程仍持有同一文件描述的副本，下一个窗口也应能立即接手。用完整桌面测试分别覆盖默认并行和 `-- --test-threads=1`，核对恢复后的内容、脏状态、目标格式与最近文件。
 
-Agent 示例用 release 版 `logisim-agent` 和 `python3 examples/agent/build_showcase.py` 从已提交的 `.circ` 生成。保留原始 XML 字节。提交前运行 `cargo test -p logisim-file showcase --locked --offline`，通过原生编解码和显式旧格式导出核对两种示例的完整内容、持久 ID 和插件相对路径。打包后在目标平台运行 `python3 .github/scripts/test_package.py <归档路径>`，用包内 Agent 打开两种格式，核对寄存器文件探针和重新生成的字节。
+Agent 示例用 release 版 `logisim-agent` 和 `python3 examples/agent/build_showcase.py` 从已提交的 `.circ` 生成。保留原始 XML 字节。修改原生示例时通过编解码器重新生成，用 `logisim-agent lrs inspect --input FILE.lrs` 核对文档字段，避免手写二进制。提交前运行 `cargo test -p logisim-file showcase --locked --offline`，通过原生编解码和显式旧格式导出核对两种示例的完整内容、持久 ID 和插件相对路径。打包后在目标平台运行 `python3 .github/scripts/test_package.py <归档路径>`，用包内 Agent 打开两种格式，核对寄存器文件探针和重新生成的字节。
 
 ## 无界面性能基线
 
@@ -94,6 +94,8 @@ git diff --cached --stat
 网络失败可以重试，不强制推送或覆盖远端改动。
 
 ## 发布
+
+候选审计在阶段分支完成。用同一组 Linux 目标程序和六个已校验的 Wasm 独立打包两次，比较归档 SHA-256，并从解压包验证 Agent、桌面、工程转换和恢复。将归档、验证记录和发布说明草稿保存在本地 `experiments/`。候选验收通过后，实际发布仍需单独确认。
 
 1. 更新 workspace 版本，推送 `release/vX.Y.Z` 分支并确认构建通过。
 2. 对通过检查的同一提交创建并推送附注标签 `vX.Y.Z`，标签须与 workspace 版本一致。
