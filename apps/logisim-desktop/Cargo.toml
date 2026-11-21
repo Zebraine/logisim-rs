@@ -8,6 +8,7 @@ license.workspace = true
 publish.workspace = true
 
 [features]
+default = ["wasmtime-abi4", "wasmtime-cache"]
 wasmtime-cache = ["wasmtime-abi4", "logisim-plugin/wasmtime-cache"]
 wasmtime-abi4 = ["logisim-plugin/wasmtime-abi4"]
 

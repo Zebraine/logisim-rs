@@ -77,7 +77,7 @@ logisim-rs 使用带版本号的 Wasm 插件 ABI 提供外部元件。插件可�
 
 六个随附插件均使用 ABI 4，声明支持 wasmi 与 Wasmtime。模块路径、插件 ID、版本（1.0.0）及工具定义均与原版一致。包内 `plugins/abi3/` 另附六份原版模块，供旧宿主和需要原有计量行为的工程使用。
 
-桌面默认使用 wasmi。Linux、Windows 和 macOS 官方桌面打包配方均启用 `wasmtime-abi4,wasmtime-cache`。普通 Cargo 构建仅包含 wasmi。双引擎构建可在**设置 → 高级 → Wasm 插件引擎**选择 Wasmtime，确认并重启。**项目选项**会列出每个已加载依赖的请求引擎和实际引擎。ABI 1–3 始终使用 wasmi。ABI 4 声明不允许所选引擎时，宿主拒绝加载并报告原因。Agent 固定使用 wasmi。
+桌面默认使用 wasmi。默认 Cargo 构建和官方桌面包都包含 wasmi 与 Wasmtime；Wasmtime 代码编入桌面程序，但运行时默认仍是 wasmi。需要 only-wasmi 的开发构建时使用 `--no-default-features`。可在**设置 → 高级 → Wasm 插件引擎**选择 Wasmtime，确认并重启。**项目选项**会列出每个已加载依赖的请求引擎和实际引擎。ABI 1–3 始终使用 wasmi。ABI 4 声明不允许所选引擎时，宿主拒绝加载并报告原因。Agent 固定使用 wasmi。
 
 ABI 4 每次请求的预算为所选引擎的 1,000 万个 fuel 单位。同一计算可能在一个引擎完成，在另一个引擎耗尽预算。稳定态执行故障会暂停仿真并丢弃待提交的 transition，Reset 重建实例。本次 Linux 实测中，空缓存首次编译课程模块约需半秒。
 
