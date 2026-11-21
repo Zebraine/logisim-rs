@@ -70,8 +70,8 @@ impl Files {
         use logisim_ui::WasmEnginePreference;
         let requested = workspace.preferences().wasm_engine;
         let available = WasmEngine::Wasmtime.available();
-        let experimental = requested == WasmEnginePreference::Wasmtime;
-        let engine = if experimental && available {
+        let requests_wasmtime = requested == WasmEnginePreference::Wasmtime;
+        let engine = if requests_wasmtime && available {
             WasmEngine::Wasmtime
         } else {
             WasmEngine::Wasmi
@@ -100,7 +100,7 @@ impl Files {
         };
         Self {
             loader,
-            engine_warning_pending: experimental && !available,
+            engine_warning_pending: requests_wasmtime && !available,
             ..Self::with_recovery(directory)
         }
     }

@@ -1033,13 +1033,13 @@
     "Reason: engine unavailable in this build": "原因：本构建未包含所选引擎",
     "Session engine preference: {}": "本次会话选择的引擎：{}",
     "Plugin ABI 1–3: wasmi only.": "ABI 1–3 插件仅使用 wasmi。",
-    "This build does not include the experimental engine.": "此构建未包含实验性引擎。",
-    "Use experimental Wasmtime on the next desktop start?": "下次启动桌面应用时使用实验性 Wasmtime？",
+    "This build does not include Wasmtime.": "此构建未包含 Wasmtime。",
+    "Use Wasmtime on the next desktop start?": "下次启动桌面应用时使用Wasmtime？",
     "Wasm plugin engine": "Wasm 插件引擎",
-    "Wasmtime (Experimental)": "Wasmtime（实验性）",
+    "Wasmtime": "Wasmtime",
     "After restart, the first course plugin load with an empty cache takes about 0.5 s. Fuel can pause execution at a different point. The Agent uses wasmi.": "重启后，缓存为空时首次加载课程插件约需 0.5 秒。fuel 耗尽时的暂停位置可能不同。Agent 使用 wasmi。",
     "wasmi (default)": "wasmi（默认）",
     "This build uses wasmi. Plugins that require Wasmtime cannot be loaded.": "本次构建使用 wasmi。仅支持 Wasmtime 的插件无法加载。",
-    "After restart, experimental Wasmtime may take about 0.5 s to compile the course plugin on an empty cache. Fuel pause points can differ. Legacy plugins and builds without Wasmtime use wasmi.": "重启后，实验性 Wasmtime 在空缓存下首次编译课程插件约需 0.5 秒。fuel 暂停位置可能不同。旧 ABI 插件及未包含 Wasmtime 的构建使用 wasmi。"
+    "After restart, Wasmtime may take about 0.5 s to compile the course plugin on an empty cache. Fuel pause points can differ. Legacy plugins and builds without Wasmtime use wasmi.": "重启后，Wasmtime 在空缓存下首次编译课程插件约需 0.5 秒。fuel 暂停位置可能不同。旧 ABI 插件及未包含 Wasmtime 的构建使用 wasmi。"
   }
 }

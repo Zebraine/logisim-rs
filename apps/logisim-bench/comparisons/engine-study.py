@@ -82,7 +82,7 @@ def main():
                 raise ValueError(f"{workload} trace mismatch")
         if action == "trace":
             if report["wasm_engine"] != {"wasmi": "wasmi-1.1.0", "wasmtime": "wasmtime-36.0.20"}[engine]:
-                raise ValueError("Wrong experimental binary")
+                raise ValueError("Expected a dual-engine benchmark binary")
             signature = [report[k] for k in ("digest", "steps", "ticks", "work_per_run", "diagnostics")]
             if references.setdefault(workload, signature) != signature:
                 raise ValueError("Engine or fuel budget changed the work or visible state")

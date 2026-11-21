@@ -1033,13 +1033,13 @@
     "Reason: engine unavailable in this build": "Reason: engine unavailable in this build",
     "Session engine preference: {}": "Session engine preference: {}",
     "Plugin ABI 1–3: wasmi only.": "Plugin ABI 1–3: wasmi only.",
-    "This build does not include the experimental engine.": "This build does not include the experimental engine.",
-    "Use experimental Wasmtime on the next desktop start?": "Use experimental Wasmtime on the next desktop start?",
+    "This build does not include Wasmtime.": "This build does not include Wasmtime.",
+    "Use Wasmtime on the next desktop start?": "Use Wasmtime on the next desktop start?",
     "Wasm plugin engine": "Wasm plugin engine",
-    "Wasmtime (Experimental)": "Wasmtime (Experimental)",
+    "Wasmtime": "Wasmtime",
     "After restart, the first course plugin load with an empty cache takes about 0.5 s. Fuel can pause execution at a different point. The Agent uses wasmi.": "After restart, the first course plugin load with an empty cache takes about 0.5 s. Fuel can pause execution at a different point. The Agent uses wasmi.",
     "wasmi (default)": "wasmi (default)",
     "This build uses wasmi. Plugins that require Wasmtime cannot be loaded.": "This build uses wasmi. Plugins that require Wasmtime cannot be loaded.",
-    "After restart, experimental Wasmtime may take about 0.5 s to compile the course plugin on an empty cache. Fuel pause points can differ. Legacy plugins and builds without Wasmtime use wasmi.": "After restart, experimental Wasmtime may take about 0.5 s to compile the course plugin on an empty cache. Fuel pause points can differ. Legacy plugins and builds without Wasmtime use wasmi."
+    "After restart, Wasmtime may take about 0.5 s to compile the course plugin on an empty cache. Fuel pause points can differ. Legacy plugins and builds without Wasmtime use wasmi.": "After restart, Wasmtime may take about 0.5 s to compile the course plugin on an empty cache. Fuel pause points can differ. Legacy plugins and builds without Wasmtime use wasmi."
   }
 }

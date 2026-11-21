@@ -35,7 +35,7 @@ pub(crate) struct Page {
     confirm_reset: bool,
     pub(crate) requested_engine: WasmEnginePreference,
     active_engine: WasmEnginePreference,
-    experimental_available: bool,
+    wasmtime_available: bool,
     confirm_engine: bool,
     bindings: bindings::BindingEditor,
     confirm_clear: bool,
@@ -51,7 +51,7 @@ impl Page {
     ) {
         self.requested_engine = requested;
         self.active_engine = active;
-        self.experimental_available = available;
+        self.wasmtime_available = available;
     }
 
     fn engine_card(&mut self, ui: &mut Ui, values: &mut Settings) {
@@ -73,25 +73,21 @@ impl Page {
                         values.wasm_engine = Wasmi;
                         self.confirm_engine = false;
                     }
-                    let experimental = egui::Button::selectable(
-                        values.wasm_engine == Wasmtime,
-                        tr("Wasmtime (Experimental)"),
-                    );
-                    if ui
-                        .add_enabled(self.experimental_available, experimental)
-                        .clicked()
+                    let wasmtime =
+                        egui::Button::selectable(values.wasm_engine == Wasmtime, tr("Wasmtime"));
+                    if ui.add_enabled(self.wasmtime_available, wasmtime).clicked()
                         && values.wasm_engine != Wasmtime
                     {
                         self.confirm_engine = true;
                     }
                 });
             });
-            if !self.experimental_available {
-                ui.label(tr("This build does not include the experimental engine."));
+            if !self.wasmtime_available {
+                ui.label(tr("This build does not include Wasmtime."));
             }
             ui.label(tr(WARNING));
             if self.confirm_engine {
-                ui.label(tr("Use experimental Wasmtime on the next desktop start?"));
+                ui.label(tr("Use Wasmtime on the next desktop start?"));
                 ui.horizontal_wrapped(|ui| {
                     if ui.button(tr("Confirm")).clicked() {
                         values.wasm_engine = Wasmtime;
@@ -102,7 +98,7 @@ impl Page {
                     }
                 });
             }
-            if values.wasm_engine != self.active_engine && self.experimental_available {
+            if values.wasm_engine != self.active_engine && self.wasmtime_available {
                 ui.label(tr("Restart the desktop application to apply this change."));
             }
         });

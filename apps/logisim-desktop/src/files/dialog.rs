@@ -164,9 +164,9 @@ impl Dialog {
                     "Replace your current preferences with the settings in {}? Your circuit, recent projects, window and panel layout are preserved.",
                     path.file_name().expect("selected file").to_string_lossy()
                 );
-                if settings.uses_experimental_engine() {
+                if settings.requests_wasmtime() {
                     question.push_str("\n\n");
-                    question.push_str(tr("After restart, experimental Wasmtime may take about 0.5 s to compile the course plugin on an empty cache. Fuel pause points can differ. Legacy plugins and builds without Wasmtime use wasmi."));
+                    question.push_str(tr("After restart, Wasmtime may take about 0.5 s to compile the course plugin on an empty cache. Fuel pause points can differ. Legacy plugins and builds without Wasmtime use wasmi."));
                 }
                 Window::prompt("confirm-settings-import").confirm(
                     ctx,

@@ -47,9 +47,7 @@ impl Engine {
                 .map(Self::Wasmtime)
                 .map_err(error),
             #[cfg(not(feature = "wasmtime-abi4"))]
-            WasmEngine::Wasmtime => {
-                Err("This build does not include the experimental engine.".into())
-            }
+            WasmEngine::Wasmtime => Err("This build does not include Wasmtime.".into()),
         }
     }
 

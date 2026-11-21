@@ -40,16 +40,9 @@ impl SimulationMode {
 }
 
 impl Workspace {
-    pub fn set_plugin_runtime(
-        &mut self,
-        active: WasmEnginePreference,
-        experimental_available: bool,
-    ) {
-        self.settings_page.set_runtime(
-            self.preferences.wasm_engine,
-            active,
-            experimental_available,
-        );
+    pub fn set_plugin_runtime(&mut self, active: WasmEnginePreference, wasmtime_available: bool) {
+        self.settings_page
+            .set_runtime(self.preferences.wasm_engine, active, wasmtime_available);
     }
 
     pub fn set_recovery_view(&mut self, view: RecoveryView) {

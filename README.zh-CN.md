@@ -77,11 +77,11 @@ logisim-rs 使用带版本号的 Wasm 插件 ABI 提供外部元件。插件可�
 
 六个随附插件均使用 ABI 4，声明支持 wasmi 与 Wasmtime。模块路径、插件 ID、版本（1.0.0）及工具定义均与原版一致。包内 `plugins/abi3/` 另附六份原版模块，供旧宿主和需要原有计量行为的工程使用。
 
-桌面默认使用 wasmi。Linux x86-64 打包配方显式编入 `wasmtime-abi4,wasmtime-cache`。普通 Cargo 构建和 Windows/macOS 打包配方仅包含 wasmi。双引擎构建可在**设置 → 高级 → Wasm 插件引擎**选择实验性 Wasmtime，确认并重启。**项目选项**会列出每个已加载依赖的请求引擎和实际引擎。ABI 1–3 始终使用 wasmi。ABI 4 声明不允许所选引擎时，宿主拒绝加载并报告原因。Agent 固定使用 wasmi。
+桌面默认使用 wasmi。Linux、Windows 和 macOS 官方桌面打包配方均启用 `wasmtime-abi4,wasmtime-cache`。普通 Cargo 构建仅包含 wasmi。双引擎构建可在**设置 → 高级 → Wasm 插件引擎**选择Wasmtime，确认并重启。**项目选项**会列出每个已加载依赖的请求引擎和实际引擎。ABI 1–3 始终使用 wasmi。ABI 4 声明不允许所选引擎时，宿主拒绝加载并报告原因。Agent 固定使用 wasmi。
 
 ABI 4 每次请求的预算为所选引擎的 1,000 万个 fuel 单位。同一计算可能在一个引擎完成，在另一个引擎耗尽预算。稳定态执行故障会暂停仿真并丢弃待提交的 transition，Reset 重建实例。本次 Linux 实测中，空缓存首次编译课程模块约需半秒。
 
-Linux 桌面将编译后的机器码存放在应用偏好文件旁的私有目录 `wasmtime-cache-v1/`，应使用可信本地文件系统。目录不可用或记录损坏时，桌面从源 Wasm 编译并向 stderr 报告原因。退出桌面后可删除目录以清空缓存。Windows 和 macOS 的 Wasmtime 执行仍待实机验证。
+Linux 桌面将编译后的机器码存放在应用偏好文件旁的私有目录 `wasmtime-cache-v1/`，应使用可信本地文件系统。目录不可用或记录损坏时，桌面从源 Wasm 编译并向 stderr 报告原因。退出桌面后可删除目录以清空缓存。Windows 和 macOS 上的 Wasmtime 每次加载时从源模块编译。私有磁盘缓存目前依赖 Linux 的所有者与权限校验。
 
 ## 示例
 
@@ -159,7 +159,7 @@ MCP 支持 `2024-11-05`、`2025-03-26`、`2025-06-18` 和 `2025-11-25`。握手�
 
 例如，`{"ops":[{"key":"appearance.theme","value":"dark"}]}` 修改 v17 便携偏好。可在同一 JSON 对象中将 `expected_sha256` 设为读取时返回的 `source_sha256`，要求原文件仍为该版本。确认预演结果后，用 `--apply` 写入。桌面端与 Agent 通过同目录的 `.lock` 文件协调原子更新，保留最近工程、窗口几何、面板布局和本机插件目录。
 
-`plugins.wasm_engine` 保存桌面偏好（`wasmi` 或 `wasmtime`）。Agent 在包括实验构建在内的所有构建中均使用 wasmi。`simulation_state` 的 `wasm_engine` 标出插件运行时，`engine` 表示电路传播引擎。设置响应也会返回 `agent_wasm_engine`。
+`plugins.wasm_engine` 保存桌面偏好（`wasmi` 或 `wasmtime`）。Agent 在所有构建中均使用 wasmi。`simulation_state` 的 `wasm_engine` 标出插件运行时，`engine` 表示电路传播引擎。设置响应也会返回 `agent_wasm_engine`。
 
 读取电路时，启动 `logisim-agent cli`，在同一个进程内逐行发送 JSON。每个进程最多同时打开 64 个工程会话，达到上限时 `project_open` 返回 `session_limit`。使用 `project_close` 可释放名额。
 

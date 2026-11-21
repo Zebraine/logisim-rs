@@ -110,7 +110,7 @@ impl Loaded {
 pub(crate) struct ValidatedSettings(Settings);
 
 impl ValidatedSettings {
-    pub(crate) fn uses_experimental_engine(&self) -> bool {
+    pub(crate) fn requests_wasmtime(&self) -> bool {
         self.0.wasm_engine == logisim_ui::WasmEnginePreference::Wasmtime
     }
 }

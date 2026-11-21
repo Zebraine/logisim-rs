@@ -41,7 +41,7 @@ pub fn run(mut args: impl Iterator<Item = String>, engine: WasmEngine) -> Result
                 "private-disk" => {
                     // Only the comparison runner provisions this disposable, trusted directory.
                     let path = std::env::var_os("LOGISIM_BENCH_PRIVATE_CACHE").ok_or(
-                        "Set LOGISIM_BENCH_PRIVATE_CACHE to a fresh private experiment directory",
+                        "Set LOGISIM_BENCH_PRIVATE_CACHE to a fresh private benchmark directory",
                     )?;
                     Reuse::Disk(path.into())
                 }
@@ -92,6 +92,6 @@ pub fn run(mut args: impl Iterator<Item = String>, engine: WasmEngine) -> Result
 #[cfg(feature = "wasmtime-cache")]
 fn private_cache() -> Result<std::path::PathBuf> {
     Ok(std::env::var_os("LOGISIM_BENCH_PRIVATE_CACHE")
-        .ok_or("Set LOGISIM_BENCH_PRIVATE_CACHE to a private experiment directory")?
+        .ok_or("Set LOGISIM_BENCH_PRIVATE_CACHE to a private benchmark directory")?
         .into())
 }

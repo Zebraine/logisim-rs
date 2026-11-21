@@ -35,5 +35,5 @@ pub(super) fn open(path: &Path) -> Result<wasmtime::Cache> {
 
 #[cfg(not(target_os = "linux"))]
 pub(super) fn open(_: &Path) -> Result<wasmtime::Cache> {
-    Err("The private disk-cache experiment has been qualified only on Linux".into())
+    Err("The disk-cache benchmark requires Linux".into())
 }

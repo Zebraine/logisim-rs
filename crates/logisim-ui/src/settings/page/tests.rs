@@ -1862,7 +1862,7 @@ fn dark_artwork_toggle_and_resets_preserve_the_workspace_in_both_layouts() {
 }
 
 #[test]
-fn experimental_engine_requires_confirmation_and_keeps_current_runtime() {
+fn wasmtime_requires_confirmation_and_keeps_current_runtime() {
     use WasmEnginePreference::{Wasmi, Wasmtime};
     for language in Language::ALL {
         let t = |label| crate::i18n::with_language(language, || tr(label));
@@ -1895,15 +1895,15 @@ fn experimental_engine_requires_confirmation_and_keeps_current_runtime() {
                     .center();
                 tap(&ctx, size, w, pos);
             };
-            click(&mut w, "Wasmtime (Experimental)");
+            click(&mut w, "Wasmtime");
             assert!(!w.settings_page.confirm_engine);
             w.set_plugin_runtime(Wasmi, true);
-            click(&mut w, "Wasmtime (Experimental)");
+            click(&mut w, "Wasmtime");
             assert_eq!(w.preferences().wasm_engine, Wasmi);
             assert!(w.settings_page.confirm_engine);
             click(&mut w, "Cancel");
             assert!(!w.settings_page.confirm_engine);
-            click(&mut w, "Wasmtime (Experimental)");
+            click(&mut w, "Wasmtime");
             click(&mut w, "Confirm");
             assert_eq!(w.preferences().wasm_engine, Wasmtime);
             assert_eq!(w.settings_page.active_engine, Wasmi);

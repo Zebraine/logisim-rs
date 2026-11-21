@@ -77,11 +77,11 @@ logisim-rs uses a versioned Wasm plugin ABI for externally supplied components. 
 
 The six bundled libraries use ABI 4 and declare support for both engines. Their paths, plugin IDs, version (1.0.0) and tool definitions are the same as in the original modules. The original ABI 3 binaries are also included under `plugins/abi3/` for older hosts or projects that need the original execution contract.
 
-The desktop starts with wasmi. The Linux x86-64 package recipe includes `wasmtime-abi4,wasmtime-cache`; a normal Cargo build and the Windows/macOS package recipes use wasmi alone. On a dual-engine desktop, select **Settings → Advanced → Wasm plugin engine → Wasmtime (Experimental)**, confirm and restart. **Project Options** shows the requested and active engine for each loaded dependency. ABI 1–3 always use wasmi. An ABI 4 module that excludes the selected engine is rejected with a reason. The Agent always uses wasmi.
+The desktop starts with wasmi. Official desktop package recipes enable `wasmtime-abi4,wasmtime-cache` on Linux, Windows and macOS. A plain Cargo build includes wasmi alone. On a dual-engine desktop, select **Settings → Advanced → Wasm plugin engine → Wasmtime**, confirm and restart. **Project Options** shows the requested and active engine for each loaded dependency. ABI 1–3 always use wasmi. An ABI 4 module that excludes the selected engine is rejected with a reason. The Agent always uses wasmi.
 
 ABI 4 grants 10 million units of engine-specific fuel per request. A calculation can complete on one engine and exhaust its budget on the other. A stable execution fault pauses simulation and discards the pending transition. Reset recreates the instance. With an empty cache the first course module compilation takes about half a second on the tested Linux machine.
 
-The Linux desktop caches executable code in its private `wasmtime-cache-v1/` directory beside the preferences file. Use a trusted local filesystem. An unavailable directory or damaged record triggers compilation from source and a diagnostic on stderr. Close the desktop before deleting the directory to clear it. Wasmtime execution on Windows and macOS remains unverified.
+The Linux desktop caches executable code in its private `wasmtime-cache-v1/` directory beside the preferences file. Use a trusted local filesystem. An unavailable directory or damaged record triggers compilation from source and a diagnostic on stderr. Close the desktop before deleting the directory to clear it. On Windows and macOS, Wasmtime compiles from source on each load. Private disk caching currently requires Linux ownership and permission checks.
 
 ## Examples
 
@@ -159,7 +159,7 @@ MCP negotiates `2024-11-05`, `2025-03-26`, `2025-06-18` and `2025-11-25`. It ret
 
 An edits file such as `{"ops":[{"key":"appearance.theme","value":"dark"}]}` changes portable v17 preferences. Set `expected_sha256` to the `source_sha256` from the get response to require that exact revision. Use `--apply` to commit. The desktop and agent coordinate atomic updates using a sibling `.lock` file. Recent files, window geometry, panel layout and the local plugin directory stay in the host configuration.
 
-`plugins.wasm_engine` stores the desktop preference (`wasmi` or `wasmtime`). The Agent always executes plugins using wasmi, including in experimental builds. `simulation_state.wasm_engine` identifies the plugin runtime, and `engine` identifies circuit propagation. Settings responses also report `agent_wasm_engine`.
+`plugins.wasm_engine` stores the desktop preference (`wasmi` or `wasmtime`). The Agent always executes plugins using wasmi. `simulation_state.wasm_engine` identifies the plugin runtime, and `engine` identifies circuit propagation. Settings responses also report `agent_wasm_engine`.
 
 For a circuit, run `logisim-agent cli` and send one JSON object per line in the same process. Each process can hold 64 open project sessions. At the limit, `project_open` returns `session_limit`. Use `project_close` to free a slot.
 

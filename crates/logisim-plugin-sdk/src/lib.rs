@@ -58,6 +58,9 @@ fn metadata(value: &impl serde::Serialize) -> u64 {
 }
 /// Export current ABI entry points from a cdylib. The handler must not assume the Describe
 /// instance is reused for simulation. Each component has independent module memory.
+/// ABI 1–3 modules run with wasmi. For ABI 4 the selected engine must be allowed.
+/// Each request has 10M units of engine-specific fuel. Exhaustion discards the pending
+/// transition and pauses simulation until reset.
 /// Prefix with `execution = Wasmi`, `Wasmtime` or `Both` to generate the ABI 4
 /// entry point and matching Describe metadata. Each request receives the selected
 /// engine's fuel budget. A module opting into both engines must tolerate different
