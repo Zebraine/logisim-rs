@@ -4,6 +4,6 @@
 *.md text eol=lf
 *.yml text eol=lf
 *.circ text eol=lf
-*.lrs text eol=lf
+*.lrs binary
 *.png binary
 *.jar binary

@@ -304,12 +304,23 @@ pub fn parse_legacy_json(bytes: &[u8]) -> Result<Project> {
     if bytes.len() > MAX_BYTES {
         return Err(Error("Native project exceeds 8 MiB".into()));
     }
+    if bytes.starts_with(MAGIC) {
+        return Err(Error("Already a binary .lrs project".into()));
+    }
     limits::check(bytes)?;
     serde_json::from_slice::<Native>(bytes)
         .map_err(|e| Error(format!("Invalid .lrs JSON: {e}")))?
         .decode()
 }
 pub use cbor::{parse_native, serialize_native};
+
+/// A bounded human-readable projection for diagnostics.
+pub fn diagnostic_json(project: &Project) -> Result<Vec<u8>> {
+    let mut out = limits::Output(Vec::new());
+    serde_json::to_writer_pretty(&mut out, &Native::encode(project)?)
+        .map_err(|e| Error(format!("Cannot write JSON diagnostic: {e}")))?;
+    Ok(out.0)
+}
 
 mod identities;
 pub use identities::IdentityAssignments;

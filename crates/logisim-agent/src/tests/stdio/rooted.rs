@@ -365,3 +365,67 @@ fn partial_import_and_unrepresentable_native_copy_preserve_both_files() {
     assert!(!root.join("top.circ.lock").exists() && !root.join("top.circ.bak").exists());
     cli.finish();
 }
+
+#[test]
+fn legacy_json_migration_is_explicit_rooted_and_create_only() {
+    let fixture = Fixture::new();
+    let root = fixture.0.join("work");
+    let run = |args: &[&str]| {
+        let output = Command::new(BIN)
+            .args(["--root", "work"])
+            .args(args)
+            .current_dir(&fixture.0)
+            .output()
+            .unwrap();
+        let value: Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(value["ok"], output.status.success(), "{value}");
+        value
+    };
+    let source = include_bytes!("../../../../../examples/agent/register-file.lrs");
+    fs::write(root.join("current.lrs"), source).unwrap();
+    let dump = run(&[
+        "lrs",
+        "inspect",
+        "--input",
+        "current.lrs",
+        "--output",
+        "old.json",
+    ]);
+    assert_eq!(dump["ok"], true, "{dump}");
+    let legacy = fs::read(root.join("old.json")).unwrap();
+    fs::write(root.join("old.lrs"), &legacy).unwrap();
+    let open = run(&["project", "open", "--path", "old.lrs"]);
+    assert_eq!(open["error"]["code"], "invalid_project");
+    assert!(
+        open["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("Legacy JSON native")
+    );
+    let migrate = |output| run(&["lrs", "migrate", "--input", "old.lrs", "--output", output]);
+    assert_eq!(
+        migrate("../outside.lrs")["error"]["code"],
+        "path_outside_root"
+    );
+    assert_eq!(migrate("old.lrs")["ok"], false);
+    assert_eq!(migrate("current.lrs")["error"]["code"], "conflict");
+    assert_eq!(migrate("copy.lrs")["ok"], true);
+    assert_eq!(fs::read(root.join("copy.lrs")).unwrap(), source);
+    assert_eq!(fs::read(root.join("old.lrs")).unwrap(), legacy);
+    assert_eq!(fs::read(root.join("current.lrs")).unwrap(), source);
+    assert!(!root.join("old.lrs.bak").exists());
+    fs::write(root.join("old.lrs"), br#"{"version":20}"#).unwrap();
+    assert_eq!(migrate("bad.lrs")["error"]["code"], "invalid_project");
+    assert!(!root.join("bad.lrs").exists() && !root.join("bad.lrs.lock").exists());
+    assert_eq!(
+        run(&[
+            "lrs",
+            "inspect",
+            "--input",
+            "current.lrs",
+            "--output",
+            "old.json"
+        ])["error"]["code"],
+        "conflict"
+    );
+}

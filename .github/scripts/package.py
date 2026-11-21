@@ -58,15 +58,12 @@ def check_plugin_paths(dependencies, plugin_paths, circuit):
 def check_native_example(agent, circuit, plugin_paths):
     # Use the same native codec as the desktop before accepting the packaged bytes.
     result = subprocess.run(
-        [agent, "project", "open", "--path", circuit],
+        [agent, "lrs", "inspect", "--input", circuit],
         input="", capture_output=True, text=True, encoding="utf-8",
     )
     if result.returncode:
         raise ValueError(f"Cannot open {circuit.name}: {result.stdout or result.stderr}")
-    opened = json.loads(result.stdout)["data"]
-    if opened["partial"] or opened["warnings"]:
-        raise ValueError(f"Incomplete example {circuit.name}: {opened['warnings']}")
-    project = json.loads(circuit.read_text(encoding="utf-8"))
+    project = json.loads(result.stdout)["data"]
     check_plugin_paths(project["plugin_sources"], plugin_paths, circuit)
 
 

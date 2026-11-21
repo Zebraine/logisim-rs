@@ -1,7 +1,7 @@
 //! Run from the workspace root. Fixture generation and comparison use no file writes.
 use logisim_core::{Component, Kind, Pla, PlaInput, Point, Project};
 use logisim_file::{Error, ProjectFormat, native::study};
-use std::{env, fs, path::Path};
+use std::{env, fs::File, io::Read};
 
 fn memory_board() -> Project {
     let mut p = Project::default();
@@ -41,7 +41,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut p = if sample == "large-rom-pla" {
             memory_board()
         } else {
-            let imported = ProjectFormat::Circ.parse(&fs::read(Path::new(&sample))?)?;
+            let mut bytes = Vec::new();
+            File::open(&sample)?
+                .take(logisim_file::MAX_BYTES as u64 + 1)
+                .read_to_end(&mut bytes)?;
+            if bytes.len() > logisim_file::MAX_BYTES {
+                return Err("Study sample exceeds 8 MiB".into());
+            }
+            let imported = ProjectFormat::Circ.parse(&bytes)?;
             if imported.partial || !imported.warnings.is_empty() {
                 return Err(Box::new(Error(format!(
                     "Incomplete {sample}: {:?}",

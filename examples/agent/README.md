@@ -1,6 +1,6 @@
 # Agent showcase
 
-Open the native `.lrs` files in the desktop or headless Agent. The matching legacy
+Open the binary CBOR `.lrs` files in the desktop or headless Agent. The matching legacy
 XML files are the original inputs to the conversion.
 
 | Native project | Legacy source | Verified behavior |

@@ -97,7 +97,9 @@ The examples illustrate the implemented behavior; they are not a compatibility t
 
 The Logisim-ITA compatibility scope is frozen. New features follow logisim-rs specifications. The supported `.circ` subset remains readable and writable for migration. Import reports unsupported content and protects the original against overwrite. Imported libraries remain editable snapshots. Wasm components require their matching modules. External editors may discard extension attributes such as `agent-id` when resaving.
 
-New projects and **Save As** default to native `.lrs` v1 (UTF-8 JSON). Opening a legacy `.circ` keeps **Save** bound to the original XML file. To change the working file, use **Save As**. For XML, select **Legacy Logisim (*.circ)** and confirm. The filename extension must match the selected type. Recovery restores the original format.
+New projects and **Save As** default to native `.lrs` v1 (binary CBOR). Opening a legacy `.circ` keeps **Save** bound to the original XML file. To change the working file, use **Save As**. For XML, select **Legacy Logisim (*.circ)** and confirm. The filename extension must match the selected type. Recovery restores the original format.
+
+For an unreleased JSON `.lrs`, run `logisim-agent lrs migrate --input old.lrs --output new.lrs` to create a separate binary copy. To view a binary project as JSON, use `logisim-agent lrs inspect --input new.lrs --output project.json`. Both commands require a fresh output file.
 
 Use **File → Convert to .lrs…** or **Export .circ…** to write a separate copy and continue editing the original. Conversion requires a complete import. Legacy export verifies the result by reading it back and reports any document properties the legacy format would lose. Open the copy to edit it directly. Native documents require persistent circuit, component and wire IDs. Subcircuit instances and custom appearance ports use these IDs. Wire endpoints retain their coordinates. Wasm modules remain external dependencies.
 

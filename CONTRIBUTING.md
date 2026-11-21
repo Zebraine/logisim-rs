@@ -26,7 +26,11 @@ git diff --check
 
 ## 工程格式回归
 
-原生 v1 的格式标记为 `logisim-rs-project`。顶层字段 `version`、`main`、`circuits`、`plugin_sources` 与 `format` 一同必填。电路按持久 ID 排列，`display_order` 保存项目中的显示顺序。子电路与外观端口引用持久 ID，接口和外观边界从定义重建。ROM 的 `contents` 用左闭右开的非零区间表示，PLA 按行保存输入、输出连接。编解码定义见 [原生文档模型](crates/logisim-file/src/native.rs) 和 [元件属性](crates/logisim-file/src/native/component.rs)。
+原生文件以四字节 `LRS\0` 和大端 u16 版本 1 开头，随后为定长容器的 packed CBOR。数字字段键和枚举编号属于磁盘契约，现有字段及枚举变体的声明顺序须冻结。涉及含义或编号的变更须另立版本并保留迁移入口。未知字段、版本和重复键均拒绝。解码先检查 8 MiB 文件、128 层嵌套、100 万个值、每个容器 65,536 项和每段文本 256 KiB 的上限，再校验文档引用与元件语义。
+
+复测编解码可运行 `cargo run --release --locked --offline -p logisim-file --features codec-study --bin lrs-codec-study -- 81 examples/course/single-cycle.circ large-rom-pla`。对同一份 DTO 记录 compact JSON、CBOR、Postcard 的字节数和解析、写入 p50/p95，完整打开与保存另计。Postcard 仅供对照。
+
+载荷格式标记为 `logisim-rs-project`。顶层字段 `version`、`main`、`circuits`、`plugin_sources` 与 `format` 一同必填。电路按持久 ID 排列，`display_order` 保存项目中的显示顺序。子电路与外观端口引用持久 ID，接口和外观边界从定义重建。ROM 的 `contents` 用左闭右开的非零区间表示，PLA 按行保存输入、输出连接。编解码定义见 [原生文档模型](crates/logisim-file/src/native.rs) 和 [元件属性](crates/logisim-file/src/native/component.rs)。
 
 变更文档字段时运行两条往返测试。原生保存后应能重开并生成相同字节。旧格式导出后应能重建同一文档，遇到有损转换则须在写文件前报错。桌面验收分别覆盖未命名工程首次保存、已绑定工程直接保存、另存为切换绑定和显式转换副本。核对实际编码与扩展名、最近文件、覆盖目标的原字节备份，以及原生与旧版恢复槽。Agent 用同一会话在转换后直接保存，核对原路径与格式。
 

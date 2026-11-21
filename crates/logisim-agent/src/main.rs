@@ -200,6 +200,28 @@ fn run() -> std::io::Result<bool> {
         mcp::run(service, std::io::BufReader::new(std::io::stdin()), out)?;
         return Ok(true);
     }
+    if args.first().is_some_and(|group| group == "lrs") {
+        let result = match args {
+            [_, cmd, i, input] if cmd == "inspect" && i == "--input" => {
+                service.inspect_lrs(Path::new(input), None)
+            }
+            [_, cmd, i, input, o, output] if i == "--input" && o == "--output" => {
+                match cmd.to_str() {
+                    Some("migrate") => service.migrate_lrs(Path::new(input), Path::new(output)),
+                    Some("inspect") => {
+                        service.inspect_lrs(Path::new(input), Some(Path::new(output)))
+                    }
+                    _ => Err(Error::invalid("Expected lrs migrate or inspect.")),
+                }
+            }
+            _ => Err(Error::invalid(
+                "Use lrs migrate --input OLD --output NEW or lrs inspect --input FILE [--output JSON].",
+            )),
+        };
+        let ok = result.is_ok();
+        io::write(&mut out, &envelope(result))?;
+        return Ok(ok);
+    }
     if args != [OsString::from("cli")] {
         let req = parse(args, &service);
         let stays_open = matches!(req, Ok(Request::ProjectOpen { .. }));

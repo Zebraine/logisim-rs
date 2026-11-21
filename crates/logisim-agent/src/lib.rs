@@ -9,6 +9,7 @@ use std::{
 mod digest;
 pub mod io;
 pub mod mcp;
+mod native;
 mod paths;
 mod plugins;
 mod project;
