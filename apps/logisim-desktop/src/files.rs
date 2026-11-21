@@ -11,7 +11,7 @@ mod tests;
 use dialog::{Dialog, Response};
 use picker::{Mode, Picker};
 
-use crate::plugins::Resolution;
+use crate::plugins::{PluginLoader, Resolution};
 use crate::simulation::Host;
 use crate::storage::{self, SaveMode, Storage};
 use eframe::egui;
@@ -35,7 +35,7 @@ enum ResolutionReason {
 }
 
 pub(crate) struct Files {
-    engine: logisim_plugin::WasmEngine,
+    loader: PluginLoader,
     engine_warning_pending: bool,
     pub plugins: logisim_plugin::Registry,
     pub storage: Storage,
@@ -50,7 +50,7 @@ pub(crate) struct Files {
 impl Default for Files {
     fn default() -> Self {
         Self {
-            engine: Default::default(),
+            loader: logisim_plugin::WasmEngine::Wasmi.into(),
             engine_warning_pending: false,
             plugins: Default::default(),
             storage: Storage::new(),
@@ -83,8 +83,23 @@ impl Files {
             },
             available,
         );
+        let loader = PluginLoader::Direct(engine);
+        #[cfg(feature = "wasmtime-cache-experiment")]
+        let loader = match (engine, directory.as_deref()) {
+            (WasmEngine::Wasmtime, Some(recovery)) => {
+                // Both directories belong to the host preferences location.
+                PluginLoader::Cached(recovery.with_file_name("wasmtime-cache-v1"))
+            }
+            (WasmEngine::Wasmtime, None) => {
+                eprintln!(
+                    "No application configuration directory. Using Wasmtime without a disk cache."
+                );
+                loader
+            }
+            _ => loader,
+        };
         Self {
-            engine,
+            loader,
             engine_warning_pending: experimental && !available,
             ..Self::with_recovery(directory)
         }
@@ -161,7 +176,7 @@ impl Files {
             ResolutionReason::Repair => Vec::new(),
         };
         let resolution = Resolution::new(
-            self.engine,
+            self.loader.clone(),
             workspace.project(),
             crate::plugins::base(self.storage.path.as_deref()),
             workspace.plugin_fallback_directory.as_deref(),
@@ -702,8 +717,7 @@ impl Files {
                 if picker.mode == Mode::Plugin {
                     match storage::read_file(&path, "Choose a regular .wasm file.").and_then(
                         |bytes| {
-                            let plugin =
-                                logisim_plugin::Plugin::load_with_engine(&bytes, self.engine)?;
+                            let plugin = self.loader.load(&bytes)?;
                             let manifest = plugin.manifest();
                             for c in workspace
                                 .project()

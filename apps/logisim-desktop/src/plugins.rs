@@ -12,6 +12,38 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[derive(Clone)]
+pub(crate) enum PluginLoader {
+    Direct(WasmEngine),
+    #[cfg(feature = "wasmtime-cache-experiment")]
+    Cached(PathBuf),
+}
+
+impl From<WasmEngine> for PluginLoader {
+    fn from(engine: WasmEngine) -> Self {
+        Self::Direct(engine)
+    }
+}
+
+impl PluginLoader {
+    pub fn load(&self, bytes: &[u8]) -> Result<Plugin, String> {
+        match self {
+            Self::Direct(engine) => Plugin::load_with_engine(bytes, *engine),
+            #[cfg(feature = "wasmtime-cache-experiment")]
+            Self::Cached(directory) => {
+                let (plugin, outcome) = logisim_plugin::module_cache::load(bytes, directory)?;
+                if let Some(reason) = outcome.warning() {
+                    eprintln!(
+                        "Wasmtime cache ({}): {reason}. Compiled from source Wasm.",
+                        directory.display()
+                    );
+                }
+                Ok(plugin)
+            }
+        }
+    }
+}
+
 pub(crate) struct Row {
     pub source: PluginSource,
     pub location: String,
@@ -22,7 +54,7 @@ pub(crate) struct Row {
     components: Vec<api::Component>,
 }
 pub(crate) struct Resolution {
-    engine: WasmEngine,
+    loader: PluginLoader,
     pub rows: Vec<Row>,
     pub base: PathBuf,
     fallback_directory: Option<PathBuf>,
@@ -111,7 +143,7 @@ impl Row {
 
 impl Resolution {
     pub fn new(
-        engine: WasmEngine,
+        loader: impl Into<PluginLoader>,
         project: &Project,
         base: PathBuf,
         fallback_directory: Option<&Path>,
@@ -157,7 +189,7 @@ impl Resolution {
                 .push(c.clone());
         }
         let mut result = Self {
-            engine,
+            loader: loader.into(),
             rows: rows.into_values().collect(),
             base,
             fallback_directory: fallback_directory.map(Path::to_owned),
@@ -180,7 +212,7 @@ impl Resolution {
         let mut errors = Vec::new();
         for (path, from_directory) in candidates {
             match load(
-                self.engine,
+                &self.loader,
                 &path,
                 &row.source.plugin,
                 &row.source.version,
@@ -243,13 +275,16 @@ impl Resolution {
     }
 }
 fn load(
-    engine: WasmEngine,
+    loader: &PluginLoader,
     path: &Path,
     id: &str,
     version: &str,
     components: &[api::Component],
 ) -> Result<Plugin, String> {
     let bytes = crate::storage::read_file(path, tr("Choose a regular .wasm file."))?;
-    Plugin::load_dependency_with_engine(&bytes, id, version, components, engine)
-        .map_err(|e| tr(&e).to_owned())
+    let plugin = loader.load(&bytes).map_err(|e| tr(&e).to_owned())?;
+    plugin
+        .check_dependency(id, version, components)
+        .map_err(|e| tr(&e).to_owned())?;
+    Ok(plugin)
 }

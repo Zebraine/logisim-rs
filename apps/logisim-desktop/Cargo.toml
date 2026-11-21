@@ -8,6 +8,7 @@ license.workspace = true
 publish.workspace = true
 
 [features]
+wasmtime-cache-experiment = ["wasmtime-experimental", "logisim-plugin/wasmtime-cache-experiment"]
 wasmtime-experimental = ["logisim-plugin/wasmtime-experimental"]
 
 [dependencies]

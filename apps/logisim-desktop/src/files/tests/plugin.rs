@@ -264,13 +264,16 @@ fn desktop_engine_is_pinned_before_loading_and_falls_back_only_if_unavailable() 
     fs::write(temp.path("plugin.wasm"), wasm).unwrap();
     project.plugin_sources[0].path = "plugin.wasm".into();
     let mut workspace = Workspace::default();
-    let first = Files::for_desktop(None, &mut workspace);
-    assert_eq!(first.engine, WasmEngine::Wasmi);
+    let first = Files::for_desktop(Some(temp.path("recovery")), &mut workspace);
+    assert!(matches!(
+        first.loader,
+        PluginLoader::Direct(WasmEngine::Wasmi)
+    ));
     workspace.apply_settings(logisim_ui::Settings {
         wasm_engine: WasmEnginePreference::Wasmtime,
         ..workspace.preferences()
     });
-    let restarted = Files::for_desktop(None, &mut workspace);
+    let restarted = Files::for_desktop(Some(temp.path("recovery")), &mut workspace);
     let available = WasmEngine::Wasmtime.available();
     assert_eq!(
         workspace.preferences().wasm_engine,
@@ -288,9 +291,14 @@ fn desktop_engine_is_pinned_before_loading_and_falls_back_only_if_unavailable() 
             },
         ),
     ] {
-        let mut resolution = Resolution::new(files.engine, &project, temp.0.clone(), None, vec![]);
+        let mut resolution = Resolution::new(files.loader, &project, temp.0.clone(), None, vec![]);
         resolution.check(0);
         let plugin = resolution.rows[0].loaded.as_ref().unwrap();
         assert_eq!(plugin.engine(), expected);
+        #[cfg(all(target_os = "linux", feature = "wasmtime-cache-experiment"))]
+        assert_eq!(
+            temp.path("wasmtime-cache-v1").exists(),
+            expected == WasmEngine::Wasmtime
+        );
     }
 }
