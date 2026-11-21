@@ -13,6 +13,8 @@ mod backend;
 mod frame;
 mod interaction;
 mod metadata;
+#[cfg(feature = "wasmtime-cache-experiment")]
+pub mod module_cache;
 mod presentation;
 mod raster;
 mod reconfiguration;

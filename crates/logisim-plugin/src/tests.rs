@@ -288,3 +288,6 @@ fn loading_pins_the_engine_per_module_and_implicit_load_stays_wasmi() {
         assert!(explicit.err().unwrap().contains("does not include"));
     }
 }
+
+#[cfg(all(target_os = "linux", feature = "wasmtime-cache-experiment"))]
+mod module_cache;
