@@ -1,4 +1,4 @@
-//! Experimental storage for Wasmtime compilations. The host supplies its private cache
+//! Opt-in storage for Wasmtime compilations. The host supplies its private cache
 //! directory, independently of document paths. The OS user and administrator are trusted.
 use crate::{Plugin, Result, WasmEngine};
 use std::path::Path;

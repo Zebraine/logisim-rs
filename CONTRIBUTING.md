@@ -62,11 +62,13 @@ Linux 上先用 `cargo build --release --locked --offline -p logisim-agent` 构�
 
 ### 复现 Wasm 引擎对照
 
-默认桌面、Agent 与基准使用 wasmi。历史和当前实验的[引擎契约记录](apps/logisim-bench/comparisons/engine-contract.md)给出两个 release 构建、固定核心、fuel 矩阵和冷启动复测命令。桌面与基准的双引擎构建使用 `wasmtime-experimental`；Agent 即使启用同一 feature 也固定运行 wasmi。基准可在负载前加 `--wasm-engine wasmi` 或 `--wasm-engine wasmtime`。当前分支按模块导出和 manifest 选择运行时；旧 ABI 在所有入口都使用 wasmi。历史阶段 2/3 的旧 ABI 双引擎数据应在对应历史提交复测。阶段 1 的[原始对照补丁](apps/logisim-bench/comparisons/wasmtime-36.patch)对应历史提交 `cc5cee9`。
+默认桌面、Agent 与基准使用 wasmi。历史和当前实验的[引擎契约记录](apps/logisim-bench/comparisons/engine-contract.md)给出两个 release 构建、固定核心、fuel 矩阵和冷启动复测命令。桌面与基准的双引擎构建使用 `wasmtime-abi4`。单独构建 Agent 始终只依赖 wasmi。基准可在负载前加 `--wasm-engine wasmi` 或 `--wasm-engine wasmtime`。当前分支按模块导出和 manifest 选择运行时；旧 ABI 在所有入口都使用 wasmi。历史阶段 2/3 的旧 ABI 双引擎数据应在对应历史提交复测。阶段 1 的[原始对照补丁](apps/logisim-bench/comparisons/wasmtime-36.patch)对应历史提交 `cc5cee9`。
 
-### 私有模块缓存实验
+### ABI 4 插件与私有模块缓存
 
-`wasmtime-cache-experiment` 单独为桌面或基准启用 Wasmtime 36.0.20 的缓存 API。Linux 上只信任当前用户和系统管理员控制的本地目录。逐级校验祖先，缓存根目录须为 0700，记录须为当前用户的 0600 普通文件。标准系统 /tmp 的粘滞位允许在其下创建私有实验目录。共享账号、可被其他主体更改的挂载及已失陷的当前账号均超出信任范围。
+SDK 使用 `export_plugin!(execution = Both, …)` 声明双引擎，单引擎使用 `Wasmi` 或 `Wasmtime`。`Describe` 与静态入口须一致，fuel 使用 `engine-specific`。普通 SDK 出口生成 ABI 3。更新随附模块时运行各库的专用检查，并用双引擎 `logisim-plugin-check --compare-abi3 OLD NEW` 核对打包模块。保留 `plugins/abi3/` 中的原始字节。
+
+`wasmtime-cache` 单独为桌面或基准启用 Wasmtime 36.0.20 的缓存 API。Linux 上只信任当前用户和系统管理员控制的本地目录。逐级校验祖先，缓存根目录须为 0700，记录须为当前用户的 0600 普通文件。标准系统 /tmp 的粘滞位允许在其下创建私有实验目录。共享账号、可被其他主体更改的挂载及已失陷的当前账号均超出信任范围。
 
 持久记录绑定缓存格式版本、源 Wasm 的 SHA-256、引擎版本、目标/CPU 特性、编译配置和 fuel 预算。校验整条记录后才复制到 Wasmtime 专用的一次性私有目录。机器码装载发生在 Wasmtime 内部，自有代码使用安全 API。校验和用于发现损坏，目录所有权负责来源信任。manifest、ABI、工程保存的身份和工具定义在加载路径上照常验证。
 
@@ -75,9 +77,8 @@ Linux 上先用 `cargo build --release --locked --offline -p logisim-agent` 构�
 在 Linux 上选两个可用逻辑核运行下列命令。计时器按工程读取至首次 settle 统计，随后校验完整四态轨迹。脚本只把缓存写入私有临时目录，stdout 的 JSON 保存每次打开的分相、诊断、进程峰值 RSS 和缓存大小。
 
 ```sh
-cargo build --release -p logisim-bench --features wasmtime-cache-experiment --locked --offline
-cargo build --release --target wasm32-unknown-unknown -p logisim-course-plugin --lib --features execution-abi4 --locked --offline
-python3 apps/logisim-bench/comparisons/abi4.py --cpu 15 --abi4 target/wasm32-unknown-unknown/release/logisim_course_plugin.wasm
+cargo build --release -p logisim-bench --features wasmtime-cache --locked --offline
+python3 apps/logisim-bench/comparisons/abi4.py --cpu 15 --abi4 plugins/course/course.wasm
 python3 apps/logisim-bench/comparisons/module-cache.py --cpu 15 --peer-cpu 14
 ```
 

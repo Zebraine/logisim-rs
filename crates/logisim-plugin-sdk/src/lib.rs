@@ -59,7 +59,10 @@ fn metadata(value: &impl serde::Serialize) -> u64 {
 /// Export current ABI entry points from a cdylib. The handler must not assume the Describe
 /// instance is reused for simulation. Each component has independent module memory.
 /// Prefix with `execution = Wasmi`, `Wasmtime` or `Both` to generate the ABI 4
-/// entry point and matching Describe metadata. Ordinary exports stay at ABI 3.
+/// entry point and matching Describe metadata. Each request receives the selected
+/// engine's fuel budget. A module opting into both engines must tolerate different
+/// exhaustion points. Hosts reject an engine outside the declaration. Ordinary
+/// exports stay at ABI 3 and execute on wasmi.
 #[macro_export]
 macro_rules! export_plugin {
     (execution = $engines:ident, $handler:path $(, $($extensions:tt)+)?) => {

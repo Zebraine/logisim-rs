@@ -60,7 +60,7 @@ def check_inventory(root, package, names):
         raise ValueError("Expected regular files in the package")
 
 
-def check_archive(archive):
+def check_archive(archive, engine_check=None):
     root = Path(__file__).resolve().parents[2]
     # Use the same probe/input trajectories as the generator, with the Agent in the archive.
     showcase = runpy.run_path(str(root / "examples/agent/build_showcase.py"))
@@ -71,6 +71,10 @@ def check_archive(archive):
         shutil.unpack_archive(archive, tmp)
         package, = Path(tmp).iterdir()
         check_inventory(root, package, names)
+        if engine_check:
+            for old in sorted((package / "plugins/abi3").glob("*.wasm")):
+                current = package / "plugins" / old.stem / old.name
+                subprocess.run([engine_check, "--compare-abi3", old, current], check=True)
         examples = package / "examples/agent"
 
         binary = package / ("logisim-agent.exe" if os.name == "nt" else "logisim-agent")
@@ -100,6 +104,13 @@ def check_archive(archive):
                     if path.read_bytes() != (root / "examples/agent" / path.name).read_bytes():
                         raise ValueError(f"Regeneration changed {path.name}")
                 print(f"{name}: both formats and explicit legacy export passed, {summary}")
+            # Replay the unchanged legacy document against the archived module at its recorded path.
+            shutil.copyfile(package / "plugins/abi3/course.wasm", package / "plugins/course/course.wasm")
+            with session(process, examples / "register-file.circ") as sid:
+                verify(process, sid, "register-file")
+                state = call(process, "simulation_state", session=sid)
+                if state["wasm_engine"] != "wasmi" or state["plugins"][0]["status"] != "loaded":
+                    raise ValueError("Legacy project failed to load its original module with wasmi")
             process.stdin.close()
             if process.wait():
                 raise RuntimeError("Packaged Agent exited unsuccessfully")
@@ -108,4 +119,6 @@ def check_archive(archive):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("archive", type=Path)
-    check_archive(parser.parse_args().archive.resolve())
+    parser.add_argument("--engine-check", type=Path, help="Dual-engine logisim-plugin-check executable")
+    args = parser.parse_args()
+    check_archive(args.archive.resolve(), args.engine_check.resolve() if args.engine_check else None)

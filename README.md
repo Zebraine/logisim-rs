@@ -75,13 +75,13 @@ logisim-rs uses a versioned Wasm plugin ABI for externally supplied components. 
 - Plugin paths and definitions are validated before use. Missing or mismatched modules remain visibly unavailable instead of being silently replaced.
 - The host does not execute Java or inspect JAR files.
 
-Packages include six optional Wasm modules under `plugins/`. The source repository also contains their Rust implementations.
+The six bundled libraries use ABI 4 and declare support for both engines. Their paths, plugin IDs, version (1.0.0) and tool definitions are the same as in the original modules. The original ABI 3 binaries are also included under `plugins/abi3/` for older hosts or projects that need the original execution contract.
 
-The desktop and Agent default to wasmi. ABI 1–3 plugins always use wasmi. A desktop built with `--features wasmtime-experimental` offers **Settings → Advanced → Wasm plugin engine**. After confirmation and restart, the preference applies to experimental ABI 4 plugins that explicitly allow that engine. A mismatch is reported at load time. The Agent always selects wasmi, including for ABI 4.
+The desktop starts with wasmi. The Linux x86-64 package recipe includes `wasmtime-abi4,wasmtime-cache`; a normal Cargo build and the Windows/macOS package recipes use wasmi alone. On a dual-engine desktop, select **Settings → Advanced → Wasm plugin engine → Wasmtime (Experimental)**, confirm and restart. **Project Options** shows the requested and active engine for each loaded dependency. ABI 1–3 always use wasmi. An ABI 4 module that excludes the selected engine is rejected with a reason. The Agent always uses wasmi.
 
-ABI 4 budgets 10 million units of engine-specific fuel per request. A finite calculation can finish on one engine and exhaust its budget on the other. A stable execution fault pauses simulation and discards the pending transition. Reset creates a fresh VM. Initial Wasmtime compilation can be substantially slower. This experiment was exercised on Linux x86-64. Windows and macOS execution remain unverified.
+ABI 4 grants 10 million units of engine-specific fuel per request. A calculation can complete on one engine and exhaust its budget on the other. A stable execution fault pauses simulation and discards the pending transition. Reset recreates the instance. With an empty cache the first course module compilation takes about half a second on the tested Linux machine.
 
-A separate Linux build with `--features wasmtime-cache-experiment` can reuse compiled modules after you select Wasmtime and restart. The desktop stores executable code in a private `wasmtime-cache-v1/` directory beside its preferences. Use a trusted local filesystem. An unavailable cache or a damaged entry triggers compilation from the source Wasm and a diagnostic on stderr. Close the desktop before deleting the directory to clear it. The first open still compiles the module. The Agent uses wasmi.
+The Linux desktop caches executable code in its private `wasmtime-cache-v1/` directory beside the preferences file. Use a trusted local filesystem. An unavailable directory or damaged record triggers compilation from source and a diagnostic on stderr. Close the desktop before deleting the directory to clear it. Wasmtime execution on Windows and macOS remains unverified.
 
 ## Examples
 

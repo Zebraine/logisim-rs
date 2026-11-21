@@ -1,16 +1,51 @@
-//! Verify an SDK-built artifact against the actual host ABI, without opening the editor.
-use logisim_plugin::{MAX_MODULE, Plugin};
-use logisim_plugin_api::{Evaluation, Event, Signal};
-use std::io::Read;
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let path = std::env::args_os()
-        .nth(1)
-        .ok_or("Usage: logisim-plugin-check module.wasm")?;
-    let mut bytes = vec![];
+//! Verify SDK-built artifacts with the host loader, including packaged compatibility pairs.
+use logisim_plugin::{MAX_MODULE, Plugin, WasmEngine};
+use logisim_plugin_api::{AllowedEngines, Evaluation, Event, Execution, Signal};
+use std::{ffi::OsStr, io::Read};
+
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+fn load(path: &OsStr, requested: WasmEngine) -> Result<Plugin> {
+    let mut bytes = Vec::new();
     std::fs::File::open(path)?
         .take(MAX_MODULE as u64 + 1)
         .read_to_end(&mut bytes)?;
-    let plugin = Plugin::load(&bytes)?;
+    Ok(Plugin::load_with_engine(&bytes, requested)?)
+}
+
+fn main() -> Result<()> {
+    let args: Vec<_> = std::env::args_os().skip(1).collect();
+    match args.as_slice() {
+        [path] => verify(&load(path, WasmEngine::Wasmi)?),
+        [option, old, current] if option == "--compare-abi3" => {
+            let legacy = load(old, WasmEngine::Wasmtime)?;
+            assert_eq!(legacy.engine(), WasmEngine::Wasmi);
+            assert_eq!(legacy.manifest().abi, 3);
+            assert_eq!(legacy.manifest().execution, None);
+            let mut expected = legacy.manifest().clone();
+            expected.abi = 4;
+            expected.execution = Some(Execution::new(AllowedEngines::Both));
+            let old_ui = legacy.library();
+            for requested in [WasmEngine::Wasmi, WasmEngine::Wasmtime] {
+                let plugin = load(current, requested)?;
+                assert_eq!(plugin.engine(), requested);
+                assert_eq!(plugin.manifest(), &expected);
+                let ui = plugin.library();
+                assert_eq!(ui.presentation, old_ui.presentation);
+                assert_eq!(ui.interaction, old_ui.interaction);
+                verify(&plugin)?;
+            }
+            println!(
+                "{}: ABI 3 uses wasmi, ABI 4 verified on wasmi and Wasmtime",
+                expected.id
+            );
+            Ok(())
+        }
+        _ => Err("Usage: logisim-plugin-check MODULE | --compare-abi3 LEGACY CURRENT".into()),
+    }
+}
+
+fn verify(plugin: &Plugin) -> Result<()> {
     for component in plugin.manifest().components() {
         let inputs = component
             .tool

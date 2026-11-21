@@ -75,13 +75,13 @@ logisim-rs 使用带版本号的 Wasm 插件 ABI 提供外部元件。插件可�
 - 使用前会校验插件路径和元件定义；缺失或不匹配的模块会明确保留为不可用状态，不会被静默替换。
 - 宿主不执行 Java，也不读取 JAR 内部实现。
 
-包内的 `plugins/` 附带六个可选 Wasm 模块。相应的 Rust 源码可在仓库中找到。
+六个随附插件均使用 ABI 4，声明支持 wasmi 与 Wasmtime。模块路径、插件 ID、版本（1.0.0）及工具定义均与原版一致。包内 `plugins/abi3/` 另附六份原版模块，供旧宿主和需要原有计量行为的工程使用。
 
-桌面和 Agent 默认使用 wasmi。ABI 1–3 插件始终由 wasmi 执行。使用 `--features wasmtime-experimental` 构建桌面后，可在**设置 → 高级 → Wasm 插件引擎**确认选择并重启。这个偏好只对明确允许相应引擎的实验性 ABI 4 插件生效。声明与选择不匹配时，加载器会报告原因。Agent 对 ABI 4 也固定选择 wasmi。
+桌面默认使用 wasmi。Linux x86-64 打包配方显式编入 `wasmtime-abi4,wasmtime-cache`。普通 Cargo 构建和 Windows/macOS 打包配方仅包含 wasmi。双引擎构建可在**设置 → 高级 → Wasm 插件引擎**选择实验性 Wasmtime，确认并重启。**项目选项**会列出每个已加载依赖的请求引擎和实际引擎。ABI 1–3 始终使用 wasmi。ABI 4 声明不允许所选引擎时，宿主拒绝加载并报告原因。Agent 固定使用 wasmi。
 
-ABI 4 每次请求的预算是 1,000 万个所选引擎的 fuel 单位。同一段有限计算可能在一个引擎完成，在另一个引擎耗尽预算。稳定态执行故障会暂停仿真并丢弃待提交的 transition，Reset 重建实例。Wasmtime 首次编译可能明显更慢。实验在 Linux x86-64 上验证，Windows 和 macOS 的运行表现仍待验证。
+ABI 4 每次请求的预算为所选引擎的 1,000 万个 fuel 单位。同一计算可能在一个引擎完成，在另一个引擎耗尽预算。稳定态执行故障会暂停仿真并丢弃待提交的 transition，Reset 重建实例。本次 Linux 实测中，空缓存首次编译课程模块约需半秒。
 
-Linux 桌面另有独立构建选项 `--features wasmtime-cache-experiment`。选择 Wasmtime 并重启后，可跨进程复用编译模块。缓存含可执行机器码，存放在应用偏好文件旁的私有目录 `wasmtime-cache-v1/`，应使用可信本地文件系统。目录不可用或记录损坏时，桌面从源 Wasm 编译并向 stderr 报告原因。退出桌面后可删除该目录。首次打开仍需编译，Agent 继续使用 wasmi。
+Linux 桌面将编译后的机器码存放在应用偏好文件旁的私有目录 `wasmtime-cache-v1/`，应使用可信本地文件系统。目录不可用或记录损坏时，桌面从源 Wasm 编译并向 stderr 报告原因。退出桌面后可删除目录以清空缓存。Windows 和 macOS 的 Wasmtime 执行仍待实机验证。
 
 ## 示例
 
