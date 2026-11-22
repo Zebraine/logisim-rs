@@ -112,3 +112,28 @@ fn rotation_preserves_existing_port_connections() {
     assert!(d.wires.iter().any(|w| w.contains(Point::new(100, 80))));
     assert!(d.wires.iter().all(|w| w.a.x == w.b.x || w.a.y == w.b.y));
 }
+
+#[test]
+fn multi_wire_highlight_joins_a_closed_net_and_terminal_crossings_once() {
+    let mut c = Circuit::default();
+    let top = c.add_wire(Point::ZERO, Point::new(100, 0)).unwrap();
+    let right = c.add_wire(Point::new(100, 0), Point::new(100, 80)).unwrap();
+    let bottom = c.add_wire(Point::new(100, 80), Point::new(0, 80)).unwrap();
+    let left = c.add_wire(Point::new(0, 80), Point::ZERO).unwrap();
+    let crossing = c.add_wire(Point::new(50, -10), Point::new(50, 20)).unwrap();
+    let other = c.add_wire(Point::new(200, 0), Point::new(300, 0)).unwrap();
+    let selected = BTreeSet::from([top, left, other]);
+    assert_eq!(
+        c.connected_wire_selection(&selected),
+        BTreeSet::from([top, left, right, bottom, other])
+    );
+    let pin = c.add_component(Component::new(Kind::Pin, Point::new(50, 0)));
+    assert_eq!(
+        c.connected_wire_selection(&BTreeSet::from([top, pin])),
+        BTreeSet::from([top, left, right, bottom, crossing])
+    );
+    assert!(
+        c.connected_wire_selection(&BTreeSet::from([pin]))
+            .is_empty()
+    );
+}

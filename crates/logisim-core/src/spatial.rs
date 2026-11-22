@@ -86,5 +86,63 @@ fn query(intervals: &[Interval], at: i32, visit: &mut impl FnMut(usize)) {
     query(&intervals[mid + 1..], at, visit);
 }
 
+/// Disjoint connection groups. Physical nodes are indexed by wire order followed by port order.
+pub struct ConnectionGroups(Vec<usize>);
+impl ConnectionGroups {
+    pub fn new(count: usize) -> Self {
+        Self((0..count).collect())
+    }
+
+    /// Wire ends and terminals connect all segments at that point. Interior crossings alone
+    /// do not connect. Ports with the same nonempty tunnel label share a group.
+    pub fn from_geometry<'a>(
+        wires: &[Wire],
+        ports: impl ExactSizeIterator<Item = (Point, Option<&'a str>)>,
+    ) -> Self {
+        let offset = wires.len();
+        let mut groups = Self::new(offset + ports.len());
+        let index = WireIndex::new(wires);
+        let mut positions = BTreeMap::new();
+        // Query each connection coordinate once. Repeated endpoints and co-located
+        // ports reuse its representative, without materializing pairwise wire edges.
+        let mut attach = |point, node, groups: &mut Self| {
+            if let Some(previous) = positions.insert(point, node) {
+                groups.join(node, previous);
+            } else {
+                index.visit(point, |wire, _| groups.join(node, wire));
+            }
+        };
+        for (i, wire) in wires.iter().enumerate() {
+            for point in [wire.a, wire.b] {
+                attach(point, i, &mut groups);
+            }
+        }
+        let mut tunnels = BTreeMap::new();
+        for (i, (point, tunnel)) in ports.enumerate() {
+            let node = offset + i;
+            attach(point, node, &mut groups);
+            if let Some(label) = tunnel
+                && let Some(previous) = tunnels.insert(label, node)
+            {
+                groups.join(node, previous);
+            }
+        }
+        groups
+    }
+
+    pub fn root(&mut self, mut i: usize) -> usize {
+        while self.0[i] != i {
+            self.0[i] = self.0[self.0[i]];
+            i = self.0[i];
+        }
+        i
+    }
+    pub fn join(&mut self, a: usize, b: usize) {
+        let a = self.root(a);
+        let b = self.root(b);
+        self.0[a] = b;
+    }
+}
+
 #[cfg(test)]
 mod tests;

@@ -145,13 +145,11 @@ fn selection_info(ui: &mut Ui, editor: &mut Editor, shortcuts: &Shortcuts) {
                 .wires
                 .iter()
                 .find(|w| editor.session.selection.contains(&w.id))
+                .copied()
         {
             ui.label(tf!("Start: {}, {}", w.a.x, w.a.y));
             ui.label(tf!("End: {}, {}", w.b.x, w.b.y));
-            ui.label(tf!(
-                "Connected wires: {}",
-                editor.session.circuit.connected_wires(w.id).len()
-            ));
+            ui.label(tf!("Connected wires: {}", editor.selected_wire_net_size()));
             ui.weak(tr("Click or drag the wire to branch. Ctrl-drag to move it. Drag an endpoint to reshape it."));
             if let Some(signal) = editor.simulation.view.wires.get(&w.id) {
                 ui.colored_label(

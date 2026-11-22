@@ -42,6 +42,7 @@ enum Gesture {
     },
     Move {
         start: Point,
+        delta: Point,
         before: Snapshot,
     },
     Box {
@@ -55,6 +56,7 @@ enum Gesture {
         horizontal: bool,
     },
     Endpoint {
+        end: Point,
         before: Snapshot,
         fixed: Point,
         id: Id,
@@ -145,6 +147,23 @@ impl Editor {
             .advance(&before.project, &self.session.project);
         self.history.record(before, &self.session);
     }
+    pub fn sync_after_frame(&mut self) {
+        // The working circuit previews connected geometry. Only release publishes it via
+        // record(), so simulation, autosave and history all see the same completed edit.
+        if !matches!(
+            self.gesture,
+            Some(Gesture::Move { .. } | Gesture::Endpoint { .. })
+        ) {
+            self.sync_project();
+        }
+    }
+
+    pub fn selected_wire_net_size(&mut self) -> usize {
+        self.drawing_cache
+            .synchronize(&self.session.circuit, &self.session.selection);
+        self.drawing_cache.selected_net.len()
+    }
+
     pub fn set_main_circuit(&mut self, id: Id) {
         if self.session.project.main != id && self.session.project.circuit(id).is_some() {
             let before = self.snapshot();
@@ -671,6 +690,7 @@ impl Editor {
                         self.wire_start = None;
                         if let Some((wire, fixed)) = selected_endpoint.filter(|_| !ctrl) {
                             self.gesture = Some(Gesture::Endpoint {
+                                end: if wire.a == fixed { wire.b } else { wire.a },
                                 before: self.snapshot(),
                                 fixed,
                                 id: wire.id,
@@ -685,6 +705,7 @@ impl Editor {
                             }
                             self.gesture = Some(Gesture::Move {
                                 start: snap,
+                                delta: Point::ZERO,
                                 before: self.snapshot(),
                             });
                         } else {
@@ -717,13 +738,18 @@ impl Editor {
                                 crate::io::move_slider(c, world);
                             }
                         }
-                        Gesture::Move { start, before } => {
-                            self.session.circuit = before.circuit().clone();
-                            // Movement snaps to the grid, never to the component being moved.
-                            self.session.circuit.move_selection(
-                                &before.selection,
-                                Point::snapped(world.x, world.y) - *start,
-                            );
+                        Gesture::Move {
+                            start,
+                            delta,
+                            before,
+                        } => {
+                            // Only reroute when the snapped preview actually moves.
+                            let next = Point::snapped(world.x, world.y) - *start;
+                            if next != *delta {
+                                *delta = next;
+                                self.session.circuit = before.circuit().clone();
+                                self.session.circuit.move_selection(&before.selection, next);
+                            }
                         }
                         Gesture::Box {
                             start,
@@ -767,9 +793,11 @@ impl Editor {
                         Gesture::Endpoint {
                             before,
                             fixed,
+                            end,
                             id,
                             horizontal,
-                        } => {
+                        } if snap != *end => {
+                            *end = snap;
                             self.session.circuit = before.circuit().clone();
                             self.session.circuit.wires.retain(|w| w.id != *id);
                             self.session.selection = self
@@ -779,6 +807,7 @@ impl Editor {
                                 .into_iter()
                                 .collect();
                         }
+                        Gesture::Endpoint { .. } => {}
                     }
                 }
             }

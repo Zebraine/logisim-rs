@@ -321,3 +321,57 @@ fn ctrl_wire_drags_move_selection_and_cancel_or_undo_without_leaving_branches() 
         }
     }
 }
+
+#[test]
+fn drag_previews_publish_one_project_edit_on_release_and_none_on_escape() {
+    for endpoint in [false, true] {
+        let (ctx, mut app) = setup();
+        let circuit = &mut app.editor.session.circuit;
+        let wire = circuit
+            .add_wire(Point::new(100, 100), Point::new(300, 100))
+            .unwrap();
+        let gate =
+            circuit.add_component(Component::new(Kind::Gate(Gate::And), Point::new(200, 200)));
+        let (item, start) = if endpoint {
+            (wire, Point::new(300, 100))
+        } else {
+            (gate, Point::new(180, 200))
+        };
+        app.editor.session.selection.insert(item);
+        app.editor.sync_project();
+        let before = app.project().clone();
+        let a = app.canvas.screen(start);
+        for cancel in [true, false] {
+            button(&ctx, &mut app, a, true);
+            for i in 1..=6 {
+                let b = a + vec2(10. * i as f32, 20.);
+                frame(
+                    &ctx,
+                    &mut app,
+                    vec![Event::PointerMoved(b)],
+                    Modifiers::NONE,
+                );
+                assert_eq!(app.project(), &before);
+                assert_ne!(&app.editor.session.circuit, &before.main_circuit().circuit);
+                frame(&ctx, &mut app, vec![], Modifiers::NONE);
+                assert_eq!(app.project(), &before);
+            }
+            if cancel {
+                key(&ctx, &mut app, Key::Escape, Modifiers::NONE);
+            }
+            button(&ctx, &mut app, a + vec2(60., 20.), false);
+            assert_eq!(app.project() == &before, cancel);
+            assert_eq!(app.editor.can_undo(), !cancel);
+        }
+        key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
+        assert_eq!(
+            app.project().main_circuit().circuit.wires,
+            before.main_circuit().circuit.wires
+        );
+        assert_eq!(
+            app.project().main_circuit().circuit.components,
+            before.main_circuit().circuit.components
+        );
+        assert!(!app.editor.can_undo());
+    }
+}

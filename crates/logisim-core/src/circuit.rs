@@ -213,38 +213,38 @@ impl Circuit {
     }
     /// Topological highlighting only; no values, propagation or simulation semantics.
     pub fn connected_wires(&self, seed: Id) -> BTreeSet<Id> {
-        let mut result = BTreeSet::from([seed]);
-        let ports: BTreeSet<_> = self.components.iter().flat_map(Component::ports).collect();
-        let tunnels: Vec<_> = self
+        let mut net = self.connected_wire_selection(&BTreeSet::from([seed]));
+        net.insert(seed);
+        net
+    }
+
+    /// Union of the physical nets of all selected wires (ignoring selected components).
+    pub fn connected_wire_selection(&self, selection: &BTreeSet<Id>) -> BTreeSet<Id> {
+        if selection.is_empty() || !self.wires.iter().any(|w| selection.contains(&w.id)) {
+            return BTreeSet::new();
+        }
+        let ports: Vec<_> = self
             .components
             .iter()
-            .filter(|c| c.kind == Kind::Tunnel && !c.label.is_empty())
+            .flat_map(|c| {
+                let tunnel =
+                    (c.kind == Kind::Tunnel && !c.label.is_empty()).then_some(c.label.as_str());
+                c.ports().into_iter().map(move |point| (point, tunnel))
+            })
             .collect();
-        loop {
-            let mut next = result.clone();
-            let attached: Vec<_> = tunnels
-                .iter()
-                .filter(|t| {
-                    self.wires
-                        .iter()
-                        .any(|w| result.contains(&w.id) && w.contains(t.position))
-                })
-                .collect();
-            for wire in &self.wires {
-                if self.wires.iter().any(|w| {
-                    result.contains(&w.id)
-                        && (w.touches(*wire)
-                            || ports.iter().any(|p| w.contains(*p) && wire.contains(*p)))
-                }) || tunnels.iter().any(|t| {
-                    wire.contains(t.position) && attached.iter().any(|a| a.label == t.label)
-                }) {
-                    next.insert(wire.id);
-                }
-            }
-            if next == result {
-                return result;
-            }
-            result = next;
-        }
+        let mut groups = crate::ConnectionGroups::from_geometry(&self.wires, ports.into_iter());
+        let roots: BTreeSet<_> = self
+            .wires
+            .iter()
+            .enumerate()
+            .filter(|(_, w)| selection.contains(&w.id))
+            .map(|(index, _)| groups.root(index))
+            .collect();
+        self.wires
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| roots.contains(&groups.root(*index)))
+            .map(|(_, wire)| wire.id)
+            .collect()
     }
 }

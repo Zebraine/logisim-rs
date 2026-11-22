@@ -32,19 +32,18 @@ impl CircuitCache {
                     .as_ref()
                     .is_none_or(|old| old.wires != circuit.wires)
             {
+                let index = logisim_core::WireIndex::new(&circuit.wires);
                 self.markers = circuit
                     .junctions()
                     .into_iter()
                     .chain(circuit.dangling_ends())
                     .map(|point| {
-                        (
-                            point,
-                            circuit
-                                .wires
-                                .iter()
-                                .find(|w| w.contains(point))
-                                .map(|w| w.id),
-                        )
+                        // Keep the previous first-in-document color at a junction.
+                        let mut first = None;
+                        index.visit(point, |i, _| {
+                            first = Some(first.map_or(i, |j: usize| i.min(j)))
+                        });
+                        (point, first.map(|i| circuit.wires[i].id))
                     })
                     .collect();
                 self.ports = ports;
@@ -55,12 +54,7 @@ impl CircuitCache {
             self.visual_bounds = vec![None; circuit.components.len()];
         }
         if changed || self.selection != *selection {
-            self.selected_net.clear();
-            for id in selection {
-                if !self.selected_net.contains(id) && circuit.wires.iter().any(|w| w.id == *id) {
-                    self.selected_net.extend(circuit.connected_wires(*id));
-                }
-            }
+            self.selected_net = circuit.connected_wire_selection(selection);
             self.selection.clone_from(selection);
         }
     }

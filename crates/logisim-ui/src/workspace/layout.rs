@@ -40,7 +40,7 @@ impl Workspace {
             self.request_circuit_analysis(id);
             ui.ctx().request_repaint();
         }
-        self.editor.sync_project();
+        self.editor.sync_after_frame();
         if before != self.editor.session.context {
             self.editor.simulation.release_momentary();
             self.editor.simulation.release_keyboard();
