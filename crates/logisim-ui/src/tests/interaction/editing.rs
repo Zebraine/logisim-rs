@@ -258,3 +258,30 @@ fn context_click_targets_the_object_or_preserves_its_selected_group() {
     right_click(&mut app, at + egui::vec2(90., 90.));
     assert!(app.editor.session.selection.is_empty() && !app.editor.can_undo());
 }
+
+#[test]
+fn escape_closes_the_canvas_context_menu_before_editing_shortcuts_resume() {
+    let (ctx, mut app) = setup();
+    let p = app.canvas.rect.center();
+    for pressed in [true, false] {
+        frame(
+            &ctx,
+            &mut app,
+            vec![
+                Event::PointerMoved(p),
+                Event::PointerButton {
+                    pos: p,
+                    button: egui::PointerButton::Secondary,
+                    pressed,
+                    modifiers: Modifiers::NONE,
+                },
+            ],
+            Modifiers::NONE,
+        );
+    }
+    assert!(egui::Popup::is_any_open(&ctx));
+    key(&ctx, &mut app, Key::Escape, Modifiers::NONE);
+    assert!(!egui::Popup::is_any_open(&ctx));
+    key(&ctx, &mut app, Key::S, Modifiers::COMMAND);
+    assert_eq!(app.take_file_actions(), [crate::FileAction::Save]);
+}

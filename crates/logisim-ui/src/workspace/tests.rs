@@ -1047,3 +1047,89 @@ fn circuit_commands_and_library_search_follow_project_order_and_membership() {
     app.editor.switch_circuit(last);
     assert!(Up.enabled(&app) && !Down.enabled(&app));
 }
+
+#[test]
+fn narrow_overflow_and_empty_catalogue_remain_actionable_in_both_languages() {
+    use crate::tests::support::widgets::{frame_at_size, has};
+    for language in Language::ALL {
+        let size = vec2(720., 480.);
+        let ctx = Context::default();
+        configure(&ctx);
+        let mut app = Workspace::default();
+        app.set_language(language);
+        let tap = |app: &mut Workspace, pos| {
+            for pressed in [true, false] {
+                frame_at_size(
+                    &ctx,
+                    app,
+                    vec![
+                        Event::PointerMoved(pos),
+                        Event::PointerButton {
+                            pos,
+                            pressed,
+                            button: PointerButton::Primary,
+                            modifiers: Modifiers::NONE,
+                        },
+                    ],
+                    size,
+                );
+            }
+        };
+        frame_at_size(&ctx, &mut app, vec![], size);
+        // Go through the compact editing menu and choose a secondary placement tool.
+        tap(&mut app, pos2(150., 54.));
+        let labels = frame_at_size(&ctx, &mut app, vec![], size);
+        let and = language.translate(Kind::Gate(logisim_core::Gate::And).name());
+        let at = labels
+            .iter()
+            .find(|(text, _)| text == and)
+            .unwrap()
+            .1
+            .center();
+        tap(&mut app, at);
+        assert_eq!(
+            app.editor.tool,
+            crate::editor::Tool::Place(Kind::Gate(logisim_core::Gate::And))
+        );
+        for (tab, prompt) in [
+            ("Circuits", "No matching circuits"),
+            ("Components", "No matching components"),
+        ] {
+            let labels = frame_at_size(&ctx, &mut app, vec![], size);
+            let at = labels
+                .iter()
+                .find(|(s, _)| s == language.translate(tab))
+                .unwrap()
+                .1
+                .center();
+            tap(&mut app, at);
+            let labels = frame_at_size(&ctx, &mut app, vec![], size);
+            let at = labels
+                .iter()
+                .find(|(s, _)| s == language.translate("Search · Ctrl+F"))
+                .unwrap()
+                .1
+                .center();
+            tap(&mut app, at);
+            frame_at_size(
+                &ctx,
+                &mut app,
+                vec![Event::Text("unmatchedzzz".into())],
+                size,
+            );
+            let labels = frame_at_size(&ctx, &mut app, vec![], size);
+            assert!(has(&labels, language.translate(prompt)));
+            let clear = labels
+                .iter()
+                .find(|(s, _)| s == language.translate("Clear search"))
+                .unwrap()
+                .1;
+            assert!(clear.bottom() < size.y && clear.right() < app.canvas.rect.left());
+            tap(&mut app, clear.center());
+            assert!(!has(
+                &frame_at_size(&ctx, &mut app, vec![], size),
+                language.translate(prompt)
+            ));
+        }
+    }
+}

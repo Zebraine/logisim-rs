@@ -40,7 +40,7 @@ Download a package for your platform and its `.sha256` checksum from [Releases](
 
 The Windows and macOS packages are not signed or notarized. UI validation for this release was performed on Linux X11; the other packages are built by the same release workflow but have not been manually UI-tested on their platforms.
 
-This release uses native binary `.lrs` for new projects and Save As. Existing `.circ` files remain readable; v0.4.0 was the last release whose default was `.circ`.
+New projects and Save As use native binary `.lrs` by default. Existing `.circ` files can still be opened.
 
 Simplified Chinese text uses system fonts; install a CJK font such as Noto Sans CJK SC if needed.
 
@@ -53,7 +53,7 @@ Simplified Chinese text uses system fonts; install a CJK font such as Noto Sans 
 5. Use **Step** / `Ctrl+I`, **Tick** / `Ctrl+T`, or **Automatic ticks** / `Ctrl+K` in the Simulate menu to advance time.
 6. Save with `Ctrl+S`. The title bar shows whether the document has unsaved changes.
 
-After a circuit opens and settles, the inspector shows **Ready** and zero propagation steps. The counter starts with the next input or clock activity. A tick advances the clock by one step. The automatic clock defaults to 4 Hz and can be changed in the Simulate menu.
+**Ready** means propagation is enabled and the circuit has settled. **Pause** stops automatic propagation so you can step through changes. The inspector counts propagation after initialization. With automatic ticks on, the toolbar shows target and measured clock rates. The default target is 4 Hz.
 
 Useful starting points:
 
