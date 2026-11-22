@@ -189,3 +189,6 @@ fn bundled_course_replays_identical_traces_on_both_requested_engines() -> Result
     }
     Ok(())
 }
+
+#[cfg(feature = "dataflow-parallel")]
+mod parallel;
