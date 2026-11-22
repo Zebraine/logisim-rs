@@ -47,9 +47,22 @@ struct Open {
     first_settle_ms: f64,
 }
 
+#[cfg(feature = "dataflow-parallel")]
+fn dataflow_threads() -> Result<usize> {
+    match std::env::var("LOGISIM_BENCH_DATAFLOW_THREADS") {
+        Ok(value) => Ok(value.parse()?),
+        Err(std::env::VarError::NotPresent) => Ok(1),
+        Err(e) => Err(e.into()),
+    }
+}
+
 fn open(fixture: Result<Fixture>) -> Result<Open> {
     let fixture = fixture?;
     let mut sim = ProjectSimulator::default();
+    #[cfg(feature = "dataflow-parallel")]
+    sim.set_dataflow_pool(logisim_sim::combinational::DataflowPool::for_threads(
+        dataflow_threads()?,
+    )?);
     sim.set_plugins(fixture.plugins.clone());
     let syncing = Instant::now();
     sim.synchronize(&fixture.project, fixture.project.main);
@@ -191,6 +204,10 @@ fn benchmark_with(
     let plugin_phases = json!({"schema": 1, "enabled": false});
     #[cfg(feature = "dataflow-study")]
     let dataflow = dataflow::observe(&fixture, &mut sim, &reference)?;
+    #[cfg(feature = "dataflow-parallel")]
+    let threads = dataflow_threads()?;
+    #[cfg(not(feature = "dataflow-parallel"))]
+    let threads = 1;
     let report = json!({
         "plugin_phases": plugin_phases,
         "schema": 1,
@@ -199,7 +216,7 @@ fn benchmark_with(
         "requested_wasm_engine": requested.code(),
         "plugin_abi": fixture.runtime.map(|(abi, _)| abi),
         "wasm_engine": fixture.runtime.map(|(_, engine)| match engine { WasmEngine::Wasmi => "wasmi-1.1.0", WasmEngine::Wasmtime => "wasmtime-36.0.20" }),
-        "threads": 1,
+        "threads": threads,
         "runs": runs,
         "warmup": WARMUP,
         "cold_ms": cold_ms,

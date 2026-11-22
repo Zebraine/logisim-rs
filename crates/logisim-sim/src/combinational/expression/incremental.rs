@@ -1,6 +1,11 @@
 use super::*;
 use std::{cmp::Reverse, collections::BinaryHeap};
 
+#[cfg(feature = "dataflow-parallel")]
+mod parallel;
+#[cfg(feature = "dataflow-parallel")]
+pub use parallel::DataflowPool;
+
 pub(super) struct Consumer {
     pub(super) instruction: usize,
     bits: u32,
@@ -76,6 +81,8 @@ impl Queue {
 pub struct Evaluator {
     #[cfg(feature = "dataflow-study")]
     study: Option<dataflow::Observer>,
+    #[cfg(feature = "dataflow-parallel")]
+    parallel: Option<Box<parallel::Schedule>>,
     program: Arc<Program>,
     values: Vec<Value>,
     scratch: Scratch,
@@ -97,6 +104,8 @@ impl Evaluator {
             stats: EvaluationStats::default(),
             #[cfg(feature = "dataflow-study")]
             study: None,
+            #[cfg(feature = "dataflow-parallel")]
+            parallel: None,
             program,
         }
     }
@@ -166,7 +175,11 @@ impl Evaluator {
         }
         #[cfg(feature = "dataflow-study")]
         let started = self.study.as_ref().map(|_| std::time::Instant::now());
-        if full {
+        #[cfg(feature = "dataflow-parallel")]
+        let layered = self.execute_parallel(full);
+        #[cfg(not(feature = "dataflow-parallel"))]
+        let layered = false;
+        if !layered && full {
             #[cfg(feature = "dataflow-study")]
             if let Some(study) = &mut self.study {
                 study.active.extend(0..self.program.instructions.len());
@@ -177,7 +190,7 @@ impl Evaluator {
                 });
             }
             self.stats.instructions = self.program.instructions.len();
-        } else {
+        } else if !layered {
             // Instruction indices are topological. Every predecessor executes
             // before its consumers, even when unequal paths reconverge. Membership
             // deduplicates fan-out, so each instruction executes at most once.

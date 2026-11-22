@@ -63,10 +63,15 @@ pub fn observe(
     }
     let mut total = Summary::default();
     let mut instances = vec![];
+    let (mut dispatches, mut dispatched_nodes, mut barrier_ns, mut longest_lane_ns) = (0, 0, 0, 0);
     for (path, eval) in sim.study_evaluators() {
         let trace = eval
             .finish_dataflow_study()
             .ok_or("Missing prepared evaluator trace")?;
+        dispatches += trace.dispatches;
+        dispatched_nodes += trace.dispatched_nodes;
+        barrier_ns += trace.barrier.as_nanos() as u64;
+        longest_lane_ns += trace.longest_lane.as_nanos() as u64;
         let mut local = Summary::default();
         for pass in &trace.passes {
             local.add(pass);
@@ -84,7 +89,9 @@ pub fn observe(
     if total.eligible + total.excluded != reference.work.evaluated_instructions {
         return Err("Observed instruction count disagrees with stable report".into());
     }
-    Ok(json!({"total": total, "instances":instances}))
+    Ok(
+        json!({"total": total, "instances":instances, "dispatches": dispatches, "dispatched_nodes":dispatched_nodes,"barrier_ns":barrier_ns,"longest_lane_ns":longest_lane_ns}),
+    )
 }
 
 #[cfg(test)]

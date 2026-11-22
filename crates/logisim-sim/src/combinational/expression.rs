@@ -3,6 +3,8 @@
 pub mod dataflow;
 mod incremental;
 mod operation;
+#[cfg(feature = "dataflow-parallel")]
+pub use incremental::DataflowPool;
 pub use incremental::{EvaluationStats, Evaluator};
 #[cfg(test)]
 mod tests;
@@ -168,12 +170,7 @@ impl Scratch {
 }
 
 impl Instruction {
-    fn execute(
-        &self,
-        values: &mut [Value],
-        scratch: &mut Scratch,
-        mut changed: impl FnMut(usize, Value, Value),
-    ) {
+    fn gather(&self, values: &[Value], scratch: &mut Scratch) {
         scratch.ports.clear();
         scratch
             .ports
@@ -181,14 +178,29 @@ impl Instruction {
         for (index, read) in &self.inputs {
             scratch.ports[*index] = read.get(values);
         }
+    }
+
+    fn compute(&self, scratch: &mut Scratch, mut emit: impl FnMut(usize, Value)) {
         self.operation
             .evaluate(&scratch.ports, &mut scratch.optional, |index, value| {
                 let slot = self.outputs[index].expect("compiled output slot");
-                if values[slot] != value {
-                    changed(slot, values[slot], value);
-                    values[slot] = value;
-                }
+                emit(slot, value);
             });
+    }
+
+    fn execute(
+        &self,
+        values: &mut [Value],
+        scratch: &mut Scratch,
+        mut changed: impl FnMut(usize, Value, Value),
+    ) {
+        self.gather(values, scratch);
+        self.compute(scratch, |slot, value| {
+            if values[slot] != value {
+                changed(slot, values[slot], value);
+                values[slot] = value;
+            }
+        });
     }
 }
 

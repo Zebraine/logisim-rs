@@ -26,6 +26,8 @@ struct Bridge {
 }
 
 pub struct ProjectSimulator {
+    #[cfg(feature = "dataflow-parallel")]
+    dataflow_pool: Option<std::sync::Arc<crate::combinational::DataflowPool>>,
     plugins: logisim_plugin::Registry,
     project: Project,
     root: Id,
@@ -43,6 +45,8 @@ pub struct ProjectSimulator {
 impl Default for ProjectSimulator {
     fn default() -> Self {
         Self {
+            #[cfg(feature = "dataflow-parallel")]
+            dataflow_pool: None,
             plugins: Default::default(),
             project: Project::default(),
             root: 0,

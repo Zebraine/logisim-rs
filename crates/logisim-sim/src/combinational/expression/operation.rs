@@ -22,6 +22,20 @@ pub(super) enum Operation {
 }
 
 impl Operation {
+    #[cfg(any(feature = "dataflow-study", feature = "dataflow-parallel"))]
+    pub(super) fn dataflow_eligible(&self) -> bool {
+        match self {
+            Self::Rom(..) | Self::Pla(_) => false,
+            Self::Gate(..)
+            | Self::Parity(..)
+            | Self::Arithmetic(_)
+            | Self::Plexer(_)
+            | Self::Constant(_)
+            | Self::Controlled(_)
+            | Self::Extend(..) => true,
+        }
+    }
+
     pub(super) fn new(c: &Component, node: &Node) -> Self {
         match c.kind {
             Kind::Gate(gate) => Self::Gate(

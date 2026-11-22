@@ -4,6 +4,8 @@
 //! certify timing-safe substitution into an event-driven parent. Discovery never
 //! changes propagation, samples state, or assumes that a subcircuit is stateless.
 mod expression;
+#[cfg(feature = "dataflow-parallel")]
+pub use expression::DataflowPool;
 #[cfg(feature = "dataflow-study")]
 pub use expression::dataflow;
 pub(crate) mod graph;

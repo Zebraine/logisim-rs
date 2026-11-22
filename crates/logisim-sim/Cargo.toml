@@ -9,9 +9,11 @@ publish.workspace = true
 
 [features]
 dataflow-study = []
+dataflow-parallel = ["dep:rayon-core"]
 plugin-metrics = ["logisim-plugin/plugin-metrics"]
 
 [dependencies]
+rayon-core = { version = "=1.13.0", optional = true }
 logisim-core.workspace = true
 logisim-plugin.workspace = true
 

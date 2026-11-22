@@ -1,6 +1,6 @@
 //! Observe the executed subgraph of one compiled instance at a time.
 //! Unit-cost work and span describe available parallelism, independently of wall time.
-use super::{Operation, Program};
+use super::Program;
 use std::{collections::BTreeSet, time::Duration};
 
 pub struct Layer {
@@ -16,6 +16,10 @@ pub struct Pass {
 }
 
 pub struct Trace {
+    pub dispatches: usize,
+    pub dispatched_nodes: usize,
+    pub barrier: Duration,
+    pub longest_lane: Duration,
     pub topology: Pass,
     pub passes: Vec<Pass>,
 }
@@ -30,12 +34,7 @@ impl Graph {
         let n = program.instructions.len();
         let mut predecessors = vec![Vec::new(); n];
         let mut edges = vec![Vec::new(); n];
-        let eligible = |i: usize| {
-            !matches!(
-                program.instructions[i].operation,
-                Operation::Rom(..) | Operation::Pla(_)
-            )
-        };
+        let eligible = |i: usize| program.instructions[i].operation.dataflow_eligible();
         for (i, inst) in program.instructions.iter().enumerate() {
             for slot in inst.outputs.iter().flatten() {
                 for consumer in &program.consumers[*slot] {
@@ -117,6 +116,10 @@ impl Observer {
             graph,
             active,
             trace: Trace {
+                dispatches: 0,
+                dispatched_nodes: 0,
+                barrier: Duration::ZERO,
+                longest_lane: Duration::ZERO,
                 topology,
                 passes: Vec::new(),
             },

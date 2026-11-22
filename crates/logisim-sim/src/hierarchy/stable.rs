@@ -3,6 +3,23 @@ use crate::combinational::BoundaryReason;
 use crate::stable::{Error, Failure, Report};
 
 impl ProjectSimulator {
+    #[cfg(feature = "dataflow-parallel")]
+    pub fn set_dataflow_pool(
+        &mut self,
+        pool: Option<std::sync::Arc<crate::combinational::DataflowPool>>,
+    ) {
+        for instance in self.states.values_mut().chain(
+            self.cached_roots
+                .values_mut()
+                .flat_map(|root| root.states.values_mut()),
+        ) {
+            if let Some(Ok(plan)) = &mut instance.sim.stable_plan {
+                plan.evaluator.set_dataflow_pool(pool.as_ref());
+            }
+        }
+        self.dataflow_pool = pool;
+    }
+
     /// Prepared instance-local evaluators for the opt-in headless measurement.
     #[cfg(feature = "dataflow-study")]
     pub fn study_evaluators(
@@ -29,6 +46,16 @@ impl ProjectSimulator {
                 path: path.clone(),
                 reason,
             })?);
+            #[cfg(feature = "dataflow-parallel")]
+            instance
+                .sim
+                .stable_plan
+                .as_mut()
+                .unwrap()
+                .as_mut()
+                .unwrap()
+                .evaluator
+                .set_dataflow_pool(self.dataflow_pool.as_ref());
         }
         if self.stable_checked.is_none() {
             self.stable_checked = Some(self.check_stable_bridges());
