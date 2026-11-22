@@ -81,7 +81,7 @@ def desktop_engines(executable, target):
     info = json.loads(subprocess.check_output(
         [executable, "--print-plugin-engines"], text=True, encoding="utf-8", timeout=15,
     ))
-    required = {"available": ["wasmi", "wasmtime"], "default": "wasmi",
+    required = {"available": ["wasmi", "wasmtime"], "default": "wasmtime",
                 "cache_feature": True, "private_disk_cache": target == TARGETS[0]}
     if info != required:
         raise ValueError(f"Official desktop package requires both engines and the cache feature: {info}")

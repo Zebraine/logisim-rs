@@ -253,3 +253,37 @@ fn feedback_waits_without_retries_and_repairs_only_resume_automatic_propagation(
         }
     }
 }
+
+#[test]
+fn opening_and_reset_hide_only_automatic_setup_batches() {
+    for mode in [SimulationMode::Stable, SimulationMode::Event] {
+        let (mut engine, _, _, _) = compiled_engine();
+        let mut context = engine.context.clone().unwrap();
+        context.mode = mode;
+        engine.command(Command::Configure(context.clone()));
+        finish(&mut engine);
+        let initial = engine.snapshot().unwrap().view;
+        assert!(initial.steps > 0);
+        assert_eq!(initial.steps, initial.initial_steps);
+        assert_eq!(initial.ticks, 0);
+        engine.command(Command::Action(1, SimulationAction::Tick));
+        finish(&mut engine);
+        let ticked = engine.snapshot().unwrap().view;
+        assert_eq!(ticked.ticks, 1);
+        assert_eq!(ticked.steps, engine.sim.steps());
+        assert!(ticked.steps > ticked.initial_steps);
+        assert_eq!(ticked.initial_steps, initial.steps);
+        engine.command(Command::Action(1, SimulationAction::Reset));
+        engine.command(Command::Action(1, SimulationAction::ToggleEnabled));
+        engine.command(Command::Action(1, SimulationAction::Step));
+        let manual = engine.snapshot().unwrap().view;
+        assert_eq!(manual.steps - manual.initial_steps, 1);
+        assert_eq!(manual.ticks, 0);
+        engine.command(Command::NewDocument);
+        engine.command(Command::Configure(context));
+        finish(&mut engine);
+        let new = engine.snapshot().unwrap();
+        assert_eq!(new.view.initial_steps, new.view.steps);
+        assert_eq!((new.view.ticks, new.total_ticks), (0, 1));
+    }
+}

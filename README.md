@@ -53,7 +53,7 @@ Simplified Chinese text uses system fonts; install a CJK font such as Noto Sans 
 5. Use **Step** / `Ctrl+I`, **Tick** / `Ctrl+T`, or **Automatic ticks** / `Ctrl+K` in the Simulate menu to advance time.
 6. Save with `Ctrl+S`. The title bar shows whether the document has unsaved changes.
 
-A tick is a simulation step, not necessarily a complete clock period. The automatic clock defaults to 4 Hz and can be changed in the Simulate menu.
+After a circuit opens and settles, the inspector shows **Ready** and zero propagation steps. The counter starts with the next input or clock activity. A tick advances the clock by one step. The automatic clock defaults to 4 Hz and can be changed in the Simulate menu.
 
 Useful starting points:
 

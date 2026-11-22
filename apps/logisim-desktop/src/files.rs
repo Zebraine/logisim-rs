@@ -71,12 +71,7 @@ impl Files {
         use logisim_ui::WasmEnginePreference;
         let requested = workspace.preferences().wasm_engine;
         let available = WasmEngine::Wasmtime.available();
-        let requests_wasmtime = requested == WasmEnginePreference::Wasmtime;
-        let engine = if requests_wasmtime && available {
-            WasmEngine::Wasmtime
-        } else {
-            WasmEngine::Wasmi
-        };
+        let engine = crate::plugins::desktop_engine(requested);
         workspace.set_plugin_runtime(
             match engine {
                 WasmEngine::Wasmi => WasmEnginePreference::Wasmi,

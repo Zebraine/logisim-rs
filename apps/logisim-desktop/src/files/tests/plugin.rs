@@ -296,7 +296,7 @@ fn desktop_engine_is_pinned_before_loading_and_falls_back_only_if_unavailable() 
 #[cfg(feature = "wasmtime-abi4")]
 #[test]
 fn reopening_a_legacy_project_uses_the_module_abi_at_its_recorded_path() {
-    use logisim_ui::{Settings, WasmEnginePreference::Wasmtime};
+    use logisim_ui::WasmEnginePreference::Wasmtime;
     let temp = Temp::new();
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let project = temp.path("examples/agent/register-file.circ");
@@ -307,10 +307,7 @@ fn reopening_a_legacy_project_uses_the_module_abi_at_its_recorded_path() {
     fs::write(&project, &original).unwrap();
 
     let mut h = super::Harness::default();
-    h.ws.apply_settings(Settings {
-        wasm_engine: Wasmtime,
-        ..h.ws.preferences()
-    });
+    assert_eq!(h.ws.preferences().wasm_engine, Wasmtime);
     h.files = Files::for_desktop(Some(h.config_dir.path("recovery")), &mut h.ws);
     for (module, abi, active) in [
         ("plugins/abi3/course.wasm", 3, "wasmi"),

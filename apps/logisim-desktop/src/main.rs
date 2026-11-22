@@ -31,7 +31,7 @@ fn main() -> eframe::Result {
         println!(
             "{}",
             serde_json::json!({
-                "default": WasmEngine::default().code(),
+                "default": plugins::desktop_engine(Default::default()).code(),
                 "available": engines,
                 "cache_feature": cfg!(feature = "wasmtime-cache"),
                 "private_disk_cache": cfg!(all(feature = "wasmtime-cache", target_os = "linux")),

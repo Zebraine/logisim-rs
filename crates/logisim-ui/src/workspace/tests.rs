@@ -963,3 +963,88 @@ fn print_queues_a_preview_in_both_languages_themes_and_window_sizes() {
         }
     }
 }
+
+#[test]
+fn catalogue_search_is_scoped_to_each_tab_and_finds_canonical_tool_names() {
+    use crate::tests::support::widgets::frame_at_size;
+    for language in Language::ALL {
+        for size in [vec2(720., 480.), vec2(1200., 820.)] {
+            let ctx = Context::default();
+            configure(&ctx);
+            let mut app = Workspace::default();
+            app.set_language(language);
+            let label = |key| i18n::with_language(language, || i18n::tr(key));
+            let tap = |app: &mut Workspace, key| {
+                let mut labels = vec![];
+                for _ in 0..3 {
+                    labels = frame_at_size(&ctx, app, vec![], size);
+                }
+                let pos = labels
+                    .iter()
+                    .find(|(s, r)| s == label(key) && r.left() < app.canvas.rect.left())
+                    .unwrap()
+                    .1
+                    .center();
+                for pressed in [true, false] {
+                    frame_at_size(
+                        &ctx,
+                        app,
+                        vec![
+                            Event::PointerMoved(pos),
+                            Event::PointerButton {
+                                pos,
+                                button: PointerButton::Primary,
+                                pressed,
+                                modifiers: Modifiers::NONE,
+                            },
+                        ],
+                        size,
+                    );
+                }
+            };
+            tap(&mut app, "Components");
+            tap(&mut app, "Search · Ctrl+F");
+            frame_at_size(&ctx, &mut app, vec![Event::Text("splitter".into())], size);
+            assert_eq!(
+                i18n::with_language(language, || app.result_count(true, "splitter")),
+                1
+            );
+            tap(&mut app, "Circuits");
+            let labels = frame_at_size(&ctx, &mut app, vec![], size);
+            assert!(labels.iter().any(|(s, _)| s == label("Search · Ctrl+F")));
+            assert!(
+                !labels
+                    .iter()
+                    .any(|(s, _)| s == "splitter" || s == label("No results"))
+            );
+            tap(&mut app, "Components");
+            let labels = frame_at_size(&ctx, &mut app, vec![], size);
+            assert!(labels.iter().any(|(s, _)| s == "splitter"));
+        }
+    }
+}
+
+#[test]
+fn circuit_commands_and_library_search_follow_project_order_and_membership() {
+    use crate::{
+        libraries::LibraryGroup,
+        project::CircuitCommand::{Down, Up},
+    };
+    let mut app = Workspace::default();
+    assert!(!Up.enabled(&app) && !Down.enabled(&app));
+    let mut project = app.project().clone();
+    let child = project.add("child".into()).unwrap();
+    let last = project.add("last".into()).unwrap();
+    app.replace_project(project);
+    app.libraries.push(LibraryGroup {
+        name: "Course library".into(),
+        circuits: vec![last, child],
+    });
+    assert_eq!(app.result_count(false, "course"), 2);
+    assert_eq!(app.result_count(false, "child"), 1);
+    assert!(!Up.enabled(&app) && Down.enabled(&app));
+    app.editor.switch_circuit(child);
+    assert!(Up.enabled(&app) && Down.enabled(&app));
+    app.editor.switch_circuit(last);
+    assert!(Up.enabled(&app) && !Down.enabled(&app));
+}

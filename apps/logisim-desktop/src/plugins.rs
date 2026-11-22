@@ -12,6 +12,15 @@ use std::{
     path::{Path, PathBuf},
 };
 
+pub(crate) fn desktop_engine(preference: logisim_ui::WasmEnginePreference) -> WasmEngine {
+    if preference == logisim_ui::WasmEnginePreference::Wasmtime && WasmEngine::Wasmtime.available()
+    {
+        WasmEngine::Wasmtime
+    } else {
+        WasmEngine::Wasmi
+    }
+}
+
 #[derive(Clone)]
 pub(crate) enum PluginLoader {
     Direct(WasmEngine),

@@ -183,3 +183,78 @@ fn marquee_selects_components_and_wires_and_delete_is_undoable() {
     key(&ctx, &mut app, Key::Z, Modifiers::COMMAND);
     assert_eq!(app.editor.session.circuit, before);
 }
+
+#[test]
+fn cancelled_marquee_restores_the_selection_before_the_drag() {
+    for modifiers in [Modifiers::NONE, Modifiers::SHIFT] {
+        let (ctx, mut app) = setup();
+        let a = Point::new(80, 80);
+        let b = Point::new(280, 180);
+        let first = app
+            .editor
+            .session
+            .circuit
+            .add_component(Component::new(Kind::Pin, a));
+        let second = app
+            .editor
+            .session
+            .circuit
+            .add_component(Component::new(Kind::Pin, b));
+        app.editor.session.selection.insert(first);
+        let start = app.canvas.screen(b + Point::new(-75, -60));
+        let end = app.canvas.screen(b + Point::new(60, 50));
+        button_with(&ctx, &mut app, start, true, modifiers);
+        frame(&ctx, &mut app, vec![Event::PointerMoved(end)], modifiers);
+        assert!(app.editor.session.selection.contains(&second));
+        key(&ctx, &mut app, Key::Escape, Modifiers::NONE);
+        button(&ctx, &mut app, end, false);
+        assert_eq!(app.editor.session.selection, [first].into());
+        assert!(!app.editor.can_undo());
+    }
+}
+
+#[test]
+fn context_click_targets_the_object_or_preserves_its_selected_group() {
+    let (ctx, mut app) = setup();
+    let a = Point::new(80, 80);
+    let b = Point::new(280, 180);
+    let first = app
+        .editor
+        .session
+        .circuit
+        .add_component(Component::new(Kind::Pin, a));
+    let second = app
+        .editor
+        .session
+        .circuit
+        .add_component(Component::new(Kind::Pin, b));
+    let right_click = |app: &mut crate::Workspace, pos| {
+        for pressed in [true, false] {
+            frame(
+                &ctx,
+                app,
+                vec![
+                    Event::PointerMoved(pos),
+                    Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Secondary,
+                        pressed,
+                        modifiers: Modifiers::NONE,
+                    },
+                ],
+                Modifiers::NONE,
+            );
+        }
+        egui::Popup::close_all(&ctx);
+        frame(&ctx, app, vec![], Modifiers::NONE);
+    };
+    let at = app.canvas.screen(b);
+    app.editor.session.selection.insert(first);
+    right_click(&mut app, at);
+    assert_eq!(app.editor.session.selection, [second].into());
+    app.editor.session.selection.insert(first);
+    right_click(&mut app, at);
+    assert_eq!(app.editor.session.selection, [first, second].into());
+    right_click(&mut app, at + egui::vec2(90., 90.));
+    assert!(app.editor.session.selection.is_empty() && !app.editor.can_undo());
+}
