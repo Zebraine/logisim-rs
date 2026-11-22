@@ -367,3 +367,60 @@ fn attribute_edits_keep_the_visible_instance_and_reject_old_snapshots() {
     worker.synchronize(&mut workspace, true);
     assert!(workspace.simulation_mut().clocks.is_empty());
 }
+
+#[test]
+fn high_rate_wire_edits_publish_a_bounded_fault_then_resume_the_clock() {
+    let mut project = Project::default();
+    let circuit = &mut project.main_circuit_mut().circuit;
+    let gate = Component::new(Kind::Gate(logisim_core::Gate::Nor), Point::new(200, 100));
+    let ports = gate.ports();
+    let id = circuit.add_component(gate);
+    let clock = circuit.add_component(Component::new(Kind::Clock, ports[2]));
+    let mut workspace = Workspace::default();
+    workspace.replace_project(project.clone());
+    let mut worker = Worker::new(|| {});
+    worker.synchronize(&mut workspace, false);
+    worker.action(SimulationAction::SetTickRate(32768));
+    worker.action(SimulationAction::ToggleTicks);
+    wait(&mut worker, &mut workspace, |v| {
+        v.ticks > 0 && v.pending == 0
+    });
+    // Burst of committed wire edits, including removal, before reading the next snapshot.
+    for x in 1..=32 {
+        let mut edited = project.clone();
+        edited
+            .main_circuit_mut()
+            .circuit
+            .add_wire(Point::ZERO, Point::new(x * 10, 0));
+        workspace.replace_project(edited);
+        worker.synchronize(&mut workspace, false);
+    }
+    let mut closed = project.clone();
+    closed
+        .main_circuit_mut()
+        .circuit
+        .add_route(ports[0], ports[1], false);
+    workspace.replace_project(closed);
+    worker.synchronize(&mut workspace, false);
+    wait(&mut worker, &mut workspace, |v| {
+        v.limited && !v.issues.is_empty()
+    });
+    let stopped = workspace.simulation_mut().ticks;
+    assert_eq!(worker.reported_ticks, stopped);
+    workspace.replace_project(project);
+    worker.synchronize(&mut workspace, false);
+    wait(&mut worker, &mut workspace, |v| {
+        v.enabled && !v.limited && v.ticks > stopped && v.pending == 0
+    });
+    let view = workspace.simulation_mut();
+    assert_eq!(view.tick_hz, 32768);
+    assert!(view.automatic_ticks);
+    assert_eq!(view.ticks, worker.reported_ticks);
+    assert!(
+        !view
+            .issues
+            .iter()
+            .any(|issue| issue.message.contains("Propagation limit"))
+    );
+    assert_eq!(view.ports[&(id, 2)].binary, view.ports[&(clock, 0)].binary);
+}

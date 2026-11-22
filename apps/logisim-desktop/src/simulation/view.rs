@@ -124,7 +124,6 @@ fn present(circuit: &Circuit, sim: &Simulator) -> SimulationView {
         }
     }
     view.has_clocks = sim.has_clocks();
-    append_issues(&mut view, circuit, sim.diagnostics());
     for (id, error) in sim.plugin_errors() {
         view.plugin_errors.insert(id, error.into());
     }
@@ -186,7 +185,6 @@ pub fn present_project(
                 .is_some_and(|c| matches!(c.kind, Kind::Switch | Kind::DipSwitch))
         });
     }
-    view.issues.clear();
     let plugin_failures = sim.plugin_failures();
     view.plugin_error_count = plugin_failures.len();
     for (instance, id, error) in plugin_failures {

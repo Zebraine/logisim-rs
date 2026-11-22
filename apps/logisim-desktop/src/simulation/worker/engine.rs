@@ -16,6 +16,8 @@ struct Engine {
     propagation: Propagation,
     context: Option<Context>,
     suspended: bool,
+    // Only an automatic propagation-limit stop can resume on a topology correction.
+    resume_after_feedback: bool,
     dirty: bool,
     total_ticks: u64,
     unsettled_since: Option<Instant>,
@@ -42,8 +44,13 @@ impl Engine {
                 {
                     self.release_input();
                 }
+                let recover = self.resume_after_feedback && self.sim.limited();
                 self.sim.set_plugins(context.plugins.clone());
                 let electrical_changed = self.sim.synchronize(&context.project, context.root);
+                if electrical_changed && recover && self.sim.error().is_none() {
+                    self.sim.set_enabled(true);
+                }
+                self.resume_after_feedback &= self.sim.limited();
                 if electrical_changed || plugins_changed || mode_changed {
                     self.propagation = Propagation::for_mode(context.mode);
                     self.clocks.suspend();
@@ -59,6 +66,7 @@ impl Engine {
             }
             Command::NewDocument => {
                 self.input = None;
+                self.resume_after_feedback = false;
                 self.sim = ProjectSimulator::default();
                 self.propagation = Propagation::default();
                 self.context = None;
@@ -79,6 +87,7 @@ impl Engine {
                     self.clocks.action(&action);
                     apply_project(&mut self.sim, &context.path, action);
                 }
+                self.resume_after_feedback &= self.sim.limited();
                 self.total_ticks += self.sim.ticks().saturating_sub(before);
             }
             Command::Memory(revision, path, id, contents) => {
@@ -116,6 +125,9 @@ impl Engine {
             if started.elapsed() >= Duration::from_millis(2) {
                 break;
             }
+        }
+        if before.2 && self.sim.limited() {
+            self.resume_after_feedback = true;
         }
         self.dirty |= before != (self.sim.ticks(), self.sim.steps(), self.sim.enabled());
         if self.sim.enabled()

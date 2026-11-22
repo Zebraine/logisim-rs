@@ -177,3 +177,79 @@ fn propagation_limit_bypasses_transient_snapshot_filter() {
     assert!(!view.enabled);
     assert!(!view.issues.is_empty());
 }
+
+#[test]
+fn feedback_waits_without_retries_and_repairs_only_resume_automatic_propagation() {
+    for mode in [SimulationMode::Stable, SimulationMode::Event] {
+        for manual in [false, true] {
+            let mut engine = pending_engine();
+            let mut context = engine.context.clone().unwrap();
+            context.mode = mode;
+            let c = &mut Arc::make_mut(&mut context.project)
+                .main_circuit_mut()
+                .circuit;
+            let gate = Component::new(Kind::Gate(logisim_core::Gate::Nor), Point::new(300, 100));
+            let ports = gate.ports();
+            c.add_component(gate);
+            let input = c.add_component(Component::new(Kind::Pin, ports[2]));
+            let repaired = context.clone();
+            Arc::make_mut(&mut context.project)
+                .main_circuit_mut()
+                .circuit
+                .add_route(ports[0], ports[1], false);
+            engine.command(Command::Configure(context.clone()));
+            engine.command(Command::Action(
+                1,
+                SimulationAction::SetInput {
+                    id: input,
+                    value: 1,
+                },
+            ));
+            finish(&mut engine);
+            assert_eq!(engine.propagation, Propagation::Event);
+            if manual {
+                engine.command(Command::Action(1, SimulationAction::ToggleEnabled));
+            }
+            engine.command(Command::Action(
+                1,
+                SimulationAction::SetInput {
+                    id: input,
+                    value: 0,
+                },
+            ));
+            for _ in 0..4096 {
+                if engine.sim.limited() {
+                    break;
+                }
+                if manual {
+                    engine.command(Command::Action(1, SimulationAction::Step));
+                } else {
+                    engine.advance();
+                }
+            }
+            let terminal = engine.snapshot().unwrap();
+            assert!(terminal.view.limited && !terminal.view.issues.is_empty());
+            assert!(!terminal.view.enabled);
+            for _ in 0..128 {
+                assert_eq!(engine.advance(), None);
+                assert!(!engine.dirty);
+                assert_eq!(
+                    (engine.sim.steps(), engine.total_ticks),
+                    (terminal.view.steps, terminal.total_ticks)
+                );
+            }
+            context.language = Language::SimplifiedChinese;
+            engine.command(Command::Configure(context));
+            assert!(engine.sim.limited());
+            engine.command(Command::Configure(repaired));
+            assert!(!engine.sim.limited());
+            assert_eq!(engine.sim.enabled(), !manual);
+            if !manual {
+                finish(&mut engine);
+                engine.command(Command::Action(1, SimulationAction::Tick));
+                finish(&mut engine);
+                assert_eq!(engine.total_ticks, terminal.total_ticks + 1);
+            }
+        }
+    }
+}
