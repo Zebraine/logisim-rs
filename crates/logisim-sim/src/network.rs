@@ -1,4 +1,4 @@
-use logisim_core::{Circuit, ConnectionGroups, Id, Kind};
+use logisim_core::{Circuit, Id, Kind, WireIndex};
 use std::collections::{BTreeMap, BTreeSet};
 mod dependencies;
 mod resolution;
@@ -44,15 +44,34 @@ impl Network {
             })
             .collect();
         let offset = circuit.wires.len();
-        let mut groups = ConnectionGroups::from_geometry(
-            &circuit.wires,
-            ports.iter().map(|(c, _, point)| {
-                (
-                    *point,
-                    (c.kind == Kind::Tunnel && !c.label.is_empty()).then_some(c.label.as_str()),
-                )
-            }),
-        );
+        let mut groups = Groups((0..offset + ports.len()).collect());
+        let index = WireIndex::new(&circuit.wires);
+        let mut positions = BTreeMap::new();
+        // Query each connection coordinate once. Repeated endpoints and co-located
+        // ports reuse its representative, without materializing pairwise wire edges.
+        let mut attach = |point, node, groups: &mut Groups| {
+            if let Some(previous) = positions.insert(point, node) {
+                groups.join(node, previous);
+            } else {
+                index.visit(point, |wire, _| groups.join(node, wire));
+            }
+        };
+        for (i, wire) in circuit.wires.iter().enumerate() {
+            for point in [wire.a, wire.b] {
+                attach(point, i, &mut groups);
+            }
+        }
+        let mut tunnels = BTreeMap::new();
+        for (i, (c, _, point)) in ports.iter().enumerate() {
+            let node = offset + i;
+            attach(*point, node, &mut groups);
+            if c.kind == Kind::Tunnel
+                && !c.label.is_empty()
+                && let Some(previous) = tunnels.insert(&c.label, node)
+            {
+                groups.join(node, previous);
+            }
+        }
         let mut network = Self::default();
         let mut roots = BTreeMap::new();
         let mut widths: Vec<BTreeSet<u8>> = vec![];
@@ -99,7 +118,7 @@ impl Network {
             net.bits = (count..count + usize::from(net.width)).collect();
             count += usize::from(net.width);
         }
-        let mut groups = ConnectionGroups::new(count);
+        let mut groups = Groups((0..count).collect());
         for c in circuit
             .components
             .iter()
@@ -146,6 +165,22 @@ impl Network {
         })
     }
 }
+struct Groups(Vec<usize>);
+impl Groups {
+    fn root(&mut self, mut i: usize) -> usize {
+        while self.0[i] != i {
+            self.0[i] = self.0[self.0[i]];
+            i = self.0[i];
+        }
+        i
+    }
+    fn join(&mut self, a: usize, b: usize) {
+        let a = self.root(a);
+        let b = self.root(b);
+        self.0[a] = b;
+    }
+}
+
 pub(crate) fn merge(a: crate::Bit, b: crate::Bit) -> crate::Bit {
     use crate::Bit;
     match (a, b) {

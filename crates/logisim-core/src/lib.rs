@@ -61,7 +61,7 @@ mod circuit;
 mod component;
 mod geometry;
 mod spatial;
-pub use spatial::{ConnectionGroups, WireIndex};
+pub use spatial::WireIndex;
 mod kind;
 
 pub use circuit::Circuit;

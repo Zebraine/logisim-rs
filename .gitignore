@@ -38,6 +38,8 @@
 !/apps/logisim-bench/comparisons/wasmtime-36.patch
 !/apps/logisim-bench/comparisons/engine-contract.md
 !/apps/logisim-bench/comparisons/evaluator-hotpath.md
+!/apps/logisim-bench/comparisons/wire-editing.md
+!/apps/logisim-bench/comparisons/wire-editing.py
 !/apps/logisim-bench/comparisons/module-cache.py
 !/apps/logisim-bench/comparisons/abi4.py
 !/apps/logisim-bench/comparisons/engine-study.py
@@ -101,6 +103,6 @@
 Thumbs.db
 *.swp
 
-# Source tests for the drawing cache, not generated cache contents.
+# Source modules for the drawing cache.
 !/crates/logisim-ui/src/drawing/cache/
-!/crates/logisim-ui/src/drawing/cache/tests.rs
+!/crates/logisim-ui/src/drawing/cache/*.rs

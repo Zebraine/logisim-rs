@@ -375,3 +375,52 @@ fn drag_previews_publish_one_project_edit_on_release_and_none_on_escape() {
         assert!(!app.editor.can_undo());
     }
 }
+
+/// Run with --release -- --nocapture for the CPU frame timings. The regression checks
+/// inspect connectivity and document stability, independent of display refresh or CI load.
+#[test]
+fn selected_wire_frames_with_an_acyclic_control() {
+    let (ctx, mut app) = setup();
+    let start = Point::new(100, 80);
+    let c = &mut app.editor.session.circuit;
+    let selected = c.add_wire(start, Point::new(200, 80)).unwrap();
+    c.add_wire(Point::new(200, 80), Point::new(200, 180));
+    c.add_wire(Point::new(100, 180), Point::new(200, 180));
+    for i in 0..4000 {
+        let a = Point::new(600 + i % 32 * 50, 800 + i / 32 * 40);
+        c.add_wire(a, a + Point::new(20, 0));
+    }
+    app.editor.session.selection.insert(selected);
+    for closed in [false, true] {
+        if closed {
+            app.editor
+                .session
+                .circuit
+                .add_wire(start, Point::new(100, 180));
+        }
+        app.editor.sync_project();
+        let committed = app.project().clone();
+        let expected = if closed { 4 } else { 3 };
+        assert_eq!(app.editor.selected_wire_net_size(), expected);
+        let mut frames = Vec::new();
+        for i in 0..40 {
+            let hover = app.canvas.screen(Point::new(220 + i, 200));
+            let now = std::time::Instant::now();
+            frame(
+                &ctx,
+                &mut app,
+                vec![Event::PointerMoved(hover)],
+                Modifiers::NONE,
+            );
+            frames.push(now.elapsed());
+        }
+        frames.sort_unstable();
+        eprintln!(
+            "closed={closed} egui CPU frame p50={:?} p95={:?} max={:?}",
+            frames[19], frames[37], frames[39]
+        );
+        assert_eq!(app.editor.selected_wire_net_size(), expected);
+        assert_eq!(app.project(), &committed);
+        assert!(!app.editor.can_undo());
+    }
+}

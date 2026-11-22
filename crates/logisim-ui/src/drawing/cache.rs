@@ -1,5 +1,6 @@
 //! Derived geometry only: never cached signals, simulation state or document history.
 use super::*;
+mod connectivity;
 
 #[derive(Default)]
 pub(crate) struct CircuitCache {
@@ -54,7 +55,7 @@ impl CircuitCache {
             self.visual_bounds = vec![None; circuit.components.len()];
         }
         if changed || self.selection != *selection {
-            self.selected_net = circuit.connected_wire_selection(selection);
+            self.selected_net = connectivity::selected_wires(circuit, selection);
             self.selection.clone_from(selection);
         }
     }
