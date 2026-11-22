@@ -1,4 +1,6 @@
 //! Run from the workspace root. See CONTRIBUTING.md for sampling and counter units.
+#[cfg(feature = "dataflow-study")]
+mod dataflow;
 #[cfg(feature = "engine-study")]
 mod engine_study;
 mod measure;
@@ -187,7 +189,9 @@ fn benchmark_with(
     });
     #[cfg(not(feature = "plugin-metrics"))]
     let plugin_phases = json!({"schema": 1, "enabled": false});
-    Ok(json!({
+    #[cfg(feature = "dataflow-study")]
+    let dataflow = dataflow::observe(&fixture, &mut sim, &reference)?;
+    let report = json!({
         "plugin_phases": plugin_phases,
         "schema": 1,
         "workload": name,
@@ -218,7 +222,14 @@ fn benchmark_with(
         "work_per_run": reference.work,
         "digest": format!("{:016x}", reference.digest),
         "diagnostics": 0
-    }))
+    });
+    #[cfg(feature = "dataflow-study")]
+    let report = {
+        let mut report = report;
+        report["dataflow"] = dataflow;
+        report
+    };
+    Ok(report)
 }
 
 fn main() -> ExitCode {

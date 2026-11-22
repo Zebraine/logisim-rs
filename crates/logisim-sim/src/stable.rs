@@ -75,7 +75,7 @@ impl Report {
 }
 
 pub(crate) struct Plan {
-    evaluator: Evaluator,
+    pub(crate) evaluator: Evaluator,
     input_drivers: Vec<usize>,
     stats: CompileStats,
     pub dependencies: BTreeSet<(Port, Port)>,

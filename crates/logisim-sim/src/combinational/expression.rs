@@ -1,4 +1,6 @@
 //! Dense, immutable expression plans. No event queue, clock or mutable circuit state.
+#[cfg(feature = "dataflow-study")]
+pub mod dataflow;
 mod incremental;
 mod operation;
 pub use incremental::{EvaluationStats, Evaluator};

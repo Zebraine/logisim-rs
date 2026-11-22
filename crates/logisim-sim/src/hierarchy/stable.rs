@@ -3,6 +3,17 @@ use crate::combinational::BoundaryReason;
 use crate::stable::{Error, Failure, Report};
 
 impl ProjectSimulator {
+    /// Prepared instance-local evaluators for the opt-in headless measurement.
+    #[cfg(feature = "dataflow-study")]
+    pub fn study_evaluators(
+        &mut self,
+    ) -> impl Iterator<Item = (&[Id], &mut crate::combinational::Evaluator)> {
+        self.states.iter_mut().filter_map(|(path, instance)| {
+            let plan = instance.sim.stable_plan.as_mut()?.as_mut().ok()?;
+            Some((path.as_slice(), &mut plan.evaluator))
+        })
+    }
+
     /// Validate the complete hierarchy before any pending drive or state changes.
     /// A rejected design can safely continue with the event engine.
     pub fn prepare_compiled(&mut self) -> Result<Report, Error> {

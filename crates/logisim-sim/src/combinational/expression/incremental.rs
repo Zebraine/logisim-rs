@@ -2,7 +2,7 @@ use super::*;
 use std::{cmp::Reverse, collections::BinaryHeap};
 
 pub(super) struct Consumer {
-    instruction: usize,
+    pub(super) instruction: usize,
     bits: u32,
 }
 
@@ -74,6 +74,8 @@ impl Queue {
 
 /// Per-instance working values. Evaluators share code but never mutable signals.
 pub struct Evaluator {
+    #[cfg(feature = "dataflow-study")]
+    study: Option<dataflow::Observer>,
     program: Arc<Program>,
     values: Vec<Value>,
     scratch: Scratch,
@@ -93,6 +95,8 @@ impl Evaluator {
             all_changed: false,
             valid: false,
             stats: EvaluationStats::default(),
+            #[cfg(feature = "dataflow-study")]
+            study: None,
             program,
         }
     }
@@ -160,7 +164,13 @@ impl Evaluator {
                 self.values[slot] = value;
             }
         }
+        #[cfg(feature = "dataflow-study")]
+        let started = self.study.as_ref().map(|_| std::time::Instant::now());
         if full {
+            #[cfg(feature = "dataflow-study")]
+            if let Some(study) = &mut self.study {
+                study.active.extend(0..self.program.instructions.len());
+            }
             for instruction in &self.program.instructions {
                 instruction.execute(&mut self.values, &mut self.scratch, |slot, _, _| {
                     self.changed.push(slot)
@@ -172,6 +182,10 @@ impl Evaluator {
             // before its consumers, even when unequal paths reconverge. Membership
             // deduplicates fan-out, so each instruction executes at most once.
             while let Some(Reverse(index)) = self.queue.pending.pop() {
+                #[cfg(feature = "dataflow-study")]
+                if let Some(study) = &mut self.study {
+                    study.active.push(index);
+                }
                 self.queue.marked[index] = false;
                 self.program.instructions[index].execute(
                     &mut self.values,
@@ -184,6 +198,10 @@ impl Evaluator {
                 self.stats.instructions += 1;
             }
         }
+        #[cfg(feature = "dataflow-study")]
+        if let (Some(study), Some(started)) = (&mut self.study, started) {
+            study.finish(started.elapsed());
+        }
         self.stats.changed_outputs = if self.all_changed {
             self.program.outputs.len()
         } else {
@@ -191,6 +209,16 @@ impl Evaluator {
         };
         self.valid = true;
         Ok(refreshed)
+    }
+
+    #[cfg(feature = "dataflow-study")]
+    pub fn start_dataflow_study(&mut self) {
+        self.study = Some(dataflow::Observer::new(&self.program));
+    }
+
+    #[cfg(feature = "dataflow-study")]
+    pub fn finish_dataflow_study(&mut self) -> Option<dataflow::Trace> {
+        self.study.take().map(|study| study.trace)
     }
 
     pub fn stats(&self) -> Option<EvaluationStats> {
