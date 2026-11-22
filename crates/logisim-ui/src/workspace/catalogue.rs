@@ -291,12 +291,12 @@ impl Workspace {
                 ui,
                 (&m.id, &m.version),
                 &name,
-                &format!("v{} · {}", m.version, count),
+                &count.to_string(),
                 Icon::Chip,
                 q,
             );
             header.on_hover_ui(|ui| {
-                ui.label(&m.id);
+                ui.label(format!("{} · v{}", m.id, m.version));
                 if let Some(source) = self
                     .editor
                     .session
@@ -361,7 +361,7 @@ impl Workspace {
                 ui,
                 ("imported", g.circuits[0]),
                 &g.name,
-                tr("Imported"),
+                &ids.len().to_string(),
                 Icon::Document,
                 q,
             );
@@ -417,12 +417,15 @@ impl Workspace {
                 response.clone().on_hover_text(tr("Missing plugin"));
             }
         }
-        let response = response.on_hover_text(tr(
-            "Double-click to edit; single-click another circuit to place an instance.",
-        ));
+        let can_place = self.project().can_instantiate(self.active_circuit(), id);
+        let response = response.on_hover_text(tr(if can_place {
+            "Double-click to edit; single-click another circuit to place an instance."
+        } else {
+            "Double-click to edit this circuit."
+        }));
         if response.double_clicked() {
             self.editor.switch_circuit(id);
-        } else if response.clicked() && self.project().can_instantiate(self.active_circuit(), id) {
+        } else if response.clicked() && can_place {
             self.editor.session.context.appearance_mode = false;
             self.editor.set_tool(Tool::Place(Kind::Subcircuit(id)));
         }

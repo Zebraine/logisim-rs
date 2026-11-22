@@ -557,7 +557,7 @@ impl Editor {
     ) {
         self.validate_plugin_keyboard(libraries);
         let keyboard = ui.is_enabled()
-            && !ui.ctx().any_popup_open()
+            && !crate::shortcuts::popup_open(ui.ctx())
             && (response.has_focus()
                 || (response.hovered() && !ui.ctx().egui_wants_keyboard_input()));
         if !keyboard
@@ -593,7 +593,7 @@ impl Editor {
         if space {
             self.simulation.release_momentary();
         }
-        if ui.is_enabled() && !space && !ui.ctx().any_popup_open() {
+        if ui.is_enabled() && !space && !crate::shortcuts::popup_open(ui.ctx()) {
             if self.tool == Tool::Poke
                 && response.hovered()
                 && ui.input(|i| i.focused && i.pointer.primary_pressed())
@@ -1104,7 +1104,7 @@ impl Editor {
         }
         if response.hovered()
             && !space
-            && !ui.ctx().any_popup_open()
+            && !crate::shortcuts::popup_open(ui.ctx())
             && let Some(pos) = pointer
         {
             let world = canvas.world(pos);

@@ -61,34 +61,62 @@ pub(crate) fn show(
         _ if editor.session.selection.is_empty() => tr("Circuit").to_owned(),
         _ => tr("Selection").to_owned(),
     };
-    let source_id = plugin.map(|p| p.plugin.clone());
+    let margin = crate::theme::metrics(ui.ctx()).card_margin;
+    let role = if placing {
+        tr("Placement template")
+    } else if target.is_some() {
+        tr("Component")
+    } else {
+        &source
+    };
+    Frame::NONE.inner_margin(egui::Margin::symmetric(margin, 3)).show(ui, |ui| {
+        theme::section(ui, tr("Inspector"));
+        ui.allocate_ui_with_layout(egui::vec2(ui.available_width(), 22.), egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            theme::chip(ui, role).on_hover_ui(|ui| {
+                ui.label(&source);
+                if let Some(p) = plugin { ui.label(&p.plugin); }
+                if !editor.session.context.path.is_empty() {
+                    ui.label(tr("Instance inputs are driven by the parent circuit. Edits apply to all instances."));
+                }
+            });
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                ui.add(egui::Label::new(RichText::new(&title).size(15.).strong()).truncate())
+                    .on_hover_text(&title);
+            });
+        });
+    });
+    let scroll_target = (
+        editor.session.context.active,
+        placing,
+        target.as_ref().map(|c| c.kind.name()),
+        editor.session.selection.first().copied(),
+        editor.session.selection.len(),
+    );
     ScrollArea::vertical()
-        .id_salt("inspector-scroll")
+        .id_salt(("inspector-scroll", scroll_target))
         .auto_shrink([false, false])
         .show(ui, |ui| {
-            Frame::NONE.inner_margin(crate::theme::metrics(ui.ctx()).card_margin).show(ui, |ui| {
+            Frame::NONE.inner_margin(margin).show(ui, |ui| {
                 ui.set_min_width(ui.available_width());
                 ui.spacing_mut().text_edit_width = (ui.available_width() * 0.45).max(72.0);
                 ui.spacing_mut().combo_width = ui.spacing().text_edit_width;
-                theme::section(ui, tr("Inspector"));
-                ui.horizontal_wrapped(|ui| {
-                    ui.label(RichText::new(&title).size(15.0).strong());
-                    let chip = theme::chip(ui, &source);
-                    if let Some(id) = source_id {
-                        chip.on_hover_text(id);
-                    } else if !editor.session.context.path.is_empty() {
-                        chip.on_hover_text(tr("Instance inputs are driven by the parent circuit. Edits apply to all instances."));
-                    }
-                });
                 if let Some(c) = target {
                     if !placing && c.kind == Kind::Plugin {
                         if crate::plugins::has_runtime(&editor.simulation, &c, plugins) {
                             theme::card(ui, tr("Simulation"), |ui| {
-                                crate::plugins::runtime(ui, &mut editor.simulation, &c, plugins, files)
+                                crate::plugins::runtime(
+                                    ui,
+                                    &mut editor.simulation,
+                                    &c,
+                                    plugins,
+                                    files,
+                                )
                             });
                         }
                     } else if !placing && editor.simulation.has_component_controls(&c) {
-                        theme::card(ui, tr("Simulation"), |ui| editor.simulation.component(ui, &c));
+                        theme::card(ui, tr("Simulation"), |ui| {
+                            editor.simulation.component(ui, &c)
+                        });
                     }
                     component_editor(ui, editor, c, placing, plugins, shortcuts);
                 } else {

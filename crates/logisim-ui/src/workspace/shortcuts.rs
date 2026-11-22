@@ -14,8 +14,7 @@ impl Workspace {
     pub(super) fn dispatch_shortcuts(&mut self, ui: &Ui, response: &Response) {
         if !ui.is_enabled()
             || self.dialog_open()
-            || ui.ctx().any_popup_open()
-            || egui::Popup::is_any_open(ui.ctx())
+            || crate::shortcuts::popup_open(ui.ctx())
             || ui.ctx().text_edit_focused()
             || self.editor.simulation.plugin_keyboard.is_some()
             || ui.input(|i| !i.focused || i.events.iter().any(|e| matches!(e, Event::Ime(_))))

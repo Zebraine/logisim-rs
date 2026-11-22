@@ -90,7 +90,7 @@ impl Canvas {
             response.request_focus();
         }
         if ui.is_enabled()
-            && !ui.ctx().any_popup_open()
+            && !crate::shortcuts::popup_open(ui.ctx())
             && (response.has_focus()
                 || (response.hovered() && !ui.ctx().egui_wants_keyboard_input()))
             && crate::shortcuts::Chord::consume(ui, egui::Modifiers::COMMAND, egui::Key::Num0)
@@ -108,7 +108,7 @@ impl Canvas {
             ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
         }
 
-        if ui.is_enabled() && response.hovered() && !ui.ctx().any_popup_open() {
+        if ui.is_enabled() && response.hovered() && !crate::shortcuts::popup_open(ui.ctx()) {
             let anchor = ui.input(|i| i.pointer.hover_pos()).unwrap_or(rect.center()) - rect.min;
             ui.input(|i| {
                 for event in &i.events {

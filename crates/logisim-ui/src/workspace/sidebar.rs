@@ -41,7 +41,17 @@ impl Workspace {
         let height = ui.available_height();
         let min = (height * 0.25).max(144.).min(height * 0.52);
         let max = (height * 0.75).min(height - 100.).max(min);
-        let size = (height * self.layout.split).clamp(min, max);
+        let mut size = (height * self.layout.split).clamp(min, max);
+        if self.layout.tab == super::LayoutTab::Circuits
+            && self.layout.split == super::WorkspaceLayout::default().split
+            && self.libraries.is_empty()
+        {
+            let header = 3. * (m.control + f32::from(m.gap)) + 18.;
+            let row = crate::drawing::thumbnails::SIZE.y + 2. * f32::from(m.gap);
+            size = size
+                .min(header + self.project().circuits.len() as f32 * row)
+                .max(min);
+        }
         let panel =
             super::layout::prepare_panel(ui, "project", size, &mut self.navigation.last_height);
         Panel::top("project")
@@ -136,7 +146,7 @@ impl Workspace {
                         .desired_width((ui.available_width() - 42.0).max(50.0)),
                 );
                 if ui.is_enabled()
-                    && !ui.ctx().any_popup_open()
+                    && !crate::shortcuts::popup_open(ui.ctx())
                     && crate::shortcuts::Chord::consume(ui, egui::Modifiers::COMMAND, egui::Key::F)
                 {
                     response.request_focus();
@@ -150,15 +160,20 @@ impl Workspace {
         ui.separator();
         let mut results = |ui: &mut Ui| {
             if count == 0 {
-                ui.add_space(4.0);
-                ui.label(tr("No results"));
-                if !query.is_empty() && ui.button(tr("Clear search")).clicked() {
-                    if components {
-                        self.navigation.component_query.clear();
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(tr(if components {
+                        "No matching components"
                     } else {
-                        self.navigation.circuit_query.clear();
+                        "No matching circuits"
+                    }));
+                    if !query.is_empty() && ui.button(tr("Clear search")).clicked() {
+                        if components {
+                            self.navigation.component_query.clear();
+                        } else {
+                            self.navigation.circuit_query.clear();
+                        }
                     }
-                }
+                });
             } else if components {
                 self.components(ui, &query);
             } else {

@@ -1,6 +1,11 @@
 //! egui keyboard events and localized captions for portable bindings.
 use egui::{Key, Modifiers};
 pub use logisim_preferences::shortcuts::{Chord, Command, Conflict, Group, Scope, Shortcuts};
+/// Canvas input runs before its context menu is painted in the current pass.
+pub(crate) fn popup_open(ctx: &egui::Context) -> bool {
+    ctx.any_popup_open() || egui::Popup::is_any_open(ctx)
+}
+
 pub(crate) trait ChordUi: Sized {
     fn is_modifier(key: Key) -> bool;
     fn consume(ui: &egui::Ui, mods: Modifiers, key: Key) -> bool;

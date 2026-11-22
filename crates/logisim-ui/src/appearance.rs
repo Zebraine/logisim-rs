@@ -543,7 +543,7 @@ impl AppearanceEditor {
         self.selected.retain(|t| Self::targets(&a).contains(t));
         let pointer = ui.input(|i| i.pointer.interact_pos());
         let world = pointer.map(|p| canvas.world(p));
-        let interactive = ui.is_enabled() && !ui.ctx().any_popup_open();
+        let interactive = ui.is_enabled() && !crate::shortcuts::popup_open(ui.ctx());
         if interactive
             && (response.has_focus()
                 || (response.hovered() && !ui.ctx().egui_wants_keyboard_input()))
