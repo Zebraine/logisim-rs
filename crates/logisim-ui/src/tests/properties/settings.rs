@@ -31,6 +31,7 @@ fn runtime_rates_are_visible_beside_controls_in_both_languages_and_narrow_window
                 app.set_simulation(SimulationView {
                     enabled: true,
                     has_clocks: true,
+                    automatic_ticks: true,
                     tick_hz: target_hz,
                     actual_tick_hz: actual_hz,
                     frames_per_second: Some(59.9),
@@ -51,14 +52,16 @@ fn runtime_rates_are_visible_beside_controls_in_both_languages_and_narrow_window
                 );
                 let expected = i18n::with_language(language, || {
                     [
-                        tf!("FPS: {}", "59.9"),
+                        tf!("UI: {} FPS", "59.9"),
                         tf!("Target: {} Hz", target),
                         tf!("Actual: {} Hz", actual),
                     ]
                 });
-                let auto = i18n::with_language(language, || i18n::tr("Auto ticks"));
-                let auto = labels.iter().find(|(text, _)| text == auto).unwrap().1;
-                for expected in expected {
+                let tick = i18n::with_language(language, || i18n::tr("Tick"));
+                let tick = labels.iter().find(|(text, _)| text == tick).unwrap().1;
+                let compact = size.x < 1100.;
+                assert_eq!(has(&labels, &expected[0]), !compact);
+                for expected in expected.into_iter().skip(usize::from(compact)) {
                     let rect = labels
                         .iter()
                         .find(|(text, _)| text == &expected)
@@ -72,7 +75,7 @@ fn runtime_rates_are_visible_beside_controls_in_both_languages_and_narrow_window
                         rect.bottom() <= app.canvas.rect.top(),
                         "{expected} is outside the toolbar"
                     );
-                    assert!(rect.left() >= auto.right() || rect.top() >= auto.bottom());
+                    assert!(rect.left() >= tick.right() || rect.top() >= tick.bottom());
                 }
                 assert_eq!(app.project(), &before);
                 assert!(!app.editor.can_undo());
@@ -106,7 +109,11 @@ fn settings_click_switches_languages_without_touching_document_history_or_simula
     let labels = frame(&ctx, &mut app, vec![]);
     assert!(has(&labels, "设置"));
     assert!(has(&labels, "文件"));
-    assert!(has(&labels, "已暂停 · 2 项待传播"));
+    assert!(has(&labels, "已暂停"));
+    assert_eq!(
+        i18n::with_language(app.language(), || app.editor.simulation.status()),
+        "已暂停 · 2 项待传播"
+    );
     assert_eq!(app.project(), &document);
     assert_eq!(app.editor.session.selection, selection);
     assert_eq!(app.editor.simulation.view.steps, 7);
@@ -438,7 +445,7 @@ fn grid_zoom_frequency_motion_and_telemetry_share_the_workbench_controls() {
     }
     assert_eq!(ctx.zoom_factor(), 1.25);
     assert_eq!(ctx.global_style().animation_time, 0.);
-    assert!(!labels.iter().any(|(s, _)| s.starts_with("FPS:")));
+    assert!(!labels.iter().any(|(s, _)| s.ends_with(" FPS")));
     assert!(has(&labels, "Paused"));
     assert_eq!(app.project(), &project);
     assert_eq!(app.simulation_mut().ticks, 19);
@@ -469,4 +476,74 @@ fn grid_zoom_frequency_motion_and_telemetry_share_the_workbench_controls() {
         app.take_simulation_actions(),
         vec![SimulationAction::SetTickRate(8)]
     );
+}
+
+#[test]
+fn simulation_state_and_action_remain_distinct_with_idle_counters_hidden() {
+    for language in Language::ALL {
+        for size in [egui::vec2(720., 480.), egui::vec2(1200., 820.)] {
+            let ctx = Context::default();
+            configure(&ctx);
+            let mut app = Workspace::default();
+            app.set_language(language);
+            let tr = |key| language.translate(key);
+            for (enabled, auto, pending, limited, fault, state) in [
+                (true, false, 0, false, false, "Ready"),
+                (true, true, 0, false, false, "Running"),
+                (true, false, 2, false, false, "Running"),
+                (false, true, 0, false, false, "Paused"),
+                (false, false, 1, true, true, "Propagation limit"),
+                (false, false, 0, false, true, "Error"),
+            ] {
+                app.set_simulation(SimulationView {
+                    enabled,
+                    automatic_ticks: auto,
+                    pending,
+                    limited,
+                    has_clocks: true,
+                    tick_hz: 4,
+                    frames_per_second: Some(2.),
+                    steps: 7,
+                    initial_steps: 7,
+                    plugin_error_count: usize::from(fault),
+                    ..Default::default()
+                });
+                let labels = frame_at_size(&ctx, &mut app, vec![], size);
+                let toolbar: Vec<_> = labels
+                    .into_iter()
+                    .filter(|(_, r)| r.bottom() <= app.canvas.rect.top())
+                    .collect();
+                assert!(has(&toolbar, tr(state)));
+                assert!(has(&toolbar, tr(if enabled { "Pause" } else { "Run" })));
+                assert_eq!(
+                    has(
+                        &toolbar,
+                        &i18n::with_language(language, || tf!("Target: {} Hz", "4"))
+                    ),
+                    enabled && auto
+                );
+                assert!(
+                    !toolbar.iter().any(|(s, _)| s.ends_with(" FPS"))
+                        || (enabled && auto && size.x >= 1100.)
+                );
+            }
+            app.set_simulation(SimulationView {
+                enabled: true,
+                steps: 7,
+                initial_steps: 7,
+                ..Default::default()
+            });
+            let overview = frame(&ctx, &mut app, vec![]);
+            assert!(has(&overview, tr("Ready")));
+            assert!(!has(
+                &overview,
+                &i18n::with_language(language, || tf!("{} propagation steps", 0))
+            ));
+            app.simulation_mut().steps += 1;
+            assert!(has(
+                &frame(&ctx, &mut app, vec![]),
+                &i18n::with_language(language, || tf!("{} propagation steps", 1))
+            ));
+        }
+    }
 }

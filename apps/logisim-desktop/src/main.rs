@@ -75,6 +75,7 @@ fn main() -> eframe::Result {
                     &mut app.simulator,
                 );
             });
+            app.workspace.simulation_mut().awaiting_snapshot = true;
             Ok(Box::new(app))
         }),
     )

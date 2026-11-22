@@ -13,31 +13,34 @@ use logisim_core::{Gate, Kind};
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum ToolbarLayout {
     Wide,
-    Wrapped,
+    Compact,
     Narrow,
 }
 
 impl ToolbarLayout {
     pub(super) fn for_width(width: f32) -> Self {
-        if width < 620. {
+        if width < 660. {
             Self::Narrow
-        } else if width < 1100. {
-            Self::Wrapped
+        } else if width < 1080. {
+            Self::Compact
         } else {
             Self::Wide
         }
     }
-    pub(super) fn height(self, m: crate::theme::Metrics, telemetry: bool) -> f32 {
-        match self {
-            Self::Wide => m.toolbar_wide,
-            Self::Narrow if telemetry => m.toolbar_wrapped + m.row,
-            _ => m.toolbar_wrapped,
+    fn wrapped(self, appearance: bool) -> bool {
+        self == Self::Narrow || (appearance && self == Self::Compact)
+    }
+    pub(super) fn height(self, m: crate::theme::Metrics, appearance: bool) -> f32 {
+        if self.wrapped(appearance) {
+            m.toolbar_wrapped
+        } else {
+            m.toolbar_wide
         }
     }
-    pub(super) fn padding(self, m: crate::theme::Metrics) -> i8 {
-        let rows = if self == Self::Wide { 1. } else { 2. };
-        let gap = (rows - 1.) * f32::from(m.gap);
-        ((self.height(m, false) - rows * m.row - gap) / 2.).floor() as i8
+    pub(super) fn padding(self, m: crate::theme::Metrics, appearance: bool) -> i8 {
+        let rows = if self.wrapped(appearance) { 2. } else { 1. };
+        ((self.height(m, appearance) - rows * m.row - (rows - 1.) * f32::from(m.gap)) / 2.).floor()
+            as i8
     }
 }
 
@@ -47,103 +50,109 @@ impl Workspace {
             self.appearance.toolbar(ui, &mut self.editor);
             return;
         }
-        let narrow = layout == ToolbarLayout::Narrow;
-        let compact = layout != ToolbarLayout::Wide;
         ui.horizontal(|ui| {
-            self.edit_tools(ui);
-            if narrow {
-                return;
-            }
-            if compact {
+            self.edit_tools(ui, layout != ToolbarLayout::Wide);
+            if layout == ToolbarLayout::Narrow {
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     self.editor.simulation.status_chip(ui)
                 });
             } else {
                 ui.separator();
-                self.editor
-                    .simulation
-                    .toolbar(ui, &self.preferences.shortcuts);
-                self.runtime_status(ui, true);
+                self.simulation_tools(ui, layout);
             }
         });
-        if compact {
-            ui.horizontal(|ui| {
-                self.editor
-                    .simulation
-                    .toolbar(ui, &self.preferences.shortcuts);
-                if !narrow {
-                    self.runtime_status(ui, false);
-                } else if !self.preferences.show_telemetry {
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        self.editor.simulation.status_chip(ui)
-                    });
-                }
-            });
-        }
-        if narrow && self.preferences.show_telemetry {
-            ui.horizontal(|ui| self.runtime_status(ui, true));
+        if layout == ToolbarLayout::Narrow {
+            ui.horizontal(|ui| self.simulation_tools(ui, layout));
         }
     }
 
-    fn runtime_status(&self, ui: &mut Ui, show_state: bool) {
+    fn simulation_tools(&mut self, ui: &mut Ui, layout: ToolbarLayout) {
+        let sim = &mut self.editor.simulation;
+        ui.add_enabled_ui(!sim.view.awaiting_snapshot, |ui| {
+            sim.toolbar(
+                ui,
+                &self.preferences.shortcuts,
+                layout != ToolbarLayout::Wide,
+            )
+        });
+        ui.separator();
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if self.preferences.show_telemetry {
-                self.editor.simulation.telemetry(ui);
+            if self.preferences.show_telemetry && sim.clock_running() {
+                sim.telemetry(ui, layout == ToolbarLayout::Wide);
             }
-            if show_state {
-                self.editor.simulation.status_chip(ui);
+            if layout != ToolbarLayout::Narrow {
+                sim.status_chip(ui);
             }
         });
     }
 
-    fn edit_tools(&mut self, ui: &mut Ui) {
-        let shortcuts = &self.preferences.shortcuts;
-        for (icon, tool) in [
+    fn edit_tools(&mut self, ui: &mut Ui, compact: bool) {
+        let core = [
             (Icon::Poke, Tool::Poke),
             (Icon::Select, Tool::Select),
             (Icon::Wire, Tool::Wire),
-            (Icon::Text, Tool::Place(Kind::Text)),
             (Icon::Pin, Tool::Place(Kind::Pin)),
+        ];
+        let more = [
+            (Icon::Text, Tool::Place(Kind::Text)),
             (Icon::Tunnel, Tool::Place(Kind::Tunnel)),
             (Icon::Not, Tool::Place(Kind::Gate(Gate::Not))),
             (Icon::And, Tool::Place(Kind::Gate(Gate::And))),
             (Icon::Or, Tool::Place(Kind::Gate(Gate::Or))),
-        ] {
-            if matches!(icon, Icon::Pin | Icon::Not) {
-                ui.separator();
-            }
-            if icons::button(ui, icon, self.editor.tool == tool, true)
-                .on_hover_ui(|ui| {
-                    let hint = match tool {
-                        Tool::Poke => shortcuts.caption_with(
-                            Command::ToolPoke,
-                            "Poke · toggle inputs / inspect signals",
-                            ui,
-                        ),
-                        Tool::Wire => shortcuts.caption_with(
-                            Command::ToolWire,
-                            "Wire · drag or click two points",
-                            ui,
-                        ),
-                        Tool::Select => shortcuts.caption(Command::ToolSelect, ui),
-                        Tool::Place(Kind::Text) => shortcuts.caption(Command::ToolText, ui),
-                        Tool::Place(Kind::Tunnel) => shortcuts.caption(Command::ToolTunnel, ui),
-                        Tool::Place(kind) => tr(kind.name()).to_owned(),
-                    };
-                    ui.label(hint);
-                })
-                .clicked()
-            {
-                self.editor.set_tool(tool);
+        ];
+        for (icon, tool) in core {
+            self.edit_tool(ui, icon, tool, false);
+        }
+        if compact {
+            let selected = more.iter().any(|(_, tool)| self.editor.tool == *tool);
+            let response =
+                icons::named_button(ui, Icon::More, selected, true, tr("More editing tools"));
+            egui::Popup::menu(&response).show(|ui| {
+                for (icon, tool) in more {
+                    self.edit_tool(ui, icon, tool, true);
+                }
+            });
+        } else {
+            for (icon, tool) in more {
+                self.edit_tool(ui, icon, tool, false);
             }
         }
-        ui.separator();
-        if ui
-            .add_enabled(self.editor.can_rotate(), egui::Button::new(tr("Rotate")))
-            .on_hover_text(shortcuts.caption_with(Command::ToolRotate, "Rotate clockwise", ui))
-            .clicked()
-        {
+        let hint =
+            self.preferences
+                .shortcuts
+                .caption_with(Command::ToolRotate, "Rotate clockwise", ui);
+        if icons::named_button(ui, Icon::Rotate, false, self.editor.can_rotate(), &hint).clicked() {
             self.editor.rotate();
+        }
+    }
+
+    fn edit_tool(&mut self, ui: &mut Ui, icon: Icon, tool: Tool, in_menu: bool) {
+        let bindings = &self.preferences.shortcuts;
+        let name = match tool {
+            Tool::Select => bindings.caption(Command::ToolSelect, ui),
+            Tool::Poke => bindings.caption_with(
+                Command::ToolPoke,
+                "Poke · toggle inputs / inspect signals",
+                ui,
+            ),
+            Tool::Wire => {
+                bindings.caption_with(Command::ToolWire, "Wire · drag or click two points", ui)
+            }
+            Tool::Place(Kind::Text) => bindings.caption(Command::ToolText, ui),
+            Tool::Place(Kind::Tunnel) => bindings.caption(Command::ToolTunnel, ui),
+            Tool::Place(kind) => tr(kind.name()).into(),
+        };
+        let selected = self.editor.tool == tool;
+        let response = if in_menu {
+            ui.selectable_label(selected, &name)
+        } else {
+            icons::named_button(ui, icon, selected, true, &name)
+        };
+        if response.clicked() {
+            self.editor.set_tool(tool);
+            if in_menu {
+                ui.close();
+            }
         }
     }
 }

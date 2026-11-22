@@ -120,6 +120,7 @@ pub struct SimulationIssue {
 }
 #[derive(Default)]
 pub struct SimulationView {
+    pub awaiting_snapshot: bool,
     pub plugin_error_count: usize,
     pub plugin_rasters: BTreeMap<Id, std::sync::Arc<logisim_core::plugin::api::raster::Image>>,
     pub plugin_graphics: BTreeMap<Id, Vec<logisim_core::plugin::api::Shape>>,
@@ -255,38 +256,43 @@ impl SimulationUi {
             self.actions.push(SimulationAction::ReleaseButtons);
         }
     }
-    fn ready(&self) -> bool {
+    pub(super) fn clock_running(&self) -> bool {
         self.view.enabled
-            && self.view.pending == 0
-            && !self.view.automatic_ticks
-            && self.view.steps == self.view.initial_steps
-            && self.view.ticks == 0
-            && self.view.issues.is_empty()
-            && self.view.plugin_error_count == 0
+            && self.view.has_clocks
+            && self.view.automatic_ticks
             && !self.view.limited
+            && !self.view.awaiting_snapshot
+    }
+    fn state_label(&self) -> &'static str {
+        if self.view.awaiting_snapshot {
+            "Preparing circuit"
+        } else if self.view.limited {
+            "Propagation limit"
+        } else if self.view.plugin_error_count > 0 || !self.view.issues.is_empty() {
+            "Error"
+        } else if !self.view.enabled {
+            "Paused"
+        } else if self.view.pending > 0 || self.clock_running() {
+            "Running"
+        } else {
+            "Ready"
+        }
     }
     pub fn status(&self) -> String {
-        if self.ready() {
-            return tr("Ready").into();
-        }
         if self.view.limited {
             return tr("Propagation limit — paused").into();
         }
-        format!(
-            "{} · {}",
-            if self.view.enabled {
-                tr("Running")
-            } else {
-                tr("Paused")
-            },
-            if self.view.plugin_error_count > 0 {
+        let name = tr(self.state_label());
+        if self.view.plugin_error_count > 0 {
+            format!(
+                "{name} · {}",
                 tf!("{} plugin error(s)", self.view.plugin_error_count)
-            } else if self.view.pending == 0 {
-                tr("settled").into()
-            } else {
-                tf!("{} pending", self.view.pending)
-            }
-        )
+            )
+        } else if self.view.pending > 0 {
+            format!("{name} · {}", tf!("{} pending", self.view.pending))
+        } else {
+            name.into()
+        }
     }
     pub fn input_shortcuts(&mut self, ui: &Ui, selected: &BTreeSet<Id>) {
         if selected.len() == 1
@@ -302,11 +308,7 @@ impl SimulationUi {
         }
     }
     pub fn menu(&mut self, ui: &mut Ui, rate: &mut crate::TickHz, shortcuts: &Shortcuts) {
-        let label = if self.view.enabled {
-            "Pause"
-        } else {
-            "Enable Simulation"
-        };
+        let label = if self.view.enabled { "Pause" } else { "Run" };
         for (label, action, enabled) in [
             (
                 shortcuts.caption_with(Command::Toggle, label, ui),
@@ -355,25 +357,23 @@ impl SimulationUi {
         }
         self.frequency_menu(ui, rate);
     }
-    pub fn toolbar(&mut self, ui: &mut Ui, shortcuts: &Shortcuts) {
+    pub fn toolbar(&mut self, ui: &mut Ui, shortcuts: &Shortcuts, compact: bool) {
+        let (action, hint) = if self.view.enabled {
+            ("Pause", "Pause propagation")
+        } else {
+            ("Run", "Resume propagation")
+        };
+        let toggle = if self.view.enabled || self.view.awaiting_snapshot {
+            egui::Button::new(tr(action))
+        } else {
+            egui::Button::new(
+                egui::RichText::new(tr(action)).color(theme::palette(ui.ctx()).surface),
+            )
+            .fill(theme::colors(ui.ctx()).base)
+        };
         if ui
-            .scope(|ui| {
-                let colors = theme::colors(ui.ctx());
-                let v = &mut ui.visuals_mut().widgets;
-                v.inactive.weak_bg_fill = colors.base;
-                v.hovered.weak_bg_fill = colors.hover;
-                v.active.weak_bg_fill = colors.hover;
-                ui.add(
-                    egui::Button::new(
-                        egui::RichText::new(tr(if self.view.enabled { "Pause" } else { "Run" }))
-                            .color(theme::palette(ui.ctx()).surface)
-                            .strong(),
-                    )
-                    .min_size(egui::vec2(60.0, theme::metrics(ui.ctx()).row)),
-                )
-            })
-            .inner
-            .on_hover_text(shortcuts.caption(Command::Toggle, ui))
+            .add(toggle.min_size(egui::vec2(60., theme::metrics(ui.ctx()).row)))
+            .on_hover_text(shortcuts.caption_with(Command::Toggle, hint, ui))
             .clicked()
         {
             self.actions.push(SimulationAction::ToggleEnabled);
@@ -389,17 +389,6 @@ impl SimulationUi {
             self.actions.push(SimulationAction::Step);
         }
         if ui
-            .button(tr("Reset"))
-            .on_hover_text(shortcuts.caption_with(
-                Command::Reset,
-                "Reset inputs, storage and clocks",
-                ui,
-            ))
-            .clicked()
-        {
-            self.actions.push(SimulationAction::Reset);
-        }
-        if ui
             .add_enabled(self.can_tick(), egui::Button::new(tr("Tick")))
             .on_hover_text(shortcuts.caption_with(
                 Command::Tick,
@@ -409,6 +398,31 @@ impl SimulationUi {
             .clicked()
         {
             self.actions.push(SimulationAction::Tick);
+        }
+        if compact {
+            let response = crate::icons::named_button(
+                ui,
+                crate::icons::Icon::More,
+                false,
+                true,
+                tr("More simulation controls"),
+            );
+            egui::Popup::menu(&response).show(|ui| self.clock_controls(ui, shortcuts));
+        } else {
+            self.clock_controls(ui, shortcuts);
+        }
+    }
+    fn clock_controls(&mut self, ui: &mut Ui, shortcuts: &Shortcuts) {
+        if ui
+            .button(tr("Reset"))
+            .on_hover_text(shortcuts.caption_with(
+                Command::Reset,
+                "Reset inputs, storage and clocks",
+                ui,
+            ))
+            .clicked()
+        {
+            self.actions.push(SimulationAction::Reset);
         }
         let automatic = self.view.automatic_ticks;
         let switch = ui
@@ -464,14 +478,14 @@ impl SimulationUi {
         }
     }
 
-    pub fn telemetry(&self, ui: &mut Ui) {
+    pub fn telemetry(&self, ui: &mut Ui, show_fps: bool) {
         let fps = self
             .view
             .frames_per_second
             .map_or_else(|| "—".into(), |value| format!("{value:.1}"));
         let metrics = [
             (
-                tf!("FPS: {}", fps),
+                tf!("UI: {} FPS", fps),
                 "Completed UI frames per second, measured over about one second. Idle redraws are included.",
             ),
             (
@@ -485,8 +499,16 @@ impl SimulationUi {
                 ),
                 "Successful clock ticks per second, measured over about one second. Includes manual ticks; not full clock cycles or propagation steps.",
             ),
-        ].map(|(label,hint)|(ui.painter().layout_no_wrap(label,egui::FontId::monospace(12.0),theme::palette(ui.ctx()).muted),hint));
-        let width = metrics.iter().map(|(run, _)| run.size().x).sum::<f32>() + 32.0;
+        ].map(|(label, hint)| {
+            let run = ui.painter().layout_no_wrap(label, egui::FontId::monospace(12.), theme::palette(ui.ctx()).muted);
+            (run, hint)
+        });
+        let visible = &metrics[usize::from(!show_fps)..];
+        let width = visible
+            .iter()
+            .map(|(run, _)| run.size().x + 8.)
+            .sum::<f32>()
+            + 8.;
         let (rect, _) = ui.allocate_exact_size(egui::vec2(width, 26.0), egui::Sense::hover());
         ui.painter().rect(
             rect,
@@ -496,7 +518,7 @@ impl SimulationUi {
             egui::StrokeKind::Inside,
         );
         let mut x = rect.left() + 8.0;
-        for (index, (run, hint)) in metrics.into_iter().enumerate() {
+        for (index, (run, hint)) in visible.iter().enumerate() {
             let at = egui::pos2(x, rect.center().y - run.size().y / 2.0);
             let area = egui::Rect::from_min_size(at, run.size());
             ui.interact(
@@ -506,32 +528,19 @@ impl SimulationUi {
             )
             .on_hover_text(tr(hint));
             x += run.size().x + 8.0;
-            ui.painter().galley(at, run, theme::palette(ui.ctx()).muted);
+            ui.painter()
+                .galley(at, run.clone(), theme::palette(ui.ctx()).muted);
         }
     }
     pub fn status_chip(&self, ui: &mut Ui) {
-        let (name, tone) = if self.view.limited || self.view.plugin_error_count > 0 {
-            (
-                tr("Error").into(),
-                theme::signal(ui.ctx(), SignalTone::Error),
-            )
-        } else if self.view.pending > 0 && ui.available_width() > 190.0 {
-            (
-                self.status(),
-                if self.view.enabled {
-                    theme::signal(ui.ctx(), SignalTone::High)
-                } else {
-                    theme::palette(ui.ctx()).muted
-                },
-            )
-        } else if self.view.enabled {
-            (
-                tr(if self.ready() { "Ready" } else { "Running" }).into(),
-                theme::signal(ui.ctx(), SignalTone::High),
-            )
-        } else {
-            (tr("Paused").into(), theme::palette(ui.ctx()).muted)
+        let label = self.state_label();
+        let tone = match label {
+            "Error" => theme::signal(ui.ctx(), SignalTone::Error),
+            "Propagation limit" => theme::palette(ui.ctx()).warning,
+            "Ready" | "Running" => theme::signal(ui.ctx(), SignalTone::High),
+            _ => theme::palette(ui.ctx()).muted,
         };
+        let name = tr(label).into();
         let run = ui.painter().layout_no_wrap(
             name,
             egui::FontId::proportional(13.0),
@@ -547,7 +556,12 @@ impl SimulationUi {
             run,
             theme::palette(ui.ctx()).ink,
         );
-        r.on_hover_text(self.status());
+        r.on_hover_ui(|ui| {
+            ui.label(self.status());
+            if let Some(issue) = self.view.issues.first() {
+                ui.label(&issue.message);
+            }
+        });
     }
     pub(crate) fn can_tick(&self) -> bool {
         self.view.has_clocks && self.view.pending == 0 && !self.view.limited
@@ -559,11 +573,11 @@ impl SimulationUi {
                 "0 / 1: set selected input. Multi-bit values use hexadecimal.",
             ));
         });
-        ui.weak(tf!(
-            "{} propagation steps",
-            self.view.steps.saturating_sub(self.view.initial_steps)
-        ));
-        if self.view.has_clocks {
+        let steps = self.view.steps.saturating_sub(self.view.initial_steps);
+        if steps > 0 {
+            ui.weak(tf!("{} propagation steps", steps));
+        }
+        if self.view.has_clocks && (self.view.ticks > 0 || self.clock_running()) {
             ui.weak(tf!(
                 "{} clock ticks · target {} Hz",
                 self.view.ticks,

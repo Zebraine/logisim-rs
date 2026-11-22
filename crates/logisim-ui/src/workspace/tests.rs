@@ -48,12 +48,11 @@ fn canvas_keeps_the_right_hand_layout_when_resizing_in_both_languages() {
                 let canvas = app.canvas.rect;
                 assert_eq!(canvas.left(), m.sidebar.default.min(size.x - 452.));
                 assert!(canvas.width() > 450.);
-                let toolbar = if size.x == 720. {
-                    m.toolbar_wrapped
-                } else {
-                    m.toolbar_wide
-                };
-                assert_eq!(canvas.top(), m.menu + toolbar, "{density:?} {size:?}");
+                assert_eq!(
+                    canvas.top(),
+                    m.menu + m.toolbar_wide,
+                    "{density:?} {size:?}"
+                );
                 assert_eq!(canvas.right_bottom(), size.to_pos2());
             }
         }

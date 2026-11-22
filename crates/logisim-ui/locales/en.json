@@ -365,7 +365,6 @@
     "Expression mode": "Expression mode",
     "Expressions are stored without enumerating inputs. Generate a complete table only when needed.": "Expressions are stored without enumerating inputs. Generate a complete table only when needed.",
     "Extension": "Extension",
-    "FPS: {}": "FPS: {}",
     "Facing": "Facing",
     "Fallback path": "Fallback path",
     "Falling edge": "Falling edge",
@@ -840,7 +839,6 @@
     "Shift type": "Shift type",
     "Shifter": "Shifter",
     "Shortcuts": "Shortcuts",
-    "Show FPS and clock rates in the toolbar.": "Show FPS and clock rates in the toolbar.",
     "Show connection markers": "Show connection markers",
     "Show grid": "Show grid",
     "Show origin marker": "Show origin marker",
@@ -1042,6 +1040,18 @@
     "Wasmtime": "Wasmtime",
     "Wasmtime (default)": "Wasmtime (default)",
     "Using wasmi because this build does not include Wasmtime.": "Using wasmi because this build does not include Wasmtime.",
-    "After restart, Wasmtime may take about 0.5 s to compile the course plugin on an empty cache. Fuel pause points can differ. Legacy plugins and builds without Wasmtime use wasmi.": "After restart, Wasmtime may take about 0.5 s to compile the course plugin on an empty cache. Fuel pause points can differ. Legacy plugins and builds without Wasmtime use wasmi."
+    "After restart, Wasmtime may take about 0.5 s to compile the course plugin on an empty cache. Fuel pause points can differ. Legacy plugins and builds without Wasmtime use wasmi.": "After restart, Wasmtime may take about 0.5 s to compile the course plugin on an empty cache. Fuel pause points can differ. Legacy plugins and builds without Wasmtime use wasmi.",
+    "Preparing circuit": "Preparing circuit",
+    "Propagation limit": "Propagation limit",
+    "More simulation controls": "More simulation controls",
+    "More editing tools": "More editing tools",
+    "Pause propagation": "Pause propagation",
+    "Resume propagation": "Resume propagation",
+    "No matching circuits": "No matching circuits",
+    "No matching components": "No matching components",
+    "Placement template": "Placement template",
+    "Show clock rates during automatic ticks and UI frame rate on wide screens.": "Show clock rates during automatic ticks and UI frame rate on wide screens.",
+    "UI: {} FPS": "UI: {} FPS",
+    "Double-click to edit this circuit.": "Double-click to edit this circuit."
   }
 }

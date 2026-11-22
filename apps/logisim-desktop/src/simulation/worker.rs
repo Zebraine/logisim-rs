@@ -163,6 +163,7 @@ impl Worker {
             // on the newly selected circuit while its first snapshot is in flight.
             let previous_view = std::mem::take(workspace.simulation_mut());
             workspace.set_simulation(SimulationView {
+                awaiting_snapshot: true,
                 enabled: previous_view.enabled,
                 automatic_ticks: previous_view.automatic_ticks,
                 tick_hz: if previous_view.tick_hz == 0 {

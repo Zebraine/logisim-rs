@@ -21,6 +21,7 @@ pub(crate) enum Icon {
     Document,
     Chip,
     Search,
+    Rotate,
     Restore,
     Minus,
     Home,
@@ -51,6 +52,20 @@ pub(crate) fn button(ui: &mut Ui, icon: Icon, selected: bool, enabled: bool) -> 
     .inner
 }
 
+pub(crate) fn named_button(
+    ui: &mut Ui,
+    icon: Icon,
+    selected: bool,
+    enabled: bool,
+    name: &str,
+) -> Response {
+    let response = button(ui, icon, selected, enabled);
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::Role::Button, enabled && ui.is_enabled(), name)
+    });
+    response.on_hover_text(name).on_disabled_hover_text(name)
+}
+
 pub(crate) fn paint(p: &egui::Painter, r: Rect, icon: Icon, color: Color32) {
     let stroke = Stroke::new(1.5, color);
     let point = |x: f32, y: f32| pos2(r.left() + r.width() * x, r.top() + r.height() * y);
@@ -58,6 +73,17 @@ pub(crate) fn paint(p: &egui::Painter, r: Rect, icon: Icon, color: Color32) {
         p.line_segment([point(a.0, a.1), point(b.0, b.1)], stroke);
     };
     match icon {
+        Icon::Rotate => {
+            let arc = (0..=16)
+                .map(|i| {
+                    let angle = 0.5 + i as f32 * 5.1 / 16.;
+                    r.center() + egui::Vec2::angled(angle) * r.width() * 0.36
+                })
+                .collect();
+            p.add(Shape::line(arc, stroke));
+            line((0.80, 0.05), (0.80, 0.30));
+            line((0.80, 0.30), (0.56, 0.30));
+        }
         Icon::Restore => {
             let center = r.center();
             let radius = r.width() * 0.35;

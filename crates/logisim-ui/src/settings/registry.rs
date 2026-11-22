@@ -157,7 +157,7 @@ registry![
         "appearance.show_telemetry",
         Appearance,
         "Show telemetry",
-        "Show FPS and clock rates in the toolbar.",
+        "Show clock rates during automatic ticks and UI frame rate on wide screens.",
         Control::Toggle(|s| &mut s.show_telemetry)
     ),
     (

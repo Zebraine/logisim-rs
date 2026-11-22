@@ -68,13 +68,14 @@ impl Workspace {
 
         let width = ui.available_width() - 16.;
         let toolbar = super::toolbar::ToolbarLayout::for_width(width);
-        let height = toolbar.height(m, self.preferences.show_telemetry);
+        let appearance = self.editor.session.context.appearance_mode;
+        let height = toolbar.height(m, appearance);
         Panel::top("tools")
             .exact_size(height)
             .frame(
                 Frame::NONE
                     .fill(paint.chrome)
-                    .inner_margin(Margin::symmetric(8, toolbar.padding(m))),
+                    .inner_margin(Margin::symmetric(8, toolbar.padding(m, appearance))),
             )
             .show(ui, |ui| self.toolbar(ui, toolbar));
 

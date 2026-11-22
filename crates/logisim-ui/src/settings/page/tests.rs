@@ -1028,9 +1028,9 @@ fn all_tool_hints_and_the_canvas_rotate_menu_show_the_remapped_chord() {
             22.,
         ),
         (ToolWire, "f7", "Wire · drag or click two points · F7", 86.),
-        (ToolText, "f8", "Text · F8", 116.),
-        (ToolTunnel, "f9", "Tunnel · F9", 192.),
-        (ToolRotate, "f10", "Rotate clockwise · F10", 351.),
+        (ToolText, "f8", "Text · F8", 150.),
+        (ToolTunnel, "f9", "Tunnel · F9", 182.),
+        (ToolRotate, "f10", "Rotate clockwise · F10", 310.),
     ] {
         app.preferences
             .shortcuts
