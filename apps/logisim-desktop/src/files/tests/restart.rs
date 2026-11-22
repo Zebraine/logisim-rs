@@ -21,7 +21,7 @@ fn clean_restart_flushes_the_latest_preferences_before_launching_once() {
     let mut h = Harness::default();
     let config = h.config_dir.path("preferences.json");
     let mut settings = h.ws.preferences();
-    settings.wasm_engine = logisim_ui::WasmEnginePreference::Wasmtime;
+    settings.wasm_engine = logisim_ui::WasmEnginePreference::Wasmi;
     h.ws.apply_settings(settings);
     request_restart(&mut h);
     assert!(h.files.restart_pending && !h.files.allow_close && h.files.dialog.is_none());
@@ -30,7 +30,7 @@ fn clean_restart_flushes_the_latest_preferences_before_launching_once() {
         .restart_if_pending(&h.ctx, &mut h.ws, &mut h.preferences, || {
             let prefs: serde_json::Value =
                 serde_json::from_slice(&fs::read(config).unwrap()).unwrap();
-            assert_eq!(prefs["plugins"]["wasm_engine"], "wasmtime");
+            assert_eq!(prefs["plugins"]["wasm_engine"], "wasmi");
             Ok(())
         });
     assert_eq!(launched, Some(()));
@@ -149,7 +149,7 @@ fn restart_after_discard_preserves_recovery_until_the_child_has_started() {
 fn a_preferences_conflict_blocks_restart_and_preserves_external_changes() {
     let mut h = Harness::default();
     let mut settings = h.ws.preferences();
-    settings.wasm_engine = logisim_ui::WasmEnginePreference::Wasmtime;
+    settings.wasm_engine = logisim_ui::WasmEnginePreference::Wasmi;
     h.ws.apply_settings(settings);
     h.preferences.synchronize(&mut h.ws);
     let path = h.config_dir.path("preferences.json");

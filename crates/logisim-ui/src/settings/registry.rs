@@ -456,8 +456,8 @@ impl Entry {
                     &mut values.wasm_engine,
                     [Wasmi, Wasmtime],
                     |engine| match engine {
-                        Wasmi => tr("wasmi (default)").into(),
-                        Wasmtime => tr("Wasmtime").into(),
+                        Wasmi => "wasmi".into(),
+                        Wasmtime => tr("Wasmtime (default)").into(),
                     },
                     (!wasmtime_available)
                         .then_some((Wasmtime, tr("This build does not include Wasmtime."))),

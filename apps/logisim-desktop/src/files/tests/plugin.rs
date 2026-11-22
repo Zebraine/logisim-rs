@@ -264,6 +264,10 @@ fn desktop_engine_is_pinned_before_loading_and_falls_back_only_if_unavailable() 
     fs::write(temp.path("plugin.wasm"), wasm).unwrap();
     project.plugin_sources[0].path = "plugin.wasm".into();
     let mut workspace = Workspace::default();
+    workspace.apply_settings(logisim_ui::Settings {
+        wasm_engine: WasmEnginePreference::Wasmi,
+        ..workspace.preferences()
+    });
     let first = Files::for_desktop(Some(temp.path("recovery")), &mut workspace);
     assert!(matches!(
         first.loader,
@@ -274,12 +278,11 @@ fn desktop_engine_is_pinned_before_loading_and_falls_back_only_if_unavailable() 
         ..workspace.preferences()
     });
     let restarted = Files::for_desktop(Some(temp.path("recovery")), &mut workspace);
-    let available = WasmEngine::Wasmtime.available();
     assert_eq!(
         workspace.preferences().wasm_engine,
         WasmEnginePreference::Wasmtime
     );
-    assert_eq!(restarted.engine_warning_pending, !available);
+    assert!(restarted.dialog.is_none());
     for files in [first, restarted] {
         let mut resolution = Resolution::new(files.loader, &project, temp.0.clone(), None, vec![]);
         resolution.check(0);

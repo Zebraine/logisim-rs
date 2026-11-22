@@ -5,8 +5,8 @@ pub const CONFIG_VERSION: u32 = 17;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum WasmEnginePreference {
-    #[default]
     Wasmi,
+    #[default]
     Wasmtime,
 }
 pub const FONT_SIZES: std::ops::RangeInclusive<u8> = 8..=32;

@@ -208,7 +208,7 @@ fn all_fields_restart_reset_and_atomic_conflict_protection() {
         .bind(logisim_ui::shortcuts::Command::Save, "f5".parse().unwrap())
         .unwrap();
     let alternative = Settings {
-        wasm_engine: logisim_ui::WasmEnginePreference::Wasmtime,
+        wasm_engine: logisim_ui::WasmEnginePreference::Wasmi,
         shortcuts,
         files: logisim_ui::FileSettings {
             autosave: false,
@@ -870,7 +870,7 @@ fn fallback_directory_is_validated_local_state_and_survives_portable_transfers()
     );
     let portable: serde_json::Value =
         serde_json::from_slice(&Preferences::export_settings(&ws)).unwrap();
-    assert!(portable["plugins"] == serde_json::json!({"wasm_engine":"wasmi"}));
+    assert!(portable["plugins"] == serde_json::json!({"wasm_engine":"wasmtime"}));
     let local = dir.canonicalize().unwrap();
     for version in [13, 14, 15] {
         let mut other = serde_json::json!({
@@ -897,7 +897,7 @@ fn fallback_directory_is_validated_local_state_and_survives_portable_transfers()
             exported["appearance"]["dark_artwork_contrast"],
             version < 15
         );
-        assert!(exported["plugins"] == serde_json::json!({"wasm_engine":"wasmi"}));
+        assert!(exported["plugins"] == serde_json::json!({"wasm_engine":"wasmtime"}));
     }
     ws.plugin_fallback_directory = None;
     prefs.synchronize(&mut ws);
@@ -1076,9 +1076,9 @@ fn engine_preference_is_portable_and_validated_before_import() {
     use logisim_ui::WasmEnginePreference;
     let config =
         schema::decode(br#"{"version":16,"plugins":{"fallback_directory":null}}"#).unwrap();
-    assert_eq!(config.settings.wasm_engine, WasmEnginePreference::Wasmi);
+    assert_eq!(config.settings.wasm_engine, WasmEnginePreference::Wasmtime);
     let settings = Settings {
-        wasm_engine: WasmEnginePreference::Wasmtime,
+        wasm_engine: WasmEnginePreference::Wasmi,
         ..config.settings
     };
     let bytes = schema::encode_settings(settings);

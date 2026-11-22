@@ -37,7 +37,6 @@ enum ResolutionReason {
 
 pub(crate) struct Files {
     loader: PluginLoader,
-    engine_warning_pending: bool,
     pub plugins: logisim_plugin::Registry,
     pub storage: Storage,
     pub autosave: crate::recovery::Autosave,
@@ -53,7 +52,6 @@ impl Default for Files {
     fn default() -> Self {
         Self {
             loader: logisim_plugin::WasmEngine::Wasmi.into(),
-            engine_warning_pending: false,
             plugins: Default::default(),
             storage: Storage::new(),
             autosave: Default::default(),
@@ -103,7 +101,6 @@ impl Files {
         };
         Self {
             loader,
-            engine_warning_pending: requests_wasmtime && !available,
             ..Self::with_recovery(directory)
         }
     }
@@ -573,13 +570,6 @@ impl Files {
                 self.capture = Some(capture);
             }
             return;
-        }
-        if self.dialog.is_none() && std::mem::take(&mut self.engine_warning_pending) {
-            self.dialog = Some(Dialog::SettingsMessage {
-                title: "Wasm plugin engine",
-                body: tr("This build uses wasmi. Plugins that require Wasmtime cannot be loaded.")
-                    .into(),
-            });
         }
         let Some(mut dialog) = self.dialog.take() else {
             return;

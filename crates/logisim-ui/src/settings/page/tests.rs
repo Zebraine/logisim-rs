@@ -94,7 +94,7 @@ fn backup_search_toggle_and_resets_work_in_both_files_layouts() {
 fn registry_restores_each_field_without_changing_other_preferences() {
     let defaults = Settings::default();
     let alternative = Settings {
-        wasm_engine: WasmEnginePreference::Wasmtime,
+        wasm_engine: WasmEnginePreference::Wasmi,
         shortcuts: Default::default(),
         files: FileSettings {
             autosave: false,
@@ -1883,6 +1883,7 @@ fn engine_choice_is_a_searchable_simulation_row_with_a_deferred_restart() {
             };
             w.apply_settings(Settings {
                 language,
+                wasm_engine: Wasmi,
                 theme,
                 ..Default::default()
             });
@@ -1909,7 +1910,7 @@ fn engine_choice_is_a_searchable_simulation_row_with_a_deferred_restart() {
             w.set_plugin_runtime(Wasmi, true);
             w.settings_page.select(Category::Simulation);
             let rows = render(&mut w);
-            let choice = rect(&rows, "wasmi (default)").unwrap();
+            let choice = rect(&rows, "wasmi").unwrap();
             let bounds = ctx
                 .memory(|m| m.area_rect(Id::unique("settings-window")))
                 .unwrap();
@@ -1924,16 +1925,22 @@ fn engine_choice_is_a_searchable_simulation_row_with_a_deferred_restart() {
             }
 
             w.set_plugin_runtime(Wasmi, false);
-            assert!(rect(&render(&mut w), "This build does not include Wasmtime.").is_some());
-            click(&mut w, "wasmi (default)");
-            click(&mut w, "Wasmtime");
+            assert!(
+                rect(
+                    &render(&mut w),
+                    "Using wasmi because this build does not include Wasmtime."
+                )
+                .is_some()
+            );
+            click(&mut w, "wasmi");
+            click(&mut w, "Wasmtime (default)");
             assert_eq!(w.preferences().wasm_engine, Wasmi);
             egui::Popup::close_all(&ctx);
             w.set_plugin_runtime(Wasmi, true);
             for restart in [false, true] {
                 assert!(rect(&render(&mut w), "Restart now").is_none());
-                click(&mut w, "wasmi (default)");
-                click(&mut w, "Wasmtime");
+                click(&mut w, "wasmi");
+                click(&mut w, "Wasmtime (default)");
                 assert_eq!(w.preferences().wasm_engine, Wasmtime);
                 assert_eq!(w.settings_page.active_engine, Wasmi);
                 let rows = render(&mut w);
@@ -1945,8 +1952,8 @@ fn engine_choice_is_a_searchable_simulation_row_with_a_deferred_restart() {
                     assert_eq!(w.take_file_actions(), [crate::FileAction::Restart]);
                     assert!(!w.settings_open);
                 } else {
-                    click(&mut w, "Wasmtime");
-                    click(&mut w, "wasmi (default)");
+                    click(&mut w, "Wasmtime (default)");
+                    click(&mut w, "wasmi");
                     let rows = render(&mut w);
                     assert!(rect(&rows, "Takes effect after restart.").is_none());
                     assert!(w.take_file_actions().is_empty());

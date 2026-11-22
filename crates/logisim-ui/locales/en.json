@@ -1039,8 +1039,8 @@
     "Takes effect after restart.": "Takes effect after restart.",
     "Wasm plugin engine": "Wasm plugin engine",
     "Wasmtime": "Wasmtime",
-    "wasmi (default)": "wasmi (default)",
-    "This build uses wasmi. Plugins that require Wasmtime cannot be loaded.": "This build uses wasmi. Plugins that require Wasmtime cannot be loaded.",
+    "Wasmtime (default)": "Wasmtime (default)",
+    "Using wasmi because this build does not include Wasmtime.": "Using wasmi because this build does not include Wasmtime.",
     "After restart, Wasmtime may take about 0.5 s to compile the course plugin on an empty cache. Fuel pause points can differ. Legacy plugins and builds without Wasmtime use wasmi.": "After restart, Wasmtime may take about 0.5 s to compile the course plugin on an empty cache. Fuel pause points can differ. Legacy plugins and builds without Wasmtime use wasmi."
   }
 }

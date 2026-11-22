@@ -518,7 +518,9 @@ impl Page {
         });
         if matches!(e.control, super::registry::Control::WasmEngine) {
             if !self.wasmtime_available {
-                ui.weak(tr("This build does not include Wasmtime."));
+                ui.weak(tr(
+                    "Using wasmi because this build does not include Wasmtime.",
+                ));
             } else if values.wasm_engine != self.active_engine {
                 ui.horizontal_wrapped(|ui| {
                     ui.label(tr("Takes effect after restart."));
