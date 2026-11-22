@@ -179,20 +179,13 @@ impl Workspace {
             self.set_main_circuit(self.active_circuit());
             ui.close();
         }
-        for (label, command, enabled) in [
-            ("Move Circuit Up", CircuitCommand::Up, true),
-            ("Move Circuit Down", CircuitCommand::Down, true),
-            (
-                "Remove Circuit…",
-                CircuitCommand::Remove,
-                self.editor
-                    .session
-                    .project
-                    .can_remove(self.editor.session.context.active),
-            ),
+        for (label, command) in [
+            ("Move Circuit Up", CircuitCommand::Up),
+            ("Move Circuit Down", CircuitCommand::Down),
+            ("Remove Circuit…", CircuitCommand::Remove),
         ] {
             if ui
-                .add_enabled(enabled, egui::Button::new(tr(label)))
+                .add_enabled(command.enabled(self), egui::Button::new(tr(label)))
                 .clicked()
             {
                 self.circuit_command(command);

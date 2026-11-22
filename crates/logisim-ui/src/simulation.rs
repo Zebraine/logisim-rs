@@ -127,6 +127,8 @@ pub struct SimulationView {
     pub enabled: bool,
     pub pending: usize,
     pub steps: u64,
+    /// Propagation committed during document initialization in this counter epoch.
+    pub initial_steps: u64,
     pub limited: bool,
     pub has_clocks: bool,
     pub ticks: u64,
@@ -253,7 +255,20 @@ impl SimulationUi {
             self.actions.push(SimulationAction::ReleaseButtons);
         }
     }
+    fn ready(&self) -> bool {
+        self.view.enabled
+            && self.view.pending == 0
+            && !self.view.automatic_ticks
+            && self.view.steps == self.view.initial_steps
+            && self.view.ticks == 0
+            && self.view.issues.is_empty()
+            && self.view.plugin_error_count == 0
+            && !self.view.limited
+    }
     pub fn status(&self) -> String {
+        if self.ready() {
+            return tr("Ready").into();
+        }
         if self.view.limited {
             return tr("Propagation limit — paused").into();
         }
@@ -511,7 +526,7 @@ impl SimulationUi {
             )
         } else if self.view.enabled {
             (
-                tr("Running").into(),
+                tr(if self.ready() { "Ready" } else { "Running" }).into(),
                 theme::signal(ui.ctx(), SignalTone::High),
             )
         } else {
@@ -544,10 +559,13 @@ impl SimulationUi {
                 "0 / 1: set selected input. Multi-bit values use hexadecimal.",
             ));
         });
-        ui.weak(tf!("{} propagation steps", self.view.steps));
+        ui.weak(tf!(
+            "{} propagation steps",
+            self.view.steps.saturating_sub(self.view.initial_steps)
+        ));
         if self.view.has_clocks {
             ui.weak(tf!(
-                "{} clock ticks · {} ticks/s",
+                "{} clock ticks · target {} Hz",
                 self.view.ticks,
                 frequency::format_target(self.view.tick_hz)
             ));

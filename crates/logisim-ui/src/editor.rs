@@ -49,6 +49,7 @@ enum Gesture {
         start: Pos2,
         current: Pos2,
         previous: BTreeSet<Id>,
+        additive: bool,
     },
     Wire {
         start: Point,
@@ -243,13 +244,14 @@ impl Editor {
         }
     }
     pub fn cancel_gesture(&mut self) {
-        if let Some(
-            Gesture::Move { before, .. }
-            | Gesture::Endpoint { before, .. }
-            | Gesture::Slider { before, .. },
-        ) = self.gesture.take()
-        {
-            self.restore(before);
+        match self.gesture.take() {
+            Some(
+                Gesture::Move { before, .. }
+                | Gesture::Endpoint { before, .. }
+                | Gesture::Slider { before, .. },
+            ) => self.restore(before),
+            Some(Gesture::Box { previous, .. }) => self.session.selection = previous,
+            _ => {}
         }
         self.wire_start = None;
     }
@@ -712,11 +714,8 @@ impl Editor {
                             self.gesture = Some(Gesture::Box {
                                 start: world.to_pos2(),
                                 current: world.to_pos2(),
-                                previous: if ui.input(|i| i.modifiers.shift) {
-                                    self.session.selection.clone()
-                                } else {
-                                    BTreeSet::new()
-                                },
+                                previous: self.session.selection.clone(),
+                                additive: ui.input(|i| i.modifiers.shift),
                             });
                         }
                     }
@@ -755,10 +754,14 @@ impl Editor {
                             start,
                             current,
                             previous,
+                            additive,
                         } => {
                             *current = world.to_pos2();
                             let rect = Rect::from_two_pos(*start, *current);
-                            self.session.selection = previous.clone();
+                            self.session.selection.clear();
+                            if *additive {
+                                self.session.selection.extend(previous.iter().copied());
+                            }
                             self.session.selection.extend(
                                 self.session
                                     .circuit
@@ -947,9 +950,16 @@ impl Editor {
             self.signal_hover(response, canvas.world(pointer), tolerance, libraries);
         }
         if response.secondary_clicked() {
-            self.context_instance = pointer
-                .and_then(|p| self.hit(canvas.world(p), tolerance))
-                .or_else(|| self.session.selection.first().copied());
+            let target = pointer.and_then(|p| self.hit(canvas.world(p), tolerance));
+            if self.tool == Tool::Select {
+                self.cancel_gesture();
+                self.commit_properties();
+                if !target.is_some_and(|id| self.session.selection.contains(&id)) {
+                    self.session.selection.clear();
+                    self.session.selection.extend(target);
+                }
+            }
+            self.context_instance = target;
         }
         response.context_menu(|ui| {
             if let Some(id) = self.context_instance

@@ -10,10 +10,37 @@ use crate::{
     tf, theme,
 };
 use egui::{Align2, FontId, Rect, Response, Sense, Ui, Vec2, pos2, vec2};
-use logisim_core::{Id, Kind};
+use logisim_core::{
+    Id, Kind,
+    plugin::api::{Tool as PluginTool, presentation::Library},
+};
 
 fn matches(name: &str, query: &str) -> bool {
     query.is_empty() || name.to_lowercase().contains(query)
+}
+
+fn builtin_matches(kind: Kind, group: &str, query: &str) -> bool {
+    query.is_empty()
+        || [kind.name(), tr(kind.name()), group, tr(group)]
+            .into_iter()
+            .any(|name| matches(name, query))
+}
+
+fn plugin_matches(lib: &Library, tool: &PluginTool, query: &str) -> bool {
+    if query.is_empty() {
+        return true;
+    }
+    let name = &lib.manifest.name;
+    [
+        name.as_str(),
+        &tool.name,
+        &lib.manifest.id,
+        &tool.id,
+        plugins::text(Some(&lib.presentation), name),
+        plugins::text(Some(&lib.presentation), &tool.name),
+    ]
+    .into_iter()
+    .any(|s| matches(s, query))
 }
 
 /// Reserve one focusable hit target for a complete row, including its visual accessories.
@@ -139,16 +166,17 @@ fn group(
     name: &str,
     badge: &str,
     icon: Icon,
-    searching: bool,
+    query: &str,
 ) -> (bool, Response) {
-    let id = ui.make_persistent_id(key);
-    let opened = ui.data(|d| d.get_temp::<bool>(id)).unwrap_or(false);
+    let id = ui.make_persistent_id((key, query));
+    let opened = ui
+        .data(|d| d.get_temp::<bool>(id))
+        .unwrap_or(!query.is_empty());
     let response = row(ui, name, false, 38.0, theme::metrics(ui.ctx()).row, badge);
-    let open = opened ^ response.clicked();
+    let expanded = opened ^ response.clicked();
     if response.clicked() {
-        ui.data_mut(|d| d.insert_temp(id, open));
+        ui.data_mut(|d| d.insert_temp(id, expanded));
     }
-    let expanded = open || searching;
     let p = response.rect.left_center() + vec2(8.0, 0.0);
     let arrow = if expanded {
         [vec2(-3.0, -2.0), vec2(0.0, 1.0), vec2(3.0, -2.0)]
@@ -169,13 +197,20 @@ fn group(
 }
 
 impl Workspace {
+    fn circuit_matches(&self, d: &logisim_core::CircuitDefinition, q: &str) -> bool {
+        matches(&d.name, q)
+            || self
+                .libraries
+                .iter()
+                .any(|g| g.circuits.contains(&d.id) && matches(&g.name, q))
+    }
     pub(super) fn result_count(&self, components: bool, q: &str) -> usize {
         if !components {
             return self
                 .project()
                 .circuits
                 .iter()
-                .filter(|d| matches(&d.name, q))
+                .filter(|d| self.circuit_matches(d, q))
                 .count();
         }
         let native = groups()
@@ -183,7 +218,7 @@ impl Workspace {
             .map(|g| {
                 g.tools
                     .iter()
-                    .filter(|k| matches(tr(k.name()), q) || matches(tr(g.key), q))
+                    .filter(|k| builtin_matches(**k, g.key, q))
                     .count()
             })
             .sum::<usize>();
@@ -195,13 +230,7 @@ impl Workspace {
                     l.manifest
                         .tools
                         .iter()
-                        .filter(|t| {
-                            matches(plugins::text(Some(&l.presentation), &t.name), q)
-                                || matches(
-                                    plugins::text(Some(&l.presentation), &l.manifest.name),
-                                    q,
-                                )
-                        })
+                        .filter(|t| plugin_matches(l, t, q))
                         .count()
                 })
                 .sum::<usize>()
@@ -217,19 +246,12 @@ impl Workspace {
             Icon::Pin,
             Icon::Text,
         ]) {
-            let filter = |k: &&Kind| matches(tr(k.name()), q) || matches(tr(g.key), q);
+            let filter = |k: &&Kind| builtin_matches(**k, g.key, q);
             let count = g.tools.iter().filter(filter).count();
             if count == 0 {
                 continue;
             }
-            let (expanded, _) = group(
-                ui,
-                g.key,
-                tr(g.key),
-                &count.to_string(),
-                icon,
-                !q.is_empty(),
-            );
+            let (expanded, _) = group(ui, g.key, tr(g.key), &count.to_string(), icon, q);
             if expanded {
                 for &kind in g.tools.iter().filter(filter) {
                     let tool = Tool::Place(kind);
@@ -260,9 +282,7 @@ impl Workspace {
                     .to_owned()
             };
             let name = local(&m.name);
-            let filter = |t: &&logisim_core::plugin::api::Tool| {
-                matches(&name, q) || matches(&local(&t.name), q)
-            };
+            let filter = |t: &&logisim_core::plugin::api::Tool| plugin_matches(lib, t, q);
             let count = m.tools.iter().filter(filter).count();
             if count == 0 {
                 continue;
@@ -273,7 +293,7 @@ impl Workspace {
                 &name,
                 &format!("v{} · {}", m.version, count),
                 Icon::Chip,
-                !q.is_empty(),
+                q,
             );
             header.on_hover_ui(|ui| {
                 ui.label(&m.id);
@@ -325,15 +345,14 @@ impl Workspace {
         }
         for index in 0..self.libraries.len() {
             let g = &self.libraries[index];
-            let ids: Vec<_> = g
+            let ids: Vec<_> = self
+                .project()
                 .circuits
                 .iter()
-                .copied()
-                .filter(|id| {
-                    self.project()
-                        .circuit(*id)
-                        .is_some_and(|d| matches(&d.name, q))
+                .filter(|d| {
+                    g.circuits.contains(&d.id) && (matches(&g.name, q) || matches(&d.name, q))
                 })
+                .map(|d| d.id)
                 .collect();
             if ids.is_empty() {
                 continue;
@@ -344,7 +363,7 @@ impl Workspace {
                 &g.name,
                 tr("Imported"),
                 Icon::Document,
-                !q.is_empty(),
+                q,
             );
             header.on_hover_text(tr("Embedded library snapshot"));
             if expanded {
@@ -423,6 +442,7 @@ impl Workspace {
                 )
                 .clicked()
             {
+                self.editor.session.context.appearance_mode = false;
                 self.editor.set_tool(Tool::Place(Kind::Subcircuit(id)));
                 ui.close();
             }

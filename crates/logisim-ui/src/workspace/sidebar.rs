@@ -14,7 +14,8 @@ use egui::{Frame, Margin, Panel, RichText, ScrollArea, Ui, vec2};
 pub(crate) struct Navigation {
     pub(super) last_height: f32,
     pub(super) last_width: f32,
-    query: String,
+    circuit_query: String,
+    component_query: String,
 }
 
 impl Workspace {
@@ -114,37 +115,49 @@ impl Workspace {
             }
         });
         let components = self.layout.tab == super::LayoutTab::Components;
-        let query = self.navigation.query.trim().to_lowercase();
-        let count = self.result_count(components, &query);
-        ui.horizontal(|ui| {
-            let (rect, _) = ui.allocate_exact_size(vec2(16.0, 16.0), egui::Sense::hover());
-            icons::paint(
-                ui.painter(),
-                rect.shrink(1.0),
-                Icon::Search,
-                theme::palette(ui.ctx()).muted,
-            );
-            let response = ui.add(
-                egui::TextEdit::singleline(&mut self.navigation.query)
-                    .id_salt("catalogue-search")
-                    .hint_text(tr("Search · Ctrl+F"))
-                    .desired_width((ui.available_width() - 42.0).max(50.0)),
-            );
-            if ui.is_enabled()
-                && !ui.ctx().any_popup_open()
-                && crate::shortcuts::Chord::consume(ui, egui::Modifiers::COMMAND, egui::Key::F)
-            {
-                response.request_focus();
-            }
-            theme::chip(ui, &count.to_string()).on_hover_text(tr("Results"));
-        });
+        let (query, count) = ui
+            .horizontal(|ui| {
+                let (rect, _) = ui.allocate_exact_size(vec2(16.0, 16.0), egui::Sense::hover());
+                icons::paint(
+                    ui.painter(),
+                    rect.shrink(1.0),
+                    Icon::Search,
+                    theme::palette(ui.ctx()).muted,
+                );
+                let filter = if components {
+                    &mut self.navigation.component_query
+                } else {
+                    &mut self.navigation.circuit_query
+                };
+                let response = ui.add(
+                    egui::TextEdit::singleline(filter)
+                        .id_salt(("catalogue-search", components))
+                        .hint_text(tr("Search · Ctrl+F"))
+                        .desired_width((ui.available_width() - 42.0).max(50.0)),
+                );
+                if ui.is_enabled()
+                    && !ui.ctx().any_popup_open()
+                    && crate::shortcuts::Chord::consume(ui, egui::Modifiers::COMMAND, egui::Key::F)
+                {
+                    response.request_focus();
+                }
+                let query = filter.trim().to_lowercase();
+                let count = self.result_count(components, &query);
+                theme::chip(ui, &count.to_string()).on_hover_text(tr("Results"));
+                (query, count)
+            })
+            .inner;
         ui.separator();
         let mut results = |ui: &mut Ui| {
             if count == 0 {
                 ui.add_space(4.0);
                 ui.label(tr("No results"));
-                if ui.button(tr("Clear search")).clicked() {
-                    self.navigation.query.clear();
+                if !query.is_empty() && ui.button(tr("Clear search")).clicked() {
+                    if components {
+                        self.navigation.component_query.clear();
+                    } else {
+                        self.navigation.circuit_query.clear();
+                    }
                 }
             } else if components {
                 self.components(ui, &query);
@@ -208,10 +221,8 @@ impl Workspace {
                     ("Move down", CircuitCommand::Down),
                     ("Remove circuit", CircuitCommand::Remove),
                 ] {
-                    let enabled = !matches!(command, CircuitCommand::Remove)
-                        || self.project().can_remove(self.active_circuit());
                     if ui
-                        .add_enabled(enabled, egui::Button::new(tr(name)))
+                        .add_enabled(command.enabled(self), egui::Button::new(tr(name)))
                         .clicked()
                     {
                         self.circuit_command(command);

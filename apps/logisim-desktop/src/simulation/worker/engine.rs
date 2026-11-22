@@ -20,6 +20,8 @@ struct Engine {
     resume_after_feedback: bool,
     dirty: bool,
     total_ticks: u64,
+    // None until the automatic initialization settles or the user supplies a stimulus.
+    initial_steps: Option<u64>,
     unsettled_since: Option<Instant>,
 }
 impl Engine {
@@ -47,6 +49,9 @@ impl Engine {
                 let recover = self.resume_after_feedback && self.sim.limited();
                 self.sim.set_plugins(context.plugins.clone());
                 let electrical_changed = self.sim.synchronize(&context.project, context.root);
+                if electrical_changed {
+                    self.initial_steps = None;
+                }
                 if electrical_changed && recover && self.sim.error().is_none() {
                     self.sim.set_enabled(true);
                 }
@@ -65,6 +70,7 @@ impl Engine {
                 self.clocks.suspend();
             }
             Command::NewDocument => {
+                self.initial_steps = None;
                 self.input = None;
                 self.resume_after_feedback = false;
                 self.sim = ProjectSimulator::default();
@@ -78,8 +84,19 @@ impl Engine {
                 if revision != context.revision {
                     return;
                 }
-                if matches!(action, SimulationAction::Reset) {
-                    self.propagation = Propagation::for_mode(context.mode);
+                match &action {
+                    SimulationAction::Reset => {
+                        self.initial_steps = None;
+                        self.propagation = Propagation::for_mode(context.mode);
+                    }
+                    SimulationAction::SetTickRate(_)
+                    | SimulationAction::ToggleTicks
+                    | SimulationAction::ToggleEnabled => {}
+                    SimulationAction::Step if self.sim.enabled() => {}
+                    SimulationAction::Tick if self.sim.pending_count() != 0 => {}
+                    _ => {
+                        self.initial_steps.get_or_insert(self.sim.steps());
+                    }
                 }
                 if let SimulationAction::PluginInput { target, event } = action {
                     self.input_event(target, event);
@@ -98,6 +115,7 @@ impl Engine {
                 {
                     return;
                 }
+                self.initial_steps.get_or_insert(self.sim.steps());
                 self.sim.replace_memory(&path, id, contents);
             }
         }
@@ -106,6 +124,9 @@ impl Engine {
     fn advance(&mut self) -> Option<Duration> {
         if self.suspended || self.context.is_none() {
             return None;
+        }
+        if self.sim.pending_count() == 0 {
+            self.initial_steps.get_or_insert(self.sim.steps());
         }
         let before = (self.sim.ticks(), self.sim.steps(), self.sim.enabled());
         let delay = self.clocks.poll(Instant::now(), &mut self.sim, |sim| {
@@ -161,6 +182,7 @@ impl Engine {
         let mut view = logisim_ui::i18n::with_language(context.language, || {
             present_project(circuit, &self.sim, &context.path)
         });
+        view.initial_steps = self.initial_steps.unwrap_or(view.steps);
         self.clocks.present(&mut view);
         self.dirty = false;
         Some(Snapshot {

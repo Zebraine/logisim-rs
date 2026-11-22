@@ -20,6 +20,18 @@ pub(crate) enum CircuitCommand {
     Up,
     Down,
 }
+impl CircuitCommand {
+    pub(crate) fn enabled(self, workspace: &Workspace) -> bool {
+        let project = workspace.project();
+        let active = workspace.active_circuit();
+        match self {
+            Self::Up => project.circuits.first().is_some_and(|c| c.id != active),
+            Self::Down => project.circuits.last().is_some_and(|c| c.id != active),
+            Self::Remove => project.can_remove(active),
+            Self::Add | Self::Rename => true,
+        }
+    }
+}
 pub(crate) struct NameDialog {
     pub rename: bool,
     focus: bool,
